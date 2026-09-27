@@ -46,6 +46,19 @@ class Rpx:
     def size(self, i):
         return self.sh[i][5] if self.sh[i][1] == 8 else len(self.data(i))
 
+    def relocations(self):
+        """Yield (patched_section_name, offset, type, target_address) for every RELA entry."""
+        for i, s in enumerate(self.sh):
+            if s[1] != 4:
+                continue
+            symtab = self.data(s[6])
+            patched = self.name(s[7])
+            r = self.data(i)
+            for j in range(0, len(r), 12):
+                offset, info, addend = struct.unpack(">IIi", r[j:j + 12])
+                value, = struct.unpack(">I", symtab[(info >> 8) * 16 + 4:(info >> 8) * 16 + 8])
+                yield patched, offset, info & 0xFF, (value + addend) & 0xFFFFFFFF
+
 
 def main():
     rpx = Rpx(sys.argv[1])

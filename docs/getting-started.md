@@ -70,6 +70,48 @@ game needs a Vulkan-capable machine.
    idempotently.
 5. Check paired-single decoding. If `psq_*` looks wrong, try the `nanax74` PSQ-fix fork.
 
+**Outcome (2026-09-27): done.**
+
+Setup:
+
+* Ghidra 12.0.4 and JDK 21 are installed in `~/opt`.
+* The v0.9.2 loader zip (declared version `12.0`) loads on 12.0.4 without a rebuild.
+* It selects `PowerPC:BE:32:Gekko_Broadway_Espresso`.
+
+Rebuilding from scratch with `tools/ghidra/rebuild.sh` takes about 6.5 minutes, and two
+from-scratch runs produce **byte-identical** `functions.csv`. The steps and what they found:
+
+| Step | Result |
+|---|---|
+| Import + auto-analysis | 4.5 min. 29,384 functions covering 97.4% of `.text`. |
+| `seed_functions.py` | Ghidra misses small leaf functions reached only through pointers (vtables, callbacks). Seeding from every ADDR32/ADDR16 relocation target adds 10,476 functions. |
+| After seeding | **40,142 functions covering 99.9% of `.text`**. |
+| `apply_symbols.py` | Applied 110 randomizer names. All 97 function names landed on existing function entries, which independently checks both the randomizer addresses and our function boundaries. |
+
+The seeding result depends on the order of operations: seeding in two passes gave 40,053
+functions. `rebuild.sh` is the canonical order, and its output is the baseline.
+
+Checks:
+
+* **Cross-check against `nwiiu-analyze`.** Nearly all function starts agree. Its extra
+  entries are block-level (jump-table and branch targets inside functions).
+* **Paired singles** decode correctly: 13,398 instructions in 3,432 functions. The
+  recompiler must support them everywhere, not only in math code. The most common is
+  `ps_merge10` (9,277).
+
+Follow-ups before these boundaries feed a recompiler:
+
+* **Switch cases mistaken for functions.** 31 of our function starts are jump-table
+  targets according to `nwiiu-analyze`. Seeding promotes switch cases to functions
+  wherever Ghidra failed to recover the jump table (nwiiu reports 1,540 unresolved
+  indirect branches). Fix this with our own jump-table recovery (the GHS
+  `lis/addi/lwzx/mtctr/bctr` pattern), then exclude table entries from seeding.
+* **Possibly merged functions.** 346 relocation targets land *inside* existing function
+  bodies, and 34 bodies are non-contiguous. Audit both.
+* **Suspect decompiler output.** The float-heavy function `FUN_027e565c` decompiles with
+  many "removing unreachable block" warnings. Check whether paired-single p-code
+  semantics are the cause (see the PSQ-fix fork).
+
 ## Phase 2 — symbol bootstrap (parallel track, 1–2 weeks)
 
 In order of confidence, all recorded with evidence:
