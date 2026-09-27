@@ -1,0 +1,18 @@
+# Never commit game data. Bring your own dump (see orig/README.md).
+orig/*
+!orig/README.md
+*.wua
+*.wud
+*.wux
+*.rpx
+*.rpl
+*.elf
+*.o
+
+# Local tool state
+build/
+ghidra/projects/
+*.gpr
+*.rep/
+__pycache__/
+.venv/
