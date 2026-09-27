@@ -42,6 +42,19 @@ Answer these questions:
 **Decision after Phase 0:** fork or contribute to nWiiURecomp, or write our own
 recompiler in the XenonRecomp style. Either way, the runtime is built on Cemu code.
 
+**Outcome (2026-09-27, [evaluation](research/2026-09-27-nwiiurecomp-eval.md)):**
+
+* After a one-line fix, the lifter translates all of US v0, and the result compiles and
+  runs. Both the recompiled program and the interpreter stop at the same HLE fault after
+  6.2M instructions.
+* The output is basic-block granularity, and the playable Cemu port and the LLVM trunk
+  are not public.
+* Recommendation: write our own function-level recompiler, and use nWiiURecomp as a
+  reference and cross-check.
+
+Build dependencies installed on this server: `cmake ninja-build pkg-config libssl-dev
+zlib1g-dev libshaderc-dev libsdl3-dev`.
+
 ## Phase 1 — Ghidra baseline (parallel track, about 1 day)
 
 Server state today: no Java/Ghidra/cmake and **no GPU**; Python 3.13 and uv are present;
