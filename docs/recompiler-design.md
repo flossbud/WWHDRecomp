@@ -449,7 +449,7 @@ There are two tracks. They meet at M4.
 
 | # | Milestone | Done when |
 |---|---|---|
-| M0a | Reference | Upstream Cemu builds here and boots WWHD under Xvfb + lavapipe. The deterministic-clock patch and GX2 call logging produce frames and traces for the scripted route. |
+| M0a ✅ (core) | Reference | Upstream Cemu builds here and boots WWHD under Xvfb + lavapipe. The deterministic-clock patch and GX2 call logging produce frames and traces for the scripted route. |
 | M0b | Runtime skeleton | Our frontend links Cemu's OS libraries **without Latte, gx2 or TCL**, plus our GX2 front half with the null backend. WWHD boots with Cemu's **interpreter**. Its GX2 call stream to the title screen matches the reference (D16.1). |
 
 **CPU track**
@@ -476,6 +476,10 @@ There are two tracks. They meet at M4.
 |---|---|---|
 | M5 | Playable | The native CPU plus the native GX2 on a GPU machine play through the scripted route and beyond at full speed. |
 | M6 | First enhancement | 60 fps interpolation as overrides (needs Phase 2 names). |
+
+**M0a status (2026-09-28):** the patched reference is deterministic. Two fresh boots traced to
+frame 600 give 64.9M identical OS-call and scheduler records; see `tools/reference/README.md`.
+Still open: scripted input for a deeper route, and hardware rendering in the worker.
 
 The CPU track needs no rendering, and the graphics track can use Cemu's interpreter for the CPU
 (M0b), so the two proceed in parallel.

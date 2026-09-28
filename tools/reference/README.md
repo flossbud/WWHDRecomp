@@ -46,21 +46,27 @@ boot takes minutes while shaders compile. The title screen is reached about 3 mi
 ## Patched source build (deterministic reference)
 
 The AppImage can't provide repeatable runs, so the real reference is Cemu built from source at
-the commit the design pins (`c717fcab`), with the patches in `cemu-patches/`:
+the pinned commit (`c717fcab`), with the patches in `cemu-patches/`, running in the worker
+worker (`tools/worker/setup-volume.sh cemu`, then `cemu-rebuild` after patch changes).
 
-* **Virtual clock** (`CEMU_VIRTUAL_CLOCK=1`, set by `REF_VIRTUAL_CLOCK=1`):
-  * Guest time advances only with executed guest instructions.
-  * When no guest thread can run, it jumps to the next alarm, vsync or audio frame.
-  * Vsync (every 1/60 s of guest time) is raised by the CPU scheduler once the GPU has retired
-    all submitted work.
-  * Audio frames are paced every 3 ms of guest time.
-  * The calendar date is pinned to 2026-01-01.
-  * Combined with single-core CPU mode (`0005000010143500.ini`) and synchronous shader
-    compilation (`settings.xml`), two runs with the same input should produce the same guest
-    behaviour. `hle_trace.py diff` checks exactly that.
-* **HLE call tracer** (`CEMU_HLE_TRACE=file.zst`, optional `CEMU_HLE_TRACE_FILTER=gx2.`): a
-  compact binary record of every OS-library call (call index, LR, r3–r10, f1–f8, frame number),
-  zstd-compressed. Read it with `hle_trace.py`.
+**Status (2026-09-28): deterministic.** `determinism.sh` ran two fresh boots to frame 600 and
+got **64,874,243 identical trace records**: every OS call, timeslice, alarm and time-jump. Each
+run takes about 1–2 minutes on the worker.
+
+What it took. Each numbered item is a patch; the last is a profile setting:
+
+| Patch | What | Why (the divergence it removed) |
+|---|---|---|
+| 0001 | Virtual clock (`CEMU_VIRTUAL_CLOCK=1`) and the HLE call tracer (`CEMU_HLE_TRACE=file.zst`) | Guest time comes only from executed instructions; idle skips jump to the next alarm, vsync or audio frame. Vsync comes from the CPU scheduler after the GPU retires; audio frames every 3 ms of guest time; the date is pinned. |
+| 0002 | Trace exit-at-frame (`CEMU_HLE_TRACE_EXIT_FRAME`); 300 guest cycles per OS call | OS calls cost no guest time, so WWHD's `OSSendMessage`/`OSReceiveMessage` ping-pong (~65k per frame) stalled guest time. |
+| 0003 | IPC replies wait host-side | IOSU host threads delivered replies at host-timed moments. |
+| 0004 | Synchronous GPU submissions (wait for retire, 2 s cap) | GPU completions woke guest threads at host-timed moments. |
+| 0005 | `sched.*` events in the trace (timeslices, alarm firings, idle skips) | Debugging aid: pinpointed the next divergence. |
+| 0006 | Legacy IOSU ioctls (act, acp, mcp, boss, nim, fpd) wait host-side | `nn_save.SAVEInit` → act suspended the game thread and an IOSU thread resumed it at a host-timed moment. |
+| profile | Single-core *interpreter* (`0005000010143500.ini`) | The single-core recompiler's background JIT made timeslice boundaries depend on host timing. |
+
+`hle_trace.py diff` normalizes Cemu's `PPCCallback<host pointer>` stub names, which change with
+ASLR. `--ignore-core` compares without the core index.
 
 ```sh
 # dependencies as for the AppImage, plus the build toolchain:
@@ -84,7 +90,9 @@ deleting the vcpkg build trees.
 
 ## Still to do for M0a
 
-* **Verify determinism:** two virtual-clock runs with the same input must give identical traces
-  (`hle_trace.py diff`). Anything that still differs gets tracked down; GPU-written timestamps
-  are a likely suspect.
+* **Hardware rendering:** Cemu picks llvmpipe inside the worker (Mesa's Intel driver can't present to
+  Xvfb, which has no DRI3). Frames are correct, just slower. Options: Xorg with the dummy driver,
+  or a headless Vulkan surface.
+* **Deeper coverage:** so far only boot plus idling on the first dialog is covered. With scripted
+  input (below) the determinism check should follow a real route.
 * **Input script:** a scripted route (frame-indexed input) instead of ad-hoc `press.sh` calls.

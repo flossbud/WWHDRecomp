@@ -26,9 +26,11 @@ for run in a b; do
     done
     echo "run $run: $(stat -c %s "$out/$run.zst") bytes"
 done
-if cmp <(zstd -dcq "$out/a.zst") <(zstd -dcq "$out/b.zst"); then
+# Byte-identical is the fast path; otherwise compare normalized records (Cemu names some callback
+# stubs after host pointers, which ASLR changes every run).
+if cmp -s <(zstd -dcq "$out/a.zst") <(zstd -dcq "$out/b.zst") \
+   || uv run -q "$here/hle_trace.py" diff "$out/a.zst" "$out/b.zst"; then
     echo "DETERMINISTIC: identical traces for $frames frames"
 else
-    uv run -q "$here/hle_trace.py" diff "$out/a.zst" "$out/b.zst" || true
     exit 1
 fi
