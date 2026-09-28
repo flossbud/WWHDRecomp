@@ -78,39 +78,63 @@ Setup:
 * The v0.9.2 loader zip (declared version `12.0`) loads on 12.0.4 without a rebuild.
 * It selects `PowerPC:BE:32:Gekko_Broadway_Espresso`.
 
-Rebuilding from scratch with `tools/ghidra/rebuild.sh` takes about 6.5 minutes, and two
-from-scratch runs produce **byte-identical** `functions.csv`. The steps and what they found:
+`tools/ghidra/rebuild.sh` rebuilds the project from scratch in about 7 minutes, and two
+from-scratch runs produce byte-identical `functions.csv` and `jump_tables.csv`.
+`tools/audit_functions.py` checks the result against facts in the RPX itself. Every one
+of its checks is currently zero.
 
-| Step | Result |
+| Step | What it fixes |
 |---|---|
-| Import + auto-analysis | 4.5 min. 29,384 functions covering 97.4% of `.text`. |
-| `seed_functions.py` | Ghidra misses small leaf functions reached only through pointers (vtables, callbacks). Seeding from every ADDR32/ADDR16 relocation target adds 10,476 functions. |
-| After seeding | **40,142 functions covering 99.9% of `.text`**. |
-| `apply_symbols.py` | Applied 110 randomizer names. All 97 function names landed on existing function entries, which independently checks both the randomizer addresses and our function boundaries. |
+| Import + auto-analysis | 29,384 functions covering 97.4% of `.text`. |
+| `tools/jump_tables.py` | Finds **294 GHS switches (5,243 cases)**; see below. Ghidra can't recover these. |
+| `apply_jump_tables.py` | Adds computed-jump references from each `bctr` to its table, deletes functions wrongly started at table entries or case labels, and writes decompiler switch overrides. |
+| `seed_functions.py` | Starts a function at every relocation target in `.text` (address-taken code: vtables, callbacks, `lis/addi` pairs), with switch tables excluded. About 10,460 new functions. |
+| `split_functions.py` | Normalises function boundaries using GHS's layout rules; see below. Converges in 2 passes. |
+| `apply_symbols.py` | Applies the 110 randomizer names. All 97 function names land on existing entries. |
+| **Result** | **39,705 functions in `.text`, covering all but 524 bytes** (164 of them padding, the rest dead prefixes of the register save/restore helpers). There are also 376 OS import stubs outside `.text`. |
 
-The seeding result depends on the order of operations: seeding in two passes gave 40,053
-functions. `rebuild.sh` is the canonical order, and its output is the baseline.
+### What GHS code looks like (and what the recompiler must handle)
+
+* **Switches are branch tables in code.** The switch computes `table + 4*i` with `lis` +
+  `addic`/`addi` and `bctr`s into a run of `b case_i` instructions placed right after the
+  `bctr`. The bound is a `cmplwi` (266 switches), sometimes in a predecessor block. For
+  the other 28 we fall back to the length of the `b` run; every count is checked against
+  "the first case starts right after the table".
+* **Functions are contiguous and start at their entry.** The split pass enforces this:
+  * Any detached range Ghidra attached to a function is really a *tail-called* function.
+    The sources are switches whose cases are tail calls, jumps through `.rodata` pointer
+    tables, and `b` to a lone `blr` (an empty function).
+  * Code before the entry is a function it tail-calls.
+  * The exception is **loop rotation** (`b test` / loop / `test: … bne loop`) at the start
+    of a function. Ghidra calls the `b` a thunk, and we merge it back.
+* **Any address-taken code inside a body is a function entry.** For example, the
+  pure-virtual stub `li r3,13; b abort` referenced by thousands of vtable slots sits right
+  after a no-return call, with no terminator in between.
+* **Register save/restore helpers** at `0x028F5EE0` to `0x028F626C` are straight runs of
+  `stw`/`lwz`/`stfd`/`lfd`, one entry per register. Prologues call into them part-way
+  (`bl`), and epilogues tail-branch into them (`b`). Each entry falls through into the
+  next, so the recompiler needs to special-case them, as XenonRecomp does with
+  `__savegprlr_N`.
+* **Callee-saved FPRs are full paired singles.** The save helpers store both halves
+  (`stfd fN` → `ps_merge10 fN,fN,fN` → `stfs fN`). This is where 9,277 of the 13,398
+  paired-single instructions come from.
+* **Indirect control flow:** there are 14,947 `bctrl` (indirect calls, mostly virtual) and
+  1,555 non-switch `bctr` (indirect tail calls, e.g. GHS virtual thunks). The recompiler
+  needs a runtime address → function lookup, and every target must be a function entry,
+  which is what the seeding and audit guarantee for address-taken code.
 
 Checks:
 
+* **Paired singles** decode correctly: 13,398 instructions in 3,432 functions.
 * **Cross-check against `nwiiu-analyze`.** Nearly all function starts agree. Its extra
-  entries are block-level (jump-table and branch targets inside functions).
-* **Paired singles** decode correctly: 13,398 instructions in 3,432 functions. The
-  recompiler must support them everywhere, not only in math code. The most common is
-  `ps_merge10` (9,277).
+  entries are block-level (branch and case targets inside functions).
 
-Follow-ups before these boundaries feed a recompiler:
+Still open:
 
-* **Switch cases mistaken for functions.** 31 of our function starts are jump-table
-  targets according to `nwiiu-analyze`. Seeding promotes switch cases to functions
-  wherever Ghidra failed to recover the jump table (nwiiu reports 1,540 unresolved
-  indirect branches). Fix this with our own jump-table recovery (the GHS
-  `lis/addi/lwzx/mtctr/bctr` pattern), then exclude table entries from seeding.
-* **Possibly merged functions.** 346 relocation targets land *inside* existing function
-  bodies, and 34 bodies are non-contiguous. Audit both.
 * **Suspect decompiler output.** The float-heavy function `FUN_027e565c` decompiles with
   many "removing unreachable block" warnings. Check whether paired-single p-code
-  semantics are the cause (see the PSQ-fix fork).
+  semantics are the cause (see the PSQ-fix fork). This matters for reading the code,
+  not for the recompiler.
 
 ## Phase 2 — symbol bootstrap (parallel track, 1–2 weeks)
 

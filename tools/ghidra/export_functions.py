@@ -42,7 +42,8 @@ def main():
         with pyghidra.program_context(project, args.program) as program:
             rows = list(collect(program))
             text = program.getMemory().getBlock(".text")
-            text_size = text.getSize() if text else 0
+            lo, hi = text.getStart().getOffset(), text.getEnd().getOffset()
+            text_size = text.getSize()
     finally:
         project.close()
 
@@ -53,7 +54,7 @@ def main():
         w.writerow(["address", "size", "end", "ranges", "name", "source", "thunk"])
         w.writerows(rows)
 
-    covered = sum(r[1] for r in rows)
+    covered = sum(r[1] for r in rows if lo <= int(r[0], 16) <= hi)
     named = sum(1 for r in rows if r[5] != "DEFAULT")
     print(f"{len(rows)} functions -> {out.relative_to(ROOT) if out.is_relative_to(ROOT) else out}")
     print(f"  .text covered: {covered:#x} / {text_size:#x} bytes ({100 * covered / max(text_size, 1):.1f}%)")
