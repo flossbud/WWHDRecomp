@@ -1,0 +1,85 @@
+From 2fe2ff588a78dbce9ffd95deb4ac6054319ed53c Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 18:07:10 +0000
+Subject: [PATCH] wwhd-reference: legacy IOSU requests wait host-side under the
+ virtual clock
+
+The scheduler trace showed the game thread blocked in nn_save.SAVEInit
+(act/acp legacy ioctls) resuming at 0x08857807 in one run and 0x08e44fc7 in
+the other: iosuIoctl_pushAndWait suspended it and the IOSU host thread
+resumed it whenever it finished. Now the requester waits host-side.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/Cafe/IOSU/legacy/iosu_ioctl.cpp | 39 +++++++++++++++++++++++++++++
+ 1 file changed, 39 insertions(+)
+
+diff --git a/src/Cafe/IOSU/legacy/iosu_ioctl.cpp b/src/Cafe/IOSU/legacy/iosu_ioctl.cpp
+index 22e5a55..bb001b4 100644
+--- a/src/Cafe/IOSU/legacy/iosu_ioctl.cpp
++++ b/src/Cafe/IOSU/legacy/iosu_ioctl.cpp
+@@ -4,6 +4,9 @@
+ #include "util/helpers/ringbuffer.h"
+ 
+ #include "util/helpers/Semaphore.h"
++#include "Cafe/HW/Espresso/PPCState.h" // wwhd-reference: virtual clock
++#include <condition_variable>
++#include <unordered_set>
+ 
+ // deprecated IOCTL handling code
+ 
+@@ -12,8 +15,34 @@ CounterSemaphore _ioctlRingbufferSemaphore[IOS_DEVICE_COUNT];
+ 
+ std::mutex ioctlMutex;
+ 
++// wwhd-reference: with the virtual clock the requesting guest thread is not suspended and later
++// resumed by the IOSU host thread (a host-timed wakeup that reordered guest threads between runs,
++// e.g. during nn_save.SAVEInit -> act). It waits host-side for completion instead, so the result
++// arrives at a fixed point in its instruction stream.
++static std::mutex s_virtualWaitMtx;
++static std::condition_variable s_virtualWaitCv;
++static std::unordered_set<ioQueueEntry_t*> s_virtualWaited;
++
+ sint32 iosuIoctl_pushAndWait(uint32 ioctlHandle, ioQueueEntry_t* ioQueueEntry)
+ {
++	if (PPCTimer_isVirtualClock() && (ioctlHandle == IOS_DEVICE_ACT || ioctlHandle == IOS_DEVICE_ACP_MAIN || ioctlHandle == IOS_DEVICE_MCP ||
++		ioctlHandle == IOS_DEVICE_BOSS || ioctlHandle == IOS_DEVICE_NIM || ioctlHandle == IOS_DEVICE_FPD))
++	{
++		{
++			std::unique_lock _vl(s_virtualWaitMtx);
++			s_virtualWaited.insert(ioQueueEntry);
++		}
++		ioctlMutex.lock();
++		ioQueueEntry->ppcThread = coreinit::OSGetCurrentThread();
++		_ioctlRingbuffer[ioctlHandle].Push(ioQueueEntry);
++		ioctlMutex.unlock();
++		_ioctlRingbufferSemaphore[ioctlHandle].increment();
++		std::unique_lock _vl(s_virtualWaitMtx);
++		while (!s_virtualWaitCv.wait_for(_vl, std::chrono::seconds(2), [&] { return (bool)ioQueueEntry->isCompleted; }))
++			cemuLog_log(LogType::Force, "virtual clock: legacy IOSU request on device {} pending > 2 s", ioctlHandle);
++		s_virtualWaited.erase(ioQueueEntry);
++		return ioQueueEntry->returnValue;
++	}
+ 	if (ioctlHandle != IOS_DEVICE_ACT && ioctlHandle != IOS_DEVICE_ACP_MAIN && ioctlHandle != IOS_DEVICE_MCP && ioctlHandle != IOS_DEVICE_BOSS && ioctlHandle != IOS_DEVICE_NIM && ioctlHandle != IOS_DEVICE_FPD)
+ 	{
+ 		cemuLog_logDebug(LogType::Force, "Unsupported IOSU device {}", ioctlHandle);
+@@ -53,6 +82,16 @@ ioQueueEntry_t* iosuIoctl_getNextWithTimeout(uint32 deviceIndex, sint32 ms)
+ 
+ void iosuIoctl_completeRequest(ioQueueEntry_t* ioQueueEntry, uint32 returnValue)
+ {
++	{
++		std::unique_lock _vl(s_virtualWaitMtx);
++		if (s_virtualWaited.count(ioQueueEntry))
++		{
++			ioQueueEntry->returnValue = returnValue;
++			ioQueueEntry->isCompleted = true;
++			s_virtualWaitCv.notify_all();
++			return; // wwhd-reference: waiter is blocked host-side, not suspended
++		}
++	}
+ 	ioQueueEntry->returnValue = returnValue;
+ 	ioQueueEntry->isCompleted = true;
+ 	coreinit::OSResumeThread(ioQueueEntry->ppcThread);
+-- 
+2.47.3
+
