@@ -26,6 +26,19 @@ the worker keeps about 7 GB of RAM and 2 threads for its own jobs: Tailscale sub
 monitoring, other services. An out-of-memory job is killed inside the container; the worker and
 the editing machine keep running.
 
+**Power cap (read this before blaming a build).** the worker is an a mini PC
+(6-core CPU, 65 W desktop CPU) on a 90 W adapter.
+
+* **The problem:** the firmware allows 65 W sustained and 96 W bursts for the CPU alone, so
+  all-core load pushes the whole machine past 90 W. The adapter latched off, dead until unplugged
+  and replugged, on 2026-09-07 and again on 2026-09-28 during this worker's first Cemu build.
+* **The fix:** `/etc/systemd/system/cpu-power-cap.service` caps the package at 45 W sustained and
+  60 W burst, at every boot.
+* **Verified:** under a 10-thread burn the package measured 57–58 W for the first ~20 s, then held
+  45 W at 71–75 °C.
+* **Undo:** `sudo systemctl disable --now cpu-power-cap && sudo reboot`.
+* **If the adapter latches off again anyway**, replace it.
+
 ## Use (from the editing machine checkout)
 
 ```sh
