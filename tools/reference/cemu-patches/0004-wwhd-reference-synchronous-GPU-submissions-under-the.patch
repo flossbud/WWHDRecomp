@@ -1,0 +1,54 @@
+From 977a1a9afea20ae3c822946559fc86073e680add Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 17:47:15 +0000
+Subject: [PATCH] wwhd-reference: synchronous GPU submissions under the virtual
+ clock
+
+Second determinism diff (call 4926): same thread and call, different core
+index, because single-core scheduling spins a host-timing-dependent number of
+idle iterations while guest threads wait on GPU completion. Waiting for each
+submission to retire (2 s cap) puts every GPU->guest effect at a fixed point.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/Cafe/OS/libs/gx2/GX2_Command.cpp | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/src/Cafe/OS/libs/gx2/GX2_Command.cpp b/src/Cafe/OS/libs/gx2/GX2_Command.cpp
+index d12bf21..e213ecc 100644
+--- a/src/Cafe/OS/libs/gx2/GX2_Command.cpp
++++ b/src/Cafe/OS/libs/gx2/GX2_Command.cpp
+@@ -1,3 +1,4 @@
++#include "Cafe/HW/Espresso/PPCState.h" // wwhd-reference: virtual clock
+ #include "Cafe/HW/Latte/Core/Latte.h"
+ #include "Cafe/HW/Latte/Core/LatteDraw.h"
+ #include "Cafe/OS/common/OSCommon.h"
+@@ -287,6 +288,25 @@ namespace GX2
+ 				cemu_assert_debug(bufferLength <= coreCBState.bufferSizeInU32s);
+ 				GX2Command_SubmitCommandBuffer(coreCBState.bufferPtr, bufferLength, &s_commandState->gpuCommandReadPtr, triggerMarkerInterrupt);
+ 				GX2Command_StartNewCommandBuffer(numU32sForNextBuffer);
++				// wwhd-reference: with the virtual clock the GPU is synchronous: wait until it retired
++				// this submission, so every GPU->guest effect (timestamps, DrawDone/timestamp wakeups,
++				// readbacks) lands at a fixed point in the guest's instruction stream instead of whenever
++				// the GPU thread gets there. Capped at 2 s: a buffer may legitimately wait on memory the
++				// CPU writes later.
++				if (PPCTimer_isVirtualClock())
++				{
++					const uint64 target = GX2GetLastSubmittedTimeStamp();
++					const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
++					while (GX2GetRetiredTimeStamp() < target)
++					{
++						if (std::chrono::steady_clock::now() > deadline)
++						{
++							cemuLog_log(LogType::Force, "virtual clock: GPU submission not retired after 2 s, continuing asynchronously");
++							break;
++						}
++						std::this_thread::yield();
++					}
++				}
+ 			}
+ 			else
+ 			{
+-- 
+2.47.3
+
