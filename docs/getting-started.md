@@ -151,9 +151,13 @@ In order of confidence, all recorded with evidence:
 ## Phase 3 — first boot milestone
 
 **Design: [`recompiler-design.md`](recompiler-design.md)** (2026-09-28). In summary:
-function-level C++ that runs on Cemu's own `PPCInterpreter_t`, fibers and HLE libraries.
-Only Cemu's instruction-execution loop is replaced. That doc's milestones M0–M6 supersede
-the rough steps below.
+
+* Function-level C++ that runs on Cemu's own `PPCInterpreter_t`, fibers and OS libraries.
+* **Native graphics from the start:** our own GX2 on Vulkan, with shaders recompiled ahead of
+  time. Cemu's GPU emulator is not in the product, only in an unmodified reference build used
+  for comparison.
+
+That doc's two-track milestones (M0a/M0b, M1–M6, G0–G3) supersede the rough steps below.
 
 Get the recompiled game to its title screen on a GPU machine. The work depends on the
 Phase 0 decision. The likely order is:
