@@ -12,6 +12,8 @@
 #   CEMU_HLE_TRACE_EXIT_FRAME=N   end the trace and exit Cemu when frame N begins
 #   CEMU_INPUT_SCRIPT=route.txt   frame-keyed GamePad input (patched build; see tools/reference/routes/)
 #   CEMU_SHOT_FRAMES=0-900/60     capture TV/pad at these frames into $CEMU_SHOT_DIR (PPM)
+#   CEMU_NO_GAMEPAD=1             GamePad reported absent: the project's single-screen, Pro-Controller
+#                                 mode (default 1; set CEMU_NO_GAMEPAD= to re-enable the GamePad)
 #   REF_FRESH=1                   delete the emulated NAND (portable/mlc01: saves, account) first,
 #                                 so every run starts from the same state
 set -euo pipefail
@@ -27,6 +29,7 @@ if [ -z "${WWHD_GAME:-}" ]; then for f in /wwhd/data/rom/*.wua; do [ -f "$f" ] &
 game=${WWHD_GAME:?set WWHD_GAME to your .wua or title directory}
 export DISPLAY=${DISPLAY:-:99}
 [ -n "${REF_VIRTUAL_CLOCK:-}" ] && export CEMU_VIRTUAL_CLOCK=1
+export CEMU_NO_GAMEPAD=${CEMU_NO_GAMEPAD-1}; [ -z "$CEMU_NO_GAMEPAD" ] && unset CEMU_NO_GAMEPAD
 export CEMU_HLE_TRACE CEMU_HLE_TRACE_FILTER CEMU_HLE_TRACE_EXIT_FRAME CEMU_INPUT_SCRIPT CEMU_SHOT_FRAMES CEMU_SHOT_DIR
 [ -n "${REF_FRESH:-}" ] && rm -rf "$portable/mlc01"
 mkdir -p "$portable/controllerProfiles" "$portable/gameProfiles"

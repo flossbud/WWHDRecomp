@@ -1,0 +1,196 @@
+From 4ad4ae3c1e5b3e53d914d9634f15e67b0fbcc1fd Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 21:30:41 +0000
+Subject: [PATCH] wwhd-reference: Pro Controller scripted input; no-GamePad
+ mode
+
+The input script engine is device-neutral: VPAD and the Pro Controller
+(KPAD channel 0, URCC fields) both map its abstract buttons/sticks.
+CEMU_NO_GAMEPAD=1 makes VPADRead report no controller (single-screen,
+Pro-Controller mode, the project's target).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/Cafe/OS/libs/padscore/padscore.cpp | 35 +++++++++++++++
+ src/Cafe/OS/libs/vpad/vpad.cpp         | 61 +++++++++++++++++++-------
+ 2 files changed, 81 insertions(+), 15 deletions(-)
+
+diff --git a/src/Cafe/OS/libs/padscore/padscore.cpp b/src/Cafe/OS/libs/padscore/padscore.cpp
+index 3faa5fb..78578cf 100644
+--- a/src/Cafe/OS/libs/padscore/padscore.cpp
++++ b/src/Cafe/OS/libs/padscore/padscore.cpp
+@@ -1,3 +1,4 @@
++#include "input/emulated/WPADController.h" // wwhd-reference: kProButton_*
+ #include "Cafe/OS/common/OSCommon.h"
+ #include "Cafe/HW/Espresso/PPCCallback.h"
+ #include "Cafe/OS/libs/padscore/padscore.h"
+@@ -427,6 +428,39 @@ void padscoreExport_KPADSetConnectCallback(PPCInterpreter_t* hCPU)
+ uint64 g_kpadLastRead[InputManager::kMaxWPADControllers] = {0};
+ bool g_kpadIsInited = true;
+ 
++namespace vpad::refinput // wwhd-reference: scripted input engine, vpad.cpp
++{
++	bool enabled();
++	void state(uint32& buttons, float& lx, float& ly, float& rx, float& ry);
++	enum : uint32 { A = 1u << 0, B = 1u << 1, X = 1u << 2, Y = 1u << 3, L = 1u << 4, R = 1u << 5, ZL = 1u << 6, ZR = 1u << 7,
++		PLUS = 1u << 8, MINUS = 1u << 9, HOME = 1u << 10, UP = 1u << 11, DOWN = 1u << 12, LEFT = 1u << 13, RIGHT = 1u << 14,
++		LCLICK = 1u << 15, RCLICK = 1u << 16 };
++}
++
++// wwhd-reference: overwrite the Pro Controller (URCC) fields with the scripted state for channel 0
++static void _KPADApplyScriptedPro(uint32 channel, KPADStatus_t* status)
++{
++	namespace ri = vpad::refinput;
++	if (channel != 0 || !ri::enabled())
++		return;
++	static uint32 s_prevHold = 0;
++	uint32 abs; float lx, ly, rx, ry;
++	ri::state(abs, lx, ly, rx, ry);
++	static const std::pair<uint32, uint32> kMap[] = { {ri::A,kProButton_A},{ri::B,kProButton_B},{ri::X,kProButton_X},{ri::Y,kProButton_Y},
++		{ri::L,kProButton_L},{ri::R,kProButton_R},{ri::ZL,kProButton_ZL},{ri::ZR,kProButton_ZR},{ri::PLUS,kProButton_Plus},
++		{ri::MINUS,kProButton_Minus},{ri::HOME,kProButton_Home},{ri::UP,kProButton_Up},{ri::DOWN,kProButton_Down},
++		{ri::LEFT,kProButton_Left},{ri::RIGHT,kProButton_Right},{ri::LCLICK,kProButton_StickL},{ri::RCLICK,kProButton_StickR} };
++	uint32 hold = 0;
++	for (auto [from, to] : kMap)
++		if (abs & from) hold |= to;
++	status->ex_status.uc.hold = hold;
++	status->ex_status.uc.trig = hold & ~s_prevHold;
++	status->ex_status.uc.release = s_prevHold & ~hold;
++	s_prevHold = hold;
++	status->ex_status.uc.lstick.x = lx; status->ex_status.uc.lstick.y = ly;
++	status->ex_status.uc.rstick.x = rx; status->ex_status.uc.rstick.y = ry;
++}
++
+ sint32 _KPADRead(uint32 channel, KPADStatus_t* samplingBufs, uint32 length, betype<KPAD_ERROR>* errResult)
+ {
+ 
+@@ -475,6 +509,7 @@ sint32 _KPADRead(uint32 channel, KPADStatus_t* samplingBufs, uint32 length, bety
+ 		const auto btn_repeat = padscore::g_padscore.controller_data[channel].btn_repeat;
+ 		controller->KPADRead(*samplingBufs, btn_repeat);
+ 	}
++	_KPADApplyScriptedPro(channel, samplingBufs);
+ 
+ 	if (errResult)
+ 		*errResult = KPAD_ERROR::NONE;
+diff --git a/src/Cafe/OS/libs/vpad/vpad.cpp b/src/Cafe/OS/libs/vpad/vpad.cpp
+index 6fd0a02..f1f1912 100644
+--- a/src/Cafe/OS/libs/vpad/vpad.cpp
++++ b/src/Cafe/OS/libs/vpad/vpad.cpp
+@@ -222,17 +222,22 @@ namespace vpad
+ 		*sensitivity = g_vpad.controller_data[channel].acc_param.sensitivity;
+ 	}
+ 
+-	// wwhd-reference: scripted GamePad input keyed to the frame counter (CEMU_INPUT_SCRIPT=file).
+-	// Each line: FRAME BUTTONS [FRAMES_HELD=1]; BUTTONS joined with '+': A B X Y L R ZL ZR PLUS MINUS
+-	// HOME UP DOWN LEFT RIGHT LCLICK RCLICK, and LUP LDOWN LLEFT LRIGHT RUP RDOWN RLEFT RRIGHT for full
+-	// stick deflection. '#' starts a comment. With a script, host input is never read, so runs are
+-	// repeatable; frame = number of GX2SwapScanBuffers calls so far.
++	// wwhd-reference: scripted input keyed to the frame counter (CEMU_INPUT_SCRIPT=file), shared by
++	// the GamePad (VPAD) and Pro Controller (KPAD, padscore.cpp) paths. Each line:
++	//   FRAME BUTTONS [FRAMES_HELD=1]
++	// BUTTONS joined with '+': A B X Y L R ZL ZR PLUS MINUS HOME UP DOWN LEFT RIGHT LCLICK RCLICK, and
++	// LUP LDOWN LLEFT LRIGHT RUP RDOWN RLEFT RRIGHT for full stick deflection; '#' starts a comment.
++	// With a script, host input is never read, so runs are repeatable. frame = number of
++	// GX2SwapScanBuffers calls so far. CEMU_NO_GAMEPAD=1 makes VPADRead report no GamePad at all
++	// (single-screen, Pro Controller mode).
+ 	namespace refinput
+ 	{
++		enum : uint32 { A = 1u << 0, B = 1u << 1, X = 1u << 2, Y = 1u << 3, L = 1u << 4, R = 1u << 5, ZL = 1u << 6, ZR = 1u << 7,
++			PLUS = 1u << 8, MINUS = 1u << 9, HOME = 1u << 10, UP = 1u << 11, DOWN = 1u << 12, LEFT = 1u << 13, RIGHT = 1u << 14,
++			LCLICK = 1u << 15, RCLICK = 1u << 16 };
+ 		struct Step { uint32 frame, duration, buttons; float lx, ly, rx, ry; };
+ 		static std::vector<Step> s_steps;
+ 		static bool s_loaded = false, s_enabled = false;
+-		static uint32 s_prevHold = 0;
+ 
+ 		static void load()
+ 		{
+@@ -247,9 +252,8 @@ namespace vpad
+ 				return;
+ 			}
+ 			static const std::unordered_map<std::string, uint32> kButtons = {
+-				{"A",0x8000},{"B",0x4000},{"X",0x2000},{"Y",0x1000},{"L",0x0020},{"R",0x0010},{"ZL",0x0080},{"ZR",0x0040},
+-				{"PLUS",0x0008},{"MINUS",0x0004},{"HOME",0x0002},{"UP",0x0200},{"DOWN",0x0100},{"LEFT",0x0800},{"RIGHT",0x0400},
+-				{"LCLICK",0x00040000},{"RCLICK",0x00020000} };
++				{"A",A},{"B",B},{"X",X},{"Y",Y},{"L",L},{"R",R},{"ZL",ZL},{"ZR",ZR},{"PLUS",PLUS},{"MINUS",MINUS},{"HOME",HOME},
++				{"UP",UP},{"DOWN",DOWN},{"LEFT",LEFT},{"RIGHT",RIGHT},{"LCLICK",LCLICK},{"RCLICK",RCLICK} };
+ 			std::string line;
+ 			while (std::getline(f, line))
+ 			{
+@@ -282,25 +286,44 @@ namespace vpad
+ 			cemuLog_log(LogType::Force, "input script: {} steps from {}", s_steps.size(), path);
+ 		}
+ 
+-		static bool enabled()
++		bool enabled()
+ 		{
+ 			if (!s_loaded)
+ 				load();
+ 			return s_enabled;
+ 		}
+ 
+-		static void fill(VPADStatus* status)
++		bool noGamepad()
++		{
++			static const bool s_noGamepad = getenv("CEMU_NO_GAMEPAD") != nullptr;
++			return s_noGamepad;
++		}
++
++		// abstract state for the current frame
++		void state(uint32& buttons, float& lx, float& ly, float& rx, float& ry)
+ 		{
+ 			const uint32 frame = GX2_RefSwapCount();
+-			uint32 hold = 0;
+-			float lx = 0, ly = 0, rx = 0, ry = 0;
++			buttons = 0; lx = ly = rx = ry = 0;
+ 			for (const Step& st : s_steps)
+ 			{
+ 				if (frame < st.frame || frame >= st.frame + st.duration)
+ 					continue;
+-				hold |= st.buttons;
++				buttons |= st.buttons;
+ 				lx += st.lx; ly += st.ly; rx += st.rx; ry += st.ry;
+ 			}
++		}
++
++		static void fillVPAD(VPADStatus* status)
++		{
++			static uint32 s_prevHold = 0;
++			uint32 abs; float lx, ly, rx, ry;
++			state(abs, lx, ly, rx, ry);
++			static const std::pair<uint32, uint32> kMap[] = { {A,0x8000},{B,0x4000},{X,0x2000},{Y,0x1000},{L,0x0020},{R,0x0010},
++				{ZL,0x0080},{ZR,0x0040},{PLUS,0x0008},{MINUS,0x0004},{HOME,0x0002},{UP,0x0200},{DOWN,0x0100},{LEFT,0x0800},
++				{RIGHT,0x0400},{LCLICK,0x00040000},{RCLICK,0x00020000} };
++			uint32 hold = 0;
++			for (auto [from, to] : kMap)
++				if (abs & from) hold |= to;
+ 			constexpr float kThreshold = 0.5f; // as VPADController's emulated stick directions
+ 			if (ly > kThreshold) hold |= 0x10000000; if (ly < -kThreshold) hold |= 0x08000000;
+ 			if (lx < -kThreshold) hold |= 0x40000000; if (lx > kThreshold) hold |= 0x20000000;
+@@ -336,6 +359,14 @@ namespace vpad
+ 		status->tpProcessed1.validity = VPAD_TP_VALIDITY_INVALID_XY;
+ 		status->tpProcessed2.validity = VPAD_TP_VALIDITY_INVALID_XY;
+ 
++		if (refinput::noGamepad())
++		{
++			if (error)
++				*error = VPAD_READ_ERR_NO_CONTROLLER;
++			if (length > 0)
++				status->vpadErr = -1;
++			return 0;
++		}
+ 		if (refinput::enabled())
+ 		{
+ 			if (channel != 0)
+@@ -346,7 +377,7 @@ namespace vpad
+ 					status->vpadErr = -1;
+ 				return 0;
+ 			}
+-			refinput::fill(status);
++			refinput::fillVPAD(status);
+ 			if (error)
+ 				*error = VPAD_READ_ERR_NONE;
+ 			return 1;
+-- 
+2.47.3
+
