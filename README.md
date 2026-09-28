@@ -11,6 +11,11 @@ Status: getting started. See [`docs/getting-started.md`](docs/getting-started.md
 plan, [`docs/recompiler-design.md`](docs/recompiler-design.md) for the recompiler design, and
 [`docs/research/`](docs/research/) for the background survey.
 
+## Where things run
+
+Heavy work (Ghidra, Cemu, builds, traces) runs in a capped container on the worker; see
+[`tools/worker/README.md`](tools/worker/README.md). The editing machine checkout is for editing and git.
+
 ## Tools
 
 | | |

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# w [-t] COMMAND...  - run a command in the WWHD worker container on the worker, from the repo
+# checkout at /wwhd/WWHDRecomp. Use -t for an interactive shell (w -t bash).
+# Examples:  tools/worker/w tools/ghidra/rebuild.sh
+#            tools/worker/w python3 tools/audit_functions.py
+set -euo pipefail
+ssh_opts=() exec_opts=(-i)
+if [ "${1:-}" = -t ]; then ssh_opts=(-t); exec_opts=(-it); shift; fi
+[ $# -gt 0 ] || { echo "usage: w [-t] COMMAND..." >&2; exit 2; }
+exec ssh "${ssh_opts[@]}" worker docker exec "${exec_opts[@]}" -w /wwhd/WWHDRecomp wwhd-worker "$(printf '%q ' "$@")"

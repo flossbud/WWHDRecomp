@@ -38,15 +38,53 @@ boot takes minutes while shaders compile. The title screen is reached about 3 mi
   detects this (no "Run title" within 60 s) and retries.
 * **Clean frames:** the settings template turns off the FPS overlay and notifications.
   `shot.sh` captures Cemu's render child windows directly.
+* **Shared fonts:** the AppImage's portable mode can't find `resources/sharedFonts`, so placeholder
+  text is used. The source build finds them in `bin/resources`.
 * **Boot-time game patch:** the log shows `Patching TWW race conditon at: 0x027f9994`
   (`GamePatch.cpp`). Our recompiler must reproduce it (design D10).
 
+## Patched source build (deterministic reference)
+
+The AppImage can't provide repeatable runs, so the real reference is Cemu built from source at
+the commit the design pins (`c717fcab`), with the patches in `cemu-patches/`:
+
+* **Virtual clock** (`CEMU_VIRTUAL_CLOCK=1`, set by `REF_VIRTUAL_CLOCK=1`):
+  * Guest time advances only with executed guest instructions.
+  * When no guest thread can run, it jumps to the next alarm, vsync or audio frame.
+  * Vsync (every 1/60 s of guest time) is raised by the CPU scheduler once the GPU has retired
+    all submitted work.
+  * Audio frames are paced every 3 ms of guest time.
+  * The calendar date is pinned to 2026-01-01.
+  * Combined with single-core CPU mode (`0005000010143500.ini`) and synchronous shader
+    compilation (`settings.xml`), two runs with the same input should produce the same guest
+    behaviour. `hle_trace.py diff` checks exactly that.
+* **HLE call tracer** (`CEMU_HLE_TRACE=file.zst`, optional `CEMU_HLE_TRACE_FILTER=gx2.`): a
+  compact binary record of every OS-library call (call index, LR, r3–r10, f1–f8, frame number),
+  zstd-compressed. Read it with `hle_trace.py`.
+
+```sh
+# dependencies as for the AppImage, plus the build toolchain:
+sudo apt install clang lld cmake ninja-build nasm pkg-config autoconf automake autoconf-archive \
+    libtool bison flex python3-jinja2 freeglut3-dev libbluetooth-dev libgcrypt20-dev libglm-dev \
+    libgtk-3-dev libpulse-dev libsecret-1-dev libsystemd-dev libusb-1.0-0-dev wayland-protocols libwayland-dev
+git clone --filter=blob:none https://github.com/cemu-project/Cemu ~/opt/cemu-src && cd ~/opt/cemu-src
+git checkout c717fcab && git submodule update --init --recursive
+git am /path/to/WWHDRecomp/tools/reference/cemu-patches/*.patch
+cmake -S . -B build -DCMAKE_BUILD_TYPE=release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -G Ninja
+cmake --build build        # binary: bin/Cemu_release (bin/ already holds resources/ and gameProfiles/)
+rm -rf dependencies/vcpkg/buildtrees   # ~7.6 GB of vcpkg intermediates, not needed after configure
+
+CEMU_BIN=~/opt/cemu-src/bin/Cemu_release REF_VIRTUAL_CLOCK=1 CEMU_HLE_TRACE=/tmp/run1.zst \
+    WWHD_GAME=/path/to/game.wua tools/reference/run.sh
+```
+
+Configure (vcpkg building every dependency) took 13.5 minutes here, and the compile takes
+another 30+ minutes. Disk: plan for about 10 GB during the build, or about 2.5 GB after
+deleting the vcpkg build trees.
+
 ## Still to do for M0a
 
-* **Deterministic clock:** a source build of Cemu with a fixed-step `OSGetTime`, needed for
-  frame-exact comparison (D16). v2.6 is an AppImage; the source build will pin the same commit we
-  link against.
-* **Shared fonts:** the log says "no shareddata fonts loaded", so placeholder text is used. Wire up
-  the `CafeStd.ttf` family.
-* **Compact GX2 tracer:** a binary call log instead of text logging (see design D15).
+* **Verify determinism:** two virtual-clock runs with the same input must give identical traces
+  (`hle_trace.py diff`). Anything that still differs gets tracked down; GPU-written timestamps
+  are a likely suspect.
 * **Input script:** a scripted route (frame-indexed input) instead of ad-hoc `press.sh` calls.

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Reference Cemu settings (tools/reference/run.sh copies this into portable/ on every start).
-     Vulkan, Cubeb audio (api 3), separate GamePad window, no overlay/notifications so frames are clean. -->
+     Vulkan, Cubeb audio (api 3), separate GamePad window, no overlay/notifications so frames are clean,
+     synchronous shader compilation so no draw is skipped while a shader compiles. -->
 <content>
     <logflag>0</logflag>
     <advanced_ppc_logging>false</advanced_ppc_logging>
@@ -65,7 +66,7 @@
         <UpscaleFilter>1</UpscaleFilter>
         <DownscaleFilter>0</DownscaleFilter>
         <FullscreenScaling>0</FullscreenScaling>
-        <AsyncCompile>true</AsyncCompile>
+        <AsyncCompile>false</AsyncCompile>
         <vkAccurateBarriers>true</vkAccurateBarriers>
         <Overlay>
             <Position>0</Position>

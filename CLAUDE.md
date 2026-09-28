@@ -1,6 +1,10 @@
 # Notes for agents
 
 - Goal: static **recomp** of the game; decompile only what we need to change. See the plan.
+- **Heavy jobs run on the worker worker, never in the editing machine container** (Cemu, Ghidra
+  rebuilds, big builds, trace analysis): `tools/worker/sync.sh` then `tools/worker/w <cmd>`.
+  the editing machine is for editing, git and light checks. Tools reading big files must stream.
+  See `tools/worker/README.md`.
 - Target: WWHD **USA v0** `cking.rpx` (sha256 in `orig/README.md`). All addresses assume it.
 - **Never** commit or emit game data: no `.rpx`/`.rpl`/`.wua`, no extracted assets, no raw
   decompiler dumps, no generated recompiler output. `orig/` is gitignored — keep it that way.

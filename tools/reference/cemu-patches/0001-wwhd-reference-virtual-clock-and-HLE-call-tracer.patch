@@ -1,0 +1,524 @@
+From cbfa09f9dfdeaca23f32fda069e1e24e80f8011c Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 03:11:38 +0000
+Subject: [PATCH] wwhd-reference: virtual clock and HLE call tracer
+
+CEMU_VIRTUAL_CLOCK=1: guest time advances only with executed instructions and
+skips to the next alarm/vsync/audio frame when all guest threads are idle;
+vsync is raised by the CPU scheduler after the GPU retires submitted work;
+AX frames every 3 ms of guest time; calendar date pinned to 2026-01-01.
+
+CEMU_HLE_TRACE=file.zst: compact zstd-compressed binary record of every HLE
+call (index, LR, r3-r10, f1-f8, frame), optional CEMU_HLE_TRACE_FILTER.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/Cafe/CafeSystem.cpp                       |   8 +-
+ .../Interpreter/PPCInterpreterHLE.cpp         | 135 ++++++++++++++++++
+ src/Cafe/HW/Espresso/PPCState.h               |   3 +
+ src/Cafe/HW/Espresso/PPCTimer.cpp             |  25 ++++
+ .../Recompiler/BackendX64/BackendX64.cpp      |   3 +
+ src/Cafe/HW/Latte/Core/LatteTiming.cpp        |   4 +
+ src/Cafe/OS/libs/coreinit/coreinit_Alarm.cpp  |  10 ++
+ src/Cafe/OS/libs/coreinit/coreinit_Alarm.h    |   1 +
+ src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp |  57 ++++++++
+ src/Cafe/OS/libs/snd_core/ax.h                |   1 +
+ src/Cafe/OS/libs/snd_core/ax_out.cpp          |  31 ++++
+ 11 files changed, 275 insertions(+), 3 deletions(-)
+
+diff --git a/src/Cafe/CafeSystem.cpp b/src/Cafe/CafeSystem.cpp
+index 6e6504a..6e1fb51 100644
+--- a/src/Cafe/CafeSystem.cpp
++++ b/src/Cafe/CafeSystem.cpp
+@@ -369,11 +369,13 @@ void cemu_initForGame()
+ 	// input manager apply game profile
+ 	InputManager::instance().apply_game_profile();
+ 	// determine cycle offset since 1.1.2000
+-	uint64 secondsSince2000_UTC = (uint64)(time(NULL) - 946684800);
++	// wwhd-reference: the virtual clock also pins the calendar date (2026-01-01 00:00 UTC)
++	const time_t hostNow = PPCTimer_isVirtualClock() ? (time_t)1767225600 : time(NULL);
++	uint64 secondsSince2000_UTC = (uint64)(hostNow - 946684800);
+ 	ppcCyclesSince2000_UTC = secondsSince2000_UTC * (uint64)ESPRESSO_CORE_CLOCK;
+-	time_t theTime = (time(NULL) - 946684800);
++	time_t theTime = (hostNow - 946684800);
+ 	{
+-		tm* lt = localtime(&theTime);
++		tm* lt = PPCTimer_isVirtualClock() ? gmtime(&theTime) : localtime(&theTime);
+ #if BOOST_OS_WINDOWS
+ 		theTime = _mkgmtime(lt);
+ #else
+diff --git a/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp b/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp
+index cf7ba19..78e1098 100644
+--- a/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp
++++ b/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp
+@@ -1,6 +1,8 @@
+ #include "../PPCState.h"
+ #include "PPCInterpreterInternal.h"
+ #include "PPCInterpreterHelper.h"
++#include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
++#include <zstd.h>
+ 
+ std::unordered_set<std::string> s_unsupportedHLECalls;
+ 
+@@ -19,6 +21,7 @@ void PPCInterpreter_handleUnsupportedHLECall(PPCInterpreter_t* hCPU)
+ 
+ static constexpr size_t HLE_TABLE_CAPACITY = 0x4000;
+ HLECALL s_ppcHleTable[HLE_TABLE_CAPACITY]{};
++std::string s_ppcHleNames[HLE_TABLE_CAPACITY]; // wwhd-reference: for the HLE call tracer
+ sint32 s_ppcHleTableWriteIndex = 0;
+ std::mutex s_ppcHleTableMutex;
+ 
+@@ -39,6 +42,7 @@ HLEIDX PPCInterpreter_registerHLECall(HLECALL hleCall, std::string hleName)
+ 	}
+ 	cemu_assert(s_ppcHleTableWriteIndex < HLE_TABLE_CAPACITY);
+ 	s_ppcHleTable[s_ppcHleTableWriteIndex] = hleCall;
++	s_ppcHleNames[s_ppcHleTableWriteIndex] = hleName;
+ 	HLEIDX funcIndex = s_ppcHleTableWriteIndex;
+ 	s_ppcHleTableWriteIndex++;
+ 	return funcIndex;
+@@ -53,6 +57,136 @@ HLECALL PPCInterpreter_getHLECall(HLEIDX funcIndex)
+ 
+ std::mutex s_hleLogMutex;
+ 
++// wwhd-reference: HLE call tracer. CEMU_HLE_TRACE=<file.zst> records every OS library call made by
++// the game as compact binary records; CEMU_HLE_TRACE_FILTER=gx2.,coreinit.OSGetTime limits it to
++// names starting with any listed prefix. The stream is zstd-compressed and flushed every 4096
++// records, so a killed process still leaves a readable trace. Record layout (little endian):
++//   'N' u16 index, u16 length, name                   - first time an index appears
++//   'C' u32 frame, u16 index, u8 core, u8 0, u32 thread, u32 lr, u32 r3..r10, f32 f1..f8
++// frame counts calls to gx2.GX2SwapScanBuffers. See tools/reference/hle_trace.py for a reader.
++namespace HLETrace
++{
++	static std::mutex s_mutex;
++	static FILE* s_file = nullptr;
++	static ZSTD_CCtx* s_cctx = nullptr;
++	static bool s_initialized = false;
++	static std::vector<uint8> s_in, s_out;
++	static std::vector<uint8> s_state; // per index: 0 unknown, 1 traced, 2 filtered out
++	static uint32 s_frame = 0;
++	static uint32 s_sinceFlush = 0;
++
++	static void write(ZSTD_EndDirective mode)
++	{
++		ZSTD_inBuffer in{ s_in.data(), s_in.size(), 0 };
++		bool done;
++		do
++		{
++			ZSTD_outBuffer out{ s_out.data(), s_out.size(), 0 };
++			size_t remaining = ZSTD_compressStream2(s_cctx, &out, &in, mode);
++			fwrite(s_out.data(), 1, out.pos, s_file);
++			done = (mode == ZSTD_e_continue) ? (in.pos == in.size) : (remaining == 0);
++		} while (!done);
++		s_in.clear();
++		if (mode != ZSTD_e_continue)
++			fflush(s_file);
++	}
++
++	static void finish()
++	{
++		std::unique_lock _l(s_mutex);
++		if (s_file)
++		{
++			write(ZSTD_e_end);
++			fclose(s_file);
++			s_file = nullptr;
++		}
++	}
++
++	static bool init()
++	{
++		s_initialized = true;
++		const char* path = getenv("CEMU_HLE_TRACE");
++		if (!path || !*path)
++			return false;
++		s_file = fopen(path, "wb");
++		if (!s_file)
++			return false;
++		s_cctx = ZSTD_createCCtx();
++		ZSTD_CCtx_setParameter(s_cctx, ZSTD_c_compressionLevel, 3);
++		s_out.resize(ZSTD_CStreamOutSize());
++		s_state.assign(HLE_TABLE_CAPACITY, 0);
++		const char magic[8] = { 'H','L','E','T','R','C','0','1' };
++		s_in.insert(s_in.end(), magic, magic + 8);
++		atexit(finish);
++		return true;
++	}
++
++	template<typename T> static void put(T v)
++	{
++		const uint8* p = (const uint8*)&v;
++		s_in.insert(s_in.end(), p, p + sizeof(T));
++	}
++
++	static bool wanted(const std::string& name)
++	{
++		const char* filter = getenv("CEMU_HLE_TRACE_FILTER");
++		if (!filter || !*filter)
++			return true;
++		std::string_view rest(filter);
++		while (!rest.empty())
++		{
++			size_t comma = rest.find(',');
++			std::string_view prefix = rest.substr(0, comma);
++			if (!prefix.empty() && name.compare(0, prefix.size(), prefix) == 0)
++				return true;
++			if (comma == std::string_view::npos)
++				break;
++			rest.remove_prefix(comma + 1);
++		}
++		return false;
++	}
++
++	void record(PPCInterpreter_t* hCPU, uint32 index)
++	{
++		std::unique_lock _l(s_mutex);
++		if (!s_initialized && !init())
++			return;
++		if (!s_file || index >= HLE_TABLE_CAPACITY)
++			return;
++		const std::string& name = s_ppcHleNames[index];
++		if (s_state[index] == 0)
++		{
++			s_state[index] = wanted(name) ? 1 : 2;
++			if (s_state[index] == 1)
++			{
++				put<uint8>('N'); put<uint16>((uint16)index); put<uint16>((uint16)name.size());
++				s_in.insert(s_in.end(), name.begin(), name.end());
++			}
++		}
++		if (name == "gx2.GX2SwapScanBuffers")
++			s_frame++;
++		if (s_state[index] != 1)
++			return;
++		put<uint8>('C');
++		put<uint32>(s_frame);
++		put<uint16>((uint16)index);
++		put<uint8>((uint8)hCPU->spr.UPIR);
++		put<uint8>(0);
++		put<uint32>(memory_getVirtualOffsetFromPointer(coreinit::OSGetCurrentThread()));
++		put<uint32>(hCPU->spr.LR);
++		for (sint32 r = 3; r <= 10; r++)
++			put<uint32>(hCPU->gpr[r]);
++		for (sint32 f = 1; f <= 8; f++)
++			put<float>((float)hCPU->fpr[f].fp0);
++		write(ZSTD_e_continue);
++		if (++s_sinceFlush >= 4096)
++		{
++			write(ZSTD_e_flush);
++			s_sinceFlush = 0;
++		}
++	}
++}
++
+ void PPCInterpreter_virtualHLE(PPCInterpreter_t* hCPU, unsigned int opcode)
+ {
+ 	uint32 hleFuncId = opcode & 0xFFFF;
+@@ -67,6 +201,7 @@ void PPCInterpreter_virtualHLE(PPCInterpreter_t* hCPU, unsigned int opcode)
+ 		// os lib function
+ 		auto hleCall = PPCInterpreter_getHLECall(hleFuncId);
+ 		cemu_assert(hleCall);
++		HLETrace::record(hCPU, hleFuncId);
+ 		hleCall(hCPU);
+ 	}
+ }
+\ No newline at end of file
+diff --git a/src/Cafe/HW/Espresso/PPCState.h b/src/Cafe/HW/Espresso/PPCState.h
+index fd943d3..7903670 100644
+--- a/src/Cafe/HW/Espresso/PPCState.h
++++ b/src/Cafe/HW/Espresso/PPCState.h
+@@ -206,6 +206,9 @@ extern uint64 ppcMainThreadDECCycleStart; // at which cycle the dec register was
+ void PPCTimer_init();
+ void PPCTimer_waitForInit();
+ uint64 PPCTimer_getFromRDTSC();
++bool PPCTimer_isVirtualClock();
++void PPCTimer_advanceVirtualClock(uint64 cycles);
++void PPCTimer_advanceVirtualClockTo(uint64 cycles);
+ 
+ uint64 PPCTimer_microsecondsToTsc(uint64 us);
+ uint64 PPCTimer_tscToMicroseconds(uint64 us);
+diff --git a/src/Cafe/HW/Espresso/PPCTimer.cpp b/src/Cafe/HW/Espresso/PPCTimer.cpp
+index 257973a..858a5d9 100644
+--- a/src/Cafe/HW/Espresso/PPCTimer.cpp
++++ b/src/Cafe/HW/Espresso/PPCTimer.cpp
+@@ -123,9 +123,34 @@ void PPCTimer_waitForInit()
+ 
+ FSpinlock sTimerSpinlock;
+ 
++// wwhd-reference: deterministic virtual clock (CEMU_VIRTUAL_CLOCK=1).
++// Guest time advances only with executed guest instructions (1 instruction = 1 core cycle) and,
++// when every guest thread is idle, jumps straight to the next timed event. Nothing reads the
++// host clock, so two runs with the same input see the same guest time.
++static const bool s_virtualClockEnabled = getenv("CEMU_VIRTUAL_CLOCK") != nullptr;
++static std::atomic<uint64> s_virtualCycles{0};
++
++bool PPCTimer_isVirtualClock()
++{
++	return s_virtualClockEnabled;
++}
++
++void PPCTimer_advanceVirtualClock(uint64 cycles)
++{
++	s_virtualCycles.fetch_add(cycles);
++}
++
++void PPCTimer_advanceVirtualClockTo(uint64 cycles)
++{
++	uint64 cur = s_virtualCycles.load();
++	while (cur < cycles && !s_virtualCycles.compare_exchange_weak(cur, cycles)) {}
++}
++
+ // thread safe
+ uint64 PPCTimer_getFromRDTSC()
+ {
++	if (s_virtualClockEnabled)
++		return s_virtualCycles.load();
+ 	sTimerSpinlock.lock();
+ 	_mm_mfence();
+ 	uint64 rdtscCurrentMeasure = __rdtsc();
+diff --git a/src/Cafe/HW/Espresso/Recompiler/BackendX64/BackendX64.cpp b/src/Cafe/HW/Espresso/Recompiler/BackendX64/BackendX64.cpp
+index 20c1711..72523d9 100644
+--- a/src/Cafe/HW/Espresso/Recompiler/BackendX64/BackendX64.cpp
++++ b/src/Cafe/HW/Espresso/Recompiler/BackendX64/BackendX64.cpp
+@@ -153,6 +153,8 @@ void PPCRecompilerX64Gen_redirectRelativeJump(x64GenContext_t* x64GenContext, si
+ 	}
+ }
+ 
++namespace HLETrace { void record(PPCInterpreter_t* hCPU, uint32 index); } // wwhd-reference
++
+ void* ATTR_MS_ABI PPCRecompiler_virtualHLE(PPCInterpreter_t* hCPU, uint32 hleFuncId)
+ {
+ 	void* prevRSPTemp = hCPU->rspTemp;
+@@ -167,6 +169,7 @@ void* ATTR_MS_ABI PPCRecompiler_virtualHLE(PPCInterpreter_t* hCPU, uint32 hleFun
+ 	{
+ 		auto hleCall = PPCInterpreter_getHLECall(hleFuncId);
+ 		cemu_assert(hleCall != nullptr);
++		HLETrace::record(hCPU, hleFuncId); // wwhd-reference
+ 		hleCall(hCPU);
+ 	}
+ 	hCPU->rspTemp = prevRSPTemp;
+diff --git a/src/Cafe/HW/Latte/Core/LatteTiming.cpp b/src/Cafe/HW/Latte/Core/LatteTiming.cpp
+index 60f4c52..8c59840 100644
+--- a/src/Cafe/HW/Latte/Core/LatteTiming.cpp
++++ b/src/Cafe/HW/Latte/Core/LatteTiming.cpp
+@@ -1,3 +1,4 @@
++#include "Cafe/HW/Espresso/PPCState.h" // wwhd-reference: virtual clock
+ #include "Cafe/HW/Latte/Core/Latte.h"
+ #include "Cafe/OS/libs/gx2/GX2_Event.h"
+ #ifdef ENABLE_VULKAN
+@@ -155,6 +156,9 @@ void LatteTiming_NotifyHostVSync()
+ // handle timed vsync event
+ void LatteTiming_HandleTimedVsync()
+ {
++	// wwhd-reference: with the virtual clock, vsync is raised by the CPU scheduler instead
++	if (PPCTimer_isVirtualClock())
++		return;
+ 	// simulate VSync
+ 	uint64 currentTimer = HighResolutionTimer::now().getTick();
+ 	if( currentTimer >= LatteGPUState.timer_nextVSync )
+diff --git a/src/Cafe/OS/libs/coreinit/coreinit_Alarm.cpp b/src/Cafe/OS/libs/coreinit/coreinit_Alarm.cpp
+index be5e9a7..4198bd8 100644
+--- a/src/Cafe/OS/libs/coreinit/coreinit_Alarm.cpp
++++ b/src/Cafe/OS/libs/coreinit/coreinit_Alarm.cpp
+@@ -111,6 +111,10 @@ namespace coreinit
+ 			return m_nextFire;
+ 		}
+ 
++		static uint64 getSoonestFire() // wwhd-reference
++		{
++			return g_soonestAlarm;
++		}
+ 		static bool quickCheckForAlarm(uint64 currentTick)
+ 		{
+ 			// fast way to check if any alarm was triggered without requiring scheduler lock
+@@ -163,6 +167,12 @@ namespace coreinit
+ 		delete hostAlarm;
+ 	}
+ 
++	// wwhd-reference: earliest pending host alarm (OSGetTime ticks), for virtual-clock idle skipping
++	uint64 OSHostAlarmSoonestFire()
++	{
++		return OSHostAlarm::getSoonestFire();
++	}
++
+ 	void alarm_update()
+ 	{	
+ 		cemu_assert_debug(!__OSHasSchedulerLock());
+diff --git a/src/Cafe/OS/libs/coreinit/coreinit_Alarm.h b/src/Cafe/OS/libs/coreinit/coreinit_Alarm.h
+index 6f4964f..88e63d2 100644
+--- a/src/Cafe/OS/libs/coreinit/coreinit_Alarm.h
++++ b/src/Cafe/OS/libs/coreinit/coreinit_Alarm.h
+@@ -6,6 +6,7 @@ namespace coreinit
+ 	class OSHostAlarm;
+ 	OSHostAlarm* OSHostAlarmCreate(uint64 nextFire, uint64 period, void(*callbackFunc)(uint64 currentTick, void* context), void* context);
+ 	void OSHostAlarmDestroy(OSHostAlarm* hostAlarm);
++	uint64 OSHostAlarmSoonestFire();
+ 
+ 	struct OSAlarm_t
+ 	{
+diff --git a/src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp b/src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp
+index 52dc031..ad86e75 100644
+--- a/src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp
++++ b/src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp
+@@ -2,6 +2,9 @@
+ #include "Cafe/HW/Espresso/PPCCallback.h"
+ #include "Cafe/OS/RPL/rpl.h"
+ #include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
++#include "Cafe/HW/Latte/Core/Latte.h"
++#include "Cafe/OS/libs/gx2/GX2_Command.h"
++void LatteTiming_signalVsync();
+ #include "Cafe/OS/libs/coreinit/coreinit_Time.h"
+ #include "Cafe/OS/libs/coreinit/coreinit_Alarm.h"
+ #include "Cafe/OS/libs/snd_core/ax.h"
+@@ -1180,6 +1183,7 @@ namespace coreinit
+ 	}
+ 
+ 	uint32 s_lehmer_lcg[PPC_CORE_COUNT] = { 0 };
++	sint32 s_sliceBudget[PPC_CORE_COUNT] = { 0 }; // wwhd-reference: timeslice size, to count executed instructions
+ 
+ 	void __OSThreadStartTimeslice(OSThread_t* thread, PPCInterpreter_t* hCPU)
+ 	{
+@@ -1193,6 +1197,7 @@ namespace coreinit
+ 			s_lehmer_lcg[coreIndex] = 12345;
+ 		hCPU->remainingCycles += (s_lehmer_lcg[coreIndex] & 0x7F);
+ 		s_lehmer_lcg[coreIndex] = (uint32)((uint64)s_lehmer_lcg[coreIndex] * 279470273ull % 0xfffffffbull);
++		s_sliceBudget[coreIndex] = hCPU->remainingCycles;
+ 	}
+ 
+ 	OSThread_t* __OSGetNextRunableThread(uint32 coreIndex)
+@@ -1246,6 +1251,46 @@ namespace coreinit
+ 
+ 	Fiber* g_idleLoopFiber[3]{};
+ 
++	// wwhd-reference: timed events driven by the virtual clock (see PPCTimer.cpp).
++	// Vsync fires every 1/60 s of guest time, after the GPU has retired everything submitted so
++	// far, so flip bookkeeping never depends on how far the GPU thread happened to get. When no
++	// guest thread can run, guest time jumps to the next event (alarm, vsync, audio frame).
++	static uint64 s_nextVirtualVsync = 0;
++	constexpr uint64 kVirtualVsyncCycles = ESPRESSO_CORE_CLOCK / 60;
++
++	void __OSVirtualClockEvents(sint32 coreIndex)
++	{
++		uint64 now = PPCInterpreter_getMainCoreCycleCounter();
++		if (s_nextVirtualVsync == 0)
++			s_nextVirtualVsync = now + kVirtualVsyncCycles;
++		if (now >= s_nextVirtualVsync)
++		{
++			if (LatteGPUState.gx2InitCalled)
++			{
++				while (GX2::GX2GetRetiredTimeStamp() < GX2::GX2GetLastSubmittedTimeStamp())
++					std::this_thread::yield();
++			}
++			LatteTiming_signalVsync();
++			s_nextVirtualVsync += kVirtualVsyncCycles;
++		}
++		bool anyRunnable = false;
++		for (sint32 i = 0; i < PPC_CORE_COUNT; i++)
++			anyRunnable |= !g_coreRunQueueThreadCount[i].isZero();
++		if (!anyRunnable)
++		{
++			uint64 next = s_nextVirtualVsync;
++			uint64 alarm = OSHostAlarmSoonestFire(); // in OSGetTime ticks
++			if (alarm != 0 && alarm != std::numeric_limits<uint64>::max() && alarm > ppcCyclesSince2000TimerClock)
++			{
++				uint64 alarmCycles = (alarm - ppcCyclesSince2000TimerClock) * 20ULL;
++				next = std::min(next, alarmCycles);
++			}
++			next = std::min(next, snd_core::AXOut_virtualNextFrame());
++			if (next > now)
++				PPCTimer_advanceVirtualClockTo(next);
++		}
++	}
++
+ 	// idle fiber per core if no thread is runnable
+ 	// this is necessary since we can't block in __OSThreadSwitchToNext() (__OSStoreThread + thread switch must happen inside same scheduler lock)
+ 	void __OSThreadCoreIdle(void* unusedParam)
+@@ -1268,6 +1313,8 @@ namespace coreinit
+ 			}
+ 			if (isMainCore)
+ 			{
++				if (PPCTimer_isVirtualClock())
++					__OSVirtualClockEvents(coreIndex);
+ 				__OSCheckSystemEvents();
+ 				if(g_isMulticoreMode == false)
+ 					coreIndex = (coreIndex + 1) % 3;
+@@ -1292,6 +1339,16 @@ namespace coreinit
+ 		//if (ppcInterpreterCurrentInstance)
+ 		//	debug_printf("Core %d store thread %08x (t = %d)\n", hostThread->ppcInstance.sprNew.UPIR, memory_getVirtualOffsetFromPointer(hostThread->thread), t_assignedCoreIndex);
+ 
++		// wwhd-reference: the virtual clock advances by the instructions this timeslice executed
++		if (PPCTimer_isVirtualClock())
++		{
++			PPCInterpreter_t* sliceCPU = &hostThread->ppcInstance;
++			sint32 core = PPCInterpreter_getCoreIndex(sliceCPU);
++			sint32 executed = s_sliceBudget[core] - std::max<sint32>(sliceCPU->remainingCycles, 0);
++			if (executed > 0)
++				PPCTimer_advanceVirtualClock((uint64)executed);
++			s_sliceBudget[core] = 0;
++		}
+ 		// store context of current thread
+ 		__OSStoreThread(OSGetCurrentThread(), &hostThread->ppcInstance);
+ 		cemu_assert_debug(PPCInterpreter_getCurrentInstance() == nullptr);
+diff --git a/src/Cafe/OS/libs/snd_core/ax.h b/src/Cafe/OS/libs/snd_core/ax.h
+index 144e0c9..0f8244a 100644
+--- a/src/Cafe/OS/libs/snd_core/ax.h
++++ b/src/Cafe/OS/libs/snd_core/ax.h
+@@ -391,6 +391,7 @@ namespace snd_core
+ 	void AXOut_init();
+ 	void AXOut_reset();
+ 	void AXOut_update();
++	uint64 AXOut_virtualNextFrame(); // wwhd-reference
+ 
+ 	COSModule* GetModuleSndCore1();
+ 	COSModule* GetModuleSndCore2();
+diff --git a/src/Cafe/OS/libs/snd_core/ax_out.cpp b/src/Cafe/OS/libs/snd_core/ax_out.cpp
+index 6cb1599..73c4d97 100644
+--- a/src/Cafe/OS/libs/snd_core/ax_out.cpp
++++ b/src/Cafe/OS/libs/snd_core/ax_out.cpp
+@@ -1,3 +1,4 @@
++#include "Cafe/HW/Espresso/PPCState.h" // wwhd-reference: virtual clock
+ #include "Cafe/OS/libs/snd_core/ax.h"
+ #include "Cafe/OS/libs/snd_core/ax_internal.h"
+ #include "Cafe/HW/MMU/MMU.h"
+@@ -474,9 +475,39 @@ namespace snd_core
+ 		}
+ 	}
+ 
++	// wwhd-reference: with the virtual clock, an AX frame is due every 3 ms of guest time
++	static uint64 s_virtualNextAxFrame = 0;
++	constexpr uint64 kVirtualAxFrameCycles = ESPRESSO_CORE_CLOCK / 1000 * 3;
++
++	uint64 AXOut_virtualNextFrame()
++	{
++		return s_virtualNextAxFrame ? s_virtualNextAxFrame : std::numeric_limits<uint64>::max();
++	}
++
++	static void AXOut_updateVirtual()
++	{
++		const uint64 now = PPCInterpreter_getMainCoreCycleCounter();
++		if (s_virtualNextAxFrame == 0)
++			s_virtualNextAxFrame = now + kVirtualAxFrameCycles;
++		if (now < s_virtualNextAxFrame)
++			return;
++		s_virtualNextAxFrame += kVirtualAxFrameCycles;
++		if (snd_core::isInitialized() && numQueuedFramesSndGeneric == snd_core::getNumProcessedFrames())
++		{
++			AXOut_updateDevicePlayState(true);
++			snd_core::AXIst_QueueFrame();
++			numQueuedFramesSndGeneric++;
++		}
++	}
++
+ 	// called periodically to check for AX updates
+ 	void AXOut_update()
+ 	{
++		if (PPCTimer_isVirtualClock())
++		{
++			AXOut_updateVirtual();
++			return;
++		}
+ 		constexpr static auto kTimeout = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::milliseconds(((IAudioAPI::kBlockCount * 3) / 4) * (AX_FRAMES_PER_GROUP * 3)));
+ 		constexpr static auto kWaitDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::milliseconds(3));
+ 		constexpr static auto kWaitDurationFast = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::microseconds(2900));
+-- 
+2.47.3
+
