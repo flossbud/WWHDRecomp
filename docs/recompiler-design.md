@@ -23,6 +23,16 @@ It must:
   and decompiled code land later;
 * never ship game code: the translation runs on the user's machine from their own dump.
 
+**Scope: single screen, Pro Controller** (owner decision, 2026-09-28). WWHD has a proper
+Pro-Controller mode, chosen on its Controller Selection screen. The recomp is designed around it:
+
+* **Input:** one TV-style screen, driven through `padscore`/KPAD (`KPADReadEx`).
+* **The GamePad** is reported as *not connected*. Its screen output is never presented (see D13
+  and D17).
+* **Second-screen support** (for dual-screen handhelds such as the AYN Thor) is a later feature
+  of *our own* design, built on overrides and our renderer, not a reimplementation of Nintendo's
+  GamePad model.
+
 **Non-goals for v1.**
 
 * Speed beyond "comfortably full speed".
@@ -42,7 +52,7 @@ It must:
  jump_tables.csv ├─► recompiler ─► generated/*.cpp  ├─ runtime/    ← dispatch, HLE calls, helpers,
  symbols.csv ───┘   (tools/recomp)                  │               yield, diff mode, overrides
  content/ shaders ──► shader recompiler ─► SPIR-V   ├─ gx2/        ← native GX2 on Vulkan: state,
-   (sharcfb, sarc, gsh)  (tools/shaders)            │               surfaces, draws, TV + GamePad
+   (sharcfb, sarc, gsh)  (tools/shaders)            │               surfaces, draws, TV only
                                                     ├─ Cemu Cafe   ← RPL loader, coreinit scheduler,
                                                     │  (MPL-2.0)     HLE libs, IOSU/FS, audio, input
                                                     │               (no Latte, no gx2, no TCL)
@@ -356,10 +366,14 @@ Our GX2 module provides these few symbols as a shim, so those files link unchang
 * **Coherency (GPU writes the CPU reads).** Examples: `GX2CopySurface` into CPU-visible memory,
   and the Pictograph Box photos. These are written back at `GX2DrawDone` or on explicit
   invalidation.
-* **Presentation.**
-  * `GX2CopyColorBufferToScanBuffer` and `GX2SwapScanBuffers` present both the **TV** image
-    (1920×1080 / 1280×720) and the **GamePad** image (854×480), in one window with a layout
-    option or in two windows. WWHD puts its map and items on the GamePad, so it is required.
+* **Presentation: TV only.**
+  * `GX2CopyColorBufferToScanBuffer` for the TV target and `GX2SwapScanBuffers` present the TV
+    image (1920×1080 / 1280×720) in a single window.
+  * GamePad (DRC) targets are no-ops in the backend: `GX2SetDRCBuffer`, copies to the DRC scan
+    buffer, `GX2SetDRCEnable`. The front half still returns exact `GX2CalcDRCSize` and related
+    values, because the game allocates memory from them.
+  * If the G0 trace (in Pro-Controller mode) shows the game still rendering a GamePad view, an
+    override can skip that pass later; it is wasted work, not a correctness issue.
   * Pacing follows the game's swap interval. The 60 fps enhancement is D9 plus interpolation,
     not a pacing change.
 * **Features to confirm with the G0 trace before building them:**
@@ -441,6 +455,19 @@ The G milestones are scoped from that trace, not from the import list.
   3. **Frames** match within a tolerance (SSIM), with both renderers on lavapipe. Every
      difference above tolerance is logged, and the pair of frames is kept for review.
 
+### D17. Input: Pro Controller through padscore; GamePad absent
+
+* **`VPADRead` reports no controller** (`VPAD_READ_ERR_NO_CONTROLLER`). The other VPAD imports
+  (motor, touch calibration, headphone status) are harmless no-ops.
+* **The Pro Controller is served through `padscore`:** `KPADInitEx`, `KPADReadEx` (Pro Controller
+  extension data), `WPAD*` status. The host side maps SDL3 gamepads onto the Pro Controller
+  layout: buttons, both sticks, ZL/ZR. This is the main input seam, and where remapping lives.
+* **The reference runs the same way:** a Pro Controller profile, no GamePad window. Its scripted
+  route input goes through the same KPAD path, so reference traces follow the code the recomp
+  will actually run.
+* **Later, second screen:** our own feature (e.g. map/inventory on a handheld's second display)
+  built as overrides that draw extra views, not the DRC path.
+
 ## Milestones
 
 There are two tracks. They meet at M4.
@@ -467,7 +494,7 @@ There are two tracks. They meet at M4.
 |---|---|---|
 | G0 | Trace | The D15 trace scopes the backend. |
 | G1 | Shader corpus | Every program in the game files is extracted and translated to SPIR-V that passes `spirv-val`, and every program seen in the G0 trace is in the corpus. |
-| G2 | First pixels | Title screen, TV and GamePad, render within tolerance of the reference on lavapipe. |
+| G2 | First pixels | The title screen (TV) renders within tolerance of the reference on lavapipe. |
 | G3 | The route | Every scene on the scripted route is within tolerance. |
 
 **Together**
