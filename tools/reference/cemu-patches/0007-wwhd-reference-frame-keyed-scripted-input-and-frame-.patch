@@ -1,0 +1,232 @@
+From 2b4e0ec7fd32291f672fcb672ead0818bf3785cd Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 21:26:25 +0000
+Subject: [PATCH] wwhd-reference: frame-keyed scripted input and frame-indexed
+ screenshots
+
+CEMU_INPUT_SCRIPT=file: 'FRAME BUTTONS [FRAMES_HELD]' lines drive VPAD
+channel 0 (host input is never read), keyed to the GX2SwapScanBuffers count.
+CEMU_SHOT_FRAMES=list/ranges + CEMU_SHOT_DIR: capture TV/pad as PPM when
+those frames are presented.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/Cafe/OS/libs/gx2/GX2.cpp   |  49 ++++++++++++++
+ src/Cafe/OS/libs/vpad/vpad.cpp | 114 +++++++++++++++++++++++++++++++++
+ 2 files changed, 163 insertions(+)
+
+diff --git a/src/Cafe/OS/libs/gx2/GX2.cpp b/src/Cafe/OS/libs/gx2/GX2.cpp
+index cc07dc5..4acbc55 100644
+--- a/src/Cafe/OS/libs/gx2/GX2.cpp
++++ b/src/Cafe/OS/libs/gx2/GX2.cpp
+@@ -1,3 +1,5 @@
++#include "Cafe/HW/Latte/Renderer/Renderer.h" // wwhd-reference: frame screenshots
++#include <set>
+ #include "Cafe/OS/common/OSCommon.h"
+ #include "Cafe/HW/Latte/ISA/RegDefines.h"
+ #include "Cafe/HW/Espresso/PPCCallback.h"
+@@ -47,8 +49,55 @@ struct
+ 
+ uint64 lastSwapTime = 0;
+ 
++// wwhd-reference: frame counter for scripted input (counts GX2SwapScanBuffers calls)
++static std::atomic<uint32> s_refSwapCount{0};
++uint32 GX2_RefSwapCount() { return s_refSwapCount.load(); }
++
++// wwhd-reference: frame-indexed screenshots. CEMU_SHOT_FRAMES=120,300,450 (or A-B/STEP ranges)
++// requests a capture when that frame is presented; images go to $CEMU_SHOT_DIR (default ".") as
++// fNNNNNN.tv.ppm / fNNNNNN.pad.ppm (binary PPM, RGB8).
++static void _refShotRequest(uint32 frame)
++{
++	static std::set<uint32> s_frames;
++	static bool s_parsed = false;
++	if (!s_parsed)
++	{
++		s_parsed = true;
++		const char* spec = getenv("CEMU_SHOT_FRAMES");
++		std::string s = spec ? spec : "";
++		size_t pos = 0;
++		while (pos < s.size())
++		{
++			size_t comma = s.find(',', pos);
++			std::string item = s.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos);
++			uint32 a = 0, b = 0, step = 1;
++			if (sscanf(item.c_str(), "%u-%u/%u", &a, &b, &step) >= 2 && step > 0)
++				for (uint32 f = a; f <= b; f += step) s_frames.insert(f);
++			else if (sscanf(item.c_str(), "%u", &a) == 1)
++				s_frames.insert(a);
++			if (comma == std::string::npos) break;
++			pos = comma + 1;
++		}
++	}
++	if (!g_renderer || !s_frames.count(frame))
++		return;
++	const char* dirEnv = getenv("CEMU_SHOT_DIR");
++	std::string dir = dirEnv && *dirEnv ? dirEnv : ".";
++	g_renderer->RequestScreenshot([dir, frame](const std::vector<uint8>& rgb, int width, int height, bool mainWindow) -> std::optional<std::string> {
++		std::string path = fmt::format("{}/f{:06}.{}.ppm", dir, frame, mainWindow ? "tv" : "pad");
++		if (FILE* f = fopen(path.c_str(), "wb"))
++		{
++			fprintf(f, "P6\n%d %d\n255\n", width, height);
++			fwrite(rgb.data(), 1, std::min<size_t>(rgb.size(), (size_t)width * height * 3), f);
++			fclose(f);
++		}
++		return std::nullopt;
++	});
++}
++
+ void gx2Export_GX2SwapScanBuffers(PPCInterpreter_t* hCPU)
+ {
++	_refShotRequest(++s_refSwapCount);
+ 	cemuLog_log(LogType::GX2, "GX2SwapScanBuffers()");
+ 
+ 	bool isPokken = false;
+diff --git a/src/Cafe/OS/libs/vpad/vpad.cpp b/src/Cafe/OS/libs/vpad/vpad.cpp
+index dc6b6ad..6fd0a02 100644
+--- a/src/Cafe/OS/libs/vpad/vpad.cpp
++++ b/src/Cafe/OS/libs/vpad/vpad.cpp
+@@ -7,6 +7,9 @@
+ #include "Cafe/OS/libs/coreinit/coreinit_Alarm.h"
+ #include "input/InputManager.h"
+ #include "WindowSystem.h"
++#include <fstream> // wwhd-reference: input script
++#include <sstream>
++#include <unordered_map>
+ 
+ #ifdef PUBLIC_RELASE
+ #define vpadbreak() 
+@@ -121,6 +124,8 @@ void _tpRawToResolution(sint32 x, sint32 y, sint32* outX, sint32* outY, sint32 w
+ }
+ 
+ 
++uint32 GX2_RefSwapCount(); // wwhd-reference, GX2.cpp
++
+ namespace vpad
+ {
+ 	enum class PlayMode : sint32
+@@ -217,6 +222,99 @@ namespace vpad
+ 		*sensitivity = g_vpad.controller_data[channel].acc_param.sensitivity;
+ 	}
+ 
++	// wwhd-reference: scripted GamePad input keyed to the frame counter (CEMU_INPUT_SCRIPT=file).
++	// Each line: FRAME BUTTONS [FRAMES_HELD=1]; BUTTONS joined with '+': A B X Y L R ZL ZR PLUS MINUS
++	// HOME UP DOWN LEFT RIGHT LCLICK RCLICK, and LUP LDOWN LLEFT LRIGHT RUP RDOWN RLEFT RRIGHT for full
++	// stick deflection. '#' starts a comment. With a script, host input is never read, so runs are
++	// repeatable; frame = number of GX2SwapScanBuffers calls so far.
++	namespace refinput
++	{
++		struct Step { uint32 frame, duration, buttons; float lx, ly, rx, ry; };
++		static std::vector<Step> s_steps;
++		static bool s_loaded = false, s_enabled = false;
++		static uint32 s_prevHold = 0;
++
++		static void load()
++		{
++			s_loaded = true;
++			const char* path = getenv("CEMU_INPUT_SCRIPT");
++			if (!path || !*path)
++				return;
++			std::ifstream f(path);
++			if (!f)
++			{
++				cemuLog_log(LogType::Force, "input script: cannot open {}", path);
++				return;
++			}
++			static const std::unordered_map<std::string, uint32> kButtons = {
++				{"A",0x8000},{"B",0x4000},{"X",0x2000},{"Y",0x1000},{"L",0x0020},{"R",0x0010},{"ZL",0x0080},{"ZR",0x0040},
++				{"PLUS",0x0008},{"MINUS",0x0004},{"HOME",0x0002},{"UP",0x0200},{"DOWN",0x0100},{"LEFT",0x0800},{"RIGHT",0x0400},
++				{"LCLICK",0x00040000},{"RCLICK",0x00020000} };
++			std::string line;
++			while (std::getline(f, line))
++			{
++				if (auto hash = line.find('#'); hash != std::string::npos)
++					line.resize(hash);
++				std::istringstream ls(line);
++				Step st{};
++				std::string names;
++				if (!(ls >> st.frame >> names))
++					continue;
++				if (!(ls >> st.duration))
++					st.duration = 1;
++				size_t start = 0;
++				while (start <= names.size())
++				{
++					size_t plus = names.find('+', start);
++					std::string n = names.substr(start, plus == std::string::npos ? std::string::npos : plus - start);
++					if (auto it = kButtons.find(n); it != kButtons.end()) st.buttons |= it->second;
++					else if (n == "LUP") st.ly = 1.0f; else if (n == "LDOWN") st.ly = -1.0f;
++					else if (n == "LLEFT") st.lx = -1.0f; else if (n == "LRIGHT") st.lx = 1.0f;
++					else if (n == "RUP") st.ry = 1.0f; else if (n == "RDOWN") st.ry = -1.0f;
++					else if (n == "RLEFT") st.rx = -1.0f; else if (n == "RRIGHT") st.rx = 1.0f;
++					else if (!n.empty()) cemuLog_log(LogType::Force, "input script: unknown button '{}'", n);
++					if (plus == std::string::npos) break;
++					start = plus + 1;
++				}
++				s_steps.push_back(st);
++			}
++			s_enabled = true;
++			cemuLog_log(LogType::Force, "input script: {} steps from {}", s_steps.size(), path);
++		}
++
++		static bool enabled()
++		{
++			if (!s_loaded)
++				load();
++			return s_enabled;
++		}
++
++		static void fill(VPADStatus* status)
++		{
++			const uint32 frame = GX2_RefSwapCount();
++			uint32 hold = 0;
++			float lx = 0, ly = 0, rx = 0, ry = 0;
++			for (const Step& st : s_steps)
++			{
++				if (frame < st.frame || frame >= st.frame + st.duration)
++					continue;
++				hold |= st.buttons;
++				lx += st.lx; ly += st.ly; rx += st.rx; ry += st.ry;
++			}
++			constexpr float kThreshold = 0.5f; // as VPADController's emulated stick directions
++			if (ly > kThreshold) hold |= 0x10000000; if (ly < -kThreshold) hold |= 0x08000000;
++			if (lx < -kThreshold) hold |= 0x40000000; if (lx > kThreshold) hold |= 0x20000000;
++			if (ry > kThreshold) hold |= 0x01000000; if (ry < -kThreshold) hold |= 0x00800000;
++			if (rx < -kThreshold) hold |= 0x04000000; if (rx > kThreshold) hold |= 0x02000000;
++			status->hold = hold;
++			status->trig = hold & ~s_prevHold;
++			status->release = s_prevHold & ~hold;
++			s_prevHold = hold;
++			status->leftStick.x = lx; status->leftStick.y = ly;
++			status->rightStick.x = rx; status->rightStick.y = ry;
++		}
++	}
++
+ 	sint32 VPADRead(sint32 channel, VPADStatus* status, uint32 length, sint32be* error) 
+ 	{
+ 		//printf("VPADRead(%d,0x%08X,%d,0x%08x)\n", hCPU->gpr[3], hCPU->gpr[4], hCPU->gpr[5], hCPU->gpr[6]);
+@@ -238,6 +336,22 @@ namespace vpad
+ 		status->tpProcessed1.validity = VPAD_TP_VALIDITY_INVALID_XY;
+ 		status->tpProcessed2.validity = VPAD_TP_VALIDITY_INVALID_XY;
+ 
++		if (refinput::enabled())
++		{
++			if (channel != 0)
++			{
++				if (error)
++					*error = VPAD_READ_ERR_NO_CONTROLLER;
++				if (length > 0)
++					status->vpadErr = -1;
++				return 0;
++			}
++			refinput::fill(status);
++			if (error)
++				*error = VPAD_READ_ERR_NONE;
++			return 1;
++		}
++
+ 		const auto controller = InputManager::instance().get_vpad_controller(channel);
+ 		if (!controller)
+ 		{
+-- 
+2.47.3
+

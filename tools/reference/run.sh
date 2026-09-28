@@ -10,6 +10,8 @@
 #   CEMU_HLE_TRACE=out.zst        binary OS-call trace (patched build only; see hle_trace.py)
 #   CEMU_HLE_TRACE_FILTER=gx2.    only trace names with these prefixes (comma-separated)
 #   CEMU_HLE_TRACE_EXIT_FRAME=N   end the trace and exit Cemu when frame N begins
+#   CEMU_INPUT_SCRIPT=route.txt   frame-keyed GamePad input (patched build; see tools/reference/routes/)
+#   CEMU_SHOT_FRAMES=0-900/60     capture TV/pad at these frames into $CEMU_SHOT_DIR (PPM)
 #   REF_FRESH=1                   delete the emulated NAND (portable/mlc01: saves, account) first,
 #                                 so every run starts from the same state
 set -euo pipefail
@@ -25,7 +27,7 @@ if [ -z "${WWHD_GAME:-}" ]; then for f in /wwhd/data/rom/*.wua; do [ -f "$f" ] &
 game=${WWHD_GAME:?set WWHD_GAME to your .wua or title directory}
 export DISPLAY=${DISPLAY:-:99}
 [ -n "${REF_VIRTUAL_CLOCK:-}" ] && export CEMU_VIRTUAL_CLOCK=1
-export CEMU_HLE_TRACE CEMU_HLE_TRACE_FILTER CEMU_HLE_TRACE_EXIT_FRAME
+export CEMU_HLE_TRACE CEMU_HLE_TRACE_FILTER CEMU_HLE_TRACE_EXIT_FRAME CEMU_INPUT_SCRIPT CEMU_SHOT_FRAMES CEMU_SHOT_DIR
 [ -n "${REF_FRESH:-}" ] && rm -rf "$portable/mlc01"
 mkdir -p "$portable/controllerProfiles" "$portable/gameProfiles"
 cp "$here/0005000010143500.ini" "$portable/gameProfiles/"

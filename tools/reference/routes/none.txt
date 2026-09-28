@@ -1,0 +1,1 @@
+# empty route: no input (boot, then idle on the first dialog)
