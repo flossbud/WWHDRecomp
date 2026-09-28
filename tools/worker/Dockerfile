@@ -8,7 +8,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl git rsync unzip zip xz-utils zstd file less procps \
       python3 python3-numpy python3-jinja2 \
-      build-essential clang lld cmake ninja-build nasm pkg-config autoconf automake autoconf-archive \
+      build-essential clang lld llvm cmake ninja-build nasm pkg-config autoconf automake autoconf-archive \
       libtool bison flex \
       libssl-dev zlib1g-dev libshaderc-dev libsdl3-dev \
       freeglut3-dev libbluetooth-dev libgcrypt20-dev libglm-dev libgtk-3-dev libpulse-dev \

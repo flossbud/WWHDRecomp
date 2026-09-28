@@ -28,6 +28,7 @@ cemu() {
     cd "$opt/cemu-src"
     git checkout -q "$CEMU_COMMIT" && git submodule update --init --recursive -q
     git -c user.name=wwhd -c user.email=wwhd@localhost am -q "$repo"/tools/reference/cemu-patches/*.patch
+    rm -f build/CMakeCache.txt   # a failed earlier configure can cache NOTFOUND tools; vcpkg's installed tree is kept
     cmake -S . -B build -DCMAKE_BUILD_TYPE=release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -G Ninja
     cmake --build build -j 10   # matches the container CPU quota (nproc reports 12)
     rm -rf dependencies/vcpkg/buildtrees
