@@ -1,0 +1,133 @@
+From c562bb6709f057f456ff7c3b9209dc629bcfb322 Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 17:59:06 +0000
+Subject: [PATCH] wwhd-reference: scheduler events in the HLE trace
+ (sched.slice/alarm/skip)
+
+Determinism debugging: every timeslice start (core, thread, budget, virtual
+time, IP), host alarm firing (fire time, current time, period) and idle
+time-jump is recorded as a synthetic call record.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../Interpreter/PPCInterpreterHLE.cpp         | 42 ++++++++++++++++++-
+ src/Cafe/HW/Espresso/PPCState.h               |  1 +
+ src/Cafe/OS/libs/coreinit/coreinit_Alarm.cpp  |  3 ++
+ src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp |  9 ++++
+ 4 files changed, 54 insertions(+), 1 deletion(-)
+
+diff --git a/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp b/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp
+index 26ed41e..040a773 100644
+--- a/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp
++++ b/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp
+@@ -153,6 +153,39 @@ namespace HLETrace
+ 		return false;
+ 	}
+ 
++	// Synthetic scheduler records (sched.*) share the call-record format: gpr[0..] carry the values,
++	// thread/core identify the context. Indices are taken from the top of the HLE table.
++	void event(uint32 index, const char* name, uint32 core, uint32 thread, std::initializer_list<uint32> values)
++	{
++		std::unique_lock _l(s_mutex);
++		if (!s_initialized && !init())
++			return;
++		if (!s_file || index >= HLE_TABLE_CAPACITY)
++			return;
++		if (s_ppcHleNames[index].empty())
++			s_ppcHleNames[index] = name;
++		if (s_state[index] == 0)
++		{
++			s_state[index] = wanted(s_ppcHleNames[index]) ? 1 : 2;
++			if (s_state[index] == 1)
++			{
++				put<uint8>('N'); put<uint16>((uint16)index); put<uint16>((uint16)s_ppcHleNames[index].size());
++				s_in.insert(s_in.end(), s_ppcHleNames[index].begin(), s_ppcHleNames[index].end());
++			}
++		}
++		if (s_state[index] != 1)
++			return;
++		put<uint8>('C'); put<uint32>(s_frame); put<uint16>((uint16)index); put<uint8>((uint8)core); put<uint8>(0);
++		put<uint32>(thread); put<uint32>(0);
++		uint32 regs[8]{};
++		size_t i = 0;
++		for (uint32 v : values)
++			if (i < 8) regs[i++] = v;
++		for (uint32 r : regs) put<uint32>(r);
++		for (sint32 f = 0; f < 8; f++) put<float>(0.0f);
++		write(ZSTD_e_continue);
++	}
++
+ 	void record(PPCInterpreter_t* hCPU, uint32 index)
+ 	{
+ 		std::unique_lock _l(s_mutex);
+@@ -224,4 +257,11 @@ void PPCInterpreter_virtualHLE(PPCInterpreter_t* hCPU, unsigned int opcode)
+ 			hCPU->remainingCycles -= kVirtualHLECallCycles;
+ 		hleCall(hCPU);
+ 	}
+-}
+\ No newline at end of file
++}
++// wwhd-reference: scheduler events for determinism debugging (see HLETrace::event)
++void HLETrace_schedEvent(uint32 kind, uint32 core, uint32 thread, uint32 a, uint32 b, uint32 c, uint32 d, uint32 e)
++{
++	static const char* kNames[] = { "sched.slice", "sched.alarm", "sched.skip" };
++	if (kind < 3)
++		HLETrace::event(0x3FF0 + kind, kNames[kind], core, thread, { a, b, c, d, e });
++}
+diff --git a/src/Cafe/HW/Espresso/PPCState.h b/src/Cafe/HW/Espresso/PPCState.h
+index 7903670..2528436 100644
+--- a/src/Cafe/HW/Espresso/PPCState.h
++++ b/src/Cafe/HW/Espresso/PPCState.h
+@@ -207,6 +207,7 @@ void PPCTimer_init();
+ void PPCTimer_waitForInit();
+ uint64 PPCTimer_getFromRDTSC();
+ bool PPCTimer_isVirtualClock();
++void HLETrace_schedEvent(uint32 kind, uint32 core, uint32 thread, uint32 a, uint32 b, uint32 c, uint32 d, uint32 e); // wwhd-reference
+ void PPCTimer_advanceVirtualClock(uint64 cycles);
+ void PPCTimer_advanceVirtualClockTo(uint64 cycles);
+ 
+diff --git a/src/Cafe/OS/libs/coreinit/coreinit_Alarm.cpp b/src/Cafe/OS/libs/coreinit/coreinit_Alarm.cpp
+index 4198bd8..305b2e8 100644
+--- a/src/Cafe/OS/libs/coreinit/coreinit_Alarm.cpp
++++ b/src/Cafe/OS/libs/coreinit/coreinit_Alarm.cpp
+@@ -89,6 +89,9 @@ namespace coreinit
+ 				if (currentTick >= (*firstAlarm)->m_nextFire)
+ 				{
+ 					OSHostAlarm* alarm = *firstAlarm;
++					if (PPCTimer_isVirtualClock())
++						HLETrace_schedEvent(1, 0, 0, (uint32)(alarm->m_nextFire >> 32), (uint32)alarm->m_nextFire,
++							(uint32)(currentTick >> 32), (uint32)currentTick, (uint32)alarm->m_period);
+ 					g_activeAlarmList.erase(firstAlarm);
+ 					alarm->triggerAlarm(currentTick);
+ 					// if periodic alarm then requeue
+diff --git a/src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp b/src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp
+index ad86e75..64c0371 100644
+--- a/src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp
++++ b/src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp
+@@ -1198,6 +1198,12 @@ namespace coreinit
+ 		hCPU->remainingCycles += (s_lehmer_lcg[coreIndex] & 0x7F);
+ 		s_lehmer_lcg[coreIndex] = (uint32)((uint64)s_lehmer_lcg[coreIndex] * 279470273ull % 0xfffffffbull);
+ 		s_sliceBudget[coreIndex] = hCPU->remainingCycles;
++		if (PPCTimer_isVirtualClock())
++		{
++			uint64 now = PPCInterpreter_getMainCoreCycleCounter();
++			HLETrace_schedEvent(0, coreIndex, memory_getVirtualOffsetFromPointer(thread), (uint32)hCPU->remainingCycles,
++				(uint32)(now >> 32), (uint32)now, hCPU->instructionPointer, 0);
++		}
+ 	}
+ 
+ 	OSThread_t* __OSGetNextRunableThread(uint32 coreIndex)
+@@ -1287,7 +1293,10 @@ namespace coreinit
+ 			}
+ 			next = std::min(next, snd_core::AXOut_virtualNextFrame());
+ 			if (next > now)
++			{
++				HLETrace_schedEvent(2, coreIndex, 0, (uint32)(now >> 32), (uint32)now, (uint32)(next >> 32), (uint32)next, 0);
+ 				PPCTimer_advanceVirtualClockTo(next);
++			}
+ 		}
+ 	}
+ 
+-- 
+2.47.3
+

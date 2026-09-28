@@ -96,12 +96,12 @@ def calls(path):
 HOST_ADDRESS = re.compile(r"^(PPCCallback)[0-9a-f]+$")
 
 
-def fmt(names, c):
+def fmt(names, c, core=True):
     args = " ".join(f"{g:08x}" for g in c["gpr"])
     floats = " ".join(f"{x:g}" for x in c["fpr"] if x)
     # Cemu names callback stubs after a host pointer, which ASLR changes every run
     name = HOST_ADDRESS.sub(r"\1", names.get(int(c["index"]), f"#{c['index']}"))
-    return (f"f{c['frame']:6d} c{c['core']} t{c['thread']:08x} lr{c['lr']:08x} {name}({args})"
+    return (f"f{c['frame']:6d} {'c%d ' % c['core'] if core else ''}t{c['thread']:08x} lr{c['lr']:08x} {name}({args})"
             + (f" [{floats}]" if floats else ""))
 
 
@@ -111,6 +111,8 @@ def main():
     s = sub.add_parser("summary"); s.add_argument("trace")
     d = sub.add_parser("dump"); d.add_argument("trace"); d.add_argument("--frames"); d.add_argument("--grep")
     x = sub.add_parser("diff"); x.add_argument("a"); x.add_argument("b")
+    x.add_argument("--ignore-core", action="store_true",
+                   help="compare without the core index (which core served a thread)")
     args = ap.parse_args()
 
     if args.cmd == "summary":
@@ -139,7 +141,7 @@ def main():
         history = collections.deque(maxlen=3)
         sa, sb = calls(args.a), calls(args.b)
         for (na, ca), (nb, cb) in zip(sa, sb):
-            ra, rb = fmt(na, ca), fmt(nb, cb)
+            ra, rb = fmt(na, ca, not args.ignore_core), fmt(nb, cb, not args.ignore_core)
             if ra != rb:
                 print(f"first difference at call {n}:")
                 for pa, pb in history:
