@@ -1,0 +1,89 @@
+From 1a636f26e932a4c5d015c9170d8720c82383ed98 Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 17:40:18 +0000
+Subject: [PATCH] wwhd-reference: deliver IPC replies at a deterministic point
+ under the virtual clock
+
+IOSU host threads delivered replies whenever they finished, so the guest
+threads they wake (e.g. the IPC driver thread) interleaved differently per
+run: the first determinism diff diverged at call 4873 (SAVEInit vs an IPC
+callback). The submitting thread now waits host-side for its reply (2 s cap
+for long-polls, logged).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/Cafe/IOSU/kernel/iosu_kernel.cpp | 30 ++++++++++++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+
+diff --git a/src/Cafe/IOSU/kernel/iosu_kernel.cpp b/src/Cafe/IOSU/kernel/iosu_kernel.cpp
+index 3ea6d7d..10f0680 100644
+--- a/src/Cafe/IOSU/kernel/iosu_kernel.cpp
++++ b/src/Cafe/IOSU/kernel/iosu_kernel.cpp
+@@ -3,6 +3,7 @@
+ #include "util/helpers/helpers.h"
+ #include "Cafe/OS/libs/coreinit/coreinit_IPC.h"
+ #include "util/highresolutiontimer/HighResolutionTimer.h"
++#include "Cafe/HW/Espresso/PPCState.h" // wwhd-reference: virtual clock
+ 
+ namespace iosu
+ {
+@@ -580,6 +581,16 @@ namespace iosu
+ 
+ 		std::mutex sMtxReply[3];
+ 
++		// wwhd-reference: with the virtual clock, an IPC request's reply must reach the guest at a
++		// deterministic point. Normally an IOSU host thread delivers it whenever it finishes, so the
++		// guest threads it wakes interleave differently from run to run. The submitting guest thread
++		// now waits (host-side) until the reply was delivered. Requests that legitimately stay
++		// pending (long-polls) fall back to async after kVirtualReplyWait and are logged.
++		std::mutex sVirtualReplyMtx;
++		std::condition_variable sVirtualReplyCv;
++		uint32 sVirtualReplyGen[96]{}; // one per sIPCDispatchableCommandPool entry
++		constexpr auto kVirtualReplyWait = std::chrono::seconds(2);
++
+ 		void _IPCReplyAndRelease(IOSDispatchableCommand* dispatchCmd, uint32 result)
+ 		{
+ 			cemu_assert(dispatchCmd->ppcCoreIndex < 3);
+@@ -590,6 +601,12 @@ namespace iosu
+ 			IPCCommandBody* responseArray[1];
+ 			responseArray[0] = dispatchCmd->originalBody;
+ 			coreinit::IPCDriver_NotifyResponses(dispatchCmd->ppcCoreIndex, responseArray, 1);
++			if (PPCTimer_isVirtualClock())
++			{
++				std::unique_lock _vl(sVirtualReplyMtx);
++				sVirtualReplyGen[dispatchCmd - sIPCDispatchableCommandPool.GetPtr()]++;
++				sVirtualReplyCv.notify_all();
++			}
+ 			_IPCReleaseDispatchableCommand(dispatchCmd);
+ 		}
+ 
+@@ -674,6 +691,13 @@ namespace iosu
+ 		{
+ 			// create a copy of the cmd
+ 			IOSDispatchableCommand* dispatchCmd = _IPCAllocateDispatchableCommand();
++			const size_t virtualSlot = dispatchCmd - sIPCDispatchableCommandPool.GetPtr();
++			uint32 virtualGen = 0;
++			if (PPCTimer_isVirtualClock())
++			{
++				std::unique_lock _vl(sVirtualReplyMtx);
++				virtualGen = sVirtualReplyGen[virtualSlot];
++			}
+ 			dispatchCmd->body = *cmd;
+ 			dispatchCmd->originalBody = cmd;
+ 			dispatchCmd->ppcCoreIndex = ppcCoreIndex;
+@@ -709,6 +733,12 @@ namespace iosu
+ 				_IPCReplyAndRelease(dispatchCmd, r);
+ 				// in non-error case the device handler will send the result asynchronously via IOS_ResourceReply
+ 			}
++			if (PPCTimer_isVirtualClock())
++			{
++				std::unique_lock _vl(sVirtualReplyMtx);
++				if (!sVirtualReplyCv.wait_for(_vl, kVirtualReplyWait, [&] { return sVirtualReplyGen[virtualSlot] != virtualGen; }))
++					cemuLog_log(LogType::Force, "virtual clock: IPC cmd {} still pending after 2 s, completing asynchronously", (uint32)(IPCCommandId)cmd->cmdId);
++			}
+ 		}
+ 
+ 		IOS_ERROR IOS_ResourceReply(IPCCommandBody* cmd, IOS_ERROR result)
+-- 
+2.47.3
+

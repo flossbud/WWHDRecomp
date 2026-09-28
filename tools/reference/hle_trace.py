@@ -19,6 +19,7 @@ a 272 MB trace took down the editing machine container on 2026-09-28.
 """
 import argparse
 import collections
+import re
 import sys
 
 import numpy as np
@@ -92,10 +93,14 @@ def calls(path):
             yield names, c
 
 
+HOST_ADDRESS = re.compile(r"^(PPCCallback)[0-9a-f]+$")
+
+
 def fmt(names, c):
     args = " ".join(f"{g:08x}" for g in c["gpr"])
     floats = " ".join(f"{x:g}" for x in c["fpr"] if x)
-    name = names.get(int(c["index"]), f"#{c['index']}")
+    # Cemu names callback stubs after a host pointer, which ASLR changes every run
+    name = HOST_ADDRESS.sub(r"\1", names.get(int(c["index"]), f"#{c['index']}"))
     return (f"f{c['frame']:6d} c{c['core']} t{c['thread']:08x} lr{c['lr']:08x} {name}({args})"
             + (f" [{floats}]" if floats else ""))
 
