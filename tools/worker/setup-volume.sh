@@ -3,6 +3,8 @@
 # Runs INSIDE the worker container (tools/worker/w tools/worker/setup-volume.sh all).
 #   ghidra: Ghidra 12.0.4 + Maschell/GhidraRPXLoader v0.9.2 -> /wwhd/opt
 #   cemu:   Cemu at the pinned commit + tools/reference/cemu-patches, built -> /wwhd/opt/cemu-src
+#   cemu-rebuild: re-apply the current patches on the pinned commit and rebuild incrementally
+#           (after tools/reference/cemu-patches changed)
 #   orig:   extract code/ and meta/ from the .wua in /wwhd/data/rom -> /wwhd/data/orig
 # Idempotent: finished steps are skipped.
 set -euo pipefail
@@ -35,13 +37,21 @@ cemu() {
     echo "cemu: built"
 }
 
+cemu_rebuild() {
+    cd "$opt/cemu-src"
+    git checkout -q --detach "$CEMU_COMMIT"
+    git -c user.name=wwhd -c user.email=wwhd@localhost am -q "$repo"/tools/reference/cemu-patches/*.patch
+    cmake --build build -j 10
+    echo "cemu: rebuilt with $(ls "$repo"/tools/reference/cemu-patches/*.patch | wc -l) patches"
+}
+
 orig() {
     [ -f /wwhd/data/orig/0005000010143500_v0/code/cking.rpx ] && { echo "orig: present"; return; }
     uv run -q "$repo/tools/wua_extract.py" /wwhd/data/rom/*.wua /wwhd/data/orig code/ meta/meta.xml
 }
 
 case "${1:-all}" in
-    ghidra) ghidra ;; cemu) cemu ;; orig) orig ;;
+    ghidra) ghidra ;; cemu) cemu ;; cemu-rebuild) cemu_rebuild ;; orig) orig ;;
     all) orig; ghidra; cemu ;;
-    *) echo "usage: setup-volume.sh [ghidra|cemu|orig|all]" >&2; exit 2 ;;
+    *) echo "usage: setup-volume.sh [ghidra|cemu|cemu-rebuild|orig|all]" >&2; exit 2 ;;
 esac

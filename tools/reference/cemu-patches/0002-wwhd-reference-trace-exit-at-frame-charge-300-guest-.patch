@@ -1,0 +1,86 @@
+From d4db533e8b92b621e7fd8ef6650ddaec00df9d9c Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 17:30:33 +0000
+Subject: [PATCH 2/2] wwhd-reference: trace exit-at-frame; charge 300 guest
+ cycles per HLE call
+
+CEMU_HLE_TRACE_EXIT_FRAME=N ends the trace and exits at frame N, so repeated
+runs cover the same span (this was missing from the first exported patch).
+
+Under the virtual clock each HLE call now costs 300 guest cycles: polling
+loops made of OS calls (WWHD's message ping-pong, ~65k round trips per frame)
+otherwise advance guest time almost not at all.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../Interpreter/PPCInterpreterHLE.cpp         | 22 ++++++++++++++++++-
+ .../Recompiler/BackendX64/BackendX64.cpp      |  2 ++
+ 2 files changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp b/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp
+index 78e1098..26ed41e 100644
+--- a/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp
++++ b/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp
+@@ -57,9 +57,16 @@ HLECALL PPCInterpreter_getHLECall(HLEIDX funcIndex)
+ 
+ std::mutex s_hleLogMutex;
+ 
++// wwhd-reference: with the virtual clock, an OS call must cost guest time like it does on hardware
++// (a few hundred cycles), or a polling loop built from OS calls (e.g. WWHD's OSSendMessage /
++// OSReceiveMessage ping-pong, ~65k round trips per frame) advances guest time almost not at all
++// while burning host time. Charged to the thread's timeslice, so the virtual clock sees it too.
++constexpr sint32 kVirtualHLECallCycles = 300;
++
+ // wwhd-reference: HLE call tracer. CEMU_HLE_TRACE=<file.zst> records every OS library call made by
+ // the game as compact binary records; CEMU_HLE_TRACE_FILTER=gx2.,coreinit.OSGetTime limits it to
+-// names starting with any listed prefix. The stream is zstd-compressed and flushed every 4096
++// names starting with any listed prefix; CEMU_HLE_TRACE_EXIT_FRAME=N ends the trace and exits Cemu
++// when frame N begins, so repeated runs cover exactly the same span. The stream is zstd-compressed and flushed every 4096
+ // records, so a killed process still leaves a readable trace. Record layout (little endian):
+ //   'N' u16 index, u16 length, name                   - first time an index appears
+ //   'C' u32 frame, u16 index, u8 core, u8 0, u32 thread, u32 lr, u32 r3..r10, f32 f1..f8
+@@ -164,7 +171,18 @@ namespace HLETrace
+ 			}
+ 		}
+ 		if (name == "gx2.GX2SwapScanBuffers")
++		{
+ 			s_frame++;
++			static const char* exitFrame = getenv("CEMU_HLE_TRACE_EXIT_FRAME");
++			if (exitFrame && *exitFrame && s_frame >= (uint32)atoi(exitFrame))
++			{
++				write(ZSTD_e_end);
++				fclose(s_file);
++				s_file = nullptr;
++				cemuLog_log(LogType::Force, "HLE trace: reached frame {}, exiting", s_frame);
++				_exit(0);
++			}
++		}
+ 		if (s_state[index] != 1)
+ 			return;
+ 		put<uint8>('C');
+@@ -202,6 +220,8 @@ void PPCInterpreter_virtualHLE(PPCInterpreter_t* hCPU, unsigned int opcode)
+ 		auto hleCall = PPCInterpreter_getHLECall(hleFuncId);
+ 		cemu_assert(hleCall);
+ 		HLETrace::record(hCPU, hleFuncId);
++		if (PPCTimer_isVirtualClock())
++			hCPU->remainingCycles -= kVirtualHLECallCycles;
+ 		hleCall(hCPU);
+ 	}
+ }
+\ No newline at end of file
+diff --git a/src/Cafe/HW/Espresso/Recompiler/BackendX64/BackendX64.cpp b/src/Cafe/HW/Espresso/Recompiler/BackendX64/BackendX64.cpp
+index 72523d9..d21deb7 100644
+--- a/src/Cafe/HW/Espresso/Recompiler/BackendX64/BackendX64.cpp
++++ b/src/Cafe/HW/Espresso/Recompiler/BackendX64/BackendX64.cpp
+@@ -170,6 +170,8 @@ void* ATTR_MS_ABI PPCRecompiler_virtualHLE(PPCInterpreter_t* hCPU, uint32 hleFun
+ 		auto hleCall = PPCInterpreter_getHLECall(hleFuncId);
+ 		cemu_assert(hleCall != nullptr);
+ 		HLETrace::record(hCPU, hleFuncId); // wwhd-reference
++		if (PPCTimer_isVirtualClock())
++			hCPU->remainingCycles -= 300; // wwhd-reference: see kVirtualHLECallCycles in PPCInterpreterHLE.cpp
+ 		hleCall(hCPU);
+ 	}
+ 	hCPU->rspTemp = prevRSPTemp;
+-- 
+2.47.3
+

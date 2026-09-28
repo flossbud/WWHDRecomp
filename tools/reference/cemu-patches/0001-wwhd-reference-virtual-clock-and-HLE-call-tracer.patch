@@ -1,7 +1,7 @@
 From cbfa09f9dfdeaca23f32fda069e1e24e80f8011c Mon Sep 17 00:00:00 2001
 From: flossbud <224492734+flossbud@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 03:11:38 +0000
-Subject: [PATCH] wwhd-reference: virtual clock and HLE call tracer
+Subject: [PATCH 1/2] wwhd-reference: virtual clock and HLE call tracer
 
 CEMU_VIRTUAL_CLOCK=1: guest time advances only with executed instructions and
 skips to the next alarm/vsync/audio frame when all guest threads are idle;

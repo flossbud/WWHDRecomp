@@ -14,11 +14,14 @@
 #                                 so every run starts from the same state
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
+# default: the patched build on the worker worker, else the extracted AppImage
+if [ -z "${CEMU_BIN:-}" ] && [ -x /wwhd/opt/cemu-src/bin/Cemu_release ]; then CEMU_BIN=/wwhd/opt/cemu-src/bin/Cemu_release; fi
 bin=${CEMU_BIN:-$HOME/opt/cemu/squashfs-root/AppRun}
 case "$bin" in
     */AppRun) portable=${CEMU_PORTABLE:-$(dirname "$bin")/usr/bin/portable} ;;
     *)        portable=${CEMU_PORTABLE:-$(dirname "$bin")/portable} ;;
 esac
+if [ -z "${WWHD_GAME:-}" ]; then for f in /wwhd/data/rom/*.wua; do [ -f "$f" ] && WWHD_GAME=$f; done; fi
 game=${WWHD_GAME:?set WWHD_GAME to your .wua or title directory}
 export DISPLAY=${DISPLAY:-:99}
 [ -n "${REF_VIRTUAL_CLOCK:-}" ] && export CEMU_VIRTUAL_CLOCK=1
@@ -34,6 +37,7 @@ sed "s|<logflag>0</logflag>|<logflag>${REF_LOGFLAG:-0}</logflag>|" "$here/settin
 # openbox gives keyboard focus/activation; without a WM, Cemu ignores key presses.
 xdpyinfo >/dev/null 2>&1 || { Xvfb "$DISPLAY" -screen 0 2200x1100x24 -nolisten tcp >/dev/null 2>&1 & sleep 1; }
 pgrep -x openbox >/dev/null || { openbox >/dev/null 2>&1 & sleep 1; }
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/tmp/xdg-$(id -u)}; mkdir -p -m 700 "$XDG_RUNTIME_DIR"
 pulseaudio --check 2>/dev/null || pulseaudio --start --exit-idle-time=-1
 pactl list short sinks | grep -q null || pactl load-module module-null-sink sink_name=null >/dev/null
 
