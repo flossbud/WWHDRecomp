@@ -22,6 +22,7 @@ WWHD_GAME=/path/to/game.wua tools/reference/run.sh     # Xvfb :99 + openbox + nu
 tools/reference/press.sh x                             # press A (mapping in controller0.xml)
 tools/reference/shot.sh out/title                      # out/title.tv.png (1280x720), out/title.pad.png (854x480)
 REF_LOGFLAG=2 WWHD_GAME=... tools/reference/run.sh      # log every GX2 call to portable/log.txt
+                                                       # (~1 GB per 3.5 min: short runs only)
 ```
 
 Rendering is Mesa lavapipe (Vulkan on the CPU): about 2–5 FPS on this 4-core VM, and the first
@@ -47,4 +48,5 @@ boot takes minutes while shaders compile. The title screen is reached about 3 mi
   link against.
 * **Shared fonts:** the log says "no shareddata fonts loaded", so placeholder text is used. Wire up
   the `CafeStd.ttf` family.
+* **Compact GX2 tracer:** a binary call log instead of text logging (see design D15).
 * **Input script:** a scripted route (frame-indexed input) instead of ad-hoc `press.sh` calls.

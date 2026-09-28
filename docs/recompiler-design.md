@@ -414,6 +414,18 @@ Before building the backend we measure what WWHD actually does:
 
 The G milestones are scoped from that trace, not from the import list.
 
+**First look (2026-09-28, reference Cemu 2.6, boot to title, about 3.5 minutes):**
+
+* 76 of the 108 imported GX2 functions are called.
+* The hottest are `GX2SetVertexUniformBlock` (3.1M calls), `GX2DrawIndexedEx` (2.5M) and
+  `GX2SetBlendControl` (1.8M).
+* **Display lists are central:** 27.7k `GX2BeginDisplayListEx`, 212k `GX2CallDisplayList` and
+  11k `GX2DirectCallDisplayList`. Record-and-replay (D12) is on the hot path from the first frame.
+* **Cemu's text logging is unusable at this scale:** 956 MB in 3.5 minutes. The G0 tracer has
+  to be a compact binary log, written by a small hook in the reference's source build: call id,
+  arguments, and hashes of referenced buffers. This is part of the reference Cemu patch, together
+  with the deterministic clock.
+
 ### D16. Graphics verification
 
 * **The reference** is unmodified upstream Cemu, run under Xvfb with lavapipe, on the same
