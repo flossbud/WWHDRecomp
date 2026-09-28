@@ -150,6 +150,11 @@ In order of confidence, all recorded with evidence:
 
 ## Phase 3 — first boot milestone
 
+**Design: [`recompiler-design.md`](recompiler-design.md)** (2026-09-28). In summary:
+function-level C++ that runs on Cemu's own `PPCInterpreter_t`, fibers and HLE libraries.
+Only Cemu's instruction-execution loop is replaced. That doc's milestones M0–M6 supersede
+the rough steps below.
+
 Get the recompiled game to its title screen on a GPU machine. The work depends on the
 Phase 0 decision. The likely order is:
 

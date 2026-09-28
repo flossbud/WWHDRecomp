@@ -8,7 +8,8 @@ incrementally with AI-agent assistance.
 dump; see [`orig/README.md`](orig/README.md).
 
 Status: getting started. See [`docs/getting-started.md`](docs/getting-started.md) for the
-plan and [`docs/research/`](docs/research/) for the background survey.
+plan, [`docs/recompiler-design.md`](docs/recompiler-design.md) for the recompiler design, and
+[`docs/research/`](docs/research/) for the background survey.
 
 ## Tools
 

@@ -12,4 +12,4 @@
   package); use `wwhd_env.load_tool()`.
 - Every rename/retype needs recorded evidence (string anchor, GC-decomp match, trace).
   A function is only "done" when an external check (fixtures/trace diff) passes.
-- Plan: `docs/getting-started.md`. Background: `docs/research/`.
+- Plan: `docs/getting-started.md`. Recompiler design: `docs/recompiler-design.md`. Background: `docs/research/`.
