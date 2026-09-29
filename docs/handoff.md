@@ -166,8 +166,8 @@ renders the title screen on lavapipe, visually the same as the reference. Frames
 - Not on the route yet, so untested: GPU-side `GX2CopySurface` (`IT_HLE_COPY_SURFACE_NEW`, only
   reported), readback of a rendered surface into a linear-special destination, 3D textures,
   depth-stencil textures loaded from memory (zeroed, as Cemu does).
-- The G1 translator now sets the pixel-shader input table like the renderer; the 287 variants
-  were re-translated (574 modules, all valid), the 30,011-program corpus not yet.
+- The G1 translator now sets the pixel-shader input table like the renderer. Re-translated since:
+  the 287 variants (574 modules) and the whole corpus (30,011), all valid.
 
 ### 2. Extend the route, then rerun G0 and the native check
 
