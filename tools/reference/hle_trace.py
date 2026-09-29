@@ -136,25 +136,70 @@ def main():
             if c["frame"] >= lo and (not args.grep or args.grep in names.get(int(c["index"]), "")):
                 print(fmt(names, c))
     elif args.cmd == "diff":
-        # walk both traces in step, comparing rendered records (robust to differing index tables)
-        n = 0
-        history = collections.deque(maxlen=3)
-        sa, sb = calls(args.a), calls(args.b)
-        for (na, ca), (nb, cb) in zip(sa, sb):
-            ra, rb = fmt(na, ca, not args.ignore_core), fmt(nb, cb, not args.ignore_core)
-            if ra != rb:
-                print(f"first difference at call {n}:")
-                for pa, pb in history:
-                    print(f"   A {pa}\n   B {pb}")
-                print(f">> A {ra}\n>> B {rb}")
-                sys.exit(1)
-            history.append((ra, rb))
-            n += 1
-        rest_a, rest_b = next(sa, None), next(sb, None)
-        if rest_a or rest_b:
-            print(f"identical for {n} calls, then {'A' if rest_a else 'B'} continues")
-            sys.exit(1)
-        print(f"identical: {n} calls")
+        sys.exit(diff(args.a, args.b, args.ignore_core))
+
+
+def diff(path_a, path_b, ignore_core):
+    """Vectorized comparison of two traces. Function indices are mapped to normalized names (so
+    runs with different HLE index tables or host-pointer stub names still compare), then whole
+    numpy blocks are compared at once; only the first mismatch is rendered."""
+    def canon(names):
+        return {i: HOST_ADDRESS.sub(r"\\1", n) for i, n in names.items()}
+
+    name_ids = {}
+
+    def keyed(names, block):
+        c = canon(names)
+        lut = np.zeros(0x10000, dtype=np.uint32)
+        for i, n in c.items():
+            lut[i] = name_ids.setdefault(n, len(name_ids) + 1)
+        k = block.copy()
+        k["index"] = lut[block["index"]].astype(np.uint16)
+        k["pad"] = 0
+        if ignore_core:
+            k["core"] = 0
+        return k
+
+    ga, gb = blocks(path_a), blocks(path_b)
+    buf_a = buf_b = np.zeros(0, CALL)
+    names_a = names_b = {}
+    offset = 0
+    done_a = done_b = False
+    while True:
+        while len(buf_a) < 1 << 20 and not done_a:
+            try:
+                names_a, blk = next(ga); buf_a = np.concatenate([buf_a, keyed(names_a, blk)])
+            except StopIteration:
+                done_a = True
+        while len(buf_b) < 1 << 20 and not done_b:
+            try:
+                names_b, blk = next(gb); buf_b = np.concatenate([buf_b, keyed(names_b, blk)])
+            except StopIteration:
+                done_b = True
+        n = min(len(buf_a), len(buf_b))
+        if n == 0:
+            break
+        # compare raw bytes: float args are often NaN, and NaN != NaN field-wise
+        bad = np.flatnonzero((buf_a[:n].view(np.uint8).reshape(n, -1)
+                              != buf_b[:n].view(np.uint8).reshape(n, -1)).any(axis=1))
+        if bad.size:
+            i = int(bad[0])
+            inv = {v: k for k, v in name_ids.items()}
+            def show(c):
+                nm = inv.get(int(c["index"]), "?")
+                return fmt({int(c["index"]): nm}, c, not ignore_core)
+            print(f"first difference at call {offset + i}:")
+            for j in range(max(0, i - 3), i):
+                print(f"   A {show(buf_a[j])}\n   B {show(buf_b[j])}")
+            print(f">> A {show(buf_a[i])}\n>> B {show(buf_b[i])}")
+            return 1
+        offset += n
+        buf_a, buf_b = buf_a[n:], buf_b[n:]
+    if len(buf_a) or len(buf_b):
+        print(f"identical for {offset} calls, then {'A' if len(buf_a) else 'B'} continues")
+        return 1
+    print(f"identical: {offset} calls")
+    return 0
 
 
 if __name__ == "__main__":

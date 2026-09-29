@@ -10,7 +10,7 @@
 #   CEMU_HLE_TRACE=out.zst        binary OS-call trace (patched build only; see hle_trace.py)
 #   CEMU_HLE_TRACE_FILTER=gx2.    only trace names with these prefixes (comma-separated)
 #   CEMU_HLE_TRACE_EXIT_FRAME=N   end the trace and exit Cemu when frame N begins
-#   CEMU_INPUT_SCRIPT=route.txt   frame-keyed GamePad input (patched build; see tools/reference/routes/)
+#   CEMU_INPUT_SCRIPT=route.txt   frame-keyed controller input (patched build; see tools/reference/routes/)
 #   CEMU_SWKBD_AUTO=Link          answer the software keyboard (name entry) with this text
 #   CEMU_SHOT_FRAMES=0-900/60     capture TV/pad at these frames into $CEMU_SHOT_DIR (PPM)
 #   CEMU_NO_GAMEPAD=1             GamePad reported absent: the project's single-screen, Pro-Controller
