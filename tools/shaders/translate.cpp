@@ -20,6 +20,7 @@
 // Linked into Cemu_release's own link line with -Wl,--wrap=main, like the M1 fuzzer.
 #include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/Core/FetchShader.h"
+#include "Cafe/HW/Latte/Core/LatteShader.h"
 #include "Cafe/HW/Latte/ISA/RegDefines.h"
 #include "Cafe/HW/Latte/LegacyShaderDecompiler/LatteDecompiler.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
@@ -200,6 +201,9 @@ namespace
 			std::vector<uint8> fsCode = ReadFile(dump / (fsHash + ".fs")), vsCode = ReadFile(dump / (vsHash + ".vs")),
 				psCode = ReadFile(dump / (psHash + ".ps"));
 			LatteDecompilerOptions options = Options();
+			// both stages read the pixel shader's input table, built from the registers (as Cemu does
+			// before it decompiles; src/gpu/vk/draw.cpp likewise)
+			LatteShader_UpdatePSInputs(regs.data());
 			LatteFetchShader* fetch = LatteShaderRecompiler_createFetchShader(std::stoull(fsHash, nullptr, 16), regs.data(),
 				(uint32*)fsCode.data(), (uint32)fsCode.size());
 			LatteDecompilerOutput_t vo{};
@@ -347,6 +351,7 @@ namespace
 			LatteFetchShader* fetch = vertex ? SynthesizedFetchShader(w) : nullptr;
 			auto translate = [&] {
 				LatteDecompilerOutput_t o{};
+				LatteShader_UpdatePSInputs(regs.data());
 				if (vertex)
 					LatteDecompiler_DecompileVertexShader(hash, regs.data(), w.code.data(), (uint32)w.code.size(), fetch, options, &o);
 				else
