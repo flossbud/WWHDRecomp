@@ -686,7 +686,8 @@ patches are in the generated code (D10).
   unsupported import, which is a no-op.
 * The run takes 359 s, against 720 s interpreting and about 25 minutes for the reference on the
   GPU. Much of it is the trace writer (1.1 billion records through zstd) and the null GPU.
-* Diff mode now also checks cycles, and was clean on 600 frames.
+* Diff mode now also checks cycles. Over the whole route, all 3,875,261 sampled pure calls agree
+  with the interpreter on registers, stores and the cycles charged (4,616 functions).
 
 Performance work (D6's per-block counting, host-local registers) comes after the graphics track
 needs it; every step keeps the same trace check.

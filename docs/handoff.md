@@ -123,7 +123,7 @@ For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
   non-pure code goes native (M4).
 - `WWHD_NATIVE=diff`: diff mode (D8.2). Over the whole route: 3,875,261 sampled pure calls checked,
   all equal to the interpreter; 4,616 functions, all clean; trace identical to `null-route.zst`.
-  Since M4 it also compares cycles.
+  Since M4 it also compares cycles: clean over the whole route as well.
 - `WWHD_GPU_STATS=path` (null GPU) and `tools/reference/g0_gx2.py`: the G0 measurements (D15).
 - `tools/reference/route.sh OUT FRAMES ROUTE BASELINE`: one run plus a trace comparison.
 
