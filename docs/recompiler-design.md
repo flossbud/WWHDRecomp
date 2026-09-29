@@ -510,7 +510,7 @@ There are two tracks. They meet at M4.
 | # | Milestone | Done when |
 |---|---|---|
 | M1 ✅ | Instruction semantics | The generator emits all 157 mnemonics the game uses. The instruction fuzzer passes against Cemu's interpreter. |
-| M2 | Whole program compiles | All 39,705 functions generate with zero unknown instructions and zero unresolved branches, and compile with clang. |
+| M2 ✅ | Whole program compiles | All 39,705 functions generate with zero unknown instructions and zero unresolved branches, and compile with clang. |
 | M3 | Pure functions native | `native_dispatch` is on for pure functions, with sampled diff mode clean over the scripted route (null backend). |
 | M4 | Everything native | HLE calls direct, yield points in place, `GamePatch` handled. The GX2 call stream still matches the reference, and the interpreter fallback counter is 0. |
 
@@ -544,6 +544,21 @@ emits all of them, and the fuzzer (`tools/recomp/fuzz/`) matches Cemu's interpre
 register and memory byte for the 154 that compute (about 1.8M randomized runs); `dcbf`/`dcbst`
 and `tw` are runtime hooks. Two findings: a signed-overflow UB in a naive `neg` that clang
 exploited, and NaN payloads, which depend on x86 operand order (see open question 4).
+
+**M2 status (2026-09-29):** done. `tools/recomp/generate.py` emits all functions in 13 s, and
+`tools/recomp/build.sh` compiles them on the worker in about 4 minutes with 8 jobs. Totals:
+39,720 functions (39,705 from `functions.csv`, the `.syscall` stub, and 14 synthesised GHS
+restore entries per D7), 426 imports, 156 shards of 256 functions. There are 0 generator errors
+(no unknown instructions, no unresolved branches), and clang builds it with 0 errors and 0
+warnings at `-O2`, `musttail` included, into 79 MB of objects. Things the generator had to know:
+
+* branches to imports are `REL24` relocations into `.fimport_*`, 3,643 sites;
+* 58 immediates are relocated against data imports (`.dimport_*`) and read from the runtime;
+* two weak calls resolve to address 0 and become runtime errors;
+* 9 `bcl` are conditional calls;
+* the jump-table `bctr`s become a `switch` on CTR.
+
+Not yet in: the yield budget (D6) and the runtime behind `rt_*` (M3).
 
 **M0b status (2026-09-29):** done. `src/` builds two executables against the worker's Cemu
 build (`src/build.sh`). Both use our frontend (`src/frontend`, Cemu's `WindowSystem` without

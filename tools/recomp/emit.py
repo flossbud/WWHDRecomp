@@ -25,28 +25,40 @@ def ra0(i):
 
 
 def hx(v):
-    return f"0x{v & 0xFFFFFFFF:X}u"
+    """Immediate as C: an int, or a C expression string (runtime-relocated import addresses)."""
+    return f"(uint32)({v})" if isinstance(v, str) else f"0x{v & 0xFFFFFFFF:X}u"
 
 
 class StepFlow:
     """Single-instruction control flow: the instruction leaves the next address in
-    instructionPointer. Used by the fuzzer, where each test runs exactly one instruction."""
+    instructionPointer. Used by the fuzzer, where each test runs exactly one instruction.
+
+    A flow provides fallthrough(ea) and the three branch kinds; `cond` is a C condition or None,
+    `link` whether LR gets the return address:
+        branch_to(ea, target, cond, link)   b / bc / bl / bcl to a known address
+        branch_lr(ea, cond, link)           bclr (return)
+        branch_ctr(ea, cond, link)          bcctr (switch, indirect jump or call)"""
 
     def fallthrough(self, ea):
         return [f"ctx->instructionPointer = {hx(ea + 4)};"]
 
-    def branch(self, ea, target, cond=None, link=False, target_is_expr=False):
-        tgt = target if target_is_expr else hx(target)
-        body = []
-        if target_is_expr:
-            body.append(f"uint32 t_ = {tgt};")
-            tgt = "t_"
+    def _jump(self, ea, target_expr, cond, link):
+        body = [f"uint32 t_ = {target_expr};"]
         if link:
             body.append(f"ctx->spr.LR = {hx(ea + 4)};")
-        body += [f"ctx->instructionPointer = {tgt};", "return;"]
+        body += ["ctx->instructionPointer = t_;", "return;"]
         if cond is None:
-            return body
+            return ["{"] + ["\t" + b for b in body] + ["}"]
         return [f"if ({cond}) {{"] + ["\t" + b for b in body] + ["}"] + self.fallthrough(ea)
+
+    def branch_to(self, ea, target, cond, link):
+        return self._jump(ea, hx(target), cond, link)
+
+    def branch_lr(self, ea, cond, link):
+        return self._jump(ea, "ctx->spr.LR & ~3u", cond, link)
+
+    def branch_ctr(self, ea, cond, link):
+        return self._jump(ea, "ctx->spr.CTR & ~3u", cond, link)
 
 
 class Emitter:
@@ -553,18 +565,16 @@ class Emitter:
 
     def op_b(self, i, ea):
         target = (i.li if i.aa else ea + i.li) & 0xFFFFFFFF
-        return (self.flow.branch(ea, target, link=bool(i.lk)))
+        return self.flow.branch_to(ea, target, None, bool(i.lk))
 
     def op_bc(self, i, ea):
         pre = [] if i.bo & 4 else ["ctx->spr.CTR--;"]
         target = (i.bd if i.aa else ea + i.bd) & 0xFFFFFFFF
-        return (pre + self.flow.branch(ea, target, self._cond(i.bo, i.bi, True), link=bool(i.lk)))
+        return pre + self.flow.branch_to(ea, target, self._cond(i.bo, i.bi, True), bool(i.lk))
 
     def op_bclr(self, i, ea):
         pre = [] if i.bo & 4 else ["ctx->spr.CTR--;"]
-        return (pre + self.flow.branch(ea, "ctx->spr.LR & ~3u", self._cond(i.bo, i.bi, True),
-                                                 link=bool(i.lk), target_is_expr=True))
+        return pre + self.flow.branch_lr(ea, self._cond(i.bo, i.bi, True), bool(i.lk))
 
     def op_bcctr(self, i, ea):
-        return (self.flow.branch(ea, "ctx->spr.CTR & ~3u", self._cond(i.bo, i.bi, False),
-                                           link=bool(i.lk), target_is_expr=True))
+        return self.flow.branch_ctr(ea, self._cond(i.bo, i.bi, False), bool(i.lk))

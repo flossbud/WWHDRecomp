@@ -9,6 +9,17 @@ Python generator (docs/recompiler-design.md D1, D11) plus the C++ runtime header
 | `emit.py` | C++ for one instruction, semantics mirroring Cemu's interpreter; control flow via a `flow` policy |
 | `runtime/ppc_ops.h` | memory, CR and FP helpers the emitted code uses (includes Cemu's headers) |
 | `fuzz/` | M1 instruction fuzzer: emitted code vs `PPCInterpreterSlim_executeInstruction` |
+| `generate.py` | M2: every function as C++ (gotos, musttail calls, jump-table switches, imports, D7 helper entries) into shards |
+| `build.sh` | M2: generate and compile the whole program on the worker (`build/recomp`, never committed) |
+
+## Whole program (M2)
+
+    tools/worker/job start recomp-build tools/recomp/build.sh
+
+Generates `build/recomp/shard_*.cpp`, `funcs.h`, `func_table.cpp` and `imports.cpp`, then compiles
+them with Cemu's flags plus `-ffp-contract=off -fno-strict-aliasing`, against a precompiled
+`runtime/ppc_ops.h`. The runtime functions they call (`rt_import`, `rt_import_data`,
+`rt_call_ctr`, `rt_jump_ctr`, `rt_bad_branch`) come with M3.
 
 ## Fuzzer
 
