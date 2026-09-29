@@ -199,6 +199,8 @@ void rt_jump_ctr(PPCInterpreter_t* ctx)
 
 void rt_bad_branch(PPCInterpreter_t* ctx, uint32 ea, uint32 target)
 {
+	if (g_rtJournalOn)
+		DiffNativeFault(ea, target);    // inside a diff-mode native run: unwind it (diff.cpp)
 	Fatal("bad branch at %08X to %08X (LR %08X, r1 %08X, r3 %08X)", ea, target, ctx->spr.LR, ctx->gpr[1], ctx->gpr[3]);
 }
 

@@ -5,7 +5,8 @@
 // native call reaches exactly the code the interpreter would:
 // * every relocated branch to a function import is followed to its target (a trampoline holding
 //   Cemu's HLE opcode, (1 << 26) | index); all sites of one import must agree;
-// * every relocated immediate of a data import gives half of its address; all must agree.
+// * every relocated immediate of a data import gives half of its address plus an addend; all
+//   must agree on the address.
 // * a branch site that no longer holds a branch was patched by Cemu (GamePatch NOPs some calls,
 //   D10): the hash in CheckCode can't see that (it masks import sites), so its function is marked
 //   patched here and stays interpreted.
@@ -14,6 +15,7 @@
 #include "rt_internal.h"
 #include "Cafe/HW/Espresso/Interpreter/PPCInterpreterInternal.h"
 #include "Cafe/OS/common/OSCommon.h"
+#include <map>
 
 namespace wwhd::rt
 {
@@ -44,7 +46,9 @@ namespace wwhd::rt
 	{
 		s_func.assign(g_importCount, {});
 		s_data.assign(g_importCount, 0);
-		std::vector<sint32> hi(g_importCount, -1), lo(g_importCount, -1), hiKind(g_importCount, 0);
+		// data imports: the relocated halves of (address + addend), per import and addend
+		struct Halves { sint32 hi = -1, lo = -1, hiKind = 0; };
+		std::map<std::pair<uint32, sint32>, Halves> halves;
 		size_t branches = 0, immediates = 0, weak = 0, patchedSites = 0;
 		for (size_t k = 0; k < g_importSiteCount; k++)
 		{
@@ -82,33 +86,44 @@ namespace wwhd::rt
 				branches++;
 				continue;
 			}
-			// ADDR16_LO (4), _HI (5), _HA (6): one half of a data import's address
+			// ADDR16_LO (4), _HI (5), _HA (6): one half of a data import's address + addend
+			Halves& h = halves[{ s.import, s.addend }];
 			sint32 imm = (sint32)(memory_readU32(s.ea) & 0xFFFF);
-			sint32& half = (s.kind == 4) ? lo[s.import] : hi[s.import];
+			sint32& half = (s.kind == 4) ? h.lo : h.hi;
 			if (half >= 0 && half != imm)
-				Fatal("data import %s.%s: immediates %04X and %04X disagree (site %08X)", imp.lib, imp.name, half, imm, s.ea);
+				Fatal("data import %s.%s%+d: immediates %04X and %04X disagree (site %08X)", imp.lib, imp.name, s.addend,
+					half, imm, s.ea);
 			half = imm;
 			if (s.kind != 4)
 			{
-				if (hiKind[s.import] && hiKind[s.import] != s.kind)
+				if (h.hiKind && h.hiKind != s.kind)
 					Fatal("data import %s.%s: both HI and HA immediates", imp.lib, imp.name);
-				hiKind[s.import] = s.kind;
+				h.hiKind = s.kind;
 			}
 			immediates++;
 		}
 		size_t funcs = 0, hle = 0, data = 0, crossFail = 0;
+		std::vector<uint8> dataBound(g_importCount, 0);
+		for (auto& [key, h] : halves)
+		{
+			const RecompImport& imp = g_imports[key.first];
+			if (h.hi < 0 || h.lo < 0)
+				Fatal("data import %s.%s%+d: only one half of its address is referenced", imp.lib, imp.name, key.second);
+			uint32 sum = h.hiKind == 6 ? ((uint32)h.hi << 16) + (uint32)(sint32)(sint16)h.lo : ((uint32)h.hi << 16) | (uint32)h.lo;
+			uint32 v = sum - (uint32)key.second;
+			if (dataBound[key.first] && s_data[key.first] != v)
+				Fatal("data import %s.%s: its immediates give %08X and %08X", imp.lib, imp.name, s_data[key.first], v);
+			s_data[key.first] = v;
+			dataBound[key.first] = 1;
+		}
 		for (size_t i = 0; i < g_importCount; i++)
 		{
 			const RecompImport& imp = g_imports[i];
 			if (imp.isData)
 			{
-				if (hi[i] < 0 && lo[i] < 0)
+				if (!dataBound[i])
 					continue;                          // not referenced by code
-				if (hi[i] < 0 || lo[i] < 0)
-					Fatal("data import %s.%s: only one half of its address is referenced", imp.lib, imp.name);
-				uint32 v = hiKind[i] == 6 ? ((uint32)hi[i] << 16) + (uint32)(sint32)(sint16)lo[i]
-				                          : ((uint32)hi[i] << 16) | (uint32)lo[i];
-				s_data[i] = v;
+				uint32 v = s_data[i];
 				data++;
 				uint32 named = osLib_getPointer(LibName(imp.lib).c_str(), imp.name);
 				if (named != 0xFFFFFFFF && named != v && crossFail++ < 10)

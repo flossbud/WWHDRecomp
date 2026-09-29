@@ -48,6 +48,13 @@ class Rpx:
 
     def relocations(self):
         """Yield (patched_section_name, offset, type, target_address) for every RELA entry."""
+        for patched, offset, typ, value, addend in self.relocations_by_symbol():
+            yield patched, offset, typ, (value + addend) & 0xFFFFFFFF
+
+    def relocations_by_symbol(self):
+        """Yield (patched_section_name, offset, type, symbol_value, addend) for every RELA entry.
+        Needed where the symbol matters, not just the address: an import's stub address plus an
+        addend can equal another import's stub (e.g. _iob+0x10 is environ's stub address)."""
         for i, s in enumerate(self.sh):
             if s[1] != 4:
                 continue
@@ -57,7 +64,7 @@ class Rpx:
             for j in range(0, len(r), 12):
                 offset, info, addend = struct.unpack(">IIi", r[j:j + 12])
                 value, = struct.unpack(">I", symtab[(info >> 8) * 16 + 4:(info >> 8) * 16 + 8])
-                yield patched, offset, info & 0xFF, (value + addend) & 0xFFFFFFFF
+                yield patched, offset, info & 0xFF, value, addend
 
 
 def main():

@@ -9,7 +9,7 @@
 struct PPCInterpreter_t;
 
 // Bumped whenever these layouts change; generated code built against another version is refused.
-constexpr uint32_t kRecompTablesVersion = 2;
+constexpr uint32_t kRecompTablesVersion = 3;
 
 enum RecompFuncFlags : uint32_t
 {
@@ -36,12 +36,13 @@ struct RecompImport
 
 // A word in .text that Cemu's loader rewrites: a branch to an import (kind 10, REL24), a branch
 // to a weak symbol at address 0 (kind 0, import 0xFFFF), or an immediate relocated against a
-// data import (kind 4/5/6: ADDR16_LO/HI/HA).
+// data import plus an addend (kind 4/5/6: ADDR16_LO/HI/HA of the import's address + addend).
 struct RecompImportSite
 {
 	uint32_t ea;
 	uint16_t import;
 	uint16_t kind;
+	int32_t addend;
 };
 
 struct RecompStoreCount

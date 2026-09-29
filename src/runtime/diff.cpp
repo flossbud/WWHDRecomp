@@ -6,11 +6,18 @@
 //  2. the native run is rewound: memory from the journal, registers from a copy;
 //  3. the interpreter runs the call as it always would, charging its cycles and being preempted
 //     as usual, and this runtime decodes each store it executes to record what it wrote;
-//  4. when the interpreter reaches the call's return (LR, with the stack pointer back), its
-//     registers and the bytes it stored are compared with the native run's.
+//  4. when the interpreter reaches the point where the native run left the guest (its final LR,
+//     where blr went, with its final stack pointer), its registers and the bytes it stored are
+//     compared with the native run's.
+// For an ordinary function that point is the caller's return address with the stack pointer back
+// where it was; the GHS restore-and-exit helpers (D7) pop their caller's frame too and return to
+// the caller's caller. A native run that is wrong about it never meets the interpreter there and
+// shows up as escaped or runaway, so it is still caught.
 // Guest-visible behaviour stays the interpreter's, so the OS-call trace must still equal the
 // reference's, and every sampled call is checked on real game state.
 //
+// A native run that reaches rt_bad_branch (a branch the generator couldn't place) is unwound with
+// longjmp (generated code holds no resources), rewound, and counted as a native fault.
 // A call whose timeslice ended before it returned is "preempted": other threads ran meanwhile and
 // may have changed memory it reads, so its mismatches are counted apart. A call that reaches an
 // HLE trampoline or leaves the function table ("escaped") contradicts the purity analysis and is
@@ -26,6 +33,7 @@
 #include "rt_internal.h"
 #include "Cafe/HW/Espresso/Interpreter/PPCInterpreterInternal.h"
 #include <atomic>
+#include <csetjmp>
 #include <chrono>
 #include <cmath>
 #include <mutex>
@@ -78,7 +86,10 @@ namespace wwhd::rt
 		r.fpscr = c->fpscr;
 		memcpy(r.cr, c->cr, sizeof(r.cr));
 		r.xer_ca = c->xer_ca; r.xer_so = c->xer_so; r.xer_ov = c->xer_ov;
-		r.LR = c->spr.LR; r.CTR = c->spr.CTR; r.XER = c->spr.XER;
+		// XER as mfspr reads it (PPCInterpreter_getXER): CA/SO/OV live in xer_ca/so/ov, and spr.XER's
+		// copies of those bits are stale after a context switch reloads the thread's XER
+		r.LR = c->spr.LR; r.CTR = c->spr.CTR;
+		r.XER = c->spr.XER & ~((1u << XER_BIT_CA) | (1u << XER_BIT_SO) | (1u << XER_BIT_OV));
 		memcpy(r.UGQR, c->spr.UGQR, sizeof(r.UGQR));
 		r.resAddr = c->reservedMemAddr; r.resValue = c->reservedMemValue;
 	}
@@ -186,7 +197,7 @@ namespace wwhd::rt
 	struct FuncStats
 	{
 		uint64 calls = 0, samples = 0, ok = 0, mismatch = 0, preempted = 0, preemptedMismatch = 0, escaped = 0,
-			runaway = 0, nanTolerated = 0;
+			runaway = 0, nativeFault = 0, nanTolerated = 0;
 		uint32 reported = 0;
 	};
 
@@ -204,6 +215,8 @@ namespace wwhd::rt
 	static std::atomic<uint64> s_nativeSince{ 0 };       // steady ns when a native run began, 0 if none
 	static std::atomic<uint32> s_nativeFunc{ 0 };
 	static uint64 s_detailed = 0;                         // mismatches reported in detail so far
+	static jmp_buf s_nativeJmp;                           // RunNative's way out of a native fault
+	static uint32 s_faultEa, s_faultTarget;
 
 	static std::unordered_set<uint32> ParseAddresses(const char* env)
 	{
@@ -342,8 +355,16 @@ namespace wwhd::rt
 		return true;
 	}
 
-	// run the function natively from the current state, record what it did, and undo it
-	static void RunNative(PPCInterpreter_t* hCPU, const RecompFunc& f, Sample& s)
+	void DiffNativeFault(uint32 ea, uint32 target)
+	{
+		s_faultEa = ea;
+		s_faultTarget = target;
+		longjmp(s_nativeJmp, 1);
+	}
+
+	// run the function natively from the current state, record what it did, and undo it; false if
+	// the native run faulted (it is undone all the same)
+	static bool RunNative(PPCInterpreter_t* hCPU, const RecompFunc& f, Sample& s)
 	{
 		PPCInterpreter_t saved = *hCPU;
 		s_journal.clear();
@@ -351,7 +372,11 @@ namespace wwhd::rt
 		s_nativeFunc = f.address;
 		s_nativeSince = Clock::now().time_since_epoch().count();
 		g_rtJournalOn = true;
-		f.fn(hCPU);
+		volatile bool ok = true;
+		if (setjmp(s_nativeJmp) == 0)
+			f.fn(hCPU);
+		else
+			ok = false;
 		g_rtJournalOn = false;
 		s_nativeSince = 0;
 		Capture(s.native, hCPU);
@@ -362,6 +387,7 @@ namespace wwhd::rt
 		for (auto j = s_journal.rbegin(); j != s_journal.rend(); ++j)
 			memcpy(memory_base + j->ea, s_journalBytes.data() + j->offset, j->size);
 		*hCPU = saved;
+		return ok;
 	}
 
 	static Sample* MaybeStart(PPCInterpreter_t* hCPU, uint32 ip)
@@ -374,11 +400,20 @@ namespace wwhd::rt
 		Sample* s = new Sample;
 		s->func = fi;
 		s->call = n;
-		s->ret = hCPU->spr.LR & ~3u;
-		s->sp = hCPU->gpr[1];
 		Capture(s->entry, hCPU);
-		RunNative(hCPU, g_funcTable[fi], *s);
 		st.samples++;
+		if (!RunNative(hCPU, g_funcTable[fi], *s))
+		{
+			st.nativeFault++;
+			if (st.reported++ < 3)
+				Log("NATIVE FAULT f_%08X call %llu: rt_bad_branch at %08X to %08X (LR %08X, r3-r6 %08X %08X %08X %08X)",
+					g_funcTable[fi].address, (unsigned long long)n, s_faultEa, s_faultTarget, s->entry.LR,
+					s->entry.gpr[3], s->entry.gpr[4], s->entry.gpr[5], s->entry.gpr[6]);
+			delete s;
+			return nullptr;
+		}
+		s->ret = s->native.LR & ~3u;                    // where the native run left the guest
+		s->sp = s->native.gpr[1];
 		return s;
 	}
 
@@ -478,7 +513,7 @@ namespace wwhd::rt
 		{
 			const RecompFunc& f = g_funcTable[s.func];
 			Log("MISMATCH%s f_%08X call %llu (LR %08X, r3-r6 %08X %08X %08X %08X, %llu instructions, %zu/%zu bytes stored):%s%s%s",
-				s.preempted ? " (preempted)" : "", f.address, (unsigned long long)s.call, s.ret, s.entry.gpr[3],
+				s.preempted ? " (preempted)" : "", f.address, (unsigned long long)s.call, s.entry.LR, s.entry.gpr[3],
 				s.entry.gpr[4], s.entry.gpr[5], s.entry.gpr[6], (unsigned long long)s.steps, s.nativeWrites.size(),
 				s.interpWrites.size(), regs.c_str(), memCount ? " mem:" : "", mem.c_str());
 			if (memCount > 8)
@@ -567,11 +602,12 @@ namespace wwhd::rt
 		{
 			t.calls += st.calls; t.samples += st.samples; t.ok += st.ok; t.mismatch += st.mismatch;
 			t.preempted += st.preempted; t.preemptedMismatch += st.preemptedMismatch; t.escaped += st.escaped;
-			t.runaway += st.runaway; t.nanTolerated += st.nanTolerated;
+			t.runaway += st.runaway; t.nativeFault += st.nativeFault; t.nanTolerated += st.nanTolerated;
 			called += st.calls != 0;
 			checked += (st.ok + st.mismatch + st.preemptedMismatch) != 0;
-			clean += st.ok != 0 && st.mismatch == 0 && st.preemptedMismatch == 0 && st.escaped == 0;
-			failing += st.mismatch != 0 || st.escaped != 0;
+			clean += st.ok != 0 && st.mismatch == 0 && st.preemptedMismatch == 0 && st.escaped == 0 && st.nativeFault == 0
+				&& st.runaway == 0;
+			failing += st.mismatch != 0 || st.escaped != 0 || st.nativeFault != 0 || st.runaway != 0;
 		}
 		size_t pending;
 		{
@@ -579,26 +615,27 @@ namespace wwhd::rt
 			pending = s_pending.size();
 		}
 		Log("diff%s: pure calls %llu, checked %llu: ok %llu, MISMATCH %llu, preempted %llu (of which mismatched %llu), "
-			"escaped %llu, runaway %llu, NaN-tolerated %llu, pending %zu; functions called %zu, checked %zu, clean %zu, failing %zu",
+			"escaped %llu, runaway %llu, native faults %llu, NaN-tolerated %llu, pending %zu; functions called %zu, "
+			"checked %zu, clean %zu, failing %zu",
 			final ? " (final)" : "", (unsigned long long)t.calls, (unsigned long long)(t.ok + t.mismatch + t.preemptedMismatch),
 			(unsigned long long)t.ok, (unsigned long long)t.mismatch, (unsigned long long)t.preempted,
 			(unsigned long long)t.preemptedMismatch, (unsigned long long)t.escaped, (unsigned long long)t.runaway,
-			(unsigned long long)t.nanTolerated, pending, called, checked, clean, failing);
+			(unsigned long long)t.nativeFault, (unsigned long long)t.nanTolerated, pending, called, checked, clean, failing);
 		s_lastReport = Clock::now();
 		if (!final || s_csvPath.empty())
 			return;
 		if (FILE* f = fopen(s_csvPath.c_str(), "w"))
 		{
-			fputs("address,calls,samples,ok,mismatch,preempted,preempted_mismatch,escaped,runaway,nan_tolerated\n", f);
+			fputs("address,calls,samples,ok,mismatch,preempted,preempted_mismatch,escaped,runaway,native_fault,nan_tolerated\n", f);
 			for (size_t i = 0; i < s_stats.size(); i++)
 			{
 				const FuncStats& st = s_stats[i];
 				if (st.calls)
-					fprintf(f, "%08X,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\n", g_funcTable[i].address,
+					fprintf(f, "%08X,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\n", g_funcTable[i].address,
 						(unsigned long long)st.calls, (unsigned long long)st.samples, (unsigned long long)st.ok,
 						(unsigned long long)st.mismatch, (unsigned long long)st.preempted,
 						(unsigned long long)st.preemptedMismatch, (unsigned long long)st.escaped,
-						(unsigned long long)st.runaway, (unsigned long long)st.nanTolerated);
+						(unsigned long long)st.runaway, (unsigned long long)st.nativeFault, (unsigned long long)st.nanTolerated);
 			}
 			fclose(f);
 		}

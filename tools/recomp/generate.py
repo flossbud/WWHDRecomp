@@ -81,18 +81,32 @@ class Program:
         self.starts = [a for a, _, _ in self.funcs]
         self.import_ids = {a: n for n, a in enumerate(sorted(self.imports))}
         # relocations patched into .text: branch targets and relocated immediates
+        # (by symbol: _iob+0x10 lands on environ's stub address but means _iob's second FILE)
         self.rel24, self.imm_import = {}, {}
-        for sec, off, typ, tgt in rpx.relocations():
+        for sec, off, typ, value, addend in rpx.relocations_by_symbol():
             if sec != ".text":
                 continue
             if typ == REL24:
-                self.rel24[off] = tgt
-            elif typ in (ADDR16_LO, ADDR16_HI, ADDR16_HA) and tgt in self.imports:
-                self.imm_import[off & ~3] = (typ, tgt)
+                assert not (value in self.imports and addend), (hex(off), "branch to an import plus an addend")
+                self.rel24[off] = (value + addend) & 0xFFFFFFFF
+            elif typ in (ADDR16_LO, ADDR16_HI, ADDR16_HA) and value in self.imports:
+                self.imm_import[off & ~3] = (typ, value, addend)
+        # bctr -> the values CTR can hold there, which the switch cases on. If the table is a run
+        # of b instructions in the code (all 294 of WWHD's are, whatever the csv's "bound" column
+        # says about how the bound was found), the bctr jumps into it: CTR holds a slot's address
+        # (slot k at table + 4k), and the slot's own b goes on to the listed target. A table of
+        # addresses in data would hold the targets themselves.
         self.jump_tables = {}
         with open(CONFIG / "jump_tables.csv") as f:
             for r in csv.DictReader(f):
-                self.jump_tables[int(r["bctr"], 16)] = [int(t, 16) for t in r["targets"].split()]
+                base, n = int(r["table"], 16), int(r["count"])
+                targets = [int(t, 16) for t in r["targets"].split()]
+                slots = [base + 4 * k for k in range(n)]
+                if self.in_text(base) and all(self._is_b(a) for a in slots):
+                    assert [self._b_target(a) for a in slots] == targets, r["bctr"]
+                    self.jump_tables[int(r["bctr"], 16)] = slots
+                else:
+                    self.jump_tables[int(r["bctr"], 16)] = targets
         self.names = {}
         sym = CONFIG / "symbols.csv"
         if sym.exists():
@@ -124,6 +138,13 @@ class Program:
             host = self.function_containing(t)
             out.append((t, host[1], f"ghs_helper_{t:08X}"))
         return out
+
+    def _is_b(self, ea):
+        i = ppc.decode(self.word(ea))
+        return i is not None and i.op == "b" and not i.lk and not i.aa
+
+    def _b_target(self, ea):
+        return (ea + ppc.decode(self.word(ea)).li) & 0xFFFFFFFF
 
     def section_of(self, a):
         for name, base, size in self.sections:
@@ -237,8 +258,8 @@ def is_terminator(i):
 
 def relocated(prog, i, ea):
     """Replace immediates relocated against data imports with the runtime's value."""
-    typ, tgt = prog.imm_import[ea]
-    expr = f"rt_import_data({prog.import_ids[tgt]})"
+    typ, tgt, addend = prog.imm_import[ea]
+    expr = f"rt_import_data({prog.import_ids[tgt]})" + (f" + {addend:#x}u" if addend else "")
     if typ == ADDR16_HA:
         assert i.op == "addis", (hex(ea), i.op)
         return f"GPR({i.rD}) = {emit.ra0(i)} + ((({expr}) + 0x8000u) & 0xFFFF0000u);"
@@ -367,10 +388,10 @@ def main():
     pure = pure_functions(flows)
     synthetic = {a for a, _, _ in prog.synthetic}
     # words the loader rewrites: calls/branches to imports and weak symbols, data-import immediates
-    sites = sorted([(ea, prog.import_ids[t], REL24) for ea, t in prog.rel24.items() if t in prog.imports]
-                   + [(ea, 0xFFFF, 0) for ea, t in prog.rel24.items() if t == 0]
-                   + [(ea, prog.import_ids[t], typ) for ea, (typ, t) in prog.imm_import.items()])
-    masked = {ea for ea, _, _ in sites}
+    sites = sorted([(ea, prog.import_ids[t], REL24, 0) for ea, t in prog.rel24.items() if t in prog.imports]
+                   + [(ea, 0xFFFF, 0, 0) for ea, t in prog.rel24.items() if t == 0]
+                   + [(ea, prog.import_ids[t], typ, a) for ea, (typ, t, a) in prog.imm_import.items()])
+    masked = {s[0] for s in sites}
     table = [header, '#include "funcs.h"', '#include "recomp_tables.h"', "",
              "extern const uint32_t g_recompTablesVersion = kRecompTablesVersion;",
              "extern const RecompFunc g_funcTable[] = {"]
@@ -392,7 +413,7 @@ def main():
              for a in sorted(prog.imports)]
     imps += ["};", f"extern const size_t g_importCount = {len(prog.imports)};", "",
              "extern const RecompImportSite g_importSites[] = {"]
-    imps += [f"\t{{0x{ea:08X}u, {i}u, {k}u}}," for ea, i, k in sites]
+    imps += [f"\t{{0x{ea:08X}u, {i}u, {k}u, {a}}}," for ea, i, k, a in sites]
     imps += ["};", f"extern const size_t g_importSiteCount = {len(sites)};", ""]
     stores = collections.Counter()
     for a, e, _ in prog.funcs:

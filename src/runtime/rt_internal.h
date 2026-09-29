@@ -47,4 +47,5 @@ namespace wwhd::rt
 	bool DiffInit();                                       // true if diff mode is on
 	void DiffExecute(PPCInterpreter_t* hCPU);              // the hook's loop in diff mode
 	void DiffReport(bool final);
+	[[noreturn]] void DiffNativeFault(uint32 ea, uint32 target);   // rt_bad_branch in a diff native run
 }
