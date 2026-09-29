@@ -1,0 +1,36 @@
+From b0d2d6f3264346cc490ebdb01060e8e3c3a738cc Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Tue, 29 Sep 2026 05:24:43 +0000
+Subject: [PATCH] wwhd-reference: write screenshots atomically (render thread
+ may lag the exit frame)
+
+---
+ src/Cafe/OS/libs/gx2/GX2.cpp | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/src/Cafe/OS/libs/gx2/GX2.cpp b/src/Cafe/OS/libs/gx2/GX2.cpp
+index 4acbc55..9a71a6f 100644
+--- a/src/Cafe/OS/libs/gx2/GX2.cpp
++++ b/src/Cafe/OS/libs/gx2/GX2.cpp
+@@ -84,12 +84,16 @@ static void _refShotRequest(uint32 frame)
+ 	const char* dirEnv = getenv("CEMU_SHOT_DIR");
+ 	std::string dir = dirEnv && *dirEnv ? dirEnv : ".";
+ 	g_renderer->RequestScreenshot([dir, frame](const std::vector<uint8>& rgb, int width, int height, bool mainWindow) -> std::optional<std::string> {
++		// written by the render thread, which may lag the CPU: write aside and rename, so an exit
++		// mid-write (CEMU_HLE_TRACE_EXIT_FRAME) leaves no half-written image
+ 		std::string path = fmt::format("{}/f{:06}.{}.ppm", dir, frame, mainWindow ? "tv" : "pad");
+-		if (FILE* f = fopen(path.c_str(), "wb"))
++		std::string tmp = path + ".part";
++		if (FILE* f = fopen(tmp.c_str(), "wb"))
+ 		{
+ 			fprintf(f, "P6\n%d %d\n255\n", width, height);
+ 			fwrite(rgb.data(), 1, std::min<size_t>(rgb.size(), (size_t)width * height * 3), f);
+-			fclose(f);
++			if (fclose(f) == 0)
++				rename(tmp.c_str(), path.c_str());
+ 		}
+ 		return std::nullopt;
+ 	});
+-- 
+2.47.3
+

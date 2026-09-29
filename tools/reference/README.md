@@ -25,8 +25,10 @@ REF_LOGFLAG=2 WWHD_GAME=... tools/reference/run.sh      # log every GX2 call to 
                                                        # (~1 GB per 3.5 min: short runs only)
 ```
 
-Rendering is Mesa lavapipe (Vulkan on the CPU): about 2–5 FPS on this 4-core VM, and the first
-boot takes minutes while shaders compile. The title screen is reached about 3 minutes after launch.
+On the worker worker Cemu renders on the Intel iGPU (Intel iGPU) through Mesa's anv driver. Xvfb has
+no DRI3, so `run.sh` sets `MESA_VK_WSI_DEBUG=sw`: the GPU renders and Mesa copies each frame into
+Xvfb through the CPU. `REF_GPU=llvmpipe` renders in software instead (Mesa lavapipe): about 1.5x
+slower on menus and slower still in 3D, and its frames agree with the GPU's to 49-55 dB.
 
 ## Gotchas found getting here
 
@@ -63,6 +65,10 @@ What it took. Each numbered item is a patch; the last is a profile setting:
 | 0004 | Synchronous GPU submissions (wait for retire, 2 s cap) | GPU completions woke guest threads at host-timed moments. |
 | 0005 | `sched.*` events in the trace (timeslices, alarm firings, idle skips) | Debugging aid: pinpointed the next divergence. |
 | 0006 | Legacy IOSU ioctls (act, acp, mcp, boss, nim, fpd) wait host-side | `nn_save.SAVEInit` → act suspended the game thread and an IOSU thread resumed it at a host-timed moment. |
+| 0007 | Frame-keyed scripted input (`CEMU_INPUT_SCRIPT`) and frame-indexed screenshots (`CEMU_SHOT_FRAMES`) | Repeatable routes and pictures to check them. |
+| 0008 | Pro Controller scripted input through padscore/KPAD; `CEMU_NO_GAMEPAD` reports the GamePad absent | The project is single-screen, Pro Controller mode (design D17). |
+| 0009 | `CEMU_SWKBD_AUTO` answers the system keyboard (name entry) | New Game asks for a name through swkbd. |
+| 0010 | Screenshots written aside and renamed | With a real GPU the render thread lags the CPU; exit-at-frame cut the last capture in half. |
 | profile | Single-core *interpreter* (`0005000010143500.ini`) | The single-core recompiler's background JIT made timeslice boundaries depend on host timing. |
 
 `hle_trace.py diff` normalizes Cemu's `PPCCallback<host pointer>` stub names, which change with
@@ -90,9 +96,7 @@ deleting the vcpkg build trees.
 
 ## Still to do for M0a
 
-* **Hardware rendering:** Cemu picks llvmpipe inside the worker (Mesa's Intel driver can't present to
-  Xvfb, which has no DRI3). Frames are correct, just slower. Options: Xorg with the dummy driver,
-  or a headless Vulkan surface.
+* ~~Hardware rendering~~: done (2026-09-29), see above.
 * ~~Deeper coverage / input script~~: done. `determinism.sh OUT 10800 routes/title-to-game.txt`
   gives 1,124,796,468 identical records along the route into gameplay (2026-09-29). Screenshots
   of the two runs differ in a few hundred edge pixels (llvmpipe), which the CPU check ignores.

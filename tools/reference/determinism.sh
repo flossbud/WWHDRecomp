@@ -15,15 +15,16 @@ frames=${2:-600}
 route=${3:+$(readlink -f "$3")}
 mkdir -p "$out"
 export CEMU_BIN=${CEMU_BIN:-/wwhd/opt/cemu-src/bin/Cemu_release}
+export REF_PIDFILE=$out/cemu.pid
 for run in a b; do
     mkdir -p "$out/$run"; rm -f "$out/$run"/f*.ppm
     REF_FRESH=1 REF_VIRTUAL_CLOCK=1 CEMU_HLE_TRACE="$out/$run.zst" CEMU_HLE_TRACE_EXIT_FRAME=$frames \
         CEMU_INPUT_SCRIPT=${route:-} CEMU_SHOT_FRAMES=0-$frames/$(( frames / 8 )) CEMU_SHOT_DIR="$out/$run" \
         "$here/run.sh"
     deadline=$(( $(date +%s) + ${REF_MAX_MINUTES:-30} * 60 ))
-    while pgrep -x cemu >/dev/null; do                   # Cemu exits itself at the frame limit
+    while kill -0 "$(cat "$REF_PIDFILE")" 2>/dev/null; do                  # Cemu exits itself at the frame limit
         if [ "$(date +%s)" -gt "$deadline" ]; then
-            pkill -x cemu || true
+            kill "$(cat "$REF_PIDFILE")" || true
             echo "run $run: did not reach frame $frames within ${REF_MAX_MINUTES:-30} min; stopped" >&2
             exit 3
         fi

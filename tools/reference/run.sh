@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Start the reference Cemu on a virtual display with software Vulkan.
-#   CEMU_BIN      executable (default: the extracted 2.6 AppImage, ~/opt/cemu/squashfs-root/AppRun;
-#                 the patched source build is ~/opt/cemu-src/bin/Cemu_release)
+# Start the reference Cemu on a virtual display (Xvfb), rendering on the host GPU.
+#   CEMU_BIN      executable (default: the worker's patched build /wwhd/opt/cemu-src/bin/Cemu_release,
+#                 else the extracted 2.6 AppImage; build/wwhd/wwhd is our own frontend, src/build.sh)
 #   CEMU_PORTABLE its portable data dir (default: next to the real binary, .../portable)
 #   WWHD_GAME     path to the game (.wua or extracted title dir)
 #   DISPLAY    default :99 (an Xvfb is started if none is running there)
@@ -15,6 +15,11 @@
 #   CEMU_SHOT_FRAMES=0-900/60     capture TV/pad at these frames into $CEMU_SHOT_DIR (PPM)
 #   CEMU_NO_GAMEPAD=1             GamePad reported absent: the project's single-screen, Pro-Controller
 #                                 mode (default 1; set CEMU_NO_GAMEPAD= to re-enable the GamePad)
+#   REF_GPU=llvmpipe              render in software instead (default: the first GPU, the worker's
+#                                 Intel iGPU; Mesa's "sw" WSI copies its frames into Xvfb, which has
+#                                 no DRI3 for direct presentation)
+#   REF_PIDFILE=path              where to record the emulator's pid (default portable/cemu.pid);
+#                                 callers wait on it with `kill -0`
 #   REF_FRESH=1                   delete the emulated NAND (portable/mlc01: saves, account) first,
 #                                 so every run starts from the same state
 set -euo pipefail
@@ -44,17 +49,25 @@ sed "s|<logflag>0</logflag>|<logflag>${REF_LOGFLAG:-0}</logflag>|" "$here/settin
 # openbox gives keyboard focus/activation; without a WM, Cemu ignores key presses.
 xdpyinfo >/dev/null 2>&1 || { Xvfb "$DISPLAY" -screen 0 2200x1100x24 -nolisten tcp >/dev/null 2>&1 & sleep 1; }
 pgrep -x openbox >/dev/null || { openbox >/dev/null 2>&1 & sleep 1; }
+export WWHD_CEMU_DATA=${WWHD_CEMU_DATA:-/wwhd/opt/cemu-src/bin}   # Cemu's resources/ for build/wwhd/wwhd
+export MESA_VK_WSI_DEBUG=${MESA_VK_WSI_DEBUG-sw}
+[ "${REF_GPU:-}" = llvmpipe ] && export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/tmp/xdg-$(id -u)}; mkdir -p -m 700 "$XDG_RUNTIME_DIR"
 pulseaudio --check 2>/dev/null || pulseaudio --start --exit-idle-time=-1
 pactl list short sinks | grep -q null || pactl load-module module-null-sink sink_name=null >/dev/null
 
-pgrep -x cemu >/dev/null && { echo "cemu already running" >&2; exit 1; }
+# One instance per portable dir (they hold the NAND and log); different binaries may run side by side.
+pidfile=${REF_PIDFILE:-$portable/cemu.pid}
+if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+    echo "already running as pid $(cat "$pidfile") ($pidfile)" >&2; exit 1
+fi
 for attempt in 1 2 3; do
     : > "$portable/log.txt"
-    (cd "$(dirname "$bin")" && "$bin" -g "$game" >/dev/null 2>&1 &)
+    (cd "$(dirname "$bin")" && exec "$bin" -g "$game" >/dev/null 2>&1) &
+    echo $! > "$pidfile"
     # Cemu 2.6 sometimes deadlocks in a forked child before logging starts; retry if so.
     for _ in $(seq 60); do grep -q 'Run title' "$portable/log.txt" 2>/dev/null && { echo "cemu running (attempt $attempt)"; exit 0; }; sleep 1; done
     echo "no 'Run title' after 60s, restarting (attempt $attempt)" >&2
-    pkill -x cemu || true; sleep 2; pkill -9 -x cemu || true
+    kill "$(cat "$pidfile")" 2>/dev/null || true; sleep 2; kill -9 "$(cat "$pidfile")" 2>/dev/null || true
 done
 exit 1
