@@ -29,7 +29,8 @@ compile() { "${cxx[@]}" "${@:3}" -c "$1" -o "$out/$2" & pids+=($!); }
 compile "$root/src/frontend/cemu_boot.cpp" cemu_boot.o
 compile "$root/src/frontend/window_system.cpp" window_system.o
 compile "$root/src/frontend/window_system.cpp" window_system_null.o -DWWHD_NULL_GPU
-compile "$root/src/gpu/null_gpu.cpp" null_gpu.o
+compile "$root/src/gpu/null_gpu.cpp" null_gpu.o -I"$root/src/gpu" -I"$cemu/dependencies/Vulkan-Headers/include"
+for f in vk renderer; do compile "$root/src/gpu/vk/$f.cpp" "vk_$f.o" -I"$cemu/dependencies/Vulkan-Headers/include"; done
 for f in dispatch imports diff; do compile "$root/src/runtime/$f.cpp" "rt_$f.o"; done
 for p in "${pids[@]}"; do wait "$p"; done
 
@@ -57,7 +58,7 @@ link() {  # link NAME OBJECTS...
     eval "$cmd"
 }
 link wwhd "$out/cemu_boot.o" "$out/window_system.o"
-null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/null_gpu.o" "$out"/rt_{dispatch,imports,diff}.o)
+null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/null_gpu.o" "$out"/vk_{vk,renderer}.o "$out"/rt_{dispatch,imports,diff}.o)
 if [ -n "$recomp" ]; then
     null_objs+=("$recomp"/shard_*.o "$recomp/func_table.o" "$recomp/imports.o")
     echo "wwhd: wwhd-null links the recompiled program from $recomp ($(ls "$recomp"/shard_*.o | wc -l) shards)"

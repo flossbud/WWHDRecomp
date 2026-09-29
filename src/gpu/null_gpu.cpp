@@ -21,6 +21,7 @@
 #include "Cafe/CafeSystem.h"
 #include "util/highresolutiontimer/HighResolutionTimer.h"
 #include "util/helpers/helpers.h"
+#include "vk/renderer.h"
 #include <map>
 #include <set>
 
@@ -463,7 +464,11 @@ namespace
 			break;
 		}
 		case IT_HLE_REQUEST_SWAP_BUFFERS: LatteGPUState.flipRequestCount.fetch_add(1); break;
-		case IT_HLE_TRIGGER_SCANBUFFER_SWAP: LatteGPUState.frameCounter++; break;
+		case IT_HLE_TRIGGER_SCANBUFFER_SWAP:
+			LatteGPUState.frameCounter++;
+			if (wwhd::gpu::RendererOn())
+				wwhd::gpu::RendererSwap();
+			break;
 		case IT_HLE_WAIT_FOR_FLIP:
 		{
 			uint32 flips = LatteGPUState.flipCounter;
@@ -484,9 +489,16 @@ namespace
 				gpustats::Draw(op);
 			break;
 		// nothing to observe without a renderer
-		case IT_SURFACE_SYNC:
-		case IT_HLE_CLEAR_COLOR_DEPTH_STENCIL: case IT_HLE_COPY_SURFACE_NEW:
-		case IT_HLE_COPY_COLORBUFFER_TO_SCANBUFFER: case IT_HLE_SYNC_ASYNC_OPERATIONS:
+		// the renderer (src/gpu/vk, WWHD_RENDER=vk) draws them; nothing guest-visible
+		case IT_HLE_CLEAR_COLOR_DEPTH_STENCIL:
+			if (wwhd::gpu::RendererOn())
+				wwhd::gpu::RendererClear(body, nWords);
+			break;
+		case IT_HLE_COPY_COLORBUFFER_TO_SCANBUFFER:
+			if (wwhd::gpu::RendererOn())
+				wwhd::gpu::RendererCopyToScanBuffer(body, nWords);
+			break;
+		case IT_SURFACE_SYNC: case IT_HLE_COPY_SURFACE_NEW: case IT_HLE_SYNC_ASYNC_OPERATIONS:
 			break;
 		default:
 			cemuLog_logOnce(LogType::Force, "null GPU: unknown PM4 packet {:02x}", op);
