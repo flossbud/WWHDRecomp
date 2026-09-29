@@ -17,29 +17,8 @@ ops=()
 [ -n "${FUZZ_OPS:-}" ] && ops=(--ops "$FUZZ_OPS")
 python3 "$here/gen.py" "$out/cases.cpp" --per-op "${FUZZ_PER_OP:-64}" "${ops[@]}"
 
-# Cemu's flags for PPCInterpreterFPU.cpp, minus its output, PCH and LTO
-mapfile -t flags < <(python3 - "$cemu/build/compile_commands.json" <<'EOF'
-import json, shlex, sys
-for e in json.load(open(sys.argv[1])):
-    if e["file"].endswith("Espresso/Interpreter/PPCInterpreterFPU.cpp"):
-        a = shlex.split(e["command"])[1:]
-        out, skip = [], 0
-        for i, x in enumerate(a):
-            if skip:
-                skip -= 1
-                continue
-            if x in ("-o", "-c"):
-                skip = 1
-            elif x == "-Xclang" and i + 1 < len(a) and a[i + 1] in ("-include-pch", "-include"):
-                skip = 3
-            elif x.startswith("-flto") or x == "-Winvalid-pch":
-                pass
-            else:
-                out.append(x)
-        print("\n".join(out))
-        break
-EOF
-)
+# Cemu's own flags for its interpreter (tools/cemu_flags.py)
+mapfile -t flags < <(python3 "$root/tools/cemu_flags.py" "$cemu/build/compile_commands.json" Espresso/Interpreter/PPCInterpreterFPU.cpp)
 cxx=(clang++ "${flags[@]}" -fno-lto -ffp-contract=off -include "$cemu/src/Common/precompiled.h"
      -I"$root/tools/recomp/runtime" -I"$here" -Wno-unused-variable)
 echo "fuzz: compiling"
