@@ -1,0 +1,43 @@
+From 6a19ac7ca9d6cd0de724fbbc70f1deb6ecf7efdb Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Tue, 29 Sep 2026 03:03:19 +0000
+Subject: [PATCH] wwhd-reference: CEMU_SWKBD_AUTO answers the software keyboard
+ deterministically
+
+WWHD's name entry uses the system swkbd, which Cemu drives from host
+keyboard input and draws with ImGui after the screenshot hook. For scripted
+routes, the first SwkbdCalc after it appears fills in the given text and
+presses OK.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/Cafe/OS/libs/swkbd/swkbd.cpp | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/src/Cafe/OS/libs/swkbd/swkbd.cpp b/src/Cafe/OS/libs/swkbd/swkbd.cpp
+index 16b8d73..9a56691 100644
+--- a/src/Cafe/OS/libs/swkbd/swkbd.cpp
++++ b/src/Cafe/OS/libs/swkbd/swkbd.cpp
+@@ -393,6 +393,19 @@ void SwkbdCalcSubThreadPredict()
+ 
+ void SwkbdCalc(void* controllerInfo)
+ {
++	// wwhd-reference: CEMU_SWKBD_AUTO=text answers an open keyboard/input form with that text
++	// on the first SwkbdCalc after it appears (deterministic; host keyboard never involved)
++	static const char* s_autoText = getenv("CEMU_SWKBD_AUTO");
++	if (s_autoText && swkbdInternalState->isActive && !swkbdInternalState->decideButtonWasPressed)
++	{
++		sint32 n = 0;
++		for (const char* c = s_autoText; *c && n < swkbdInternalState->maxTextLength; c++)
++			swkbdInternalState->formStringBuffer[n++] = (wchar_t)(uint8)*c;
++		swkbdInternalState->formStringBuffer[n] = '\0';
++		swkbdInternalState->formStringLength = n;
++		swkbdInternalState->decideButtonWasPressed = true;
++		cemuLog_log(LogType::Force, "swkbd: auto-answered \"{}\"", s_autoText);
++	}
+ 	// no op for now
+ }
+ 
+-- 
+2.47.3
+

@@ -2,3 +2,6 @@
 # FRAME BUTTONS [FRAMES_HELD]; frames are GX2SwapScanBuffers counts (see cemu-patches/0007,0008).
 # Found with tools/reference/survey.sh; extend one screen at a time.
 200 A 5        # "Save data has been created." -> OK
+600 A 5        # title screen "Press Any Button" (up from ~f510)
+700 A 5        # Controller Selection (up from ~f660; cursor already on Pro Controller)
+800 A 5        # File Selection (up from ~f740; cursor on Quest Log 1 "New Game")

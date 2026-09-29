@@ -465,6 +465,11 @@ The G milestones are scoped from that trace, not from the import list.
 * **The reference runs the same way:** a Pro Controller profile, no GamePad window. Its scripted
   route input goes through the same KPAD path, so reference traces follow the code the recomp
   will actually run.
+* **Software keyboard (name entry):** WWHD enters the player's name through the system
+  keyboard (`nn_swkbd`). Cemu implements it with an ImGui overlay drawn by its renderer, and that
+  renderer isn't in our product. The recomp needs its own: at minimum a text prompt in our
+  frontend feeding `SwkbdGetInputFormString`, later an in-game-styled keyboard. The reference
+  answers it deterministically (`CEMU_SWKBD_AUTO`).
 * **Later, second screen:** our own feature (e.g. map/inventory on a handheld's second display)
   built as overrides that draw extra views, not the DRC path.
 
