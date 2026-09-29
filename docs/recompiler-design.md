@@ -231,7 +231,7 @@ A later optimisation could inline them at call sites.
 
 There are three layers, all using Cemu's interpreter as the oracle, running in the same process.
 
-1. **Instruction fuzzing.** For each of the 200 mnemonics, take random CPU states and memory
+1. **Instruction fuzzing.** For each of the 157 mnemonics the game uses, take random CPU states and memory
    windows and compare one generated instruction against `PPCInterpreterSlim_executeInstruction`.
    This runs as a unit test on this server with no game data.
 2. **Function diff on "pure" functions.** From the call graph, mark functions that reach no
@@ -488,7 +488,7 @@ There are two tracks. They meet at M4.
 
 | # | Milestone | Done when |
 |---|---|---|
-| M1 | Instruction semantics | The generator emits all 200 mnemonics. The instruction fuzzer passes against Cemu's interpreter. |
+| M1 ✅ | Instruction semantics | The generator emits all 157 mnemonics the game uses. The instruction fuzzer passes against Cemu's interpreter. |
 | M2 | Whole program compiles | All 39,705 functions generate with zero unknown instructions and zero unresolved branches, and compile with clang. |
 | M3 | Pure functions native | `native_dispatch` is on for pure functions, with sampled diff mode clean over the scripted route (null backend). |
 | M4 | Everything native | HLE calls direct, yield points in place, `GamePatch` handled. The GX2 call stream still matches the reference, and the interpreter fallback counter is 0. |
@@ -509,9 +509,20 @@ There are two tracks. They meet at M4.
 | M5 | Playable | The native CPU plus the native GX2 on a GPU machine play through the scripted route and beyond at full speed. |
 | M6 | First enhancement | 60 fps interpolation as overrides (needs Phase 2 names). |
 
-**M0a status (2026-09-28):** the patched reference is deterministic. Two fresh boots traced to
-frame 600 give 64.9M identical OS-call and scheduler records; see `tools/reference/README.md`.
-Still open: scripted input for a deeper route, and hardware rendering in the worker.
+**M0a status (2026-09-29):** done. The patched reference is deterministic along a scripted route:
+two fresh boots playing `tools/reference/routes/title-to-game.txt` (title, file select, name
+entry, the legend intro, Aryll's dialogue, into gameplay on Outset) give 1,124,796,468 identical
+OS-call and scheduler records over 10,800 frames. Frames from the two runs differ only in a few
+hundred edge pixels (PSNR 73-75 dB): host rasteriser noise from llvmpipe, which D16.3's
+tolerance absorbs. Still open: hardware rendering in the worker.
+
+**M1 status (2026-09-29):** done. `tools/recomp/census.py` decodes all 2,351,474 instructions in
+`functions.csv` into 157 base mnemonics (none undecodable). The game uses no OE forms, no FP
+record forms, no absolute branches, and SPRs only LR, CTR and UGQR2-5. `tools/recomp/emit.py`
+emits all of them, and the fuzzer (`tools/recomp/fuzz/`) matches Cemu's interpreter on every
+register and memory byte for the 154 that compute (about 1.8M randomized runs); `dcbf`/`dcbst`
+and `tw` are runtime hooks. Two findings: a signed-overflow UB in a naive `neg` that clang
+exploited, and NaN payloads, which depend on x86 operand order (see open question 4).
 
 The CPU track needs no rendering, and the graphics track can use Cemu's interpreter for the CPU
 (M0b), so the two proceed in parallel.
@@ -523,9 +534,12 @@ The CPU track needs no rendering, and the graphics track can use Cemu's interpre
    this, and the coupling shim (D12) is the known part.
 2. **`GamePatch` and graphic packs.** Which Cemu game patches target WWHD US (D10)?
 3. **Fiber stack size and `musttail`.** Is 2 MB enough for native recursion? Check during M3/M4.
-4. **Floating-point exactness.** Does the host FPU plus correct rounding match Espresso for
-   `fmadds` (fused vs. separate rounding) and denormals? The M1 fuzzer will show it; Cemu's
-   interpreter documents its own choices.
+4. **Floating-point exactness.** Answered for the oracle (M1): Cemu does not fuse `fmadd*`
+   (it is built for baseline x86-64, and we compile with `-ffp-contract=off`), rounds single ops
+   through `float`, and truncates frC to 25 bits for single multiplies; the emitter copies all of
+   it and matches bit for bit. The one tolerated difference is *which* NaN comes out when inputs
+   are NaN, because x86 propagates the first operand and compilers may commute additions. Espresso
+   follows different NaN rules again, so matching real hardware there is a later question.
 5. **Shader state variants.** How many (program × fetch-layout × render-target-format) variants
    does WWHD really use? G0 answers this, and it decides specialisation constants versus
    enumerated variants.
