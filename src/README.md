@@ -21,7 +21,9 @@ is ours. Its frames on the route are byte-identical to Cemu_release's.
 
 **`wwhd-null`** (M0b.2) is headless and has no Latte: `libCemuCafe.a` is copied without the
 objects built from `src/Cafe/HW/Latte`, except the address library, which gx2 needs for surface
-layouts. Along the route its OS-call trace equals the reference's (59,531,239 calls to f600).
+layouts. Along the route its OS-call trace equals the reference's: 59,531,239 calls to f600, and
+all 1,124,796,468 calls over the whole route into gameplay, which takes 12 minutes, about 2x
+faster than the reference on the GPU.
 
 Link order matters. Static constructors run in link order, and each of Cemu's `SysAllocator`s
 takes its slot in guest memory (0x0E000000 up) as it is constructed. Leaving Latte out changes

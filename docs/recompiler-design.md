@@ -569,7 +569,9 @@ wxWidgets):
   `src/gpu/null_gpu.cpp` in their place.
 
 Along the scripted route, both give OS-call traces identical to Cemu_release's (59,531,239
-calls to f600), and `wwhd-null` is deterministic run to run. One trap: dropping objects changes
+calls to f600), and `wwhd-null` is deterministic run to run. Over the whole route into gameplay
+(10,800 frames), `wwhd-null` matches the reference's 1,124,796,468 calls exactly, in 12 minutes
+of wall time (the reference takes about 25 on the GPU). It is the fast harness for the CPU track. One trap: dropping objects changes
 the order of static constructors, which moves Cemu's `SysAllocator` slots in guest memory. So
 `wwhd-null` is linked with its archive members in `wwhd`'s order (`src/link_order.py`).
 
