@@ -70,10 +70,24 @@ What it took. Each numbered item is a patch; the last is a profile setting:
 | 0009 | `CEMU_SWKBD_AUTO` answers the system keyboard (name entry) | New Game asks for a name through swkbd. |
 | 0010 | Screenshots written aside and renamed | With a real GPU the render thread lags the CPU; exit-at-frame cut the last capture in half. |
 | 0011 | Execution seam: `g_ppcExecuteHook`, null by default, replaces the interpreter loop in `__OSFiberThreadEntry` and `PPCCore_executeCallbackInternal`; the trace's exit-at-frame runs `at_quick_exit` handlers | Not a determinism fix: it is where the recompiled program's runtime (`src/runtime`, design D1) takes over. With the hook null the reference is unchanged (600 frames, 59,531,239 calls equal to the baseline). |
+| 0012 | Texture dumps and a texture-cache log: `CEMU_TEX_DUMP_FRAME=N[,M...]` writes every uncompressed GPU-side texture (all mips, slice 0) as PPM into `CEMU_TEX_DUMP_DIR` at those swaps (`CEMU_TEX_DUMP_ADDR=hex` limits it to one address); `CEMU_TEX_WATCH=hex` logs creation, deletion, reloads, syncs and clears of the textures at that address | Not a determinism fix: ground truth for the recomp's renderer (G2). `compare_dumps.py` compares a dump with the renderer's (`WWHD_RENDER_DUMP`). Off unless set. |
 | profile | Single-core *interpreter* (`0005000010143500.ini`) | The single-core recompiler's background JIT made timeslice boundaries depend on host timing. |
 
 `g0_gx2.py TRACE --imports build/recomp/imports.cpp` (design D15, G0) lists every GX2 call on a
 route with its argument values, and the imported GX2 functions that are never called.
+
+**Comparing frames and surfaces with the recomp's renderer (G2).** `compare_frames.py REF OURS
+[--threshold DB]` compares two directories of `f<N>.tv.ppm` captures. The reference's shot N is the
+image its *(N+1)*th swap presents (the screenshot is requested at the Nth `GX2SwapScanBuffers` and
+taken at the renderer's next present); the renderer captures the same way. `compare_dumps.py FRAME
+REF_DIR OURS_DIR` compares the reference's texture dump (patch 0012) with the renderer's surface
+dump at the same swap, in the reference's write order, so the first surface that differs is where
+a difference starts. Two things in the reference's texture cache matter for such comparisons:
+* It deletes a GPU-written texture that a later write to overlapping memory made stale, and reloads
+  it from guest memory (zeros, since the GPU never writes back), when a round-robin scan at a swap
+  (25 textures per swap) finds it unused for 100 ms of wall time. Which frames that happens at
+  depends on the host; the renderer does it at every swap.
+* Its depth clears also clear the color textures that start at the same address, to the depth value.
 
 `route.sh OUT FRAMES ROUTE BASELINE` is `determinism.sh` with one run: it plays the route once and
 compares the trace with a known-good one (for example `wwhd-null` in diff mode against

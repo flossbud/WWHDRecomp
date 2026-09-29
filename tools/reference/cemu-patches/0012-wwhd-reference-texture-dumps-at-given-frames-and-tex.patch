@@ -1,0 +1,333 @@
+From b8a8283745d45c54e4d0f9e23a7ca75d8e0d87fb Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Tue, 29 Sep 2026 19:56:52 +0000
+Subject: [PATCH] wwhd-reference: texture dumps at given frames and
+ texture-cache event log (CEMU_TEX_DUMP_FRAME, CEMU_TEX_WATCH)
+
+---
+ src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp  |  32 ++++
+ src/Cafe/HW/Latte/Core/LatteTexture.cpp       |  15 ++
+ src/Cafe/HW/Latte/Core/LatteTextureCache.cpp  |   3 +
+ src/Cafe/HW/Latte/Core/LatteTextureLegacy.cpp |   4 +
+ .../Latte/Renderer/Vulkan/VulkanRenderer.cpp  | 152 ++++++++++++++++++
+ .../HW/Latte/Renderer/Vulkan/VulkanRenderer.h |   3 +
+ 6 files changed, 209 insertions(+)
+
+diff --git a/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp b/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp
+index f1556f8..1d28a48 100644
+--- a/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp
++++ b/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp
+@@ -8,6 +8,9 @@
+ #include "Cafe/HW/Latte/Core/LatteTexture.h"
+ #include "Cafe/HW/Latte/Core/LatteCachedFBO.h"
+ #include "Cafe/HW/Latte/Renderer/Renderer.h"
++#ifdef ENABLE_VULKAN
++#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
++#endif
+ #include "Cafe/HW/Latte/Core/LattePerformanceMonitor.h"
+ #include "util/highresolutiontimer/HighResolutionTimer.h"
+ #include "Cafe/GraphicPack/GraphicPack2.h"
+@@ -685,6 +688,31 @@ void LatteRenderTarget_itHLESwapScanBuffer()
+ 	LattePerformanceMonitor_frameEnd();
+ 	FrameBenchmarkHelper::FrameEnd();
+ 	LatteGPUState.frameCounter++;
++#ifdef ENABLE_VULKAN
++	// wwhd-reference: CEMU_TEX_DUMP_FRAME=N[,M...] dumps the GPU-side textures at those swaps (CEMU_TEX_DUMP_DIR;
++	// CEMU_TEX_DUMP_ADDR=hex limits it to textures at that address)
++	{
++		static const std::set<uint32> dumpFrames = [] {
++			std::set<uint32> f;
++			if (const char* e = getenv("CEMU_TEX_DUMP_FRAME"))
++				for (const char* p = e; *p;)
++				{
++					char* end;
++					uint32 v = (uint32)strtoul(p, &end, 10);
++					if (end == p)
++						break;
++					f.insert(v);
++					p = *end == ',' ? end + 1 : end;
++				}
++			return f;
++		}();
++		if (dumpFrames.count(LatteGPUState.frameCounter) && g_renderer->GetType() == RendererAPI::Vulkan)
++		{
++			const char* d = getenv("CEMU_TEX_DUMP_DIR");
++			VulkanRenderer::GetInstance()->DumpTexturesForDebug(d && *d ? d : ".", LatteGPUState.frameCounter);
++		}
++	}
++#endif
+ 	g_renderer->SwapBuffers(true, true);
+ 
+ 	catchOpenGLError();
+@@ -700,8 +728,11 @@ void LatteRenderTarget_itHLESwapScanBuffer()
+ 	LattePerformanceMonitor_frameBegin();
+ }
+ 
++void LatteTexture_WwhdWatchEvent(const char* what, LatteTexture* t, LatteTexture* other);
++
+ void LatteRenderTarget_applyTextureColorClear(LatteTexture* texture, uint32 sliceIndex, uint32 mipIndex, float r, float g, float b, float a, uint64 eventCounter)
+ {
++	LatteTexture_WwhdWatchEvent("color clear", texture, nullptr);
+ 	if (texture->isDepth)
+ 	{
+ 		cemuLog_logDebug(LogType::Force, "Unsupported clear depth as color");
+@@ -715,6 +746,7 @@ void LatteRenderTarget_applyTextureColorClear(LatteTexture* texture, uint32 slic
+ 
+ void LatteRenderTarget_applyTextureDepthClear(LatteTexture* texture, uint32 sliceIndex, uint32 mipIndex, bool hasDepthClear, bool hasStencilClear, float depthValue, uint8 stencilValue, uint64 eventCounter)
+ {
++	LatteTexture_WwhdWatchEvent("depth clear", texture, nullptr);
+ 	if(texture->isDepth)
+ 	{
+ 		g_renderer->texture_clearDepthSlice(texture, sliceIndex, mipIndex, hasDepthClear, hasStencilClear, depthValue, stencilValue);
+diff --git a/src/Cafe/HW/Latte/Core/LatteTexture.cpp b/src/Cafe/HW/Latte/Core/LatteTexture.cpp
+index 43b116f..af01fb2 100644
+--- a/src/Cafe/HW/Latte/Core/LatteTexture.cpp
++++ b/src/Cafe/HW/Latte/Core/LatteTexture.cpp
+@@ -442,8 +442,22 @@ void LatteTexture_MarkDynamicTextureAsChanged(LatteTextureView* textureView, sin
+ 	LatteTexture_MarkConnectedTexturesForReloadFromDynamicTextures(textureView->baseTexture);
+ }
+ 
++// wwhd-reference: CEMU_TEX_WATCH=hex logs the texture cache's lifecycle events for textures at that address
++void LatteTexture_WwhdWatchEvent(const char* what, LatteTexture* t, LatteTexture* other)
++{
++	static const MPTR watch = [] { const char* e = getenv("CEMU_TEX_WATCH"); return e ? (MPTR)strtoul(e, nullptr, 16) : MPTR_NULL; }();
++	if (watch == MPTR_NULL || !t || (t->physAddress != watch && !(other && other->physAddress == watch)))
++		return;
++	auto desc = [](LatteTexture* x) {
++		return fmt::format("{:08x} {}x{} pitch {} fmt {:x}{} dim {} mips {} ptr {}", x->physAddress, x->width, x->height, x->pitch,
++			(uint32)x->format, x->isDepth ? " depth" : "", (uint32)x->dim, x->mipLevels, (void*)x);
++	};
++	cemuLog_log(LogType::Force, "texwatch frame {} {}: {}{}", LatteGPUState.frameCounter, what, desc(t), other ? " <-> " + desc(other) : std::string());
++}
++
+ void LatteTexture_SyncSlice(LatteTexture* srcTexture, sint32 srcSliceIndex, sint32 srcMipIndex, LatteTexture* dstTexture, sint32 dstSliceIndex, sint32 dstMipIndex)
+ {
++	LatteTexture_WwhdWatchEvent("sync (dst <- src)", dstTexture, srcTexture);
+ 	sint32 srcWidth = srcTexture->width;
+ 	sint32 srcHeight = srcTexture->height;
+ 	sint32 dstWidth = dstTexture->width;
+@@ -956,6 +970,7 @@ void LatteTexture_DeleteAbsorbedSubtextures(LatteTexture* texture)
+ 
+ void LatteTexture_RecreateTextureWithDifferentMipSliceCount(LatteTexture* texture, MPTR physMipAddr, sint32 newMipCount, sint32 newDepth)
+ {
++	LatteTexture_WwhdWatchEvent("recreate with more mips/slices", texture, nullptr);
+ 	Latte::E_DIM newDim = texture->dim;
+ 	if (newDim == Latte::E_DIM::DIM_2D && newDepth > 1)
+ 		newDim = Latte::E_DIM::DIM_2D_ARRAY;
+diff --git a/src/Cafe/HW/Latte/Core/LatteTextureCache.cpp b/src/Cafe/HW/Latte/Core/LatteTextureCache.cpp
+index b1ed968..b0b6eaa 100644
+--- a/src/Cafe/HW/Latte/Core/LatteTextureCache.cpp
++++ b/src/Cafe/HW/Latte/Core/LatteTextureCache.cpp
+@@ -323,8 +323,11 @@ bool LatteTC_IsTextureDataOverwritten(LatteTexture* texture)
+ 	return true;
+ }
+ 
++void LatteTexture_WwhdWatchEvent(const char* what, LatteTexture* t, LatteTexture* other);
++
+ void LatteTexture_Delete(LatteTexture* texture)
+ {
++	LatteTexture_WwhdWatchEvent("delete", texture, nullptr);
+ 	LatteTC_UnregisterTexture(texture);
+ 	LatteMRT::NotifyTextureDeletion(texture);
+ 	LatteTextureReadback_NotifyTextureDeletion(texture);
+diff --git a/src/Cafe/HW/Latte/Core/LatteTextureLegacy.cpp b/src/Cafe/HW/Latte/Core/LatteTextureLegacy.cpp
+index 7b8a0b7..c814f78 100644
+--- a/src/Cafe/HW/Latte/Core/LatteTextureLegacy.cpp
++++ b/src/Cafe/HW/Latte/Core/LatteTextureLegacy.cpp
+@@ -36,8 +36,11 @@ void LatteTexture_setEffectiveTextureScale(LatteConst::ShaderType shaderType, si
+ 
+ void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIndex, uint32 mipIndex, MPTR physImagePtr, MPTR physMipPtr, Latte::E_DIM dim, uint32 width, uint32 height, uint32 depth, uint32 mipLevels, uint32 pitch, Latte::E_HWTILEMODE tileMode, uint32 swizzle, bool dumpTex);
+ 
++void LatteTexture_WwhdWatchEvent(const char* what, LatteTexture* t, LatteTexture* other);
++
+ void LatteTexture_ReloadData(LatteTexture* tex)
+ {
++	LatteTexture_WwhdWatchEvent("reload from RAM", tex, nullptr);
+ 	tex->reloadCount++;
+ 	for(sint32 mip=0; mip<tex->mipLevels; mip++)
+ 	{
+@@ -81,6 +84,7 @@ LatteTextureView* LatteTexture_CreateTexture(Latte::E_DIM dim, MPTR physAddress,
+ 	LatteTexture_RegisterTextureMemoryOccupancy(tex);
+ 	cemu_assert_debug(mipLevels != 0);
+ 
++	LatteTexture_WwhdWatchEvent("create", tex, nullptr);
+ 	LatteTexture_ReloadData(tex);
+ 	LatteTC_MarkTextureStillInUse(tex);
+ 	LatteTC_RegisterTexture(tex);
+diff --git a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
+index 599190a..74b8f5e 100644
+--- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
++++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
+@@ -4382,3 +4382,155 @@ VKRObjectDescriptorSet::~VKRObjectDescriptorSet()
+ 	vkFreeDescriptorSets(vkr->GetLogicalDevice(), vkr->GetDescriptorPool(), 1, &descriptorSet);
+ 	performanceMonitor.vk.numDescriptorSets.decrement();
+ }
++
++// wwhd-reference: texture dump for comparing render targets with the recomp's renderer
++// (CEMU_TEX_DUMP_FRAME=N[,M...], CEMU_TEX_DUMP_DIR, CEMU_TEX_DUMP_ADDR). Every uncompressed texture's mips, slice 0, as PPM:
++// unorm and float values clamped to 0..1, single-channel float and depth data stretched to their
++// range (the same conversion as the recomp's WWHD_RENDER_DUMP). Names carry the physical address,
++// mip address, GX2 format, size, mip, whether the GPU updated the texture, and its last write
++// event counter (higher = written later).
++static float _dumpHalfToFloat(uint16 h)
++{
++	uint32 e = (h >> 10) & 0x1F, m = h & 0x3FF;
++	float v = e == 0 ? m / 1024.0f / 16384.0f : std::ldexp(1.0f + m / 1024.0f, (int)e - 15);
++	return (h & 0x8000) ? -v : v;
++}
++
++static float _dumpSmallFloat(uint32 bits, uint32 mantissaBits)
++{
++	uint32 e = bits >> mantissaBits, m = bits & ((1u << mantissaBits) - 1);
++	float f = (float)m / (float)(1u << mantissaBits);
++	return e == 0 ? std::ldexp(f, -14) : std::ldexp(1.0f + f, (int)e - 15);
++}
++
++void VulkanRenderer::DumpTexturesForDebug(const std::string& dir, uint32 frame)
++{
++	draw_endRenderPass();
++	VkPhysicalDeviceMemoryProperties memProps;
++	vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProps);
++	uint32 count = 0;
++	static const MPTR onlyAddr = [] { const char* e = getenv("CEMU_TEX_DUMP_ADDR"); return e ? (MPTR)strtoul(e, nullptr, 16) : MPTR_NULL; }();
++	for (LatteTexture* t : LatteTexture::GetAllTextures())
++	{
++		if (!t || t->dim == Latte::E_DIM::DIM_3D || t->IsCompressedFormat())
++			continue;
++		if (onlyAddr != MPTR_NULL && t->physAddress != onlyAddr)
++			continue;
++		auto* tex = (LatteTextureVk*)t;
++		VkFormat fmt = tex->GetFormat();
++		bool depth = tex->GetImageAspect() & VK_IMAGE_ASPECT_DEPTH_BIT;
++		uint32 bpp;
++		switch (fmt)
++		{
++		case VK_FORMAT_R8_UNORM: bpp = 1; break;
++		case VK_FORMAT_R8G8_UNORM: case VK_FORMAT_R16_SFLOAT: case VK_FORMAT_D16_UNORM: case VK_FORMAT_R16_UNORM: bpp = 2; break;
++		case VK_FORMAT_R16G16B16A16_SFLOAT: bpp = 8; break;
++		case VK_FORMAT_R8G8B8A8_UNORM: case VK_FORMAT_R8G8B8A8_SRGB: case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
++		case VK_FORMAT_B10G11R11_UFLOAT_PACK32: case VK_FORMAT_R32_SFLOAT: case VK_FORMAT_D32_SFLOAT:
++		case VK_FORMAT_D32_SFLOAT_S8_UINT: case VK_FORMAT_D24_UNORM_S8_UINT: case VK_FORMAT_R16G16_SFLOAT: bpp = 4; break;
++		default: continue;
++		}
++		for (sint32 mip = 0; mip < tex->mipLevels; mip++)
++		{
++			uint32 w = tex->GetMipWidth(mip), h = tex->GetMipHeight(mip);
++			VkDeviceSize size = (VkDeviceSize)w * h * bpp;
++			VkBufferCreateInfo bci{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
++			bci.size = size;
++			bci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
++			VkBuffer buf;
++			if (vkCreateBuffer(m_logicalDevice, &bci, nullptr, &buf) != VK_SUCCESS)
++				continue;
++			VkMemoryRequirements req;
++			vkGetBufferMemoryRequirements(m_logicalDevice, buf, &req);
++			uint32 memType = UINT32_MAX;
++			for (uint32 i = 0; i < memProps.memoryTypeCount; i++)
++				if ((req.memoryTypeBits & (1u << i)) && (memProps.memoryTypes[i].propertyFlags & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) ==
++					(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
++				{
++					memType = i;
++					break;
++				}
++			VkMemoryAllocateInfo ai{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
++			ai.allocationSize = req.size;
++			ai.memoryTypeIndex = memType;
++			VkDeviceMemory mem;
++			if (memType == UINT32_MAX || vkAllocateMemory(m_logicalDevice, &ai, nullptr, &mem) != VK_SUCCESS)
++			{
++				vkDestroyBuffer(m_logicalDevice, buf, nullptr);
++				continue;
++			}
++			vkBindBufferMemory(m_logicalDevice, buf, mem, 0);
++			VkImageSubresourceLayers layers{};
++			layers.aspectMask = tex->GetImageAspect();
++			layers.mipLevel = mip;
++			layers.baseArrayLayer = 0;
++			layers.layerCount = 1;
++			barrier_image<ANY_TRANSFER | IMAGE_WRITE, TRANSFER_READ>(tex, layers, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
++			VkBufferImageCopy region{};
++			region.imageSubresource = layers;
++			region.imageSubresource.aspectMask = depth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
++			region.imageExtent = { w, h, 1 };
++			vkCmdCopyImageToBuffer(getCurrentCommandBuffer(), tex->GetImageObj()->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buf, 1, &region);
++			barrier_image<TRANSFER_READ, ANY_TRANSFER | IMAGE_WRITE>(tex, layers, tex->GetDefaultLayout());
++			uint64 cmdId = GetCurrentCommandBufferId();
++			SubmitCommandBuffer();
++			WaitCommandBufferFinished(cmdId);
++			uint8* px;
++			vkMapMemory(m_logicalDevice, mem, 0, size, 0, (void**)&px);
++			size_t n = (size_t)w * h;
++			std::vector<float> rgb(n * 3);
++			for (size_t i = 0; i < n; i++)
++			{
++				const uint8* p = px + i * bpp;
++				uint32 v = 0;
++				memcpy(&v, p, std::min(bpp, 4u));
++				float* o = &rgb[i * 3];
++				switch (fmt)
++				{
++				case VK_FORMAT_R8_UNORM: o[0] = o[1] = o[2] = p[0] / 255.0f; break;
++				case VK_FORMAT_R8G8_UNORM: o[0] = p[0] / 255.0f; o[1] = p[1] / 255.0f; o[2] = 0; break;
++				case VK_FORMAT_R16_SFLOAT: o[0] = o[1] = o[2] = _dumpHalfToFloat((uint16)v); break;
++				case VK_FORMAT_R16_UNORM: case VK_FORMAT_D16_UNORM: o[0] = o[1] = o[2] = (v & 0xFFFF) / 65535.0f; break;
++				case VK_FORMAT_R16G16_SFLOAT: o[0] = _dumpHalfToFloat((uint16)v); o[1] = _dumpHalfToFloat((uint16)(v >> 16)); o[2] = 0; break;
++				case VK_FORMAT_R16G16B16A16_SFLOAT:
++					for (int c = 0; c < 3; c++)
++						o[c] = _dumpHalfToFloat((uint16)(p[c * 2] | (p[c * 2 + 1] << 8)));
++					break;
++				case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
++					o[0] = (v & 0x3FF) / 1023.0f; o[1] = ((v >> 10) & 0x3FF) / 1023.0f; o[2] = ((v >> 20) & 0x3FF) / 1023.0f; break;
++				case VK_FORMAT_B10G11R11_UFLOAT_PACK32:
++					o[0] = _dumpSmallFloat(v & 0x7FF, 6); o[1] = _dumpSmallFloat((v >> 11) & 0x7FF, 6); o[2] = _dumpSmallFloat(v >> 22, 5); break;
++				case VK_FORMAT_R32_SFLOAT: case VK_FORMAT_D32_SFLOAT: case VK_FORMAT_D32_SFLOAT_S8_UINT:
++					memcpy(&o[0], &v, 4); o[1] = o[2] = o[0]; break;
++				case VK_FORMAT_D24_UNORM_S8_UINT: o[0] = o[1] = o[2] = (v & 0xFFFFFF) / 16777215.0f; break;
++				default: o[0] = p[0] / 255.0f; o[1] = p[1] / 255.0f; o[2] = p[2] / 255.0f; break;
++				}
++			}
++			float lo = 0.0f, hi = 1.0f;
++			if (depth || fmt == VK_FORMAT_R32_SFLOAT || fmt == VK_FORMAT_R16_SFLOAT)
++			{
++				lo = std::numeric_limits<float>::max(), hi = -std::numeric_limits<float>::max();
++				for (size_t i = 0; i < n; i++)
++					lo = std::min(lo, rgb[i * 3]), hi = std::max(hi, rgb[i * 3]);
++				if (hi <= lo)
++					hi = lo + 1.0f;
++			}
++			std::vector<uint8> out(n * 3);
++			for (size_t i = 0; i < n * 3; i++)
++				out[i] = (uint8)std::clamp((rgb[i] - lo) / (hi - lo) * 255.0f + 0.5f, 0.0f, 255.0f);
++			std::string path = fmt::format("{}/tex{:06}_{:08x}_{:08x}_{:x}{}_{}x{}_m{}_{}_w{}.ppm", dir, frame, t->physAddress, t->physMipAddress,
++				(uint32)t->format, t->isDepth ? "d" : "", w, h, mip, t->isUpdatedOnGPU ? "gpu" : "ram", t->lastWriteEventCounter);
++			if (FILE* f = fopen(path.c_str(), "wb"))
++			{
++				fprintf(f, "P6\n%u %u\n255\n", w, h);
++				fwrite(out.data(), 1, out.size(), f);
++				fclose(f);
++				count++;
++			}
++			vkUnmapMemory(m_logicalDevice, mem);
++			vkDestroyBuffer(m_logicalDevice, buf, nullptr);
++			vkFreeMemory(m_logicalDevice, mem, nullptr);
++		}
++	}
++	cemuLog_log(LogType::Force, "texture dump: {} images at frame {} into {}", count, frame, dir);
++}
+diff --git a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h
+index d975e11..dc33f30 100644
+--- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h
++++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h
+@@ -953,6 +953,9 @@ private:
+ 
+ 
+ public:
++	// wwhd-reference: CEMU_TEX_DUMP_FRAME=N writes the GPU-side textures at the Nth swap (LatteRenderTarget.cpp)
++	void DumpTexturesForDebug(const std::string& dir, uint32 frame);
++
+ 	bool GetDisableMultithreadedCompilation() const { return m_featureControl.disableMultithreadedCompilation; }
+ 	bool HasSPRIVRoundingModeRTE32() const { return m_featureControl.shaderFloatControls.shaderRoundingModeRTEFloat32; }
+ 	bool IsDebugMarkersEnabled() const { return m_featureControl.usingDebugMarkerTool; }
+-- 
+2.47.3
+
