@@ -3,7 +3,7 @@
 Read this first, then `CLAUDE.md`, `docs/recompiler-design.md` (decisions D1–D17, milestones,
 status paragraphs) and the READMEs in `tools/reference/`, `tools/recomp/`, `tools/worker/`, `src/`.
 M3 was done on branch `ww02` (worktree `/srv/projects/WWHDRecomp/.worktrees/ww02`, based on
-`ww-2`), pushed to the `worker` remote.
+`ww-2`), pushed to the `worker` remote. M4 and G0 followed on the same branch.
 
 ## What the project is
 
@@ -110,7 +110,11 @@ For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
   a store census (`runtime/recomp_tables.h`). Two M2 bugs were fixed: all 294 jump tables are `b`
   runs (the switches never matched), and `_iob+0x10` was emitted as `environ`.
 
-**Runtime** (`src/runtime/`, M3 done). Linked into `wwhd-null` with the generated program:
+**Runtime** (`src/runtime/`, M3 and M4 done). Linked into `wwhd-null` with the generated program:
+- **`WWHD_NATIVE=on` runs the recompiled program.** The whole-route trace equals the reference's
+  (1,124,796,468 calls) in 359 s, with 0 game instructions interpreted. Guest time is exact per
+  instruction (`RT_TICK`/`rt_yield`, design D6 as built), and Cemu's boot patches are in the
+  generated code (`config/US_v0/code_patches.csv`, D10).
 - Cemu patch 0011's hook replaces the interpreter loop; by default it interprets exactly.
 - At boot: function table (D5), code hashes vs guest memory (Cemu patches `f_027F9994` and
   `f_028137E0`, D10), imports bound from guest memory (397 functions, 10 data; 0 differences from
@@ -119,6 +123,8 @@ For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
   non-pure code goes native (M4).
 - `WWHD_NATIVE=diff`: diff mode (D8.2). Over the whole route: 3,875,261 sampled pure calls checked,
   all equal to the interpreter; 4,616 functions, all clean; trace identical to `null-route.zst`.
+  Since M4 it also compares cycles.
+- `WWHD_GPU_STATS=path` (null GPU) and `tools/reference/g0_gx2.py`: the G0 measurements (D15).
 - `tools/reference/route.sh OUT FRAMES ROUTE BASELINE`: one run plus a trace comparison.
 
 **Runtime** (`src/`, M0b done). `src/build.sh` builds two binaries against the worker's Cemu:
@@ -135,47 +141,27 @@ For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
 
 ## Next steps, in order
 
-### 1. M4: everything native
+M3, M4 and G0 are done on the scripted route (design doc status paragraphs). `wwhd-null` with
+`WWHD_NATIVE=on` runs the recompiled program, and its whole-route trace equals the reference's.
 
-M3 is done (design doc, "M3 status"). **Guest time is decided** (design D6, owner, 2026-09-29):
-exact accounting per instruction, yielding in place on the fiber, so the whole-route trace must
-still equal the reference. Then: native dispatch for all functions, the D10 patches as
-overrides, the interpreter fallback counter to 0.
+### 1. G1: the shader corpus (design D14)
 
-**M4 guest time.** Under the virtual clock, guest time *is* the instruction count: each timeslice
-is 45,000 + (LCG & 0x7F) instructions (`while (--remainingCycles >= 0)`), an OS call costs 300
-more, and alarms, vsync and audio frames hang off the resulting clock. Native code has to end each
-timeslice on the same instruction as the interpreter, or thread interleaving changes and the trace
-stops matching. Because every guest thread is a Cemu fiber, native code can yield *in place*
-(`PPCCore_switchToScheduler()` from inside the generated function; its C++ frames wait on the
-fiber stack), so exact accounting needs no mid-function re-entry. Decided: exact per instruction
-(D6 has the details and the options that were considered).
+- Extract every GX2 program from the game files (`sharcfb`, `sarc`, `gsh`, inside `.pack`/`.szs`)
+  and translate them to SPIR-V that passes `spirv-val`. Everything goes to `build/`, never git.
+- Check the corpus against G0: every program seen on the route (hashes by content, from
+  `WWHD_GPU_STATS`'s `variants.csv`) must be in it. The route alone has 64 fetch, 236 vertex and
+  268 pixel programs. G0 found no geometry shaders, stream-out, MSAA or HiZ, and 287 variants,
+  so they can be enumerated (design D15).
+- The backend reads the null GPU's register file in Cemu's dialect: the depth image's address is
+  in `DB_HTILE_DATA_BASE`, not `DB_DEPTH_BASE` (D15).
 
-The M4 work after that decision:
-1. The accounting itself in `emit.py`/`generate.py`, and `rt_import` charging the trampoline's own
-   cycle as the interpreter does (`PPCInterpreter_virtualHLE` already charges the 300).
-2. Native dispatch in the hook: at a function entry, call the generated function instead of
-   interpreting (`src/runtime/dispatch.cpp`), with a fallback counter that must reach 0.
-3. The two D10 patches as overrides (`f_027F9994` race-condition `nop`s, `f_028137E0` DSP branch).
-4. HLE handlers that end the timeslice (`PPCInterpreter_relinquishTimeslice` sets
-   `remainingCycles = -1`) or reload a thread's context must behave as in the interpreter.
-5. Check: `route.sh` over the whole route, trace equal to `null-route.zst`; keep diff mode as the
-   per-function oracle.
+### 2. Extend the route, then rerun G0 and the native check
 
-### 2. G0: scope the graphics backend (measurement only; can run beside M4)
-
-- Trace every GX2 call and argument in single-screen Pro Controller mode along the route
-  (`REF_LOGFLAG` or the HLE tracer filtered with `CEMU_HLE_TRACE_FILTER=gx2.`), plus the PM4
-  register state the null GPU sees.
-- Answer D13's open features: geometry shaders, MSAA/`GX2ExpandAAColorBuffer`, HiZ,
-  stream-out, whether a GamePad view is still rendered, and the shader variant count (open
-  question 5).
-- `GX2CopySurface` and occlusion queries need attention:
-  - the null GPU skips the CPU-copy path and answers no queries;
-  - WWHD didn't use queries up to gameplay, and the traces still match;
-  - but a real backend must handle whatever G0 finds.
-- The Vulkan backend (D13) will be a renderer that reads the null GPU's register file (see the
-  revised D12). G1 is the AOT shader corpus.
+The route stops on Outset. D15 also wants sailing, a dungeon room, the menus and the Pictograph
+Box. Extend `routes/title-to-game.txt` (with `survey.sh` for contact sheets), record new baselines
+with the reference, and rerun:
+- `route.sh` in native mode against the new baseline;
+- `g0_gx2.py` on the new trace, and `WWHD_GPU_STATS` in the same native run.
 
 ### 3. Own CMake build for `src/` and an SDL3 window
 
@@ -188,9 +174,14 @@ The M4 work after that decision:
 
 ### 4. Later
 
-- M4 (everything native), G1–G3, M5 (playable on a GPU machine), M6 (60 fps).
+- G2–G3 (the Vulkan renderer on the null GPU's register file), M5 (playable on a GPU machine),
+  M6 (60 fps).
+- Native speed, when it matters: per-block counting (D6), host-local registers (D2). Keep the
+  whole-route trace check for every step. The shipped real-clock build may count coarsely behind a
+  flag (D6).
 - The recomp needs its own name-entry keyboard; the reference uses `CEMU_SWKBD_AUTO`.
-- Extend the route beyond the lookout when the CPU track needs more coverage.
+- The GamePad view (an 864×480 pass, about 7 draws per frame) can be skipped with an override once
+  the renderer exists.
 
 ## Known facts and gotchas worth not rediscovering
 

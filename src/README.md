@@ -10,7 +10,7 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 | `gpu/null_gpu.cpp` | null GPU in place of Latte: consumes gx2's command buffers, keeps the register file, performs every guest-visible effect, draws nothing (derived from Latte, MPL-2.0) |
 | `runtime/dispatch.cpp` | the execution seam (Cemu patch 0011): the hook that replaces Cemu's interpreter loop, the function table (D5), the D10 code check, `rt_call_ctr`/`rt_jump_ctr`/`rt_bad_branch` |
 | `runtime/imports.cpp` | `rt_import`/`rt_import_data` (D4), bound from what Cemu's loader wrote into guest memory |
-| `runtime/diff.cpp` | diff mode (D8.2, M3): pure functions run natively, are rewound, and are compared with the interpreter's run of the same call |
+| `runtime/diff.cpp` | diff mode (D8.2, M3): pure functions run natively, are rewound, and are compared (registers, stores, cycles) with the interpreter's run of the same call |
 | `build.sh` | builds `build/wwhd/wwhd` and `build/wwhd/wwhd-null` on the worker against its Cemu build |
 | `link_order.py` | orders `wwhd-null`'s archive members like `wwhd`'s link (see below) |
 
@@ -23,8 +23,14 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 none). The frontend installs Cemu's execution seam (`g_ppcExecuteHook`, cemu-patches/0011) before
 launching the title. By default the hook runs Cemu's exact interpreter loop, so the trace stays
 the reference's. With `WWHD_NATIVE=diff`, sampled calls of pure functions also run natively and are
-checked against the interpreter (options in `runtime/diff.cpp`); `WWHD_RT_LOG=path` collects the
-runtime's log and, at exit, per-function results in `path.funcs.csv`.
+checked against the interpreter (options in `runtime/diff.cpp`). **`WWHD_NATIVE=on` runs the
+recompiled program** (M4): its whole-route trace equals the reference's, in half the interpreter's
+time. `WWHD_RT_LOG=path` collects the runtime's log (and, in diff mode, per-function results in
+`path.funcs.csv` at exit).
+
+The null GPU also collects the G0 draw statistics (design D15) with `WWHD_GPU_STATS=path`: the
+register state at every draw (programs by content, targets, depth, MSAA, geometry shaders,
+stream-out, primitive types), with the pipeline variants in `path.variants.csv`.
 
     tools/worker/job start recomp-build tools/recomp/build.sh
     tools/worker/job start wwhd-build src/build.sh

@@ -236,6 +236,19 @@ The Phase 1 audit guarantees that every address-taken code location is a functio
 > Options considered: exact per block from the start (faster, more generator work up front, about
 > twice the code), and coarse counting with a relaxed per-thread call-sequence check (weakest
 > oracle; guest time drifts from the reference).
+>
+> **As built (M4).** `RT_TICK(pc)` precedes every generated instruction. `rt_yield` ends the slice
+> the way the loop that called the hook would: Cemu's two loops differ, so patch 0011 passes a flag.
+> * `__OSFiberThreadEntry` clears the reservation and switches, and the next slice gets the
+>   quantum plus the scheduler's jitter.
+> * `PPCCore_executeCallbackInternal` switches (`OSYieldThread`) and then resets the budget to the
+>   bare quantum.
+>
+> The runtime keeps a callback depth per guest thread. Import calls and calls into the trampoline
+> area tick for the trampoline instruction before `PPCInterpreter_virtualHLE` charges its 300. Diff
+> mode checks the accounting per function: a native run starts with an unlimited slice, and the
+> cycles it spent must equal the instructions the interpreter executed for the same call. Over the
+> whole route, 9,697,829 timeslices end inside native code, and the trace equals the reference's.
 
 Every guest thread already runs on its own Cemu fiber: a ucontext with a 2 MB stack
 (`util/Fiber/FiberUnix.cpp`), scheduled over three host threads for the three cores.
@@ -322,7 +335,12 @@ it is not needed. Assert at boot that no patch touched a native-dispatched range
 two differ, both Cemu's TWW patches: `f_027F9994` (the "TWW race condition": four calls to the
 mutex lock/unlock wrappers become `nop`s, to avoid a deadlock in single-core mode) and
 `f_028137E0` (the US "DSP kill channel" patch at `0x02813878`, `bge` → `b`). Both stay
-interpreted, and so would any native function that reaches them. They become overrides in M4.
+interpreted, and so would any native function that reaches them.
+
+**As built (M4).** `config/US_v0/code_patches.csv` lists the five words those patches change,
+with their original values and the evidence. The generator applies them before generating, so the
+generated code is the code Cemu runs, and the boot check finds 0 functions patched in memory. A
+patch Cemu applies that the csv lacks would show up there and keep its function interpreted.
 
 Cemu graphic-pack code patches (such as the FPS fix at `0x025AC25C`) are handled the same way:
 they become overrides only when wanted.
@@ -459,6 +477,11 @@ Our GX2 module provides these few symbols as a shim, so those files link unchang
   * HiZ;
   * stream-out.
 
+  *G0 answer (scripted route, D15):* none of the four occurs. The backend needs no geometry
+  shaders, MSAA, HiZ or stream-out for this route. It does need quad lists (273k draws), a
+  depth-only pass (a 1024×1024 D16 shadow map), float render targets (R11G11B10) and GX2's
+  GPU-side surface copies.
+
 ### D14. Shaders are recompiled ahead of time, like the CPU code
 
 The Wii U has no runtime shader compiler, so every shader the game can bind is in its files:
@@ -516,6 +539,42 @@ The G milestones are scoped from that trace, not from the import list.
   arguments, and hashes of referenced buffers. This is part of the reference Cemu patch, together
   with the deterministic clock.
 
+**G0 (2026-09-29, the scripted route to f10800: boot, title, file select, name entry, the intro,
+Aryll's dialogue, gameplay on Outset).** Two tools: `tools/reference/g0_gx2.py` reads the OS-call
+trace (every GX2 call with its register arguments), and `WWHD_GPU_STATS` makes the null GPU record
+the register state at every draw. Findings:
+
+* **Calls:** 85 of the 108 imported GX2 functions are called. The other 23 include every geometry
+  shader function, `GX2ExpandAAColorBuffer`, `GX2ExpandDepthBuffer`, `GX2InitDepthBufferHiZEnable`,
+  `GX2SetDRCEnable`/`GX2SetTVEnable`, vertex textures and samplers, point size and line width.
+  Stream-out and occlusion queries aren't imported at all. `GX2SetShaderModeEx` is only ever mode 0
+  or 1, never the geometry-shader mode. The swap interval is 2.
+* **Draws:** 7,023,899 (7,020,305 indexed, 3,594 auto). Primitive types are triangle lists (4.59M),
+  strips (2.16M) and quad lists (273k). There is always one instance.
+* **At the register level on every draw:** geometry shaders off, stream-out off, one sample (no
+  MSAA). About 1.0M draws have colour writes disabled (depth only).
+* **Shaders:** 64 fetch, 236 vertex, 0 geometry and 268 pixel programs by content, forming 281
+  pipelines and **287 variants** (pipeline × render-target formats × MSAA). Open question 5 is
+  answered: few enough to enumerate.
+* **Targets** (all tile mode 4, 2D tiled thin, which addrlib untiles):
+  * the scene at 1920×1088 (RGB10A2 and R8, D32F depth);
+  * a half-resolution 960×544 chain;
+  * R11G11B10-float downsamples from 480×272 down to 64×48;
+  * 1024×544 R8;
+  * a 1024×1024 D16 shadow map.
+* **The GamePad view is still rendered** in Pro-Controller mode: an 864×480 target with its own
+  depth buffer, about 7 draws per frame (78,836 in all). Every frame copies both a 1920×1080
+  buffer to the TV and an 854×480 buffer to the DRC. It's cheap, and an override can skip it (D13).
+* **HiZ:** the game sizes HiZ buffers (`GX2CalcDepthBufferHiZInfo`, 9 calls), but Cemu's gx2 encodes
+  no HiZ in the command stream: it writes the depth image's address into `DB_HTILE_DATA_BASE` and 0
+  into `DB_DEPTH_BASE`. A backend on this register file (D12) inherits that Cemu dialect. HiZ only
+  affects performance.
+* **Copies:** `GX2CopySurface` runs 50 times, all at boot. The null GPU ignores them (nothing is
+  drawn), but a real backend has to perform them.
+
+Not covered yet: sailing, a dungeon room, the menus and the Pictograph Box. The same two tools
+rerun unchanged once the route reaches them.
+
 ### D16. Graphics verification
 
 * **The reference** is unmodified upstream Cemu, run under Xvfb with lavapipe, on the same
@@ -567,13 +626,13 @@ There are two tracks. They meet at M4.
 | M1 ✅ | Instruction semantics | The generator emits all 157 mnemonics the game uses. The instruction fuzzer passes against Cemu's interpreter. |
 | M2 ✅ | Whole program compiles | All 39,705 functions generate with zero unknown instructions and zero unresolved branches, and compile with clang. |
 | M3 ✅ | Pure functions native | `native_dispatch` is on for pure functions, with sampled diff mode clean over the scripted route (null backend). |
-| M4 | Everything native | HLE calls direct, yield points in place, `GamePatch` handled. The GX2 call stream still matches the reference, and the interpreter fallback counter is 0. |
+| M4 ✅ | Everything native | HLE calls direct, yield points in place, `GamePatch` handled. The GX2 call stream still matches the reference, and the interpreter fallback counter is 0. |
 
 **Graphics track**
 
 | # | Milestone | Done when |
 |---|---|---|
-| G0 | Trace | The D15 trace scopes the backend. |
+| G0 ✅ (route) | Trace | The D15 trace scopes the backend. |
 | G1 | Shader corpus | Every program in the game files is extracted and translated to SPIR-V that passes `spirv-val`, and every program seen in the G0 trace is in the corpus. |
 | G2 | First pixels | The title screen (TV) renders within tolerance of the reference on lavapipe. |
 | G3 | The route | Every scene on the scripted route is within tolerance. |
@@ -615,6 +674,23 @@ warnings at `-O2`, `musttail` included, into 79 MB of objects. Things the genera
 
 Not yet in: the yield budget (D6). The runtime behind `rt_*` came with M3.
 
+**M4 status (2026-09-29):** done on the scripted route. `WWHD_NATIVE=on` runs the recompiled
+program: the hook calls the generated function at every entry, generated code ticks and yields
+per instruction (D6 as built), imports go straight to Cemu's handlers (D4), and Cemu's boot
+patches are in the generated code (D10).
+
+* Over the whole route the OS-call trace equals the reference's: 1,124,796,468 calls to f10800.
+  9,697,829 timeslices ended inside native code, each on the reference's instruction.
+* **0 game instructions interpreted.** The only interpreted code is in Cemu's trampoline area. That's
+  3.0M calls through a game function pointer that lands on the `blr` of Cemu's stub for an
+  unsupported import, which is a no-op.
+* The run takes 359 s, against 720 s interpreting and about 25 minutes for the reference on the
+  GPU. Much of it is the trace writer (1.1 billion records through zstd) and the null GPU.
+* Diff mode now also checks cycles, and was clean on 600 frames.
+
+Performance work (D6's per-block counting, host-local registers) comes after the graphics track
+needs it; every step keeps the same trace check.
+
 **M3 status (2026-09-29):** done. Every sampled call of a pure function along the scripted route runs
 natively and agrees with Cemu's interpreter, and the run's OS-call trace is still the reference's.
 
@@ -638,8 +714,8 @@ natively and agrees with Cemu's interpreter, and the run's OS-call trace is stil
   restore-and-exit helpers need the check to end where the native run left the guest, not at the
   entry's LR; and after a context switch `spr.XER` holds stale copies of CA/SO/OV.
 
-Diff mode leaves guest time to the interpreter. M4 has to decide how native code accounts for it
-(D6, open).
+Diff mode leaves guest time to the interpreter; how native code accounts for it was decided before
+M4 (D6).
 
 **M0b status (2026-09-29):** done. `src/` builds two executables against the worker's Cemu
 build (`src/build.sh`). Both use our frontend (`src/frontend`, Cemu's `WindowSystem` without
@@ -679,7 +755,9 @@ The CPU track needs no rendering, and the graphics track can use Cemu's interpre
    follows different NaN rules again, so matching real hardware there is a later question.
 5. **Shader state variants.** How many (program × fetch-layout × render-target-format) variants
    does WWHD really use? G0 answers this, and it decides specialisation constants versus
-   enumerated variants.
-6. **Geometry shaders, MSAA, HiZ, stream-out.** Which of them does WWHD use (G0)?
+   enumerated variants. *Answered for the route (G0): 287 variants over 281 pipelines, so
+   enumerate them.*
+6. **Geometry shaders, MSAA, HiZ, stream-out.** Which of them does WWHD use (G0)? *None on the
+   route; HiZ doesn't reach the command stream at all (D15).*
 7. **Project licence.** Pick one before anything is published.
 8. **GPU machine.** Which machine does M5 run on: your desktop, or a VM with GPU passthrough?

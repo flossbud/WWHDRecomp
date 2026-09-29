@@ -25,6 +25,10 @@ runtime functions they call (`rt_import`, `rt_import_data`, `rt_call_ctr`, `rt_j
 
 What the generator knows beyond single instructions:
 
+* **Guest time (D6).** `RT_TICK(address)` precedes every instruction: one cycle of the timeslice,
+  and a yield in place (`rt_yield`) when it runs out, exactly where Cemu's interpreter would switch.
+* **Cemu's boot patches (D10).** `config/US_v0/code_patches.csv` (the words Cemu's GamePatch changes,
+  with evidence) is applied first, so the generated code is the code Cemu runs.
 * **Purity (D8.2).** A function is pure if it makes no import call, no indirect call or jump and
   no weak call, and calls only pure functions: 12,968 of 39,720.
 * **Jump tables.** All 294 of WWHD's are runs of `b` instructions that the `bctr` jumps into, so

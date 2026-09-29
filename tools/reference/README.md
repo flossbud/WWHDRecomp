@@ -72,6 +72,9 @@ What it took. Each numbered item is a patch; the last is a profile setting:
 | 0011 | Execution seam: `g_ppcExecuteHook`, null by default, replaces the interpreter loop in `__OSFiberThreadEntry` and `PPCCore_executeCallbackInternal`; the trace's exit-at-frame runs `at_quick_exit` handlers | Not a determinism fix: it is where the recompiled program's runtime (`src/runtime`, design D1) takes over. With the hook null the reference is unchanged (600 frames, 59,531,239 calls equal to the baseline). |
 | profile | Single-core *interpreter* (`0005000010143500.ini`) | The single-core recompiler's background JIT made timeslice boundaries depend on host timing. |
 
+`g0_gx2.py TRACE --imports build/recomp/imports.cpp` (design D15, G0) lists every GX2 call on a
+route with its argument values, and the imported GX2 functions that are never called.
+
 `route.sh OUT FRAMES ROUTE BASELINE` is `determinism.sh` with one run: it plays the route once and
 compares the trace with a known-good one (for example `wwhd-null` in diff mode against
 `/wwhd/data/traces/null-route.zst`), in half the time.
