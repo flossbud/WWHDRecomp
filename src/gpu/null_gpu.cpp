@@ -107,6 +107,11 @@ static void handleTimedVsync()
 // geometry shaders, stream-out, primitive types and special colour ops. The report goes to path
 // (histograms) and path.variants.csv (each pipeline x target-format combination and its draw
 // count) at exit, including the trace's exit-at-frame. It only reads state.
+// WWHD_GPU_DUMP=dir (G1) also writes each program once, as dir/<hash>.<fs|vs|gs|ps> (the bytes
+// the GPU reads), and for each new variant the whole register file at its first draw,
+// dir/variant_<n>.regs (LATTE_MAX_REGISTER host-order words), listed in dir/variants.csv. That is
+// everything Cemu's shader decompiler reads, so tools/shaders can translate exactly what the
+// reference would.
 namespace gpustats
 {
 	// context registers without a define in RegDefines.h (index = byte offset / 4, see LatteReg.h)
@@ -122,6 +127,42 @@ namespace gpustats
 	std::unordered_map<uint32, Program> s_programs;              // by address
 	std::set<uint64> s_distinct[4];                              // program hashes seen, per stage (fs vs gs ps)
 	std::map<std::string, uint64> s_variants;                    // csv row -> draws
+	std::string s_dumpDir;
+	std::set<uint64> s_dumped;
+	uint32 s_dumpedVariants = 0;
+
+	void DumpProgram(uint32 startReg, uint64 hash, const char* stage)
+	{
+		if (!hash || !s_dumped.insert(hash).second)
+			return;
+		uint32 addr = LatteGPUState.contextRegister[startReg] << 8, size = LatteGPUState.contextRegister[startReg + 1] << 3;
+		if (FILE* f = fopen(fmt::format("{}/{:016x}.{}", s_dumpDir, hash, stage).c_str(), "wb"))
+		{
+			fwrite(memory_getPointerFromPhysicalOffset(addr), 1, size, f);
+			fclose(f);
+		}
+	}
+
+	void DumpVariant(const std::string& key, uint32 gsMode, uint64 fs, uint64 vs, uint64 gs, uint64 ps)
+	{
+		uint32 n = s_dumpedVariants++;
+		if (FILE* f = fopen(fmt::format("{}/variant_{}.regs", s_dumpDir, n).c_str(), "wb"))
+		{
+			fwrite(LatteGPUState.contextRegister, 4, LATTE_MAX_REGISTER, f);
+			fclose(f);
+		}
+		DumpProgram(mmSQ_PGM_START_FS, fs, "fs");
+		DumpProgram(gsMode ? mmSQ_PGM_START_ES : mmSQ_PGM_START_VS, vs, "vs");
+		DumpProgram(mmSQ_PGM_START_GS, gs, "gs");
+		DumpProgram(mmSQ_PGM_START_PS, ps, "ps");
+		if (FILE* f = fopen((s_dumpDir + "/variants.csv").c_str(), "a"))
+		{
+			if (n == 0)
+				fputs("variant,fetch,vertex,geometry,pixel,targets,msaa_log2\n", f);
+			fprintf(f, "%u,%s\n", n, key.c_str());
+			fclose(f);
+		}
+	}
 
 	uint64 Fnv(const uint8* p, uint32 n)
 	{
@@ -195,7 +236,11 @@ namespace gpustats
 				dbInfo & 7, (dbInfo >> 15) & 0xF, (dbInfo >> 25) & 1));
 			hist(fmt::format("db_htile_surface={:#x} db_render_override={:#x}", r[mmDB_HTILE_SURFACE], r[mmDB_RENDER_OVERRIDE]));
 		}
-		s_variants[fmt::format("{:016x},{:016x},{:016x},{:016x},{},{}", fs, vs, gs, ps, targets, r[mmPA_SC_AA_CONFIG] & 3)]++;
+		std::string key = fmt::format("{:016x},{:016x},{:016x},{:016x},{},{}", fs, vs, gs, ps, targets, r[mmPA_SC_AA_CONFIG] & 3);
+		auto [variant, isNew] = s_variants.try_emplace(key, 0);
+		variant->second++;
+		if (isNew && !s_dumpDir.empty())
+			DumpVariant(key, gsMode, fs, vs, gs, ps);
 	}
 
 	void Report()
@@ -228,6 +273,8 @@ namespace gpustats
 
 	bool Init()
 	{
+		if (const char* dump = getenv("WWHD_GPU_DUMP"); dump && *dump)
+			s_dumpDir = dump;
 		const char* path = getenv("WWHD_GPU_STATS");
 		if (!path || !*path)
 			return false;

@@ -125,6 +125,8 @@ For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
   all equal to the interpreter; 4,616 functions, all clean; trace identical to `null-route.zst`.
   Since M4 it also compares cycles: clean over the whole route as well.
 - `WWHD_GPU_STATS=path` (null GPU) and `tools/reference/g0_gx2.py`: the G0 measurements (D15).
+- `WWHD_GPU_DUMP=dir` (null GPU) and `tools/shaders/`: the G1 corpus, 30,011 programs, all
+  translated to valid SPIR-V (D14).
 - `tools/reference/route.sh OUT FRAMES ROUTE BASELINE`: one run plus a trace comparison.
 
 **Runtime** (`src/`, M0b done). `src/build.sh` builds two binaries against the worker's Cemu:
@@ -141,19 +143,26 @@ For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
 
 ## Next steps, in order
 
-M3, M4 and G0 are done on the scripted route (design doc status paragraphs). `wwhd-null` with
+M3, M4, G0 and G1 are done, M4 and G0 on the scripted route (design doc status paragraphs). `wwhd-null` with
 `WWHD_NATIVE=on` runs the recompiled program, and its whole-route trace equals the reference's.
+G1 (the shader corpus) is done too.
 
-### 1. G1: the shader corpus (design D14)
+### 1. G2: first pixels (design D13, D16.3)
 
-- Extract every GX2 program from the game files (`sharcfb`, `sarc`, `gsh`, inside `.pack`/`.szs`)
-  and translate them to SPIR-V that passes `spirv-val`. Everything goes to `build/`, never git.
-- Check the corpus against G0: every program seen on the route (hashes by content, from
-  `WWHD_GPU_STATS`'s `variants.csv`) must be in it. The route alone has 64 fetch, 236 vertex and
-  268 pixel programs. G0 found no geometry shaders, stream-out, MSAA or HiZ, and 287 variants,
-  so they can be enumerated (design D15).
-- The backend reads the null GPU's register file in Cemu's dialect: the depth image's address is
-  in `DB_HTILE_DATA_BASE`, not `DB_DEPTH_BASE` (D15).
+G1 is done (design doc, "G1 status"): every program in the game's files translates to valid
+SPIR-V (30,011), and the route's 287 variants translate with their exact state (`tools/shaders/`).
+Next is the Vulkan renderer: a consumer of the null GPU's register file (D12 as revised).
+- **Scope** is the G0 answer (D15): no geometry shaders, stream-out, MSAA or HiZ. It needs:
+  - quad lists (273k draws);
+  - a depth-only shadow pass;
+  - R11G11B10 float targets;
+  - tile mode 4 surfaces (addrlib);
+  - GX2's GPU-side surface copies.
+- **Shaders:** start from the translator's GLSL/SPIR-V and Cemu's Vulkan resource mapping
+  (`resourceMappingVK` in the decompiler output). Look programs up by hash, and translate
+  unknown state variants at runtime with a cache.
+- **Registers:** remember Cemu's dialect, e.g. the depth address is in `DB_HTILE_DATA_BASE`.
+- **Done when** the title screen (TV) renders within tolerance of the reference on lavapipe.
 
 ### 2. Extend the route, then rerun G0 and the native check
 
@@ -174,8 +183,7 @@ with the reference, and rerun:
 
 ### 4. Later
 
-- G2–G3 (the Vulkan renderer on the null GPU's register file), M5 (playable on a GPU machine),
-  M6 (60 fps).
+- G3 (every scene on the route), M5 (playable on a GPU machine), M6 (60 fps).
 - Native speed, when it matters: per-block counting (D6), host-local registers (D2). Keep the
   whole-route trace check for every step. The shipped real-clock build may count coarsely behind a
   flag (D6).

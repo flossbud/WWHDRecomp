@@ -510,6 +510,20 @@ XenosRecomp plays for Unleashed.
 render-target formats, alpha test, and so on) becomes **specialisation constants** or a small,
 enumerated set of variants that the G0 trace confirms. It never means compiling at runtime.
 
+**As built (G1, `tools/shaders/`).** Cemu's decompiler is not restructured yet: the translator links
+it and glslang the way Cemu's Vulkan renderer runs them, like the M1 fuzzer, and emits GLSL and
+SPIR-V. The shaders are in more places than the list above suggests:
+* 2,794 SHARCFB archives (agl's format, version 9, little-endian), mostly inside the per-stage and
+  per-object `.szs` archives. HD models are BFRES files with their own shader archives.
+* 2 GFD files (`.gsh`), and 2 more embedded in `Common/Misc/Misc.bfres`.
+
+Programs are keyed by the FNV-1a hash of their microcode. The draw state not in the microcode
+comes in two ways (tools/shaders/README.md):
+* from a run's dump of each variant's register file (`WWHD_GPU_DUMP`), which gives exactly the
+  reference's inputs;
+* or chosen neutral for the whole corpus: 2D textures except where the microcode sets a cube-map
+  index, float targets, and a float4 fetch layout.
+
 **The runtime** loads SPIR-V by microcode hash.
 
 * A shader missing from the corpus is a bug: it is logged, and in development builds it is
@@ -633,7 +647,7 @@ There are two tracks. They meet at M4.
 | # | Milestone | Done when |
 |---|---|---|
 | G0 ✅ (route) | Trace | The D15 trace scopes the backend. |
-| G1 | Shader corpus | Every program in the game files is extracted and translated to SPIR-V that passes `spirv-val`, and every program seen in the G0 trace is in the corpus. |
+| G1 ✅ | Shader corpus | Every program in the game files is extracted and translated to SPIR-V that passes `spirv-val`, and every program seen in the G0 trace is in the corpus. |
 | G2 | First pixels | The title screen (TV) renders within tolerance of the reference on lavapipe. |
 | G3 | The route | Every scene on the scripted route is within tolerance. |
 
@@ -673,6 +687,19 @@ warnings at `-O2`, `musttail` included, into 79 MB of objects. Things the genera
 * the jump-table `bctr`s become a `switch` on CTR.
 
 Not yet in: the yield budget (D6). The runtime behind `rt_*` came with M3.
+
+**G1 status (2026-09-29):** done.
+* **Corpus:** `tools/shaders/corpus.py` finds 99,006 programs in the game's files: 30,011 distinct,
+  11,765 vertex and 18,246 pixel, with no geometry shaders.
+* **Translation:** all 30,011 translate to SPIR-V that passes `spirv-val` (Vulkan 1.1), in about a
+  minute on the worker's 8 cores. 29 pixel shaders needed the cube-map dimension their own
+  microcode implies.
+* **Against G0:** every program the scripted route uses is in the corpus by hash (236 vertex, 268
+  pixel). Its 287 variants translate with their dumped runtime state: 574 modules, all valid.
+* **Fetch shaders** (64 on the route) are not in files: GX2 builds them at runtime from the
+  attribute layout. They are state, decoded into each vertex shader's GLSL.
+* **What `spirv-val` proves:** well-formed SPIR-V, not that it renders what the reference renders.
+  That is G2's check.
 
 **M4 status (2026-09-29):** done on the scripted route. `WWHD_NATIVE=on` runs the recompiled
 program: the hook calls the generated function at every entry, generated code ticks and yields

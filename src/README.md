@@ -30,7 +30,9 @@ time. `WWHD_RT_LOG=path` collects the runtime's log (and, in diff mode, per-func
 
 The null GPU also collects the G0 draw statistics (design D15) with `WWHD_GPU_STATS=path`: the
 register state at every draw (programs by content, targets, depth, MSAA, geometry shaders,
-stream-out, primitive types), with the pipeline variants in `path.variants.csv`.
+stream-out, primitive types), with the pipeline variants in `path.variants.csv`. With
+`WWHD_GPU_DUMP=dir` it also writes, once each, every program the GPU runs and, for each new variant,
+the whole register file at its first draw: the inputs `tools/shaders/translate` needs (G1).
 
     tools/worker/job start recomp-build tools/recomp/build.sh
     tools/worker/job start wwhd-build src/build.sh
