@@ -484,12 +484,13 @@ namespace
 		case IT_HLE_BEGIN_OCCLUSION_QUERY: case IT_HLE_END_OCCLUSION_QUERY:
 			cemuLog_logOnce(LogType::Force, "null GPU: occlusion queries are not answered");
 			break;
+		// the renderer (src/gpu/vk, WWHD_RENDER=vk) draws these; nothing guest-visible
 		case IT_DRAW_INDEX_2: case IT_DRAW_INDEX_AUTO: case IT_DRAW_INDEX_IMMD:
 			if (gpustats::s_enabled)
 				gpustats::Draw(op);
+			if (wwhd::gpu::RendererOn())
+				wwhd::gpu::RendererDraw(op, body, nWords);
 			break;
-		// nothing to observe without a renderer
-		// the renderer (src/gpu/vk, WWHD_RENDER=vk) draws them; nothing guest-visible
 		case IT_HLE_CLEAR_COLOR_DEPTH_STENCIL:
 			if (wwhd::gpu::RendererOn())
 				wwhd::gpu::RendererClear(body, nWords);
@@ -498,7 +499,11 @@ namespace
 			if (wwhd::gpu::RendererOn())
 				wwhd::gpu::RendererCopyToScanBuffer(body, nWords);
 			break;
-		case IT_SURFACE_SYNC: case IT_HLE_COPY_SURFACE_NEW: case IT_HLE_SYNC_ASYNC_OPERATIONS:
+		case IT_HLE_COPY_SURFACE_NEW:
+			if (wwhd::gpu::RendererOn())
+				wwhd::gpu::RendererCopySurface(body, nWords);
+			break;
+		case IT_SURFACE_SYNC: case IT_HLE_SYNC_ASYNC_OPERATIONS:
 			break;
 		default:
 			cemuLog_logOnce(LogType::Force, "null GPU: unknown PM4 packet {:02x}", op);
@@ -640,24 +645,30 @@ void LatteRenderTarget_getScreenImageArea(sint32* x, sint32* y, sint32* w, sint3
 	*h = *fh = 1080;
 }
 
-// GX2CopySurface's CPU-copy path goes through the reference's GPU texture cache, which a null GPU
-// doesn't have. Logged so a trace divergence here is easy to spot.
-void LatteAsyncCommand_queueTextureCopy(const LatteSurfaceCopyParam&, const LatteSurfaceCopyParam&, const LatteSurfaceCopyRect&)
+// GX2CopySurface's CPU copies (a linear-special surface on either side; WWHD makes 50 at boot).
+// The reference queues them to its GPU thread (LatteSurfaceCopy_copySurfaceNew) and GX2CopySurface
+// waits for them. From a linear-special source, and from any source its texture cache doesn't
+// hold, it untiles and retiles in guest memory (LatteSurfaceCopy_CopyInRAM), which is done here in
+// place. The one path not taken is the reference's readback of a GPU-rendered source into a
+// linear-special destination: nothing here renders into guest memory.
+void gx2SurfaceCopySoftware(uint8* inputData, sint32 surfSrcHeight, sint32 srcPitch, sint32 srcDepth, uint32 srcSlice,
+	uint32 srcSwizzle, uint32 srcHwTileMode, uint8* outputData, sint32 surfDstHeight, sint32 dstPitch, sint32 dstDepth,
+	uint32 dstSlice, uint32 dstSwizzle, uint32 dstHwTileMode, uint32 copyWidth, uint32 copyHeight, uint32 copyBpp);
+
+void LatteAsyncCommand_queueTextureCopy(const LatteSurfaceCopyParam& src, const LatteSurfaceCopyParam& dst, const LatteSurfaceCopyRect& rect)
 {
-	cemuLog_logOnce(LogType::Force, "null GPU: GX2CopySurface CPU copy skipped");
+	Latte::E_HWFMT dstHwFormat = Latte::GetHWFormat(dst.surfaceFormat);
+	sint32 copyWidth = rect.width, copyHeight = rect.height;
+	if (Latte::IsCompressedFormat(dstHwFormat))
+	{
+		copyWidth = (copyWidth + 3) / 4;
+		copyHeight = (copyHeight + 3) / 4;
+	}
+	gx2SurfaceCopySoftware((uint8*)MEMPTR<void>(src.physDataAddr).GetPtr(), src.heightInTexels, src.pitch, 1, src.sliceIndex, src.swizzle,
+		(uint32)src.tilemode, (uint8*)MEMPTR<void>(dst.physDataAddr).GetPtr(), dst.heightInTexels, dst.pitch, 1, dst.sliceIndex,
+		dst.swizzle, (uint32)dst.tilemode, copyWidth, copyHeight, Latte::GetFormatBits(dstHwFormat));
 }
 void LatteAsyncCommands_waitUntilAllProcessed() {}
-
-// Only reached through GX2 tiling apertures, which WWHD does not use.
-void LatteTextureLoader_begin(LatteTextureLoaderCtx*, uint32, uint32, MPTR, MPTR, Latte::E_GX2SURFFMT, Latte::E_DIM, uint32, uint32, uint32, uint32, uint32, Latte::E_HWTILEMODE, uint32)
-{
-	cemu_assert_unimplemented();
-	abort();
-}
-uint8* LatteTextureLoader_GetInput(LatteTextureLoaderCtx*, sint32, sint32)
-{
-	abort();
-}
 
 // Referenced by Cemu's main() for a Vulkan driver probe that belongs to Latte's renderer.
 int BreathOfTheWildChildProcessMain() { return 0; }

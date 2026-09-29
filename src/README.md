@@ -7,7 +7,12 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 |---|---|
 | `frontend/window_system.cpp` | Cemu's `WindowSystem` interface: boot, one TV window (Xlib for now), event loop; headless with `WWHD_NULL_GPU` |
 | `frontend/cemu_boot.cpp` | paths, config, default NAND files, title preparation (derived from Cemu's wx GUI, MPL-2.0) |
-| `gpu/null_gpu.cpp` | null GPU in place of Latte: consumes gx2's command buffers, keeps the register file, performs every guest-visible effect, draws nothing (derived from Latte, MPL-2.0) |
+| `gpu/null_gpu.cpp` | null GPU in place of Latte: consumes gx2's command buffers, keeps the register file, performs every guest-visible effect, and hands draws, clears, copies and swaps to the renderer when it is on (derived from Latte, MPL-2.0) |
+| `gpu/vk/renderer.cpp` | the Vulkan renderer (G2, `WWHD_RENDER=vk`): device, surfaces, clears, scan-out, frame capture, surface dumps |
+| `gpu/vk/draw.cpp` | draws: shaders (Cemu's decompiler + glslang), pipelines, descriptors, uniform/vertex/index data, render targets (derived from Cemu's Vulkan renderer, MPL-2.0) |
+| `gpu/vk/texture.cpp` | textures: from surfaces (render to texture, sized copies, mip chains) or decoded from guest memory with Cemu's texture loader; samplers (derived from Cemu, MPL-2.0) |
+| `gpu/vk/latte_glue.cpp` | the pieces of Latte the decompiler calls, and a no-op `Renderer` (derived from Cemu, MPL-2.0) |
+| `gpu/vk/vk.h`, `vk.cpp` | Vulkan loaded at runtime, so `wwhd-null` runs without a driver when rendering is off |
 | `runtime/dispatch.cpp` | the execution seam (Cemu patch 0011): the hook that replaces Cemu's interpreter loop, the function table (D5), the D10 code check, `rt_call_ctr`/`rt_jump_ctr`/`rt_bad_branch` |
 | `runtime/imports.cpp` | `rt_import`/`rt_import_data` (D4), bound from what Cemu's loader wrote into guest memory |
 | `runtime/diff.cpp` | diff mode (D8.2, M3): pure functions run natively, are rewound, and are compared (registers, stores, cycles) with the interpreter's run of the same call |
@@ -52,7 +57,7 @@ is ours. Its frames on the route are byte-identical to Cemu_release's.
 
 **`wwhd-null`** (M0b.2) is headless and has no Latte: `libCemuCafe.a` is copied without the
 objects built from `src/Cafe/HW/Latte`, except the address library, which gx2 needs for surface
-layouts. Along the route its OS-call trace equals the reference's: 59,531,239 calls to f600, and
+layouts, and the pieces the renderer uses (below). Along the route its OS-call trace equals the reference's: 59,531,239 calls to f600, and
 all 1,124,796,468 calls over the whole route into gameplay, which takes 12 minutes, about 2x
 faster than the reference on the GPU.
 
@@ -62,5 +67,22 @@ the order in which the linker pulls archive members, and with it host-side addre
 sees in registers. `build.sh` therefore links `wwhd-null` twice: once to learn which members it
 needs, then with those members as explicit objects in `wwhd`'s order.
 
+**The renderer** (G2, design D13 as built) is off unless `WWHD_RENDER=vk`. It needs a Vulkan 1.3
+device with dynamic rendering (lavapipe: `REF_GPU=llvmpipe` in `tools/reference/run.sh`). It draws on
+the GPU thread and never writes guest memory, so the trace is the same with it on or off. Options:
+`CEMU_SHOT_FRAMES`/`CEMU_SHOT_DIR` capture the TV image as the reference does (`survey.sh` sets
+them), `WWHD_RENDER_STATS=N` logs draw counts every N frames, `WWHD_RENDER_DUMP=N` writes every
+surface at frame N as PPM into the shot directory, and `WWHD_RENDER_COPIES=1` reports GX2's
+GPU-side surface copies.
+
+    tools/worker/job start g2-vk env CEMU_BIN=/wwhd/WWHDRecomp/build/wwhd/wwhd-null REF_GPU=llvmpipe \
+        WWHD_RENDER=vk WWHD_NATIVE=on tools/reference/survey.sh tools/reference/routes/title-to-game.txt \
+        /wwhd/data/g2/vk 600 30 0
+    tools/worker/w uv run -q tools/reference/compare_frames.py /wwhd/data/g2/ref /wwhd/data/g2/vk
+
+For the renderer `libCemuCafe_nolatte.a` also keeps Latte's shader decompiler, fetch- and
+GS-copy-shader parsers and texture loader; `gpu/vk/latte_glue.cpp` stands in for the rest of Latte
+they call.
+
 Next: the window moves to SDL3 (Cemu's vcpkg SDL3 has no video backends) when we have our own
-CMake build; the Vulkan backend (D13) becomes a renderer on the null GPU's command processor.
+CMake build, and the renderer presents to it.

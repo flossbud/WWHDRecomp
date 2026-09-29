@@ -128,6 +128,8 @@ For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
 - `WWHD_GPU_DUMP=dir` (null GPU) and `tools/shaders/`: the G1 corpus, 30,011 programs, all
   translated to valid SPIR-V (D14).
 - `tools/reference/route.sh OUT FRAMES ROUTE BASELINE`: one run plus a trace comparison.
+- `WWHD_RENDER=vk` (`src/gpu/vk`): the G2 renderer; `survey.sh` captures and
+  `compare_frames.py` compares with `/wwhd/data/g2/ref` (the reference's captures, f30-f600 every 30).
 
 **Runtime** (`src/`, M0b done). `src/build.sh` builds two binaries against the worker's Cemu:
 - **`build/wwhd/wwhd`:** our frontend (`src/frontend`, Cemu's `WindowSystem` without wxWidgets,
@@ -145,23 +147,27 @@ For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
 
 M3, M4, G0 and G1 are done, M4 and G0 on the scripted route (design doc status paragraphs). `wwhd-null` with
 `WWHD_NATIVE=on` runs the recompiled program, and its whole-route trace equals the reference's.
+G2 renders the title screen; closing it is step 1.
 
-### 1. G2: first pixels (design D13, D16.3)
+### 1. G2: close the title screen (design D13, D16.3)
 
-G1 is done (design doc, "G1 status"): every program in the game's files translates to valid
-SPIR-V (30,011), and the route's 287 variants translate with their exact state (`tools/shaders/`).
-Next is the Vulkan renderer: a consumer of the null GPU's register file (D12 as revised).
-- **Scope** is the G0 answer (D15): no geometry shaders, stream-out, MSAA or HiZ. It needs:
-  - quad lists (273k draws);
-  - a depth-only shadow pass;
-  - R11G11B10 float targets;
-  - tile mode 4 surfaces (addrlib);
-  - GX2's GPU-side surface copies.
-- **Shaders:** start from the translator's GLSL/SPIR-V and Cemu's Vulkan resource mapping
-  (`resourceMappingVK` in the decompiler output). Look programs up by hash, and translate
-  unknown state variants at runtime with a cache.
-- **Registers:** remember Cemu's dialect, e.g. the depth address is in `DB_HTILE_DATA_BASE`.
-- **Done when** the title screen (TV) renders within tolerance of the reference on lavapipe.
+The renderer exists (design doc "G2 status", `src/README.md`): `WWHD_RENDER=vk` in `wwhd-null`
+renders the title screen on lavapipe, visually the same as the reference. Frames f150-f390 are at
+36-53 dB; the title frames f420-f600 are at 24.6-27.4 dB. The trace with rendering on equals
+`det-null/a.zst`. Left:
+- **The bloom halo** on the title is smaller than the reference's. The chain (one R11G11B10 texture,
+  480x270 with 4 mips at `f4000800`, levels drawn as separate targets) is assembled from the
+  per-level surfaces, and every level has plausible content (`WWHD_RENDER_DUMP=480`). Suspects:
+  how Cemu's texture cache relates the 480x270 texture to the 480x272 target and to the padded
+  level targets (256x256, 128x128, 64x64), and the blur's ping-pong targets (256x144). A dump of
+  the reference's targets at the same frame (a Cemu patch) would settle it.
+- **A numeric tolerance:** D16.3 names SSIM; `compare_frames.py` reports PSNR. References against
+  each other are at 73-75 dB.
+- Not on the route yet, so untested: GPU-side `GX2CopySurface` (`IT_HLE_COPY_SURFACE_NEW`, only
+  reported), readback of a rendered surface into a linear-special destination, 3D textures,
+  depth-stencil textures loaded from memory (zeroed, as Cemu does).
+- The G1 translator now sets the pixel-shader input table like the renderer; the 287 variants
+  were re-translated (574 modules, all valid), the 30,011-program corpus not yet.
 
 ### 2. Extend the route, then rerun G0 and the native check
 
@@ -187,8 +193,8 @@ with the reference, and rerun:
   whole-route trace check for every step. The shipped real-clock build may count coarsely behind a
   flag (D6).
 - The recomp needs its own name-entry keyboard; the reference uses `CEMU_SWKBD_AUTO`.
-- The GamePad view (an 864×480 pass, about 7 draws per frame) can be skipped with an override once
-  the renderer exists.
+- The GamePad view (an 864×480 pass, about 7 draws per frame) can be skipped with an override now
+  that the renderer exists.
 
 ## Known facts and gotchas worth not rediscovering
 

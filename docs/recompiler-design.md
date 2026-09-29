@@ -482,6 +482,21 @@ Our GX2 module provides these few symbols as a shim, so those files link unchang
   depth-only pass (a 1024×1024 D16 shadow map), float render targets (R11G11B10) and GX2's
   GPU-side surface copies.
 
+*As built for G2 (`src/gpu/vk`):* a renderer on the null GPU's command processor. It runs on the
+GPU thread and never writes guest memory, so the trace is the same with it on or off.
+* **Draws** follow Cemu's Vulkan renderer: decompiler GLSL compiled with glslang, one descriptor
+  set per stage, dynamic uniform buffers for the uniform variables and blocks, raw vertex formats
+  decoded in the shader, pipeline state from the registers, dynamic rendering. Uniform, vertex and
+  index data are copied from guest memory at every draw.
+* **Surfaces** are keyed by (address, GX2 format): color and depth targets, created on first clear
+  or draw and grown as needed. Scan-out copies the TV target, as the reference's capture does.
+* **Textures** sample a surface when one was drawn at their address. Otherwise they are untiled
+  and decoded from guest memory by Cemu's texture loader (addrlib and its `TextureDecoder`s, kept
+  in `wwhd-null`), in the formats Cemu's Vulkan renderer picks, and reloaded when a per-frame hash
+  of their data changes. See the G2 status for copies and mip chains.
+* **GX2's GPU-side surface copies** (`IT_HLE_COPY_SURFACE_NEW`) don't occur on the route; the
+  renderer only reports them (`WWHD_RENDER_COPIES`). The CPU copies are done by the null GPU.
+
 ### D14. Shaders are recompiled ahead of time, like the CPU code
 
 The Wii U has no runtime shader compiler, so every shader the game can bind is in its files:
@@ -700,6 +715,37 @@ Not yet in: the yield budget (D6). The runtime behind `rt_*` came with M3.
   attribute layout. They are state, decoded into each vertex shader's GLSL.
 * **What `spirv-val` proves:** well-formed SPIR-V, not that it renders what the reference renders.
   That is G2's check.
+
+**G2 status (2026-09-29):** the title screen renders; not yet closed. `WWHD_RENDER=vk` turns on a
+Vulkan renderer inside `wwhd-null` (`src/gpu/vk`, D13 as built), fed by the null GPU's register
+file. On lavapipe along the route to f600 it runs 929,455 draws (0 skipped), 547 shader variants
+and 397 pipelines. Compared with the reference's captures every 30 frames
+(`tools/reference/compare_frames.py`):
+
+* the file-creation and fade frames (f150-f390) at 36-53 dB, 0-0.02% of pixels off by more than 16;
+* the title (f420-f600) at 24.6-27.4 dB, 2.5-12% of pixels off: the same image, but the bloom halo
+  (around the sun, cloud edges, the wind ribbon) is smaller than the reference's;
+* the logo frames f30 and f60 at 44 and 37 dB, the black frames identical.
+
+The OS-call trace with rendering on equals `det-null/a.zst` (59,531,239 calls to f600). Getting
+there took four fixes beyond draws themselves, found by dumping every surface at a frame
+(`WWHD_RENDER_DUMP=N`):
+
+* the game reuses memory for transient targets of other formats within a frame, so a texture
+  samples the surface *last written* at its address;
+* render targets are allocated padded (1920x1088 for 1920x1080), so a texture of another size
+  samples a copy of the surface's top-left corner, as Cemu's texture cache copies between
+  overlapping textures;
+* the bloom chain is one R11G11B10 texture whose mip levels are drawn as separate targets, so a
+  surface-backed texture with mips is assembled level by level from the surfaces at each level's
+  address;
+* `GX2CopySurface`'s CPU copies (all 50 at boot involve a linear-special surface) are done in guest
+  memory, as the reference's `LatteSurfaceCopy_CopyInRAM` does. The null GPU used to skip them. It
+  doesn't change the title frames, and without rendering the whole-route trace still equals
+  `null-route.zst` (1,124,796,468 calls, native, 380 s).
+
+Open for G2: the bloom halo, and a numeric tolerance (D16.3 says SSIM; references against each
+other are at 73-75 dB PSNR).
 
 **M4 status (2026-09-29):** done on the scripted route. `WWHD_NATIVE=on` runs the recompiled
 program: the hook calls the generated function at every entry, generated code ticks and yields

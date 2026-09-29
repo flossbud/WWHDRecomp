@@ -31,15 +31,26 @@ compile "$root/src/frontend/window_system.cpp" window_system.o
 compile "$root/src/frontend/window_system.cpp" window_system_null.o -DWWHD_NULL_GPU
 compile "$root/src/gpu/null_gpu.cpp" null_gpu.o -I"$root/src/gpu" -I"$cemu/dependencies/Vulkan-Headers/include"
 for f in vk renderer; do compile "$root/src/gpu/vk/$f.cpp" "vk_$f.o" -I"$cemu/dependencies/Vulkan-Headers/include"; done
+# draws compile with Cemu's flags for its Vulkan shader compiler (glslang's include paths)
+mapfile -t vkflags < <(python3 "$root/tools/cemu_flags.py" "$cemu/build/compile_commands.json" Latte/Renderer/Vulkan/RendererShaderVk.cpp)
+for f in draw texture latte_glue; do
+    clang++ "${vkflags[@]}" -fno-lto -include "$cemu/src/Common/precompiled.h" -O2 \
+        -I"$cemu/dependencies/Vulkan-Headers/include" -c "$root/src/gpu/vk/$f.cpp" -o "$out/vk_$f.o" & pids+=($!)
+done
 for f in dispatch imports diff; do compile "$root/src/runtime/$f.cpp" "rt_$f.o"; done
 for p in "${pids[@]}"; do wait "$p"; done
 
-# libCemuCafe.a without Latte (object names come from compile_commands.json; they are unique)
+# libCemuCafe.a without Latte (object names come from compile_commands.json; they are unique).
+# Kept: the address library (gx2 computes surface layouts with it), and for the renderer (G2) the
+# shader decompiler, the fetch- and GS-copy-shader parsers and the texture loader, with
+# src/gpu/vk/latte_glue.cpp standing in for the rest of Latte they call.
 python3 - "$cemu/build/compile_commands.json" > "$out/latte-objects.txt" <<'PY'
 import json, os, sys
+keep = ("/LatteAddrLib/", "/LegacyShaderDecompiler/", "/Core/FetchShader.cpp", "/Core/LatteGSCopyShaderParser.cpp",
+        "/Core/LatteTextureLoader.cpp")
 for e in json.load(open(sys.argv[1])):
     f = e["file"]
-    if "/CemuCafe.dir/" in e["command"] and "/src/Cafe/HW/Latte/" in f and "/LatteAddrLib/" not in f:
+    if "/CemuCafe.dir/" in e["command"] and "/src/Cafe/HW/Latte/" in f and not any(k in f for k in keep):
         print(os.path.basename(e["command"].split(" -o ")[1].split()[0]))
 PY
 cp "$cemu/build/src/Cafe/libCemuCafe.a" "$out/libCemuCafe_nolatte.a"
@@ -58,14 +69,16 @@ link() {  # link NAME OBJECTS...
     eval "$cmd"
 }
 link wwhd "$out/cemu_boot.o" "$out/window_system.o"
-null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/null_gpu.o" "$out"/vk_{vk,renderer}.o "$out"/rt_{dispatch,imports,diff}.o)
+null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/null_gpu.o" "$out"/vk_{vk,renderer,draw,texture,latte_glue}.o
+           "$out"/rt_{dispatch,imports,diff}.o)
+limits=$(ls "$cemu"/build/vcpkg_installed/*/lib/libglslang-default-resource-limits.a | head -1)  # glslang's defaults (draw.cpp)
 if [ -n "$recomp" ]; then
     null_objs+=("$recomp"/shard_*.o "$recomp/func_table.o" "$recomp/imports.o")
     echo "wwhd: wwhd-null links the recompiled program from $recomp ($(ls "$recomp"/shard_*.o | wc -l) shards)"
 else
     echo "wwhd: wwhd-null without recompiled code (the runtime interprets)"
 fi
-link wwhd-null "${null_objs[@]}"
+link wwhd-null "${null_objs[@]}" "$limits"
 
 # Relink wwhd-null with its archive members as explicit objects in wwhd's inclusion order, so
 # static constructors (and with them Cemu's SysAllocator slots in guest memory) run in the same

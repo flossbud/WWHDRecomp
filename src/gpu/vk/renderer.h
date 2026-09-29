@@ -15,4 +15,6 @@ namespace wwhd::gpu
 	void RendererClear(const uint32be* body, uint32 nWords);       // IT_HLE_CLEAR_COLOR_DEPTH_STENCIL
 	void RendererCopyToScanBuffer(const uint32be* body, uint32 nWords); // IT_HLE_COPY_COLORBUFFER_TO_SCANBUFFER
 	void RendererSwap();                                           // IT_HLE_TRIGGER_SCANBUFFER_SWAP
+	void RendererDraw(uint32 op, const uint32be* body, uint32 nWords); // IT_DRAW_INDEX_2 / _AUTO (draw.cpp)
+	void RendererCopySurface(const uint32be* body, uint32 nWords); // IT_HLE_COPY_SURFACE_NEW (texture.cpp)
 }
