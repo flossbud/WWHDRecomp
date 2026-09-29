@@ -8,6 +8,9 @@ Writes OUT_DIR/shard_NNN.cpp (one C++ function per guest function in functions.c
 table the runtime binds to Cemu's HLE handlers). Output is generated from game code: it goes to
 build/ and is never committed. A shard is rewritten only when its content changes.
 
+config/US_v0/code_patches.csv (D10) is applied first: the boot-time patches Cemu's GamePatch makes to
+this RPX, so the generated code is the code the interpreter runs.
+
 func_table.cpp also carries, per function, its end, a hash of its code as the RPX has it (so the
 runtime can tell which functions Cemu patched in memory, D10) and flags. A function is *pure*
 (D8.2) if it and everything it can call make no import call, no indirect call or jump, and no
@@ -15,6 +18,9 @@ call to a weak (address 0) symbol; diff mode (M3) checks pure functions against 
 imports.cpp also lists every import relocation site, so the runtime can bind and cross-check
 each import against what Cemu's loader wrote into guest memory, and a census of store
 instructions that the runtime's store decoder (diff mode) must reproduce.
+
+Every instruction is preceded by RT_TICK(address): one cycle of the timeslice, and a yield in
+place when it runs out (D6, as revised for M4).
 
 Control flow (D1): branches inside a function become gotos; a branch to another function's
 entry is a musttail call; bl is a call; blr is return; a bctr listed in jump_tables.csv is a
@@ -55,6 +61,14 @@ class Program:
         self.sections = [(rpx.name(i), s[3], rpx.size(i)) for i, s in enumerate(rpx.sh) if s[3]]
         # code: .text, plus .syscall (an 8-byte "nop; blr" stub that some code calls)
         self.code = [(rpx.sh[i][3], rpx.data(i)) for i in range(len(rpx.sh)) if rpx.name(i) in (".text", ".syscall")]
+        # D10: the boot-time patches Cemu applies to this RPX (GamePatch.cpp), so the generated
+        # code is what the interpreter runs; the runtime's hash check at boot confirms it
+        self.patches = {}
+        with open(CONFIG / "code_patches.csv") as f:
+            for r in csv.DictReader(f):
+                ea, orig, new = int(r["address"], 16), int(r["original"], 16), int(r["patched"], 16)
+                assert self.word(ea) == orig, f"code_patches.csv: {ea:08X} holds {self.word(ea):08X}, not {orig:08X}"
+                self.patches[ea] = new
         # imports: symbols defined in .fimport_LIB (functions) and .dimport_LIB (data)
         self.imports, self.import_is_data = {}, {}
         for i, s in enumerate(rpx.sh):
@@ -156,6 +170,8 @@ class Program:
         return any(base <= a < base + len(data) for base, data in self.code)
 
     def word(self, ea):
+        if ea in getattr(self, "patches", ()):
+            return self.patches[ea]
         for base, data in self.code:
             if base <= ea < base + len(data):
                 return struct.unpack_from(">I", data, ea - base)[0]
@@ -308,6 +324,7 @@ def generate_function(prog, em, start, end, errors):
     for ea, lines in body:
         if ea in flow.labels:
             out.append(f"L_{ea:08X}:;")
+        out.append(f"\tRT_TICK({emit.hx(ea)});")      # one cycle per instruction (D6)
         out += ["\t" + l for l in lines]
     if last is None or not is_terminator(last):
         if end in prog.entries:

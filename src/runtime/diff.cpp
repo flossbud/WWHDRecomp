@@ -16,6 +16,8 @@
 // Guest-visible behaviour stays the interpreter's, so the OS-call trace must still equal the
 // reference's, and every sampled call is checked on real game state.
 //
+// Guest time (D6): the native run starts with an unlimited timeslice, so it never yields, and the
+// cycles it charged must equal the instructions the interpreter executed for the same call.
 // A native run that reaches rt_bad_branch (a branch the generator couldn't place) is unwound with
 // longjmp (generated code holds no resources), rewound, and counted as a native fault.
 // A call whose timeslice ended before it returned is "preempted": other threads ran meanwhile and
@@ -190,6 +192,7 @@ namespace wwhd::rt
 		uint32 ret, sp;
 		Regs entry, native;
 		Bytes nativeWrites, interpWrites;
+		uint64 nativeCycles = 0;
 		uint64 steps = 0;
 		uint32 preempted = 0;
 	};
@@ -372,6 +375,7 @@ namespace wwhd::rt
 		s_nativeFunc = f.address;
 		s_nativeSince = Clock::now().time_since_epoch().count();
 		g_rtJournalOn = true;
+		hCPU->remainingCycles = INT32_MAX;             // never yields; the ticks it spends are counted
 		volatile bool ok = true;
 		if (setjmp(s_nativeJmp) == 0)
 			f.fn(hCPU);
@@ -379,6 +383,7 @@ namespace wwhd::rt
 			ok = false;
 		g_rtJournalOn = false;
 		s_nativeSince = 0;
+		s.nativeCycles = (uint64)((sint64)INT32_MAX - hCPU->remainingCycles);
 		Capture(s.native, hCPU);
 		for (const JournalEntry& j : s_journal)
 			for (uint32 k = 0; k < j.size; k++)
@@ -495,6 +500,8 @@ namespace wwhd::rt
 		Canonical(s.interpWrites);
 		bool nan = false;
 		std::string regs = RegDiff(s.native, interp, nan);
+		if (s.nativeCycles != s.steps)
+			regs += fmt::format(" cycles native={} interp={}", s.nativeCycles, s.steps);
 		size_t memCount = 0;
 		std::string mem = MemDiff(s.nativeWrites, s.interpWrites, memCount);
 		st.nanTolerated += nan;

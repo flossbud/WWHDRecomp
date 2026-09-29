@@ -1,0 +1,6 @@
+address,original,patched,evidence
+027F99C8,4BF667F5,60000000,"Cemu GamePatch.cpp, TWW race condition (tww_waitFunc found at 027F9994, +0x34): nop the bl to 027601BC (mutex lock wrapper); avoids a single-core deadlock"
+027F99DC,4BF66815,60000000,"Cemu GamePatch.cpp, TWW race condition (+0x48): nop the bl to 027601F0 (mutex unlock wrapper)"
+027F99E4,4BF667D9,60000000,"Cemu GamePatch.cpp, TWW race condition (+0x50): nop the bl to 027601BC (mutex lock wrapper)"
+027F99F8,4BF667F9,60000000,"Cemu GamePatch.cpp, TWW race condition (+0x64): nop the bl to 027601F0 (mutex unlock wrapper)"
+02813878,40800018,48000018,"Cemu GamePatch.cpp, TWW US dsp kill channel patch: bge +0x18 becomes b +0x18"

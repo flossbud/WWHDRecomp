@@ -161,8 +161,11 @@ void rt_import(PPCInterpreter_t* ctx, uint32 id)
 		Interpret(ctx, b.target);
 		return;
 	}
-	// what the interpreter does at the trampoline: trace the call, charge it, run the handler
+	// what the interpreter does at the trampoline: one cycle for the instruction (D6), then trace
+	// the call, charge its 300 cycles and run the handler
 	ctx->instructionPointer = b.target;
+	if (--ctx->remainingCycles < 0)
+		Yield(ctx, b.target);
 	PPCInterpreter_virtualHLE(ctx, b.opcode);
 	if (ctx->instructionPointer != ctx->spr.LR) [[unlikely]]
 		Dispatch(ctx, ctx->instructionPointer);   // D4: the handler tail-called guest code (MEM forwarding)

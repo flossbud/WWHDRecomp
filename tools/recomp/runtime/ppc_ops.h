@@ -18,6 +18,13 @@ extern bool g_rtJournalOn;
 void rt_journal_store(uint32 ea, uint32 size);
 #define RT_STORE(ea, n) do { if (g_rtJournalOn) [[unlikely]] rt_journal_store((ea), (n)); } while (0)
 
+// Guest time (design D6, revised for M4): every instruction costs one cycle of the thread's
+// timeslice, exactly as in Cemu's `while ((--remainingCycles) >= 0)` loop. When the slice is used
+// up, the thread yields right here, before the instruction at pc, and runs it once scheduled again
+// (rt_yield switches fibers in place; the native frames wait on the fiber's stack).
+[[gnu::cold]] void rt_yield(PPCInterpreter_t* ctx, uint32 pc);
+#define RT_TICK(pc) do { if (--ctx->remainingCycles < 0) [[unlikely]] rt_yield(ctx, (pc)); } while (0)
+
 #define GPR(n) ctx->gpr[n]
 #define FPR(n) ctx->fpr[n]
 #define CRB(n) ctx->cr[n]

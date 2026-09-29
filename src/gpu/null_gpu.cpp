@@ -21,6 +21,8 @@
 #include "Cafe/CafeSystem.h"
 #include "util/highresolutiontimer/HighResolutionTimer.h"
 #include "util/helpers/helpers.h"
+#include <map>
+#include <set>
 
 LatteGPUState_t LatteGPUState = {};
 std::unique_ptr<Renderer> g_renderer;      // stays null: nothing renders
@@ -97,6 +99,144 @@ static void handleTimedVsync()
 	uint64 period = timeBetweenVSync();
 	uint64 missed = (now - LatteGPUState.timer_nextVSync) / period;
 	LatteGPUState.timer_nextVSync += period * (missed >= 2 ? missed + 1 : 1);
+}
+
+// ---- G0 draw statistics (docs/recompiler-design.md D15) -----------------------------------------
+// WWHD_GPU_STATS=path collects, at every draw, the register state a Vulkan backend would have to
+// translate: shader programs (by content), render-target and depth formats and sizes, MSAA, HiZ,
+// geometry shaders, stream-out, primitive types and special colour ops. The report goes to path
+// (histograms) and path.variants.csv (each pipeline x target-format combination and its draw
+// count) at exit, including the trace's exit-at-frame. It only reads state.
+namespace gpustats
+{
+	// context registers without a define in RegDefines.h (index = byte offset / 4, see LatteReg.h)
+	constexpr uint32 kCB_TARGET_MASK = 0xA08E, kCB_COLOR_CONTROL = 0xA202, kVGT_GS_MODE = 0xA290,
+		kCB_COLOR0_BASE = mmCB_COLOR0_BASE, kCB_COLOR0_SIZE = mmCB_COLOR0_SIZE, kCB_COLOR0_INFO = mmCB_COLOR0_INFO;
+
+	struct Program { uint32 size; uint64 fingerprint, hash; };
+
+	std::mutex s_mutex;
+	std::string s_path;
+	uint64 s_draws[3];
+	std::map<std::string, uint64> s_hist;                       // "what=value" -> draws
+	std::unordered_map<uint32, Program> s_programs;              // by address
+	std::set<uint64> s_distinct[4];                              // program hashes seen, per stage (fs vs gs ps)
+	std::map<std::string, uint64> s_variants;                    // csv row -> draws
+
+	uint64 Fnv(const uint8* p, uint32 n)
+	{
+		uint64 h = 0xCBF29CE484222325ull;
+		for (uint32 i = 0; i < n; i++)
+			h = (h ^ p[i]) * 0x100000001B3ull;
+		return h;
+	}
+
+	// content hash of the program at a register pair (START, START+1 = size in 8-byte units)
+	uint64 ProgramHash(uint32 startReg)
+	{
+		uint32 addr = LatteGPUState.contextRegister[startReg] << 8, size = LatteGPUState.contextRegister[startReg + 1] << 3;
+		if (addr == 0 || size == 0)
+			return 0;
+		const uint8* code = memory_getPointerFromPhysicalOffset(addr);
+		uint64 fp;
+		memcpy(&fp, code, 8);
+		fp ^= (uint64)size << 32;
+		Program& pr = s_programs[addr];
+		if (pr.size != size || pr.fingerprint != fp)              // new, or another program loaded there
+			pr = { size, fp, Fnv(code, size) };
+		return pr.hash;
+	}
+
+	std::string SurfaceSize(uint32 sizeReg)
+	{
+		uint32 pitch = ((sizeReg & 0x3FF) + 1) * 8, slice = ((sizeReg >> 10) & 0xFFFFF) + 1;
+		return fmt::format("{}x{}", pitch, slice * 64 / pitch);
+	}
+
+	void Draw(uint32 op)
+	{
+		const uint32* r = LatteGPUState.contextRegister;
+		std::unique_lock _l(s_mutex);
+		s_draws[op == IT_DRAW_INDEX_2 ? 0 : op == IT_DRAW_INDEX_AUTO ? 1 : 2]++;
+		auto hist = [](const std::string& k) { s_hist[k]++; };
+		uint32 gsMode = r[kVGT_GS_MODE] & 3;
+		hist(fmt::format("gs_mode={}", gsMode));
+		hist(fmt::format("streamout_en={}", r[mmVGT_STRMOUT_EN] & 1));
+		hist(fmt::format("msaa_log2_samples={}", r[mmPA_SC_AA_CONFIG] & 3));
+		hist(fmt::format("primitive_type={:#x}", r[mmVGT_PRIMITIVE_TYPE]));
+		hist(fmt::format("cb_special_op={}", (r[kCB_COLOR_CONTROL] >> 4) & 7));
+		// shaders, as Cemu's LatteShader picks them (with a GS, the vertex shader is ES)
+		uint64 fs = ProgramHash(mmSQ_PGM_START_FS);
+		uint64 vs = ProgramHash(gsMode ? mmSQ_PGM_START_ES : mmSQ_PGM_START_VS);
+		uint64 gs = gsMode ? ProgramHash(mmSQ_PGM_START_GS) : 0;
+		uint64 ps = ProgramHash(mmSQ_PGM_START_PS);
+		s_distinct[0].insert(fs); s_distinct[1].insert(vs); s_distinct[2].insert(gs); s_distinct[3].insert(ps);
+		// render targets the pixel shader writes (CB_TARGET_MASK), then depth
+		std::string targets;
+		uint32 mask = r[kCB_TARGET_MASK];
+		for (uint32 t = 0; t < 8; t++)
+		{
+			if (((mask >> (4 * t)) & 0xF) == 0 || r[kCB_COLOR0_BASE + t] == 0)
+				continue;
+			uint32 info = r[kCB_COLOR0_INFO + t];
+			std::string fmtName = fmt::format("fmt{:#x}/num{}", (info >> 2) & 0x3F, (info >> 12) & 7);
+			targets += fmt::format("c{}:{} ", t, fmtName);
+			hist(fmt::format("color_target={} {} array_mode={}", SurfaceSize(r[kCB_COLOR0_SIZE + t]), fmtName, (info >> 8) & 0xF));
+		}
+		// Cemu's GX2SetDepthBuffer writes the depth image's address into DB_HTILE_DATA_BASE and 0 into
+		// DB_DEPTH_BASE, and encodes no HiZ (Latte reads it the same way): a Cemu dialect of the
+		// registers that a backend on this register file inherits
+		uint32 dbInfo = r[mmDB_DEPTH_INFO];
+		bool depth = r[mmDB_HTILE_DATA_BASE] != 0;
+		if (depth)
+		{
+			targets += fmt::format("d:fmt{}", dbInfo & 7);
+			hist(fmt::format("depth_target={} fmt{} array_mode={} tile_surface(htile)={}", SurfaceSize(r[mmDB_DEPTH_SIZE]),
+				dbInfo & 7, (dbInfo >> 15) & 0xF, (dbInfo >> 25) & 1));
+			hist(fmt::format("db_htile_surface={:#x} db_render_override={:#x}", r[mmDB_HTILE_SURFACE], r[mmDB_RENDER_OVERRIDE]));
+		}
+		s_variants[fmt::format("{:016x},{:016x},{:016x},{:016x},{},{}", fs, vs, gs, ps, targets, r[mmPA_SC_AA_CONFIG] & 3)]++;
+	}
+
+	void Report()
+	{
+		std::unique_lock _l(s_mutex);
+		FILE* f = fopen(s_path.c_str(), "w");
+		if (!f)
+			return;
+		uint64 total = s_draws[0] + s_draws[1] + s_draws[2];
+		std::set<std::string> pipelines;
+		for (auto& [k, n] : s_variants)
+			pipelines.insert(k.substr(0, 4 * 17 - 1));
+		fprintf(f, "draws %llu (DRAW_INDEX_2 %llu, DRAW_INDEX_AUTO %llu, DRAW_INDEX_IMMD %llu)\n", (unsigned long long)total,
+			(unsigned long long)s_draws[0], (unsigned long long)s_draws[1], (unsigned long long)s_draws[2]);
+		fprintf(f, "distinct programs by content: fetch %zu, vertex %zu, geometry %zu, pixel %zu\n", s_distinct[0].size(),
+			s_distinct[1].size(), s_distinct[2].size() - s_distinct[2].count(0), s_distinct[3].size());
+		fprintf(f, "pipelines (fetch, vertex, geometry, pixel): %zu; variants (pipeline x target formats x MSAA): %zu\n",
+			pipelines.size(), s_variants.size());
+		for (auto& [k, n] : s_hist)
+			fprintf(f, "%s: %llu\n", k.c_str(), (unsigned long long)n);
+		fclose(f);
+		if (FILE* v = fopen((s_path + ".variants.csv").c_str(), "w"))
+		{
+			fputs("fetch,vertex,geometry,pixel,targets,msaa_log2,draws\n", v);
+			for (auto& [k, n] : s_variants)
+				fprintf(v, "%s,%llu\n", k.c_str(), (unsigned long long)n);
+			fclose(v);
+		}
+	}
+
+	bool Init()
+	{
+		const char* path = getenv("WWHD_GPU_STATS");
+		if (!path || !*path)
+			return false;
+		s_path = path;
+		at_quick_exit(Report);
+		atexit(Report);
+		return true;
+	}
+	const bool s_enabled = Init();
 }
 
 // ---- command processing (LatteCommandProcessor.cpp) --------------------------------------------
@@ -292,8 +432,12 @@ namespace
 		case IT_HLE_BEGIN_OCCLUSION_QUERY: case IT_HLE_END_OCCLUSION_QUERY:
 			cemuLog_logOnce(LogType::Force, "null GPU: occlusion queries are not answered");
 			break;
+		case IT_DRAW_INDEX_2: case IT_DRAW_INDEX_AUTO: case IT_DRAW_INDEX_IMMD:
+			if (gpustats::s_enabled)
+				gpustats::Draw(op);
+			break;
 		// nothing to observe without a renderer
-		case IT_DRAW_INDEX_2: case IT_DRAW_INDEX_AUTO: case IT_DRAW_INDEX_IMMD: case IT_SURFACE_SYNC:
+		case IT_SURFACE_SYNC:
 		case IT_HLE_CLEAR_COLOR_DEPTH_STENCIL: case IT_HLE_COPY_SURFACE_NEW:
 		case IT_HLE_COPY_COLORBUFFER_TO_SCANBUFFER: case IT_HLE_SYNC_ASYNC_OPERATIONS:
 			break;

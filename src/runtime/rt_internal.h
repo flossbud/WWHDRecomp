@@ -14,6 +14,7 @@ void rt_trap(PPCInterpreter_t* ctx, uint32 ea);
 void rt_dcache_flush(uint32 ea);
 extern bool g_rtJournalOn;
 void rt_journal_store(uint32 ea, uint32 size);
+void rt_yield(PPCInterpreter_t* ctx, uint32 pc);
 
 namespace wwhd::rt
 {
@@ -39,7 +40,10 @@ namespace wwhd::rt
 	// imports.cpp
 	void BindImports();
 
-	// dispatch.cpp: calling guest code from native code (D4, D5)
+	// dispatch.cpp: the end of a timeslice inside native code (D6), and calling guest code from
+	// native code (D4, D5)
+	void Yield(PPCInterpreter_t* ctx, uint32 pc);
+	void NativeReport(bool final);
 	void Dispatch(PPCInterpreter_t* ctx, uint32 target);   // native, HLE trampoline, or interpreted
 	void Interpret(PPCInterpreter_t* ctx, uint32 target);  // interpret from target until it returns to LR
 

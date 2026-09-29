@@ -1,4 +1,4 @@
-From 8f85fc4745777603d53833748df1878f4f0ae5b2 Mon Sep 17 00:00:00 2001
+From 0196444e65585c7c8f119a7ac30ef77ace1452d5 Mon Sep 17 00:00:00 2001
 From: flossbud <224492734+flossbud@users.noreply.github.com>
 Date: Tue, 29 Sep 2026 13:51:28 +0000
 Subject: [PATCH] wwhd-reference: execution seam (g_ppcExecuteHook), off by
@@ -9,11 +9,11 @@ __OSFiberThreadEntry and PPCCore_executeCallbackInternal (WWHDRecomp design D1).
 default, so Cemu_release interprets exactly as before. The HLE trace's exit-at-frame now uses
 std::quick_exit instead of _exit, so the runtime can write its final report.
 ---
- src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp | 2 +-
- src/Cafe/HW/Espresso/PPCScheduler.cpp                  | 5 +++++
- src/Cafe/HW/Espresso/PPCState.h                        | 9 +++++++++
- src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp          | 3 +++
- 4 files changed, 18 insertions(+), 1 deletion(-)
+ src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp |  2 +-
+ src/Cafe/HW/Espresso/PPCScheduler.cpp                  |  5 +++++
+ src/Cafe/HW/Espresso/PPCState.h                        | 10 ++++++++++
+ src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp          |  3 +++
+ 4 files changed, 19 insertions(+), 1 deletion(-)
 
 diff --git a/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp b/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp
 index 040a773..267e04c 100644
@@ -29,7 +29,7 @@ index 040a773..267e04c 100644
  		}
  		if (s_state[index] != 1)
 diff --git a/src/Cafe/HW/Espresso/PPCScheduler.cpp b/src/Cafe/HW/Espresso/PPCScheduler.cpp
-index a4c04aa..6818fd2 100644
+index a4c04aa..b062aab 100644
 --- a/src/Cafe/HW/Espresso/PPCScheduler.cpp
 +++ b/src/Cafe/HW/Espresso/PPCScheduler.cpp
 @@ -7,6 +7,8 @@
@@ -46,16 +46,16 @@ index a4c04aa..6818fd2 100644
  			PPCRecompiler_attemptEnter(hCPU, hCPU->instructionPointer);
  			// execute any remaining instructions in interpreter
 +			if (g_ppcExecuteHook) // wwhd: execution seam
-+				g_ppcExecuteHook(hCPU);
++				g_ppcExecuteHook(hCPU, true);
 +			else
  			while ((--hCPU->remainingCycles) >= 0)
  			{
  				PPCInterpreterSlim_executeInstruction(hCPU);
 diff --git a/src/Cafe/HW/Espresso/PPCState.h b/src/Cafe/HW/Espresso/PPCState.h
-index 2528436..87de51a 100644
+index 2528436..8830bd5 100644
 --- a/src/Cafe/HW/Espresso/PPCState.h
 +++ b/src/Cafe/HW/Espresso/PPCState.h
-@@ -251,6 +251,15 @@ void PPCCore_switchToScheduler();
+@@ -251,6 +251,16 @@ void PPCCore_switchToScheduler();
  void PPCCore_switchToSchedulerWithLock();
  
  PPCInterpreter_t* PPCCore_executeCallbackInternal(uint32 functionMPTR);
@@ -63,16 +63,17 @@ index 2528436..87de51a 100644
 +// wwhd: execution seam (WWHDRecomp docs/recompiler-design.md D1). Null by default, and then Cemu
 +// interprets exactly as before. When set, it replaces the interpreter loop
 +//   while ((--hCPU->remainingCycles) >= 0) PPCInterpreterSlim_executeInstruction(hCPU);
-+// in __OSFiberThreadEntry and PPCCore_executeCallbackInternal, and must leave the same state
-+// behind (the recompiled program's runtime sets it).
-+using PPCExecuteHook = void(*)(PPCInterpreter_t* hCPU);
++// in __OSFiberThreadEntry (callback = false) and PPCCore_executeCallbackInternal (callback = true),
++// and must leave the same state behind (the recompiled program's runtime sets it). The two loops
++// end a timeslice differently, which code that yields from inside the hook must reproduce.
++using PPCExecuteHook = void(*)(PPCInterpreter_t* hCPU, bool callback);
 +extern PPCExecuteHook g_ppcExecuteHook;
 +
  void PPCCore_init();
  
  // LLE scheduler
 diff --git a/src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp b/src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp
-index 64c0371..90cdefa 100644
+index 64c0371..3de2487 100644
 --- a/src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp
 +++ b/src/Cafe/OS/libs/coreinit/coreinit_Thread.cpp
 @@ -1427,6 +1427,9 @@ namespace coreinit
@@ -80,7 +81,7 @@ index 64c0371..90cdefa 100644
  				PPCRecompiler_attemptEnterWithoutRecompile(hCPU, hCPU->instructionPointer);
  				// keep executing as long as there are cycles left
 +				if (g_ppcExecuteHook) // wwhd: execution seam, see PPCState.h
-+					g_ppcExecuteHook(hCPU);
++					g_ppcExecuteHook(hCPU, false);
 +				else
  				while ((--hCPU->remainingCycles) >= 0)
  					PPCInterpreterSlim_executeInstruction(hCPU);
