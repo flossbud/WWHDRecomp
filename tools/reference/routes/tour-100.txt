@@ -1,0 +1,15 @@
+# Route: a short look around with the 100% save (REF_SAVE=/wwhd/data/saves/wwhd_100), for
+# screenshots and renderer checks: continue-100.txt's inputs, then walk and look around the Outset
+# dock and open the pause menu. FRAME BUTTONS [FRAMES_HELD]; LUP.. RRIGHT are full stick deflection.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+960 LDOWN 240  # walk back along the dock toward the village
+1230 RRIGHT 90 # swing the camera
+1350 LLEFT 150 # walk on
+1560 PLUS 5    # pause menu
+1700 R 5       # next page
+1840 R 5       # next page
+1980 PLUS 5    # close the menu
+2040 RLEFT 120 # swing the camera back
