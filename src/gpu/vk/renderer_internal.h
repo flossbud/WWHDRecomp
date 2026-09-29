@@ -21,9 +21,12 @@ namespace wwhd::gpu
 		VkImageView view = VK_NULL_HANDLE;
 		VkFormat format = VK_FORMAT_UNDEFINED;
 		VkImageAspectFlags aspect = 0;
-		uint32 width = 0, height = 0;
-		VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+		uint32 width = 0, height = 0, layers = 1;
+		VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;         // of every subresource
+		std::vector<VkImageView> layerViews;                     // 2D views of layers 1.. (LayerView)
 		uint64 written = 0;                                      // s.writes when last drawn into or cleared (surfaces)
+		uint32 bytes = 0;                                        // guest memory it covers from its address (surfaces)
+		uint64 resetFor = 0;                                     // the overlapping write it was last reset for (surfaces)
 	};
 
 	// host-visible memory that per-frame data (uniforms, vertices, indices) is written into; reset
@@ -68,13 +71,16 @@ namespace wwhd::gpu
 	uint32 MemoryType(uint32 bits, VkMemoryPropertyFlags props);
 	void SubmitAndWait();                                         // ends rendering first
 	void Transition(Image& img, VkImageLayout layout);
-	Image CreateImage(VkFormat format, VkImageAspectFlags aspect, uint32 w, uint32 h, VkImageUsageFlags usage);
+	Image CreateImage(VkFormat format, VkImageAspectFlags aspect, uint32 w, uint32 h, VkImageUsageFlags usage, uint32 layers = 1);
+	VkImageView LayerView(Image& img, uint32 layer);             // a 2D view of one layer (img.view for layer 0)
+	void DestroyImage(Image& img);
 	VkDeviceSize RingAlloc(VkDeviceSize size, VkDeviceSize align); // offset into s.ring (submits when full)
 
 	struct Format { VkFormat vk; VkImageAspectFlags aspect; };
 	Format ColorFormat(uint32 gx2);
 	Format DepthFormat(uint32 gx2);
-	Image& Surface(uint32 addr, uint32 gx2, bool depth, uint32 w, uint32 h);
+	// the surface at (addr, gx2 format), at least w x h with `layers` array slices
+	Image& Surface(uint32 addr, uint32 gx2, bool depth, uint32 w, uint32 h, uint32 layers = 1);
 
 	// draw.cpp
 	void DrawInit();

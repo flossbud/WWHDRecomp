@@ -4,8 +4,10 @@
 // OS-call trace stays the reference's whether it renders or not.
 //
 // WWHD_RENDER=vk turns it on. CEMU_SHOT_FRAMES and CEMU_SHOT_DIR capture the TV image exactly as
-// the reference's patched Cemu does (cemu-patches/0007): frame N is the Nth GX2SwapScanBuffers,
-// written as f<N>.tv.ppm, so tools/reference/compare_frames.py can compare the two directories.
+// the reference's patched Cemu does (cemu-patches/0007), written as f<N>.tv.ppm, so
+// tools/reference/compare_frames.py can compare the two directories. The reference requests shot N
+// at the Nth GX2SwapScanBuffers and its renderer takes it at the next present, so the image in
+// f<N> is the one the (N+1)th swap presents; captures here follow that.
 #pragma once
 #include "Common/precompiled.h"
 

@@ -71,9 +71,12 @@ needs, then with those members as explicit objects in `wwhd`'s order.
 device with dynamic rendering (lavapipe: `REF_GPU=llvmpipe` in `tools/reference/run.sh`). It draws on
 the GPU thread and never writes guest memory, so the trace is the same with it on or off. Options:
 `CEMU_SHOT_FRAMES`/`CEMU_SHOT_DIR` capture the TV image as the reference does (`survey.sh` sets
-them), `WWHD_RENDER_STATS=N` logs draw counts every N frames, `WWHD_RENDER_DUMP=N` writes every
-surface at frame N as PPM into the shot directory, and `WWHD_RENDER_COPIES=1` reports GX2's
-GPU-side surface copies.
+them; shot N is the image the (N+1)th swap presents, as in the reference), `WWHD_RENDER_STATS=N`
+logs draw counts every N frames, `WWHD_RENDER_DUMP=N` writes every surface at the Nth swap as PPM
+into the shot directory (compare with the reference's using `tools/reference/compare_dumps.py`),
+`WWHD_RENDER_TRACE=N:ADDR[:X,Y]` logs every draw into the color target at ADDR in frame N (state,
+programs, texture sources) and, with a pixel, which draw changed it (N=0: every frame, pixel
+changes only), and `WWHD_RENDER_COPIES=1` reports GX2's GPU-side surface copies.
 
     tools/worker/job start g2-vk env CEMU_BIN=/wwhd/WWHDRecomp/build/wwhd/wwhd-null REF_GPU=llvmpipe \
         WWHD_RENDER=vk WWHD_NATIVE=on tools/reference/survey.sh tools/reference/routes/title-to-game.txt \

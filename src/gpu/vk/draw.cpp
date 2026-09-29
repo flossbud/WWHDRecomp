@@ -34,6 +34,9 @@
 #include <glslang/Public/ResourceLimits.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
 
+Latte::E_GX2SURFFMT LatteTexture_ReconstructGX2Format(const Latte::LATTE_SQ_TEX_RESOURCE_WORD1_N& texUnitWord1,
+	const Latte::LATTE_SQ_TEX_RESOURCE_WORD4_N& texUnitWord4);  // latte_glue.cpp
+
 namespace wwhd::gpu
 {
 	void InstallNoopRenderer();                                    // latte_glue.cpp
@@ -183,9 +186,11 @@ namespace wwhd::gpu
 		{
 			Image* color[8]{};
 			Image* depth = nullptr;
+			uint32 colorLayer[8]{}, depthLayer = 0;                 // array slices (CB_COLORn_VIEW, DB_DEPTH_VIEW)
 			bool operator==(const Targets& o) const
 			{
-				return depth == o.depth && std::equal(std::begin(color), std::end(color), std::begin(o.color));
+				return depth == o.depth && depthLayer == o.depthLayer && std::equal(std::begin(color), std::end(color), std::begin(o.color)) &&
+					std::equal(std::begin(colorLayer), std::end(colorLayer), std::begin(o.colorLayer));
 			}
 		};
 		Targets s_current;
@@ -210,7 +215,7 @@ namespace wwhd::gpu
 				if (!t.color[i])
 					continue;
 				Transition(*t.color[i], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-				colors[i].imageView = t.color[i]->view;
+				colors[i].imageView = LayerView(*t.color[i], t.colorLayer[i]);
 				colors[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 				colors[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 				colors[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -222,7 +227,7 @@ namespace wwhd::gpu
 			if (t.depth)
 			{
 				Transition(*t.depth, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-				depth.imageView = t.depth->view;
+				depth.imageView = LayerView(*t.depth, t.depthLayer);
 				depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 				depth.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 				depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -752,12 +757,101 @@ namespace wwhd::gpu
 		uint64 s_draws = 0, s_skipped = 0;
 		uint32 s_statsEvery = 0;
 
+		// WWHD_RENDER_TRACE=FRAME:ADDR logs every draw into the color target at ADDR (hex) during swap
+		// interval FRAME (after the FRAME-1th swap): programs, alpha test, depth, and each pixel
+		// texture unit with where its data comes from. For hunting a surface that differs from the
+		// reference's (tools/reference: CEMU_TEX_DUMP_FRAME).
+		void TraceDraw(Shader* vs, Shader* ps, uint64 vsKey, uint64 psKey, const Targets& t,
+			Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE prim, uint32 count, uint32 hostCount);
+
 		// room for one draw's per-draw data (a submit in the middle of a draw would free what it already allocated)
 		void Reserve()
 		{
 			if (s.ring.used + (64ull << 20) > s.ring.size || s_sets + 2 > (1u << 16) || s_imageDescriptors + 64 > (1u << 18) ||
 				s_bufferDescriptors + 64 > (1u << 17))
 				SubmitAndWait();
+		}
+	}
+
+	namespace
+	{
+		void TraceDraw(Shader* vs, Shader* ps, uint64 vsKey, uint64 psKey, const Targets& t,
+			Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE prim, uint32 count, uint32 hostCount)
+		{
+			static uint32 frame = 0, addr = 0, px = UINT32_MAX, py = 0;
+			static const bool on = [] {
+				const char* e = getenv("WWHD_RENDER_TRACE");
+				return e && sscanf(e, "%u:%x:%u,%u", &frame, &addr, &px, &py) >= 2;
+			}();
+			if (!on || (frame && s.frame + 1 != frame))              // frame 0: every frame, pixel changes only
+				return;
+			const uint32* regs = LatteGPUState.contextRegister;
+			sint32 slot = -1;
+			for (uint32 i = 0; i < 8 && slot < 0; i++)
+				if (t.color[i] && (regs[mmCB_COLOR0_BASE + i] & 0xFFFFF800u) == (addr & 0xFFFFF800u))
+					slot = (sint32)i;
+			if (slot < 0)
+				return;
+			Image* target = t.color[slot];
+			static uint32 n = 0;
+			const auto& r = LatteGPUState.contextNew;
+			std::string line = fmt::format("trace #{} slot {} of {:02x} vs {:016x} ps {:016x} prim {} count {} ({}) alpha {:x} ref {} depth {:08x} blend {:08x} cull {:x} mask {:08x}",
+				n++, slot, [&] { uint32 m = 0; for (uint32 i = 0; i < 8; i++) m |= t.color[i] ? 1u << i : 0; return m; }(), vsKey, psKey, (uint32)prim, count, hostCount, regs[Latte::REGADDR::SX_ALPHA_TEST_CONTROL], r.SX_ALPHA_REF.get_ALPHA_TEST_REF(),
+				regs[Latte::REGADDR::DB_DEPTH_CONTROL], regs[Latte::REGADDR::CB_BLEND0_CONTROL], regs[Latte::REGADDR::PA_SU_SC_MODE_CNTL] & 3,
+				regs[Latte::REGADDR::CB_TARGET_MASK]);
+			for (sint32 i = 0; i < ps->mapping.getTextureCount(); i++)
+			{
+				uint32 unit = ps->mapping.getRelativeTextureUnitFromRelativeBindingPoint(i);
+				const uint32* w = regs + Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_PS + unit * 7;
+				uint32 taddr = w[2] << 8, tile = (w[0] >> 3) & 0xF;
+				if (Latte::TM_IsMacroTiled((Latte::E_HWTILEMODE)tile))
+					taddr &= ~0x700u;
+				const auto& tu = *(const _LatteRegisterSetTextureUnit*)w;
+				uint32 fmt = (uint32)LatteTexture_ReconstructGX2Format(tu.word1, tu.word4);
+				bool surface = s.surfaces.lower_bound({ taddr, 0 }) != s.surfaces.end() && s.surfaces.lower_bound({ taddr, 0 })->first.first == taddr;
+				line += fmt::format(" | t{} {:08x} fmt {:x} {}x{} dim {} sel {:03x} mips {}-{} {}{}", unit, taddr, fmt, (w[0] >> 19) + 1, (w[1] & 0x1FFF) + 1,
+					w[0] & 7, (w[4] >> 16) & 0xFFF, tu.word4.get_BASE_LEVEL(), tu.word5.get_LAST_LEVEL(), surface ? "surface" : "memory",
+					ps->dec->textureUsesDepthCompare[unit] ? " cmp" : "");
+			}
+			if (frame)
+				Log(line);
+			// with :X,Y, the pixel after the draw, when it changed
+			if (px != UINT32_MAX && px < target->width && py < target->height)
+			{
+				static VkBuffer buf = VK_NULL_HANDLE;
+				static uint32* mapped = nullptr;
+				static uint32 last = 0xDEADBEEF;
+				if (!buf)
+				{
+					VkBufferCreateInfo bci{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+					bci.size = 64;
+					bci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+					Check(vkCreateBuffer(s.device, &bci, nullptr, &buf), "vkCreateBuffer");
+					VkMemoryRequirements req;
+					vkGetBufferMemoryRequirements(s.device, buf, &req);
+					VkMemoryAllocateInfo ai{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+					ai.allocationSize = req.size;
+					ai.memoryTypeIndex = MemoryType(req.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+					VkDeviceMemory mem;
+					Check(vkAllocateMemory(s.device, &ai, nullptr, &mem), "vkAllocateMemory");
+					vkBindBufferMemory(s.device, buf, mem, 0);
+					vkMapMemory(s.device, mem, 0, 64, 0, (void**)&mapped);
+				}
+				EndRendering();
+				Transition(*target, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+				VkBufferImageCopy c{};
+				c.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+				c.imageOffset = { (sint32)px, (sint32)py, 0 };
+				c.imageExtent = { 1, 1, 1 };
+				vkCmdCopyImageToBuffer(s.cmd, target->image, target->layout, buf, 1, &c);
+				SubmitAndWait();
+				if (mapped[0] != last)
+				{
+					Log(fmt::format("trace #{} frame {}: pixel {},{} {:08x} -> {:08x}{}", n - 1, s.frame + 1, px, py, last, mapped[0],
+						frame ? std::string() : " by " + line));
+					last = mapped[0];
+				}
+			}
 		}
 	}
 
@@ -866,7 +960,8 @@ namespace wwhd::gpu
 			if (Latte::TM_IsMacroTiled((Latte::E_HWTILEMODE)((info >> 8) & 0xF)))
 				base &= ~0x700u;
 			uint32 pitch = ((size & 0x3FF) + 1) << 3, height = ((((size >> 10) & 0xFFFFF) + 1) << 6) / pitch;
-			t.color[i] = &Surface(base, (uint32)LatteMRT::GetColorBufferFormat(i, r), false, pitch, height);
+			t.colorLayer[i] = regs[mmCB_COLOR0_VIEW + i] & 0x7FF;
+			t.color[i] = &Surface(base, (uint32)LatteMRT::GetColorBufferFormat(i, r), false, pitch, height, t.colorLayer[i] + 1);
 		}
 		uint32 scissorX = r.PA_SC_GENERIC_SCISSOR_TL.get_TL_X(), scissorY = r.PA_SC_GENERIC_SCISSOR_TL.get_TL_Y();
 		uint32 scissorR = r.PA_SC_GENERIC_SCISSOR_BR.get_BR_X(), scissorB = r.PA_SC_GENERIC_SCISSOR_BR.get_BR_Y();
@@ -876,7 +971,10 @@ namespace wwhd::gpu
 			uint32 pitch = (size & 0x3FF) + 1, height = ((((size >> 10) & 0xFFFFF) + 1) / pitch) << 3;
 			pitch <<= 3;
 			if (base && scissorR <= pitch && scissorB <= height)
-				t.depth = &Surface(base, (uint32)LatteMRT::GetDepthBufferFormat(r), true, std::max(pitch, 2u), std::max(height, 2u));
+			{
+				t.depthLayer = regs[mmDB_DEPTH_VIEW] & 0x7FF;
+				t.depth = &Surface(base, (uint32)LatteMRT::GetDepthBufferFormat(r), true, std::max(pitch, 2u), std::max(height, 2u), t.depthLayer + 1);
+			}
 		}
 		if (!colorMask && !t.depth)
 			return skip("nothing to draw into");
@@ -918,6 +1016,10 @@ namespace wwhd::gpu
 		float zs = r.PA_CL_VPORT_ZSCALE.get_SCALE(), zb = r.PA_CL_VPORT_ZOFFSET.get_OFFSET();
 		bool halfZ = r.PA_CL_CLIP_CNTL.get_DX_CLIP_SPACE_DEF();
 		float farZ = zs + zb, nearZ = halfZ ? zb : zb - zs;
+		if (nearZ < 0.0f || nearZ > 1.0f || farZ < 0.0f || farZ > 1.0f)
+			LogOnce(fmt::format("zrange{}_{}_{}", nearZ, farZ, t.depth ? t.depth->width : 0), [&] {
+				return fmt::format("depth range {}..{} outside 0..1 (depth target {}x{}, halfZ {})", nearZ, farZ,
+					t.depth ? t.depth->width : 0, t.depth ? t.depth->height : 0, halfZ); });
 
 		std::vector<uint32> dynamicOffsets;
 		VkDescriptorSet sets[2] = { Descriptors(*vs, true, vsImages, dynamicOffsets, vpW, vpH), VK_NULL_HANDLE };
@@ -945,5 +1047,6 @@ namespace wwhd::gpu
 		else
 			vkCmdDraw(s.cmd, idx.count, instances, baseVertex, baseInstance);
 		s_draws++;
+		TraceDraw(vs, ps, vsKey, psKey, t, prim, count, idx.count);
 	}
 }

@@ -130,6 +130,8 @@ For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
 - `tools/reference/route.sh OUT FRAMES ROUTE BASELINE`: one run plus a trace comparison.
 - `WWHD_RENDER=vk` (`src/gpu/vk`): the G2 renderer; `survey.sh` captures and
   `compare_frames.py` compares with `/wwhd/data/g2/ref` (the reference's captures, f30-f600 every 30).
+  Surface-level comparison: cemu-patches/0012 (`CEMU_TEX_DUMP_FRAME`, `CEMU_TEX_WATCH`),
+  `WWHD_RENDER_DUMP`, `compare_dumps.py`, `WWHD_RENDER_TRACE` (src/README.md).
 
 **Runtime** (`src/`, M0b done). `src/build.sh` builds two binaries against the worker's Cemu:
 - **`build/wwhd/wwhd`:** our frontend (`src/frontend`, Cemu's `WindowSystem` without wxWidgets,
@@ -147,27 +149,23 @@ For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
 
 M3, M4, G0 and G1 are done, M4 and G0 on the scripted route (design doc status paragraphs). `wwhd-null` with
 `WWHD_NATIVE=on` runs the recompiled program, and its whole-route trace equals the reference's.
-G2 renders the title screen; closing it is step 1.
+G2 is done on the title screen (design doc "G2 status"); G3 is next.
 
-### 1. G2: close the title screen (design D13, D16.3)
+### 1. G3: render the whole route (design D13, D16.3)
 
-The renderer exists (design doc "G2 status", `src/README.md`): `WWHD_RENDER=vk` in `wwhd-null`
-renders the title screen on lavapipe, visually the same as the reference. Frames f150-f390 are at
-36-53 dB; the title frames f420-f600 are at 24.6-27.4 dB. The trace with rendering on equals
-`det-null/a.zst`. Left:
-- **The bloom halo** on the title is smaller than the reference's. The chain (one R11G11B10 texture,
-  480x270 with 4 mips at `f4000800`, levels drawn as separate targets) is assembled from the
-  per-level surfaces, and every level has plausible content (`WWHD_RENDER_DUMP=480`). Suspects:
-  how Cemu's texture cache relates the 480x270 texture to the 480x272 target and to the padded
-  level targets (256x256, 128x128, 64x64), and the blur's ping-pong targets (256x144). A dump of
-  the reference's targets at the same frame (a Cemu patch) would settle it.
-- **A numeric tolerance:** D16.3 names SSIM; `compare_frames.py` reports PSNR. References against
-  each other are at 73-75 dB.
-- Not on the route yet, so untested: GPU-side `GX2CopySurface` (`IT_HLE_COPY_SURFACE_NEW`, only
-  reported), readback of a rendered surface into a linear-special destination, 3D textures,
-  depth-stencil textures loaded from memory (zeroed, as Cemu does).
-- The G1 translator now sets the pixel-shader input table like the renderer. Re-translated since:
-  the 287 variants (574 modules) and the whole corpus (30,011), all valid.
+G2 is done (design doc "G2 status"): to f600 every captured frame is within 60 dB of the
+reference, most within one level. Next, the same comparison over the whole route, as far as the
+reference's captures go (`survey.sh` on both with the same frames; `compare_frames.py --threshold
+60`). When a frame differs, compare surfaces at that swap: `CEMU_TEX_DUMP_FRAME` on the reference,
+`WWHD_RENDER_DUMP` on ours, `tools/reference/compare_dumps.py`, then `WWHD_RENDER_TRACE` with a pixel
+to find the draw. Untested so far because the title doesn't use them:
+- GPU-side `GX2CopySurface` (`IT_HLE_COPY_SURFACE_NEW`, only reported);
+- readback of a rendered surface into a linear-special destination (the reference reads back);
+- 3D textures, cube-map render targets, depth-stencil textures loaded from memory (zeroed, as
+  Cemu does);
+- targets of one address and format at different sizes: Cemu keeps separate textures, here they
+  share one surface (the bloom blur's ping-pong targets do this; harmless on the title).
+- A segfault inside lavapipe's JIT code was seen once early in a run and not reproduced.
 
 ### 2. Extend the route, then rerun G0 and the native check
 
@@ -227,6 +225,13 @@ with the reference, and rerun:
   takes about 25 min; `wwhd-null` about 12 min.
 - **Cemu's GX2 writes Cemu-only `IT_HLE_*` packets into display lists,** so their sizes differ
   from real GX2. That's why its gx2 stays (D12).
+- **Renderer facts found in G2:**
+  - the reference's screenshot N is the image its (N+1)th swap presents; compare accordingly;
+  - WWHD reuses memory for transient targets of other formats within a frame; the shadow map is a
+    2D array drawn per slice; the bloom chain's mip levels are drawn as separate targets;
+  - the G-buffer's normal target is never cleared; the reference zeroes it lazily when an
+    overlapping target overwrites it (texture-cache cleanup, wall-clock gated);
+  - the reference's depth clear also clears colour textures at the same address.
 
 ## Unfinished odds and ends
 

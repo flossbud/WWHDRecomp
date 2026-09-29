@@ -520,7 +520,7 @@ namespace wwhd::gpu
 			Copy& c = s_copies[{ surface.image, w, h, format }];
 			if (!c.img.image)
 			{
-				c.img = CreateImage(format, surface.aspect, w, h, VK_IMAGE_USAGE_SAMPLED_BIT);
+				c.img = CreateImage(format, surface.aspect, w, h, VK_IMAGE_USAGE_SAMPLED_BIT, surface.layers);
 				ForgetImage(c.img.image);                              // a reused handle's stale views
 			}
 			if (c.written != surface.written)
@@ -529,7 +529,7 @@ namespace wwhd::gpu
 				Transition(c.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 				if (w > surface.width || h > surface.height)           // the part the surface doesn't cover
 				{
-					VkImageSubresourceRange all{ c.img.aspect, 0, 1, 0, 1 };
+					VkImageSubresourceRange all{ c.img.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
 					if (c.img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT)
 					{
 						VkClearDepthStencilValue v{};
@@ -543,7 +543,7 @@ namespace wwhd::gpu
 				}
 				Transition(surface, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 				VkImageCopy r{};
-				r.srcSubresource = r.dstSubresource = { surface.aspect, 0, 0, 1 };
+				r.srcSubresource = r.dstSubresource = { surface.aspect, 0, 0, surface.layers };
 				r.extent = { std::min(w, surface.width), std::min(h, surface.height), 1 };
 				vkCmdCopyImage(s.cmd, surface.image, surface.layout, c.img.image, c.img.layout, 1, &r);
 				Transition(c.img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -665,12 +665,7 @@ namespace wwhd::gpu
 	{
 		for (auto it = s_copies.lower_bound({ image, 0, 0, VK_FORMAT_UNDEFINED }); it != s_copies.end() && std::get<0>(it->first) == image;)
 		{
-			Image& img = it->second.img;
-			ForgetImage(img.image);
-			if (img.view)
-				vkDestroyImageView(s.device, img.view, nullptr);
-			vkDestroyImage(s.device, img.image, nullptr);
-			vkFreeMemory(s.device, img.memory, nullptr);
+			DestroyImage(it->second.img);
 			it = s_copies.erase(it);
 		}
 		auto it = s_surfaceViewCache.find(image);
@@ -785,7 +780,10 @@ namespace wwhd::gpu
 				EndRendering();
 				Transition(*surface, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 			}
-			VkImageView v = View(img->image, img->format, img->aspect, viewType, 0, 1, 0, 1, comp, s_surfaceViewCache[img->image]);
+			// array slices as the texture registers select them (cascaded shadow maps are drawn slice by slice)
+			uint32 baseLayer = std::min(firstSlice, img->layers - 1);
+			uint32 layers = viewType == VK_IMAGE_VIEW_TYPE_2D_ARRAY ? std::clamp(numSlices, 1u, img->layers - baseLayer) : 1;
+			VkImageView v = View(img->image, img->format, img->aspect, viewType, 0, 1, baseLayer, layers, comp, s_surfaceViewCache[img->image]);
 			return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
 		}
 

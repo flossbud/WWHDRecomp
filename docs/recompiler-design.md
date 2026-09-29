@@ -494,6 +494,10 @@ GPU thread and never writes guest memory, so the trace is the same with it on or
   and decoded from guest memory by Cemu's texture loader (addrlib and its `TextureDecoder`s, kept
   in `wwhd-null`), in the formats Cemu's Vulkan renderer picks, and reloaded when a per-frame hash
   of their data changes. See the G2 status for copies and mip chains.
+* **Surfaces** also have array layers (a target attaches the slice `CB_COLORn_VIEW`/`DB_DEPTH_VIEW`
+  selects; clears clear their slices). Guest memory is shared by all of them but each has its own
+  image, so a surface overwritten by a later write to overlapping memory is reset to zero at the
+  next swap, as the reference's texture cache does lazily (G2 status).
 * **GX2's GPU-side surface copies** (`IT_HLE_COPY_SURFACE_NEW`) don't occur on the route; the
   renderer only reports them (`WWHD_RENDER_COPIES`). The CPU copies are done by the null GPU.
 
@@ -663,7 +667,7 @@ There are two tracks. They meet at M4.
 |---|---|---|
 | G0 ✅ (route) | Trace | The D15 trace scopes the backend. |
 | G1 ✅ | Shader corpus | Every program in the game files is extracted and translated to SPIR-V that passes `spirv-val`, and every program seen in the G0 trace is in the corpus. |
-| G2 | First pixels | The title screen (TV) renders within tolerance of the reference on lavapipe. |
+| G2 ✅ (title) | First pixels | The title screen (TV) renders within tolerance of the reference on lavapipe. |
 | G3 | The route | Every scene on the scripted route is within tolerance. |
 
 **Together**
@@ -716,36 +720,52 @@ Not yet in: the yield budget (D6). The runtime behind `rt_*` came with M3.
 * **What `spirv-val` proves:** well-formed SPIR-V, not that it renders what the reference renders.
   That is G2's check.
 
-**G2 status (2026-09-29):** the title screen renders; not yet closed. `WWHD_RENDER=vk` turns on a
-Vulkan renderer inside `wwhd-null` (`src/gpu/vk`, D13 as built), fed by the null GPU's register
-file. On lavapipe along the route to f600 it runs 929,455 draws (0 skipped), 547 shader variants
-and 397 pipelines. Compared with the reference's captures every 30 frames
-(`tools/reference/compare_frames.py`):
+**G2 status (2026-09-29):** done on the route to the title screen. `WWHD_RENDER=vk` turns on a Vulkan
+renderer inside `wwhd-null` (`src/gpu/vk`, D13 as built), fed by the null GPU's register file. On
+lavapipe along the route to f600 it runs 929,455 draws (0 skipped), 547 shader variants and 397
+pipelines. Against the reference's captures every 30 frames (`tools/reference/compare_frames.py`):
 
-* the file-creation and fade frames (f150-f390) at 36-53 dB, 0-0.02% of pixels off by more than 16;
-* the title (f420-f600) at 24.6-27.4 dB, 2.5-12% of pixels off: the same image, but the bloom halo
-  (around the sun, cloud edges, the wind ribbon) is smaller than the reference's;
-* the logo frames f30 and f60 at 44 and 37 dB, the black frames identical.
+* f30-f480, 16 frames: 6 identical, 10 at 94.9-116 dB (no pixel more than 3 levels off);
+* f510-f600 at 60.7-70.9 dB, 0-0.01% of pixels off by more than 16: faint speckle on the island's
+  outlines, which is the reference's own lazy texture resets (below);
+* tolerance: `compare_frames.py --threshold 60` (references against each other are at 73-75 dB).
 
-The OS-call trace with rendering on equals `det-null/a.zst` (59,531,239 calls to f600). Getting
-there took four fixes beyond draws themselves, found by dumping every surface at a frame
-(`WWHD_RENDER_DUMP=N`):
+The OS-call trace with rendering on equals `det-null/a.zst` (59,531,239 calls to f600).
 
-* the game reuses memory for transient targets of other formats within a frame, so a texture
-  samples the surface *last written* at its address;
-* render targets are allocated padded (1920x1088 for 1920x1080), so a texture of another size
-  samples a copy of the surface's top-left corner, as Cemu's texture cache copies between
-  overlapping textures;
-* the bloom chain is one R11G11B10 texture whose mip levels are drawn as separate targets, so a
-  surface-backed texture with mips is assembled level by level from the surfaces at each level's
-  address;
-* `GX2CopySurface`'s CPU copies (all 50 at boot involve a linear-special surface) are done in guest
-  memory, as the reference's `LatteSurfaceCopy_CopyInRAM` does. The null GPU used to skip them. It
-  doesn't change the title frames, and without rendering the whole-route trace still equals
-  `null-route.zst` (1,124,796,468 calls, native, 380 s).
+**What it took.** The tools were two dumps at the same swap, the reference's (cemu-patches/0012,
+`CEMU_TEX_DUMP_FRAME`, `CEMU_TEX_WATCH`) and ours (`WWHD_RENDER_DUMP`), compared surface by surface
+in the reference's write order (`tools/reference/compare_dumps.py`), and a per-draw trace with a
+pixel probe (`WWHD_RENDER_TRACE`). Beyond the draws themselves:
 
-Open for G2: the bloom halo, and a numeric tolerance (D16.3 says SSIM; references against each
-other are at 73-75 dB PSNR).
+* **Capture timing.** The reference's shot N is the image its (N+1)th swap presents. The apparent
+  "bloom halo" difference on the title was that off-by-one on moving frames; the renderer now
+  captures the same way.
+* **Transient targets share memory.** The game puts targets of other formats at one address within
+  a frame, so a texture samples the surface *last written* at its address.
+* **Padded targets.** Targets are allocated padded (1920x1088 for 1920x1080), so a texture of
+  another size samples a copy of the surface's top-left corner, as Cemu's texture cache copies
+  between overlapping textures.
+* **Mip chains drawn level by level.** The bloom chain is one R11G11B10 texture whose levels are
+  drawn as separate targets, so a surface-backed texture with mips is assembled from the surfaces
+  at each level's address.
+* **Array targets.** The shadow map is a D16 2D array drawn slice by slice (`DB_DEPTH_VIEW`) and
+  cleared per slice; surfaces have array layers, draws attach the selected slice, and textures
+  sample the slices their registers select. Before this, all slices collapsed into one and the
+  title's sea showed a shadow the reference doesn't.
+* **Overwritten surfaces read zero.** The G-buffer's normal target is never cleared; a 1920x1080 R8
+  target inside its memory overwrites part of it every frame. The reference's texture cache then
+  deletes the stale texture and reloads it from guest memory (zeros), at a swap, once a
+  round-robin scan finds it unused for 100 ms of wall time, so after a host-dependent few frames.
+  The renderer resets such surfaces at every swap. The remaining f510-f600 difference is the
+  reference's few frames of old normals on edges before its reset.
+* **Depth clears clear colour too.** The reference's depth clear also clears the colour textures
+  that start at the same address; the renderer does the same.
+* **`GX2CopySurface`'s CPU copies** (all 50 at boot involve a linear-special surface) are done in
+  guest memory, as the reference's `LatteSurfaceCopy_CopyInRAM` does; the null GPU used to skip
+  them. Without rendering the whole-route trace still equals `null-route.zst` (1,124,796,468 calls,
+  native, 380 s).
+
+Seen once and not reproduced: a segfault inside lavapipe's JIT code early in a run.
 
 **M4 status (2026-09-29):** done on the scripted route. `WWHD_NATIVE=on` runs the recompiled
 program: the hook calls the generated function at every entry, generated code ticks and yields

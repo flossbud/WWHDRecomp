@@ -217,25 +217,26 @@ namespace wwhd::gpu
 		b.newLayout = layout;
 		b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		b.image = img.image;
-		b.subresourceRange = { img.aspect, 0, 1, 0, 1 };
+		b.subresourceRange = { img.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
 		vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr,
 			0, nullptr, 1, &b);
 		img.layout = layout;
 	}
 
-	Image CreateImage(VkFormat format, VkImageAspectFlags aspect, uint32 w, uint32 h, VkImageUsageFlags usage)
+	Image CreateImage(VkFormat format, VkImageAspectFlags aspect, uint32 w, uint32 h, VkImageUsageFlags usage, uint32 layers)
 	{
 		Image img;
 		img.format = format;
 		img.aspect = aspect;
 		img.width = w;
 		img.height = h;
+		img.layers = layers;
 		VkImageCreateInfo ci{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
 		ci.imageType = VK_IMAGE_TYPE_2D;
 		ci.format = format;
 		ci.extent = { w, h, 1 };
 		ci.mipLevels = 1;
-		ci.arrayLayers = 1;
+		ci.arrayLayers = layers;
 		ci.samples = VK_SAMPLE_COUNT_1_BIT;
 		ci.tiling = VK_IMAGE_TILING_OPTIMAL;
 		ci.usage = usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -258,6 +259,38 @@ namespace wwhd::gpu
 			Check(vkCreateImageView(s.device, &vi, nullptr, &img.view), "vkCreateImageView");
 		}
 		return img;
+	}
+
+	VkImageView LayerView(Image& img, uint32 layer)
+	{
+		if (layer == 0)
+			return img.view;
+		if (img.layerViews.size() < layer)
+			img.layerViews.resize(layer, VK_NULL_HANDLE);
+		VkImageView& v = img.layerViews[layer - 1];
+		if (!v)
+		{
+			VkImageViewCreateInfo vi{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+			vi.image = img.image;
+			vi.viewType = VK_IMAGE_VIEW_TYPE_2D;
+			vi.format = img.format;
+			vi.subresourceRange = { img.aspect, 0, 1, layer, 1 };
+			Check(vkCreateImageView(s.device, &vi, nullptr, &v), "vkCreateImageView");
+		}
+		return v;
+	}
+
+	void DestroyImage(Image& img)
+	{
+		ForgetImage(img.image);
+		for (VkImageView v : img.layerViews)
+			if (v)
+				vkDestroyImageView(s.device, v, nullptr);
+		if (img.view)
+			vkDestroyImageView(s.device, img.view, nullptr);
+		vkDestroyImage(s.device, img.image, nullptr);
+		vkFreeMemory(s.device, img.memory, nullptr);
+		img = Image{};
 	}
 
 	VkDeviceSize RingAlloc(VkDeviceSize size, VkDeviceSize align)
@@ -328,18 +361,19 @@ namespace wwhd::gpu
 	}
 
 	// ---- surfaces ----------------------------------------------------------------------------
-	Image& Surface(uint32 addr, uint32 gx2, bool depth, uint32 w, uint32 h)
+	Image& Surface(uint32 addr, uint32 gx2, bool depth, uint32 w, uint32 h, uint32 layers)
 	{
 		Image& img = s.surfaces[{ addr, gx2 | (depth ? 0x80000000u : 0) }];
-		if (img.image && img.width >= w && img.height >= h)
+		img.bytes = std::max(img.bytes, w * h * layers * Latte::GetFormatBits((Latte::E_GX2SURFFMT)gx2) / 8);
+		if (img.image && img.width >= w && img.height >= h && img.layers >= layers)
 			return img;
 		EndRendering();                                             // clears and copies follow
 		Format f = depth ? DepthFormat(gx2) : ColorFormat(gx2);
 		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT |
 			(depth ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
-		Image grown = CreateImage(f.vk, f.aspect, std::max(w, img.width), std::max(h, img.height), usage);
+		Image grown = CreateImage(f.vk, f.aspect, std::max(w, img.width), std::max(h, img.height), usage, std::max(layers, img.layers));
 		Transition(grown, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);   // start from zero, not undefined contents
-		VkImageSubresourceRange all{ f.aspect, 0, 1, 0, 1 };
+		VkImageSubresourceRange all{ f.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
 		if (depth)
 		{
 			VkClearDepthStencilValue zero{};
@@ -355,18 +389,54 @@ namespace wwhd::gpu
 			Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 			Transition(grown, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 			VkImageCopy c{};
-			c.srcSubresource = c.dstSubresource = { img.aspect, 0, 0, 1 };
+			c.srcSubresource = c.dstSubresource = { img.aspect, 0, 0, img.layers };
 			c.extent = { img.width, img.height, 1 };
 			vkCmdCopyImage(s.cmd, img.image, img.layout, grown.image, grown.layout, 1, &c);
 			SubmitAndWait();                                        // then the old image can go
-			ForgetImage(img.image);
-			if (img.view)
-				vkDestroyImageView(s.device, img.view, nullptr);
-			vkDestroyImage(s.device, img.image, nullptr);
-			vkFreeMemory(s.device, img.memory, nullptr);
 		}
+		uint32 bytes = img.bytes;
+		uint64 written = img.written, resetFor = img.resetFor;
+		if (img.image)
+			DestroyImage(img);
 		img = grown;
+		img.bytes = bytes;
+		img.written = written;
+		img.resetFor = resetFor;
 		return img;
+	}
+
+	// Guest memory is shared by every surface in it; here each surface has its own image. When a
+	// surface was written after another it overlaps, the older one's data is gone on the real GPU.
+	// The reference's texture cache then deletes the older texture and reloads it from guest memory
+	// (LatteTC_CleanupCheckTexture with LatteTC_IsTextureDataOverwritten; the GPU never writes guest
+	// memory, so it reloads zeros), at a swap once the texture hasn't been used for 100 ms. That makes
+	// its timing depend on the host; here it happens at every swap: overwritten surfaces read zero.
+	static void ResetOverwrittenSurfaces()
+	{
+		for (auto& [key, img] : s.surfaces)
+		{
+			if (!img.image)
+				continue;
+			uint64 newest = 0;
+			for (auto& [okey, other] : s.surfaces)
+				if (&other != &img && other.image && okey.first < key.first + img.bytes && key.first < okey.first + other.bytes)
+					newest = std::max(newest, other.written);
+			if (newest <= img.written || newest <= img.resetFor)
+				continue;
+			img.resetFor = newest;
+			Transition(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			VkImageSubresourceRange all{ img.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
+			if (img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT)
+			{
+				VkClearDepthStencilValue zero{};
+				vkCmdClearDepthStencilImage(s.cmd, img.image, img.layout, &zero, 1, &all);
+			}
+			else
+			{
+				VkClearColorValue zero{};
+				vkCmdClearColorImage(s.cmd, img.image, img.layout, &zero, 1, &all);
+			}
+		}
 	}
 
 	// ---- debugging: WWHD_RENDER_DUMP=N writes every surface at frame N as PPM, into CEMU_SHOT_DIR --
@@ -539,8 +609,8 @@ namespace wwhd::gpu
 		uint32 mask = p[0];
 		if ((mask & 1) && (uint32)p[1])
 		{
-			uint32 w = std::max<uint32>(p[4], p[6]), h = p[5];
-			Image& img = Surface(p[1], p[2], false, w, h);
+			uint32 w = std::max<uint32>(p[4], p[6]), h = p[5], first = p[7], count = std::max<uint32>(p[8], 1);
+			Image& img = Surface(p[1], p[2], false, w, h, first + count);
 			img.written = ++s.writes;
 			Transition(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 			VkClearColorValue c;
@@ -548,13 +618,13 @@ namespace wwhd::gpu
 			c.float32[1] = (float)(uint32)p[18] / 255.0f;
 			c.float32[2] = (float)(uint32)p[19] / 255.0f;
 			c.float32[3] = (float)(uint32)p[20] / 255.0f;
-			VkImageSubresourceRange range{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+			VkImageSubresourceRange range{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, first, count };
 			vkCmdClearColorImage(s.cmd, img.image, img.layout, &c, 1, &range);
 		}
 		if ((mask & 6) && (uint32)p[9])
 		{
-			uint32 w = std::max<uint32>(p[12], p[14]), h = p[13];
-			Image& img = Surface(p[9], p[10], true, w, h);
+			uint32 w = std::max<uint32>(p[12], p[14]), h = p[13], first = p[15], count = std::max<uint32>(p[16], 1);
+			Image& img = Surface(p[9], p[10], true, w, h, first + count);
 			img.written = ++s.writes;
 			Transition(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 			VkClearDepthStencilValue v;
@@ -565,9 +635,23 @@ namespace wwhd::gpu
 				((mask & 4) && (img.aspect & VK_IMAGE_ASPECT_STENCIL_BIT) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
 			if (aspect)
 			{
-				VkImageSubresourceRange range{ aspect, 0, 1, 0, 1 };
+				VkImageSubresourceRange range{ aspect, 0, 1, first, count };
 				vkCmdClearDepthStencilImage(s.cmd, img.image, img.layout, &v, 1, &range);
 			}
+			// the reference's depth clear also clears the color textures that start at the address and are
+			// no wider, to the depth value (LatteRenderTarget_applyTextureDepthClear), unless it clears stencil
+			if ((mask & 2) && !(mask & 4))
+				for (auto it = s.surfaces.lower_bound({ (uint32)p[9], 0 }); it != s.surfaces.end() && it->first.first == (uint32)p[9]; ++it)
+				{
+					Image& c = it->second;
+					if (!c.image || (c.aspect & VK_IMAGE_ASPECT_DEPTH_BIT) || c.width > w || first >= c.layers)
+						continue;
+					c.written = ++s.writes;
+					Transition(c, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+					VkClearColorValue cv{ { v.depth, v.depth, v.depth, v.depth } };
+					VkImageSubresourceRange range{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, first, std::min(count, c.layers - first) };
+					vkCmdClearColorImage(s.cmd, c.image, c.layout, &cv, 1, &range);
+				}
 		}
 	}
 
@@ -595,7 +679,8 @@ namespace wwhd::gpu
 		vkCmdBlitImage(s.cmd, src.image, src.layout, dst.image, dst.layout, 1, &b, VK_FILTER_NEAREST);
 	}
 
-	// IT_HLE_TRIGGER_SCANBUFFER_SWAP: one per GX2SwapScanBuffers, so frame N is the Nth swap
+	// IT_HLE_TRIGGER_SCANBUFFER_SWAP: one per GX2SwapScanBuffers, so frame N is the Nth swap. Shot N
+	// is the image the next swap presents, as in the reference (renderer.h).
 	void RendererSwap()
 	{
 		EndRendering();
@@ -604,9 +689,9 @@ namespace wwhd::gpu
 		static const uint32 dumpFrame = [] { const char* e = getenv("WWHD_RENDER_DUMP"); return e ? (uint32)atoi(e) : 0u; }();
 		if (dumpFrame && s.frame == dumpFrame)
 			DumpSurfaces(s.frame);
-		if (s.shotFrames.count(s.frame) && s.scan[0].image)
-			WritePPM(s.scan[0], s.frame);
-		else
-			SubmitAndWait();
+		if (s.frame > 1 && s.shotFrames.count(s.frame - 1) && s.scan[0].image)
+			WritePPM(s.scan[0], s.frame - 1);
+		ResetOverwrittenSurfaces();
+		SubmitAndWait();
 	}
 }
