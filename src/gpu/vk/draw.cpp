@@ -165,6 +165,15 @@ namespace wwhd::gpu
 				return sh;
 			}
 			std::string glsl = sh->dec->strBuf_shaderSource->c_str();
+			// WWHD_RENDER_SHADERS=dir: every shader's GLSL as dir/<key>.<vs|ps>.glsl (the key is the one
+			// WWHD_RENDER_TRACE prints)
+			static const char* shaderDir = getenv("WWHD_RENDER_SHADERS");
+			if (shaderDir && *shaderDir)
+				if (FILE* f = fopen(fmt::format("{}/{:016x}.{}.glsl", shaderDir, key, vertex ? "vs" : "ps").c_str(), "wb"))
+				{
+					fwrite(glsl.data(), 1, glsl.size(), f);
+					fclose(f);
+				}
 			std::vector<uint32> spirv;
 			std::string log;
 			if (!CompileSpirv(glsl, vertex ? EShLangVertex : EShLangFragment, spirv, log))

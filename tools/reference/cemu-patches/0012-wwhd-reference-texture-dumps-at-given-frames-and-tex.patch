@@ -1,4 +1,4 @@
-From b8a8283745d45c54e4d0f9e23a7ca75d8e0d87fb Mon Sep 17 00:00:00 2001
+From 4d426eb6b6bb8c1afd7195bf051af01417b9c6c8 Mon Sep 17 00:00:00 2001
 From: flossbud <224492734+flossbud@users.noreply.github.com>
 Date: Tue, 29 Sep 2026 19:56:52 +0000
 Subject: [PATCH] wwhd-reference: texture dumps at given frames and
@@ -9,9 +9,9 @@ Subject: [PATCH] wwhd-reference: texture dumps at given frames and
  src/Cafe/HW/Latte/Core/LatteTexture.cpp       |  15 ++
  src/Cafe/HW/Latte/Core/LatteTextureCache.cpp  |   3 +
  src/Cafe/HW/Latte/Core/LatteTextureLegacy.cpp |   4 +
- .../Latte/Renderer/Vulkan/VulkanRenderer.cpp  | 152 ++++++++++++++++++
+ .../Latte/Renderer/Vulkan/VulkanRenderer.cpp  | 156 ++++++++++++++++++
  .../HW/Latte/Renderer/Vulkan/VulkanRenderer.h |   3 +
- 6 files changed, 209 insertions(+)
+ 6 files changed, 213 insertions(+)
 
 diff --git a/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp b/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp
 index f1556f8..1d28a48 100644
@@ -155,20 +155,20 @@ index 7b8a0b7..c814f78 100644
  	LatteTC_MarkTextureStillInUse(tex);
  	LatteTC_RegisterTexture(tex);
 diff --git a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
-index 599190a..74b8f5e 100644
+index 599190a..a89c5e0 100644
 --- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
 +++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
-@@ -4382,3 +4382,155 @@ VKRObjectDescriptorSet::~VKRObjectDescriptorSet()
+@@ -4382,3 +4382,159 @@ VKRObjectDescriptorSet::~VKRObjectDescriptorSet()
  	vkFreeDescriptorSets(vkr->GetLogicalDevice(), vkr->GetDescriptorPool(), 1, &descriptorSet);
  	performanceMonitor.vk.numDescriptorSets.decrement();
  }
 +
 +// wwhd-reference: texture dump for comparing render targets with the recomp's renderer
-+// (CEMU_TEX_DUMP_FRAME=N[,M...], CEMU_TEX_DUMP_DIR, CEMU_TEX_DUMP_ADDR). Every uncompressed texture's mips, slice 0, as PPM:
-+// unorm and float values clamped to 0..1, single-channel float and depth data stretched to their
-+// range (the same conversion as the recomp's WWHD_RENDER_DUMP). Names carry the physical address,
-+// mip address, GX2 format, size, mip, whether the GPU updated the texture, and its last write
-+// event counter (higher = written later).
++// (CEMU_TEX_DUMP_FRAME=N[,M...], CEMU_TEX_DUMP_DIR, CEMU_TEX_DUMP_ADDR). Every uncompressed
++// texture's mips and array slices: colour as 8-bit PPM (values clamped to 0..1), depth and
++// single-channel float as 16-bit PGM (0..1); the same conversion as the recomp's WWHD_RENDER_DUMP.
++// Names carry the physical address, mip address, GX2 format, size, mip, slice, whether the GPU
++// updated the texture, and its last write event counter (higher = written later).
 +static float _dumpHalfToFloat(uint16 h)
 +{
 +	uint32 e = (h >> 10) & 0x1F, m = h & 0x3FF;
@@ -211,6 +211,7 @@ index 599190a..74b8f5e 100644
 +		default: continue;
 +		}
 +		for (sint32 mip = 0; mip < tex->mipLevels; mip++)
++		for (sint32 slice = 0; slice < (t->Is3DTexture() ? 1 : std::max<sint32>(1, t->depth)); slice++)
 +		{
 +			uint32 w = tex->GetMipWidth(mip), h = tex->GetMipHeight(mip);
 +			VkDeviceSize size = (VkDeviceSize)w * h * bpp;
@@ -243,7 +244,7 @@ index 599190a..74b8f5e 100644
 +			VkImageSubresourceLayers layers{};
 +			layers.aspectMask = tex->GetImageAspect();
 +			layers.mipLevel = mip;
-+			layers.baseArrayLayer = 0;
++			layers.baseArrayLayer = slice;
 +			layers.layerCount = 1;
 +			barrier_image<ANY_TRANSFER | IMAGE_WRITE, TRANSFER_READ>(tex, layers, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 +			VkBufferImageCopy region{};
@@ -286,23 +287,26 @@ index 599190a..74b8f5e 100644
 +				default: o[0] = p[0] / 255.0f; o[1] = p[1] / 255.0f; o[2] = p[2] / 255.0f; break;
 +				}
 +			}
-+			float lo = 0.0f, hi = 1.0f;
-+			if (depth || fmt == VK_FORMAT_R32_SFLOAT || fmt == VK_FORMAT_R16_SFLOAT)
++			// single-channel data (depth, R16/R32 float) as exact 16-bit grey (PGM, 0..1), the rest as 8-bit RGB
++			bool grey = depth || fmt == VK_FORMAT_R32_SFLOAT || fmt == VK_FORMAT_R16_SFLOAT || fmt == VK_FORMAT_R16_UNORM;
++			std::vector<uint8> out(n * (grey ? 2 : 3));
++			for (size_t i = 0; i < n; i++)
 +			{
-+				lo = std::numeric_limits<float>::max(), hi = -std::numeric_limits<float>::max();
-+				for (size_t i = 0; i < n; i++)
-+					lo = std::min(lo, rgb[i * 3]), hi = std::max(hi, rgb[i * 3]);
-+				if (hi <= lo)
-+					hi = lo + 1.0f;
++				if (grey)
++				{
++					uint16 g = (uint16)std::clamp(rgb[i * 3] * 65535.0f + 0.5f, 0.0f, 65535.0f);
++					out[i * 2] = (uint8)(g >> 8);
++					out[i * 2 + 1] = (uint8)g;
++				}
++				else
++					for (int c = 0; c < 3; c++)
++						out[i * 3 + c] = (uint8)std::clamp(rgb[i * 3 + c] * 255.0f + 0.5f, 0.0f, 255.0f);
 +			}
-+			std::vector<uint8> out(n * 3);
-+			for (size_t i = 0; i < n * 3; i++)
-+				out[i] = (uint8)std::clamp((rgb[i] - lo) / (hi - lo) * 255.0f + 0.5f, 0.0f, 255.0f);
-+			std::string path = fmt::format("{}/tex{:06}_{:08x}_{:08x}_{:x}{}_{}x{}_m{}_{}_w{}.ppm", dir, frame, t->physAddress, t->physMipAddress,
-+				(uint32)t->format, t->isDepth ? "d" : "", w, h, mip, t->isUpdatedOnGPU ? "gpu" : "ram", t->lastWriteEventCounter);
++			std::string path = fmt::format("{}/tex{:06}_{:08x}_{:08x}_{:x}{}_{}x{}_m{}_s{}_{}_w{}.{}", dir, frame, t->physAddress, t->physMipAddress,
++				(uint32)t->format, t->isDepth ? "d" : "", w, h, mip, slice, t->isUpdatedOnGPU ? "gpu" : "ram", t->lastWriteEventCounter, grey ? "pgm" : "ppm");
 +			if (FILE* f = fopen(path.c_str(), "wb"))
 +			{
-+				fprintf(f, "P6\n%u %u\n255\n", w, h);
++				fprintf(f, grey ? "P5\n%u %u\n65535\n" : "P6\n%u %u\n255\n", w, h);
 +				fwrite(out.data(), 1, out.size(), f);
 +				fclose(f);
 +				count++;

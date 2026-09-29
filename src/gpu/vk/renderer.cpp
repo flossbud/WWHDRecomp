@@ -439,7 +439,8 @@ namespace wwhd::gpu
 		}
 	}
 
-	// ---- debugging: WWHD_RENDER_DUMP=N writes every surface at frame N as PPM, into CEMU_SHOT_DIR --
+	// ---- debugging: WWHD_RENDER_DUMP=N writes every surface (every array layer) at frame N, into
+	// CEMU_SHOT_DIR: colour as 8-bit PPM, depth and single-channel float as 16-bit PGM ------------
 	static float HalfToFloat(uint16 h)
 	{
 		uint32 e = (h >> 10) & 0x1F, m = h & 0x3FF;
@@ -458,9 +459,8 @@ namespace wwhd::gpu
 	{
 		EndRendering();
 		for (auto& [key, img] : s.surfaces)
+		for (uint32 layer = 0; img.image && layer < img.layers; layer++)
 		{
-			if (!img.image)
-				continue;
 			bool depth = img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT;
 			uint32 bpp;
 			switch (img.format)
@@ -486,7 +486,7 @@ namespace wwhd::gpu
 			vkBindBufferMemory(s.device, buf, mem, 0);
 			Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 			VkBufferImageCopy r{};
-			r.imageSubresource = { depth ? (VkImageAspectFlags)VK_IMAGE_ASPECT_DEPTH_BIT : img.aspect, 0, 0, 1 };
+			r.imageSubresource = { depth ? (VkImageAspectFlags)VK_IMAGE_ASPECT_DEPTH_BIT : img.aspect, 0, layer, 1 };
 			r.imageExtent = { img.width, img.height, 1 };
 			vkCmdCopyImageToBuffer(s.cmd, img.image, img.layout, buf, 1, &r);
 			SubmitAndWait();
@@ -520,24 +520,27 @@ namespace wwhd::gpu
 				default: o[0] = p[0] / 255.0f; o[1] = p[1] / 255.0f; o[2] = p[2] / 255.0f; break;
 				}
 			}
-			// single-channel data (depth and the like) is stretched to its range, to be visible
-			float lo = 0.0f, hi = 1.0f;
-			if (depth || img.format == VK_FORMAT_R32_SFLOAT || img.format == VK_FORMAT_R16_SFLOAT)
+			// single-channel data (depth, R16/R32 float) as exact 16-bit grey (PGM, 0..1), the rest as
+			// 8-bit RGB: the reference's texture dump does the same (cemu-patches/0012)
+			bool grey = depth || img.format == VK_FORMAT_R32_SFLOAT || img.format == VK_FORMAT_R16_SFLOAT;
+			std::vector<uint8> out(n * (grey ? 2 : 3));
+			for (size_t i = 0; i < n; i++)
 			{
-				lo = FLT_MAX, hi = -FLT_MAX;
-				for (size_t i = 0; i < n; i++)
-					lo = std::min(lo, rgb[i * 3]), hi = std::max(hi, rgb[i * 3]);
-				if (hi <= lo)
-					hi = lo + 1.0f;
+				if (grey)
+				{
+					uint16 g = (uint16)std::clamp(rgb[i * 3] * 65535.0f + 0.5f, 0.0f, 65535.0f);
+					out[i * 2] = (uint8)(g >> 8);
+					out[i * 2 + 1] = (uint8)g;
+				}
+				else
+					for (int c = 0; c < 3; c++)
+						out[i * 3 + c] = (uint8)std::clamp(rgb[i * 3 + c] * 255.0f + 0.5f, 0.0f, 255.0f);
 			}
-			std::vector<uint8> out(n * 3);
-			for (size_t i = 0; i < n * 3; i++)
-				out[i] = (uint8)std::clamp((rgb[i] - lo) / (hi - lo) * 255.0f + 0.5f, 0.0f, 255.0f);
-			std::string path = fmt::format("{}/dump{:06}_{:08x}_{:x}{}_{}x{}.ppm", s.shotDir, frame, key.first, key.second & 0xFFFF,
-				depth ? "d" : "", img.width, img.height);
+			std::string path = fmt::format("{}/dump{:06}_{:08x}_{:x}{}_{}x{}_s{}.{}", s.shotDir, frame, key.first, key.second & 0xFFFF,
+				depth ? "d" : "", img.width, img.height, layer, grey ? "pgm" : "ppm");
 			if (FILE* f = fopen(path.c_str(), "wb"))
 			{
-				fprintf(f, "P6\n%u %u\n255\n", img.width, img.height);
+				fprintf(f, grey ? "P5\n%u %u\n65535\n" : "P6\n%u %u\n255\n", img.width, img.height);
 				fwrite(out.data(), 1, out.size(), f);
 				fclose(f);
 			}

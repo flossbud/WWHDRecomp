@@ -70,7 +70,7 @@ What it took. Each numbered item is a patch; the last is a profile setting:
 | 0009 | `CEMU_SWKBD_AUTO` answers the system keyboard (name entry) | New Game asks for a name through swkbd. |
 | 0010 | Screenshots written aside and renamed | With a real GPU the render thread lags the CPU; exit-at-frame cut the last capture in half. |
 | 0011 | Execution seam: `g_ppcExecuteHook`, null by default, replaces the interpreter loop in `__OSFiberThreadEntry` and `PPCCore_executeCallbackInternal`; the trace's exit-at-frame runs `at_quick_exit` handlers | Not a determinism fix: it is where the recompiled program's runtime (`src/runtime`, design D1) takes over. With the hook null the reference is unchanged (600 frames, 59,531,239 calls equal to the baseline). |
-| 0012 | Texture dumps and a texture-cache log: `CEMU_TEX_DUMP_FRAME=N[,M...]` writes every uncompressed GPU-side texture (all mips, slice 0) as PPM into `CEMU_TEX_DUMP_DIR` at those swaps (`CEMU_TEX_DUMP_ADDR=hex` limits it to one address); `CEMU_TEX_WATCH=hex` logs creation, deletion, reloads, syncs and clears of the textures at that address | Not a determinism fix: ground truth for the recomp's renderer (G2). `compare_dumps.py` compares a dump with the renderer's (`WWHD_RENDER_DUMP`). Off unless set. |
+| 0012 | Texture dumps and a texture-cache log: `CEMU_TEX_DUMP_FRAME=N[,M...]` writes every uncompressed GPU-side texture (all mips and array slices; colour as 8-bit PPM, depth and single-channel float as 16-bit PGM) into `CEMU_TEX_DUMP_DIR` at those swaps (`CEMU_TEX_DUMP_ADDR=hex` limits it to one address); `CEMU_TEX_WATCH=hex` logs creation, deletion, reloads, syncs and clears of the textures at that address | Not a determinism fix: ground truth for the recomp's renderer (G2). `compare_dumps.py` compares a dump with the renderer's (`WWHD_RENDER_DUMP`). Off unless set. |
 | profile | Single-core *interpreter* (`0005000010143500.ini`) | The single-core recompiler's background JIT made timeslice boundaries depend on host timing. |
 
 `g0_gx2.py TRACE --imports build/recomp/imports.cpp` (design D15, G0) lists every GX2 call on a
@@ -88,6 +88,10 @@ a difference starts. Two things in the reference's texture cache matter for such
   (25 textures per swap) finds it unused for 100 ms of wall time. Which frames that happens at
   depends on the host; the renderer does it at every swap.
 * Its depth clears also clear the color textures that start at the same address, to the depth value.
+* A mip level the game draws as a separate target stays unrelated to the chain in some cases: the
+  ambient-occlusion depth chain (960x540 R16F, level 1 drawn at 512x270) reads zeros for level 1,
+  so the reference's gameplay has weaker ambient occlusion than the console. The recomp's renderer
+  reads what was drawn.
 
 `route.sh OUT FRAMES ROUTE BASELINE` is `determinism.sh` with one run: it plays the route once and
 compares the trace with a known-good one (for example `wwhd-null` in diff mode against

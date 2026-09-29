@@ -168,9 +168,16 @@ reference, most within one level. Next, the same comparison over the whole route
 reference's captures go (`survey.sh` on both with the same frames; `compare_frames.py --threshold
 60`). When a frame differs, compare surfaces at that swap: `CEMU_TEX_DUMP_FRAME` on the reference,
 `WWHD_RENDER_DUMP` on ours, `tools/reference/compare_dumps.py`, then `WWHD_RENDER_TRACE` with a pixel
-to find the draw. First gameplay numbers, from the save route (Link on the Outset dock,
-f900-f1800): 40-45 dB, 0.2-0.9% of pixels off, concentrated on Beedle's shop ship and the objects
-at the screen's left edge; the menus and title in that run are exact. Untested so far because the title doesn't use them:
+to find the draw (`WWHD_RENDER_SHADERS=dir` writes each shader's GLSL for reading it). First gameplay
+numbers, from the save route (Link on the Outset dock, f900-f1800): 40-45 dB, 0.2-0.9% of pixels
+off, on Beedle's shop ship and the objects at the left edge; the title and menus are exact.
+**That difference is the reference's, not ours.** The ambient-occlusion pass samples a depth
+texture whose level 1 the game draws separately, at 960x540 R16F with level 1 at `20009000`
+(pitch 512, the same layout as the target drawn there). Cemu's texture cache never relates its own
+texture for that target to the chain, so its level 1 is zeros and its occlusion comes out weaker;
+the renderer reads what was drawn, as the console's shared memory would. With level 1 zeroed like
+Cemu's, the same frames are at 55-61 dB. Decide how comparisons should treat this (a reference
+fix, a quirk switch, or a known difference) before chasing the rest of G3. Untested so far because the title doesn't use them:
 - GPU-side `GX2CopySurface` (`IT_HLE_COPY_SURFACE_NEW`, only reported);
 - readback of a rendered surface into a linear-special destination (the reference reads back);
 - 3D textures, cube-map render targets, depth-stencil textures loaded from memory (zeroed, as
