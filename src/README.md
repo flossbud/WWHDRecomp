@@ -67,6 +67,12 @@ the order in which the linker pulls archive members, and with it host-side addre
 sees in registers. `build.sh` therefore links `wwhd-null` twice: once to learn which members it
 needs, then with those members as explicit objects in `wwhd`'s order.
 
+**Saves** live where Cemu keeps them: `portable/mlc01/usr/save/00050000/10143500/user/80000001/`
+(`cking.sav`, the Pictograph photos `cking_pic*.sav`, `cking_playlog.sav`). The game reads and
+writes them through Cemu's `nn_save` and FS, so saving and loading work as on the console. To start
+from an existing save, copy its files there; `tools/reference/run.sh` does it with `REF_SAVE=dir`
+(after `REF_FRESH` wipes the NAND).
+
 **The renderer** (G2, design D13 as built) is off unless `WWHD_RENDER=vk`. It needs a Vulkan 1.3
 device with dynamic rendering (lavapipe: `REF_GPU=llvmpipe` in `tools/reference/run.sh`). It draws on
 the GPU thread and never writes guest memory, so the trace is the same with it on or off. Options:

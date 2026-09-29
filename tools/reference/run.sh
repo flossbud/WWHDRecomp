@@ -22,6 +22,11 @@
 #                                 callers wait on it with `kill -0`
 #   REF_FRESH=1                   delete the emulated NAND (portable/mlc01: saves, account) first,
 #                                 so every run starts from the same state
+#   REF_SAVE=dir                  start from this save: the game's save files (cking.sav, the
+#                                 Pictograph photos cking_pic*.sav, cking_playlog.sav) are copied into
+#                                 the default account's save folder, replacing what is there (after
+#                                 REF_FRESH). Saves are game data: keep them outside git
+#                                 (/wwhd/data/saves on the worker).
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 # default: the patched build on the worker worker, else the extracted AppImage
@@ -39,6 +44,11 @@ export CEMU_NO_GAMEPAD=${CEMU_NO_GAMEPAD-1}; [ -z "$CEMU_NO_GAMEPAD" ] && unset 
 export CEMU_HLE_TRACE CEMU_HLE_TRACE_FILTER CEMU_HLE_TRACE_EXIT_FRAME CEMU_INPUT_SCRIPT CEMU_SHOT_FRAMES CEMU_SHOT_DIR
 export CEMU_SWKBD_AUTO=${CEMU_SWKBD_AUTO-Link}
 [ -n "${REF_FRESH:-}" ] && rm -rf "$portable/mlc01"
+if [ -n "${REF_SAVE:-}" ]; then
+    save=$portable/mlc01/usr/save/00050000/10143500/user/80000001   # USA title, Cemu's default account
+    ls "$REF_SAVE"/cking.sav >/dev/null
+    rm -rf "$save" && mkdir -p "$save" && cp "$REF_SAVE"/*.sav "$save/"
+fi
 mkdir -p "$portable/controllerProfiles" "$portable/gameProfiles"
 cp "$here/0005000010143500.ini" "$portable/gameProfiles/"
 cp "$here/controller0.xml" "$portable/controllerProfiles/controller0.xml"

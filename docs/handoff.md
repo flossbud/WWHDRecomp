@@ -94,6 +94,16 @@ select → name entry ("Link") → the legend intro → Aryll's dialogue → gam
 
 For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
 
+**Starting from a save.** The owner's 100% save (three quest logs, log 1: full Triforce, 3 pearls,
+20 hearts, Normal Mode, saved on Outset Island) is at `/wwhd/data/saves/wwhd_100` on the worker:
+`cking.sav`, 36 Pictograph photos, photo order and play log, extracted from the uploaded RAR (the
+archive is next to it). It is game data: never in git. `REF_SAVE=dir` (`run.sh`, so every harness
+script) installs a save into the default account's save folder on a fresh NAND;
+`routes/continue-100.txt` continues quest log 1 and is in gameplay on the Outset dock at f870,
+against f10450 for the new-game route. Baseline to f1800, **172,954,163 calls**: two reference runs
+identical (`/wwhd/data/traces/save-det/{a,b}.zst`), and `wwhd-null` native equals them in 69 s.
+Reference captures on llvmpipe every 60 frames: `/wwhd/data/g3/save-ref`.
+
 **Recompiler** (`tools/recomp/`, M1 and M2 done):
 - **`ppc.py`:** the decoder.
 - **`census.py`:** 2,351,474 instructions, 157 mnemonics, 0 undecodable. The game has no OE
@@ -158,7 +168,9 @@ reference, most within one level. Next, the same comparison over the whole route
 reference's captures go (`survey.sh` on both with the same frames; `compare_frames.py --threshold
 60`). When a frame differs, compare surfaces at that swap: `CEMU_TEX_DUMP_FRAME` on the reference,
 `WWHD_RENDER_DUMP` on ours, `tools/reference/compare_dumps.py`, then `WWHD_RENDER_TRACE` with a pixel
-to find the draw. Untested so far because the title doesn't use them:
+to find the draw. First gameplay numbers, from the save route (Link on the Outset dock,
+f900-f1800): 40-45 dB, 0.2-0.9% of pixels off, concentrated on Beedle's shop ship and the objects
+at the screen's left edge; the menus and title in that run are exact. Untested so far because the title doesn't use them:
 - GPU-side `GX2CopySurface` (`IT_HLE_COPY_SURFACE_NEW`, only reported);
 - readback of a rendered surface into a linear-special destination (the reference reads back);
 - 3D textures, cube-map render targets, depth-stencil textures loaded from memory (zeroed, as
@@ -169,7 +181,9 @@ to find the draw. Untested so far because the title doesn't use them:
 
 ### 2. Extend the route, then rerun G0 and the native check
 
-The route stops on Outset. D15 also wants sailing, a dungeon room, the menus and the Pictograph
+Routes can now start from the 100% save (above), so later locations no longer need the whole
+story first: warp with the Ballad of Gales, sail, or walk into a dungeon from `continue-100.txt`.
+The new-game route stops on Outset. D15 also wants sailing, a dungeon room, the menus and the Pictograph
 Box. Extend `routes/title-to-game.txt` (with `survey.sh` for contact sheets), record new baselines
 with the reference, and rerun:
 - `route.sh` in native mode against the new baseline;

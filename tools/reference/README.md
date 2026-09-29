@@ -119,6 +119,10 @@ deleting the vcpkg build trees.
 ## Still to do for M0a
 
 * ~~Hardware rendering~~: done (2026-09-29), see above.
+* **Routes from a save.** `REF_SAVE=dir` installs a save before boot (see `run.sh`).
+  `routes/continue-100.txt` continues quest log 1 of the 100% save (`/wwhd/data/saves/wwhd_100` on
+  the worker, not in git) and is in gameplay on the Outset dock at f870. Deterministic: two runs to
+  f1800 give identical traces (172,954,163 calls).
 * ~~Deeper coverage / input script~~: done. `determinism.sh OUT 10800 routes/title-to-game.txt`
   gives 1,124,796,468 identical records along the route into gameplay (2026-09-29). Screenshots
   of the two runs differ in a few hundred edge pixels (llvmpipe), which the CPU check ignores.

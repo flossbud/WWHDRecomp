@@ -1,0 +1,10 @@
+# Route: fresh boot with the 100% save installed (REF_SAVE=/wwhd/data/saves/wwhd_100), in
+# single-screen Pro-Controller mode, continuing the saved game. FRAME BUTTONS [FRAMES_HELD]; frames
+# are GX2SwapScanBuffers counts (see cemu-patches/0007,0008). Found with tools/reference/survey.sh.
+# With a save present there is no "Creating save data" screen: the title is up from ~f300.
+420 A 5        # title screen "Press Any Button" (up from ~f360)
+540 A 5        # Controller Selection (up from ~f480; cursor already on Pro Controller)
+660 A 5        # File Selection (up from ~f600; cursor on Quest Log 1: Outset Island)
+780 A 5        # Quest Log 1 (full Triforce, 3 pearls, 20 hearts, Normal Mode): cursor already on Start
+# f840 black while loading; f870+ gameplay: Link on the Outset Island dock, HUD up (20 hearts,
+# magic), Beedle's shop ship arriving. No input needed from here.
