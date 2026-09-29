@@ -69,7 +69,12 @@ What it took. Each numbered item is a patch; the last is a profile setting:
 | 0008 | Pro Controller scripted input through padscore/KPAD; `CEMU_NO_GAMEPAD` reports the GamePad absent | The project is single-screen, Pro Controller mode (design D17). |
 | 0009 | `CEMU_SWKBD_AUTO` answers the system keyboard (name entry) | New Game asks for a name through swkbd. |
 | 0010 | Screenshots written aside and renamed | With a real GPU the render thread lags the CPU; exit-at-frame cut the last capture in half. |
+| 0011 | Execution seam: `g_ppcExecuteHook`, null by default, replaces the interpreter loop in `__OSFiberThreadEntry` and `PPCCore_executeCallbackInternal`; the trace's exit-at-frame runs `at_quick_exit` handlers | Not a determinism fix: it is where the recompiled program's runtime (`src/runtime`, design D1) takes over. With the hook null the reference is unchanged (600 frames, 59,531,239 calls equal to the baseline). |
 | profile | Single-core *interpreter* (`0005000010143500.ini`) | The single-core recompiler's background JIT made timeslice boundaries depend on host timing. |
+
+`route.sh OUT FRAMES ROUTE BASELINE` is `determinism.sh` with one run: it plays the route once and
+compares the trace with a known-good one (for example `wwhd-null` in diff mode against
+`/wwhd/data/traces/null-route.zst`), in half the time.
 
 `hle_trace.py diff` normalizes Cemu's `PPCCallback<host pointer>` stub names, which change with
 ASLR. `--ignore-core` compares without the core index.

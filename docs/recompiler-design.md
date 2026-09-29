@@ -105,6 +105,10 @@ How each branch instruction is translated:
 | `bctr` otherwise | indirect tail call through the function table (D5) |
 | `bctrl` | indirect call through the function table (D5) |
 
+All 294 of WWHD's jump tables are runs of `b` instructions that the `bctr` jumps into, so the
+switch cases on CTR's slot address (table + 4k) and the slot's own `b` goes on (fixed in M3; until
+then the cases were the final targets and never matched).
+
 **Unknown instructions are errors.** The generator fails loudly rather than emitting a stub. Any
 exception must be added to a named allowlist.
 
@@ -165,7 +169,9 @@ Semantics that must be exact:
 ### D4. Imports call Cemu's HLE handlers directly
 
 When Cemu links the RPX, each import resolves to a trampoline word `(1<<26) | hleIndex`
-(`rpl_mapHLEImport`, `Cafe/OS/RPL/rpl.cpp:746`). WWHD has 426 imports.
+(`rpl_mapHLEImport`, `Cafe/OS/RPL/rpl.cpp:746`). WWHD has 408 imports (397 functions it calls,
+10 data symbols its code references; the count of 426 used until M3 included the 18 import-section
+symbols).
 
 * **Direct calls.** The generator knows every import symbol. A `bl` to an import emits
   `hle(ctx, IMPORT_coreinit_OSGetTime)`. At boot, a table maps each import to Cemu's handler via
@@ -178,6 +184,14 @@ When Cemu links the RPX, each import resolves to a trampoline word `(1<<26) | hl
 * **Indirect calls into the trampoline area** (`0x00E00000`) arrive through function pointers
   such as `MEMAllocFromDefaultHeap`, a *data* import. The function table (D5) maps trampoline
   addresses to the same HLE path.
+
+**As built (M3, `src/runtime/imports.cpp`).** Imports are bound from guest memory, not by name:
+the runtime follows every relocated branch to an import (3,643 sites) to its trampoline and reads
+the HLE opcode there, and rebuilds each data import's address from its relocated immediates (58,
+some with an addend: `_iob+0x10` is stdout). All sites of an import must agree, and the result is
+cross-checked against Cemu's name tables (`osLib_getFunctionIndex`, `osLib_getPointer`): 0
+differences. `rt_import` calls `PPCInterpreter_virtualHLE` with the trampoline's opcode, which
+records the call in the trace and charges the 300 cycles exactly as the interpreter does.
 
 ### D5. The function table is a host array indexed by guest address
 
@@ -197,6 +211,13 @@ The Phase 1 audit guarantees that every address-taken code location is a functio
 3 should never fire. If it does, that is a boundary bug to fix in `tools/ghidra/`.
 
 ### D6. Threads, yielding and stacks use Cemu's fibers
+
+> **Open for M4 (2026-09-29).** The reference now runs on a virtual clock (M0a): guest time *is* the
+> instruction count, and the timeslice boundaries, alarms and vsync all hang off it. "Coarse
+> accounting is fine" below predates that; native code that counts differently changes thread
+> interleaving and the trace stops matching the reference. M3 sidesteps it (diff mode leaves all
+> timing to the interpreter). How M4 accounts for guest time is decided with the owner before M4
+> starts, and recorded here.
 
 Every guest thread already runs on its own Cemu fiber: a ucontext with a 2 MB stack
 (`util/Fiber/FiberUnix.cpp`), scheduled over three host threads for the three cores.
@@ -242,6 +263,16 @@ There are three layers, all using Cemu's interpreter as the oracle, running in t
      functions whose side effects can be replayed.
    * Functions that call HLE can't be replayed: an allocation, a thread operation or a GPU submit
      would happen twice.
+   * **As built (M3, `src/runtime/diff.cpp`).** The native run comes first, at the call's entry,
+     with every store journaled (the old bytes); it is then rewound, memory from the journal and
+     registers from a copy. The interpreter runs the call as usual, charging cycles and being
+     preempted as the reference is, while the runtime decodes each store it executes. The two
+     are compared where the native run left the guest (its final LR, with its final stack
+     pointer), which also covers the GHS restore-and-exit helpers that return to their caller's
+     caller. Calls that were preempted are counted apart (other threads may change what they
+     read). A call that reaches an HLE trampoline would contradict the purity analysis and is
+     reported as escaped. Guest-visible behaviour stays the interpreter's, so the OS-call trace
+     still equals the reference's while every sampled call is checked on real game state.
 3. **End-to-end.** Boot to the title screen and a scripted gameplay path with frame dumps and GX2
    call traces. Compare against the unmodified reference Cemu on the same input script (D16), and
    check the frames by eye as well as by count.
@@ -268,6 +299,12 @@ not apply.
 
 **Task:** list which patches match WWHD. For each, either implement it as an override or confirm
 it is not needed. Assert at boot that no patch touched a native-dispatched range.
+
+**Found (M3).** The runtime hashes every function in guest memory against the RPX at boot. Exactly
+two differ, both Cemu's TWW patches: `f_027F9994` (the "TWW race condition": four calls to the
+mutex lock/unlock wrappers become `nop`s, to avoid a deadlock in single-core mode) and
+`f_028137E0` (the US "DSP kill channel" patch at `0x02813878`, `bge` → `b`). Both stay
+interpreted, and so would any native function that reaches them. They become overrides in M4.
 
 Cemu graphic-pack code patches (such as the FPS fix at `0x025AC25C`) are handled the same way:
 they become overrides only when wanted.
@@ -511,7 +548,7 @@ There are two tracks. They meet at M4.
 |---|---|---|
 | M1 ✅ | Instruction semantics | The generator emits all 157 mnemonics the game uses. The instruction fuzzer passes against Cemu's interpreter. |
 | M2 ✅ | Whole program compiles | All 39,705 functions generate with zero unknown instructions and zero unresolved branches, and compile with clang. |
-| M3 | Pure functions native | `native_dispatch` is on for pure functions, with sampled diff mode clean over the scripted route (null backend). |
+| M3 ✅ | Pure functions native | `native_dispatch` is on for pure functions, with sampled diff mode clean over the scripted route (null backend). |
 | M4 | Everything native | HLE calls direct, yield points in place, `GamePatch` handled. The GX2 call stream still matches the reference, and the interpreter fallback counter is 0. |
 
 **Graphics track**
@@ -558,7 +595,33 @@ warnings at `-O2`, `musttail` included, into 79 MB of objects. Things the genera
 * 9 `bcl` are conditional calls;
 * the jump-table `bctr`s become a `switch` on CTR.
 
-Not yet in: the yield budget (D6) and the runtime behind `rt_*` (M3).
+Not yet in: the yield budget (D6). The runtime behind `rt_*` came with M3.
+
+**M3 status (2026-09-29):** done. Every sampled call of a pure function along the scripted route runs
+natively and agrees with Cemu's interpreter, and the run's OS-call trace is still the reference's.
+
+* **The seam** is Cemu patch 0011: `g_ppcExecuteHook` in place of the interpreter loop in
+  `__OSFiberThreadEntry` and `PPCCore_executeCallbackInternal`, null by default. The reference with
+  the hook null (600 frames) and `wwhd-null` with the hook installed but interpreting (the whole
+  route, `determinism.sh`) both give traces identical to the baselines: 59,531,239 and
+  1,124,796,468 calls.
+* **The runtime** (`src/runtime`, linked into `wwhd-null` with the generated program) checks the
+  code against guest memory at boot (two functions patched by Cemu, D10) and binds the 408 imports
+  from it (D4). It implements all `rt_*`; the ones only non-pure code reaches (`rt_import`,
+  `rt_call_ctr`, `rt_jump_ctr`) are bound and checked but first run in M4.
+* **Diff mode** (D8.2 as built) over the whole route, checking each pure function's first 16 calls
+  and every 256th after that: 978,805,396 pure calls, 3,875,261 checked, **all equal** (2,696 of them
+  preempted mid-call), 0 escaped, 0 runaway, 0 native faults. 4,616 of the 12,968 pure functions
+  run on the route, and all 4,616 were checked and are clean (2,984 of them at least 16 times). The
+  trace equals `null-route.zst` (1,124,796,468 calls). The run takes 16 minutes, against 12
+  interpreting.
+* **Found on the way:** every jump-table `switch` was wrong since M2 (all 294 tables are `b` runs,
+  see D1); `_iob+0x10` was emitted as `environ` (relocations are now keyed by symbol); the GHS
+  restore-and-exit helpers need the check to end where the native run left the guest, not at the
+  entry's LR; and after a context switch `spr.XER` holds stale copies of CA/SO/OV.
+
+Diff mode leaves guest time to the interpreter. M4 has to decide how native code accounts for it
+(D6, open).
 
 **M0b status (2026-09-29):** done. `src/` builds two executables against the worker's Cemu
 build (`src/build.sh`). Both use our frontend (`src/frontend`, Cemu's `WindowSystem` without
@@ -586,7 +649,9 @@ The CPU track needs no rendering, and the graphics track can use Cemu's interpre
 1. **Cemu build footprint.** Can Cemu's OS libraries (CemuCafe minus Latte, gx2 and TCL), Config,
    Input, Audio and Util build without wx and without vcpkg's full dependency tree? M0b answers
    this, and the coupling shim (D12) is the known part.
-2. **`GamePatch` and graphic packs.** Which Cemu game patches target WWHD US (D10)?
+2. **`GamePatch` and graphic packs.** Which Cemu game patches target WWHD US (D10)? *Answered for
+   `GamePatch` (M3): two, the race-condition `nop`s in `f_027F9994` and the DSP kill-channel
+   branch in `f_028137E0`.* Graphic packs remain open.
 3. **Fiber stack size and `musttail`.** Is 2 MB enough for native recursion? Check during M3/M4.
 4. **Floating-point exactness.** Answered for the oracle (M1): Cemu does not fuse `fmadd*`
    (it is built for baseline x86-64, and we compile with `-ffp-contract=off`), rounds single ops

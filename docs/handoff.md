@@ -2,8 +2,8 @@
 
 Read this first, then `CLAUDE.md`, `docs/recompiler-design.md` (decisions D1–D17, milestones,
 status paragraphs) and the READMEs in `tools/reference/`, `tools/recomp/`, `tools/worker/`, `src/`.
-Branch `ww-2` in the worktree `/srv/projects/WWHDRecomp/.worktrees/ww-2`, pushed to the
-`worker` remote; the last commit when this was written was `c5f0062`.
+M3 was done on branch `ww02` (worktree `/srv/projects/WWHDRecomp/.worktrees/ww02`, based on
+`ww-2`), pushed to the `worker` remote.
 
 ## What the project is
 
@@ -37,7 +37,7 @@ Thor-like devices), but it isn't Nintendo's GamePad path, so don't design around
   replaces files by rename.
 - **Commits:** `git -c user.name="flossbud" -c user.email="224492734+flossbud@users.noreply.github.com" commit …`, with
   the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Push with
-  `git push worker ww-2`.
+  `git push worker <branch>`.
 - **Every rename or retype needs evidence** (`config/US_v0/symbols.csv` has an evidence column).
   A function counts as "done" only once an external check passes (fixture or trace diff).
 - **Talking to the owner:** they often read on a phone. Put choices as a numbered list at the end
@@ -61,7 +61,7 @@ Thor-like devices), but it isn't Nintendo's GamePad path, so don't design around
   - the editing machine `~/opt/cemu-src`, branch `wwhd-reference`, for **editing only**; never build it
     on the editing machine.
   - The worker builds `/wwhd/opt/cemu-src` at pinned commit `c717fcab` plus
-    `tools/reference/cemu-patches/0001–0010`.
+    `tools/reference/cemu-patches/0001–0011` (0011 is the execution seam, null by default).
   - To change a patch: commit on the editing machine branch, run
     `git format-patch -1 --start-number N -o tools/reference/cemu-patches/`, sync, then
     `tools/worker/job start cemu-rebuild tools/worker/setup-volume.sh cemu-rebuild` (incremental,
@@ -105,9 +105,21 @@ For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
   It links into Cemu_release's own link line via `-Wl,--wrap=main`.
 - **`generate.py`:** the whole program, 39,720 functions: 39,705 from the list, the `.syscall`
   stub, and 14 synthesised GHS restore entries (D7). 0 errors.
-- **`build.sh`:** compiles it on the worker in about 4 min, with 0 warnings. The output uses
-  `rt_import`, `rt_import_data`, `rt_call_ctr`, `rt_jump_ctr` and `rt_bad_branch`, which **don't
-  exist yet** (they come with M3).
+- **`build.sh`:** compiles it on the worker in about 4 min, with 0 warnings; incremental since M3.
+- Since M3 it also emits purity (12,968 pure functions), code hashes, call edges, import sites and
+  a store census (`runtime/recomp_tables.h`). Two M2 bugs were fixed: all 294 jump tables are `b`
+  runs (the switches never matched), and `_iob+0x10` was emitted as `environ`.
+
+**Runtime** (`src/runtime/`, M3 done). Linked into `wwhd-null` with the generated program:
+- Cemu patch 0011's hook replaces the interpreter loop; by default it interprets exactly.
+- At boot: function table (D5), code hashes vs guest memory (Cemu patches `f_027F9994` and
+  `f_028137E0`, D10), imports bound from guest memory (397 functions, 10 data; 0 differences from
+  Cemu's name tables).
+- All `rt_*` exist. `rt_import`/`rt_call_ctr`/`rt_jump_ctr` are bound and checked but only run once
+  non-pure code goes native (M4).
+- `WWHD_NATIVE=diff`: diff mode (D8.2). Over the whole route: 3,875,261 sampled pure calls checked,
+  all equal to the interpreter; 4,616 functions, all clean; trace identical to `null-route.zst`.
+- `tools/reference/route.sh OUT FRAMES ROUTE BASELINE`: one run plus a trace comparison.
 
 **Runtime** (`src/`, M0b done). `src/build.sh` builds two binaries against the worker's Cemu:
 - **`build/wwhd/wwhd`:** our frontend (`src/frontend`, Cemu's `WindowSystem` without wxWidgets,
@@ -123,53 +135,34 @@ For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
 
 ## Next steps, in order
 
-### 1. M3: run recompiled code, starting with pure functions under diff mode
+### 1. M4: everything native
 
-This is the first time generated code executes. Keep every sub-step checkable against the
-baseline traces.
+M3 is done (design doc, "M3 status"). **Guest time is the first decision**, with the owner
+(design D6, open; see "M4 guest time" below). Then: native dispatch for all functions, the D10
+patches as overrides, the interpreter fallback counter to 0, all while the trace still equals the
+reference.
 
-1. **Execution seam, as a new Cemu patch (0011).**
-   - Add a hook pointer (null by default, so the reference is unchanged) at the two places D1
-     names: the run loop in `__OSFiberThreadEntry` (`coreinit_Thread.cpp`, around line
-     1425–1431, `while (--remainingCycles >= 0) PPCInterpreterSlim_executeInstruction`) and
-     `PPCCore_executeCallbackInternal` (`PPCScheduler.cpp`).
-   - Our runtime sets the hook. When the hook finds no native function, it must fall back to
-     exactly the interpreter.
-   - Re-run `determinism.sh` with the hook installed but **everything still interpreted**. The
-     trace must equal the baseline.
-2. **The `rt_*` runtime** (a new `src/runtime/`):
-   - **`rt_import(ctx, id)`:** bind each `g_imports[]` entry (lib, name) to Cemu's HLE handler
-     the way Cemu's loader does (`rpl_mapHLEImport`, `Cafe/OS/RPL/rpl.cpp` ~746;
-     `PPCInterpreter_getHLECall`). Afterwards, check `instructionPointer == LR` for handlers that
-     redirect (D4: MEM allocator forwarding).
-   - **Record the call in the trace:** the reference's tracer records at the HLE trampoline, so
-     native import calls must also call `HLETrace::record` and charge `kVirtualHLECallCycles`
-     (300). Otherwise the traces aren't comparable.
-   - **`rt_import_data(id)`:** the address Cemu's loader resolved for that data import.
-   - **`rt_call_ctr` / `rt_jump_ctr`:** the function table (D5, a flat array over .text), then
-     the trampoline area (the HLE path), otherwise the interpreter.
-   - **`rt_bad_branch`:** a loud error.
-3. **Link the generated objects into `wwhd-null`.** The link is large; keep LTO off for
-   generated code. A good initial test is a special mode that runs one chosen native function.
-4. **Guest time is the biggest design issue.**
-   - **The problem:** under the virtual clock, guest time **is** the instruction count
-     (`remainingCycles` is decremented per instruction; timeslices and vsync hang off it). Native
-     code that charges different counts, or yields at different points, changes thread
-     interleaving, so the trace stops matching the reference. D6 predates the virtual clock and
-     says coarse accounting is fine; that no longer holds if we want trace equality.
-   - **For M3 (diff mode) there's a clean way out:** run native with stores journaled, rewind,
-     run the interpreter over the same call (which charges the cycles exactly as the reference
-     does), and compare registers and memory writes. The run then stays trace-identical to the
-     baseline while every sampled call gets checked.
-   - **For M4 (native for real), decide deliberately.** Either charge exact per-instruction counts
-     (per basic block, with a way to stop mid-block at quantum expiry), or relax the check to
-     per-thread call-sequence equality. Write the decision into the design doc.
-5. **Mark pure functions from the call graph** (they reach no import and no indirect call, D8.2),
-   and turn diff mode on for them along the route with `wwhd-null`. Done means M3's criterion: a
-   clean sampled diff over the scripted route.
-6. The yield budget (D6), `GamePatch` (D10), and "everything native" are **M4**.
+**M4 guest time.** Under the virtual clock, guest time *is* the instruction count: each timeslice
+is 45,000 + (LCG & 0x7F) instructions (`while (--remainingCycles >= 0)`), an OS call costs 300
+more, and alarms, vsync and audio frames hang off the resulting clock. Native code has to end each
+timeslice on the same instruction as the interpreter, or thread interleaving changes and the trace
+stops matching. Because every guest thread is a Cemu fiber, native code can yield *in place*
+(`PPCCore_switchToScheduler()` from inside the generated function; its C++ frames wait on the
+fiber stack), so exact accounting needs no mid-function re-entry. The options and the owner's
+decision go in design D6.
 
-### 2. G0: scope the graphics backend (measurement only; can run beside M3)
+The M4 work after that decision:
+1. The accounting itself in `emit.py`/`generate.py`, and `rt_import` charging the trampoline's own
+   cycle as the interpreter does (`PPCInterpreter_virtualHLE` already charges the 300).
+2. Native dispatch in the hook: at a function entry, call the generated function instead of
+   interpreting (`src/runtime/dispatch.cpp`), with a fallback counter that must reach 0.
+3. The two D10 patches as overrides (`f_027F9994` race-condition `nop`s, `f_028137E0` DSP branch).
+4. HLE handlers that end the timeslice (`PPCInterpreter_relinquishTimeslice` sets
+   `remainingCycles = -1`) or reload a thread's context must behave as in the interpreter.
+5. Check: `route.sh` over the whole route, trace equal to `null-route.zst`; keep diff mode as the
+   per-function oracle.
+
+### 2. G0: scope the graphics backend (measurement only; can run beside M4)
 
 - Trace every GX2 call and argument in single-screen Pro Controller mode along the route
   (`REF_LOGFLAG` or the HLE tracer filtered with `CEMU_HLE_TRACE_FILTER=gx2.`), plus the PM4
@@ -222,6 +215,10 @@ baseline traces.
   and `generate.py` synthesises those entries (D7).
 - **Reference determinism took patches 0001–0006** (`tools/reference/README.md`, "What it took").
   Screenshots of two runs can differ by a few hundred llvmpipe edge pixels, but the traces don't.
+- **Recompiler facts found in M3:** jump tables are `b` runs (switch on CTR's slot address);
+  relocations must be keyed by symbol (addends exist: `_iob+0x10`); the GHS restore-and-exit helpers
+  return to their caller's caller; `spr.XER`'s CA/SO/OV copies go stale after a context switch
+  (compare `PPCInterpreter_getXER`); Cemu's `tw` with TO=0 is its debugger's breakpoint.
 - **Size and speed:** a full-route trace is about 665 MB compressed. The GPU reference route
   takes about 25 min; `wwhd-null` about 12 min.
 - **Cemu's GX2 writes Cemu-only `IT_HLE_*` packets into display lists,** so their sizes differ

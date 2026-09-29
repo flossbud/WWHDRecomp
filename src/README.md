@@ -8,12 +8,35 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 | `frontend/window_system.cpp` | Cemu's `WindowSystem` interface: boot, one TV window (Xlib for now), event loop; headless with `WWHD_NULL_GPU` |
 | `frontend/cemu_boot.cpp` | paths, config, default NAND files, title preparation (derived from Cemu's wx GUI, MPL-2.0) |
 | `gpu/null_gpu.cpp` | null GPU in place of Latte: consumes gx2's command buffers, keeps the register file, performs every guest-visible effect, draws nothing (derived from Latte, MPL-2.0) |
+| `runtime/dispatch.cpp` | the execution seam (Cemu patch 0011): the hook that replaces Cemu's interpreter loop, the function table (D5), the D10 code check, `rt_call_ctr`/`rt_jump_ctr`/`rt_bad_branch` |
+| `runtime/imports.cpp` | `rt_import`/`rt_import_data` (D4), bound from what Cemu's loader wrote into guest memory |
+| `runtime/diff.cpp` | diff mode (D8.2, M3): pure functions run natively, are rewound, and are compared with the interpreter's run of the same call |
 | `build.sh` | builds `build/wwhd/wwhd` and `build/wwhd/wwhd-null` on the worker against its Cemu build |
 | `link_order.py` | orders `wwhd-null`'s archive members like `wwhd`'s link (see below) |
 
     tools/worker/job start wwhd-build src/build.sh
     tools/worker/job start null-det env CEMU_BIN=/wwhd/WWHDRecomp/build/wwhd/wwhd-null \
         tools/reference/determinism.sh /wwhd/data/traces/null 600 tools/reference/routes/title-to-game.txt
+
+**The runtime** (M3) is linked into `wwhd-null`, together with the recompiled program when
+`tools/recomp/build.sh` has built it (`RECOMP_DIR`, default `build/recomp`; `RECOMP_DIR=` for
+none). The frontend installs Cemu's execution seam (`g_ppcExecuteHook`, cemu-patches/0011) before
+launching the title. By default the hook runs Cemu's exact interpreter loop, so the trace stays
+the reference's. With `WWHD_NATIVE=diff`, sampled calls of pure functions also run natively and are
+checked against the interpreter (options in `runtime/diff.cpp`); `WWHD_RT_LOG=path` collects the
+runtime's log and, at exit, per-function results in `path.funcs.csv`.
+
+    tools/worker/job start recomp-build tools/recomp/build.sh
+    tools/worker/job start wwhd-build src/build.sh
+    tools/worker/job start m3-diff env WWHD_NATIVE=diff WWHD_RT_LOG=/wwhd/data/traces/m3/rt.log \
+        CEMU_BIN=/wwhd/WWHDRecomp/build/wwhd/wwhd-null tools/reference/route.sh /wwhd/data/traces/m3 \
+        10800 tools/reference/routes/title-to-game.txt /wwhd/data/traces/null-route.zst
+
+At its first timeslice the runtime checks the linked code against guest memory: each function's
+hash against the RPX's (a mismatch means Cemu's GamePatch rewrote it; it then stays
+interpreted), every import's relocated branch sites (all must lead to one trampoline), every
+relocated data-import immediate, and, in diff mode, its store decoder against the generator's
+store census. Any disagreement stops the run.
 
 **`wwhd`** (M0b.1) is Cemu's libraries with Latte on Vulkan, and our frontend instead of the
 wxWidgets GUI. Cemu's `main.cpp` still parses `-g GAME` and calls `WindowSystem::Create()`, which
