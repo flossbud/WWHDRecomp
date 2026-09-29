@@ -145,7 +145,6 @@ For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
 
 M3, M4, G0 and G1 are done, M4 and G0 on the scripted route (design doc status paragraphs). `wwhd-null` with
 `WWHD_NATIVE=on` runs the recompiled program, and its whole-route trace equals the reference's.
-G1 (the shader corpus) is done too.
 
 ### 1. G2: first pixels (design D13, D16.3)
 
