@@ -93,6 +93,6 @@ deleting the vcpkg build trees.
 * **Hardware rendering:** Cemu picks llvmpipe inside the worker (Mesa's Intel driver can't present to
   Xvfb, which has no DRI3). Frames are correct, just slower. Options: Xorg with the dummy driver,
   or a headless Vulkan surface.
-* **Deeper coverage:** so far only boot plus idling on the first dialog is covered. With scripted
-  input (below) the determinism check should follow a real route.
-* **Input script:** a scripted route (frame-indexed input) instead of ad-hoc `press.sh` calls.
+* ~~Deeper coverage / input script~~: done. `determinism.sh OUT 10800 routes/title-to-game.txt`
+  gives 1,124,796,468 identical records along the route into gameplay (2026-09-29). Screenshots
+  of the two runs differ in a few hundred edge pixels (llvmpipe), which the CPU check ignores.
