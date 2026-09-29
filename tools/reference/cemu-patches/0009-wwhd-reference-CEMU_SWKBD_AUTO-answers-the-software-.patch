@@ -1,39 +1,58 @@
-From 6a19ac7ca9d6cd0de724fbbc70f1deb6ecf7efdb Mon Sep 17 00:00:00 2001
+From 4c0509ea993093209a4ff6053295c2f7071eaaae Mon Sep 17 00:00:00 2001
 From: flossbud <224492734+flossbud@users.noreply.github.com>
 Date: Tue, 29 Sep 2026 03:03:19 +0000
 Subject: [PATCH] wwhd-reference: CEMU_SWKBD_AUTO answers the software keyboard
  deterministically
 
-WWHD's name entry uses the system swkbd, which Cemu drives from host
-keyboard input and draws with ImGui after the screenshot hook. For scripted
-routes, the first SwkbdCalc after it appears fills in the given text and
-presses OK.
+WWHD's name entry uses the system swkbd in keyboard mode (the app draws its
+own name box and receives keystrokes through its receiver buffer and
+changeString callback); Cemu drives it from host keys. For scripted routes,
+the first SwkbdCalc after it appears enters the text via
+swkbd_inputStringChanged (as typing would) and 30 calls later presses OK.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
- src/Cafe/OS/libs/swkbd/swkbd.cpp | 13 +++++++++++++
- 1 file changed, 13 insertions(+)
+ src/Cafe/OS/libs/swkbd/swkbd.cpp | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
 
 diff --git a/src/Cafe/OS/libs/swkbd/swkbd.cpp b/src/Cafe/OS/libs/swkbd/swkbd.cpp
-index 16b8d73..9a56691 100644
+index 16b8d73..7933e06 100644
 --- a/src/Cafe/OS/libs/swkbd/swkbd.cpp
 +++ b/src/Cafe/OS/libs/swkbd/swkbd.cpp
-@@ -393,6 +393,19 @@ void SwkbdCalcSubThreadPredict()
+@@ -391,8 +391,37 @@ void SwkbdCalcSubThreadPredict()
+ 	coreinit::OSSleepTicks(ESPRESSO_TIMER_CLOCK / 200); // simulate 5ms of working time
+ }
  
++void swkbd_inputStringChanged(); // wwhd-reference: defined below
++void swkbd_finishInput();
++
  void SwkbdCalc(void* controllerInfo)
  {
-+	// wwhd-reference: CEMU_SWKBD_AUTO=text answers an open keyboard/input form with that text
-+	// on the first SwkbdCalc after it appears (deterministic; host keyboard never involved)
++	// wwhd-reference: CEMU_SWKBD_AUTO=text answers an open keyboard/input form deterministically:
++	// on the first SwkbdCalc after it appears the text is entered (and, in keyboard mode, pushed to
++	// the app's receiver buffer + changeString callback, as typing would), and 30 SwkbdCalc calls
++	// later OK is pressed, once the app has taken the new text. Host keyboard never involved.
 +	static const char* s_autoText = getenv("CEMU_SWKBD_AUTO");
++	static sint32 s_autoCalls = -1; // -1: idle, >=0: calls since the text was entered
 +	if (s_autoText && swkbdInternalState->isActive && !swkbdInternalState->decideButtonWasPressed)
 +	{
-+		sint32 n = 0;
-+		for (const char* c = s_autoText; *c && n < swkbdInternalState->maxTextLength; c++)
-+			swkbdInternalState->formStringBuffer[n++] = (wchar_t)(uint8)*c;
-+		swkbdInternalState->formStringBuffer[n] = '\0';
-+		swkbdInternalState->formStringLength = n;
-+		swkbdInternalState->decideButtonWasPressed = true;
-+		cemuLog_log(LogType::Force, "swkbd: auto-answered \"{}\"", s_autoText);
++		if (s_autoCalls < 0)
++		{
++			sint32 n = 0;
++			for (const char* c = s_autoText; *c && n < SWKBD_FORM_STRING_MAX_LENGTH - 1; c++)
++				swkbdInternalState->formStringBuffer[n++] = (wchar_t)(uint8)*c;
++			swkbdInternalState->formStringBuffer[n] = '\0';
++			swkbdInternalState->formStringLength = n;
++			swkbd_inputStringChanged();
++			s_autoCalls = 0;
++			cemuLog_log(LogType::Force, "swkbd: auto-entered \"{}\"", s_autoText);
++		}
++		else if (++s_autoCalls >= 30)
++		{
++			swkbd_finishInput();
++			s_autoCalls = -1;
++			cemuLog_log(LogType::Force, "swkbd: auto-pressed OK");
++		}
 +	}
  	// no op for now
  }
