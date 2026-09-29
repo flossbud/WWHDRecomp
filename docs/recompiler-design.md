@@ -306,6 +306,27 @@ they become overrides only when wanted.
 
 ### D12. GX2 is our own native module; Latte is never built
 
+> **Revised 2026-09-29 (M0b): we keep Cemu's gx2 and TCL as the front half and replace Latte,
+> the consumer.** What we found:
+>
+> * **Cemu's gx2 is what matches the reference.** It writes some Cemu-only packets (`IT_HLE_*`, for
+>   clears, surface copies, swaps and timers) into command buffers *and display lists*. The game
+>   sees display-list sizes (`GX2EndDisplayList`), so a front half written to real-GX2 semantics
+>   would diverge from the reference. WWHD records about 24k display lists and calls 113k in its
+>   first 600 frames.
+> * **Everything guest-visible happens in the command stream.** That covers display lists,
+>   context-state shadowing (register writes mirrored into guest memory) and `LOAD_*` packets, as
+>   well as fences, timestamps, bottom-of-pipe callbacks and swap/flip bookkeeping. One command
+>   processor handles all of them uniformly.
+> * **The command processor's register file is the "decoded register-level state"** the backend
+>   needs. So the backend does consume PM4 after all, but only the command processor parses it,
+>   and renderers read registers.
+>
+> `src/gpu/null_gpu.cpp` is that command processor with nothing behind it. Linked without Latte
+> (`wwhd-null`), it reproduces the reference's OS-call trace exactly (M0b status below). The
+> Vulkan backend (D13) will be a renderer on the same command processor. The front-half list below
+> still describes what must stay exact; it now holds by construction.
+
 WWHD imports 108 GX2 functions. We register our own `gx2` module in Cemu's HLE table in place of
 Cemu's (`Cafe/OS/libs/gx2`, 8k LOC), so import resolution (D4) lands in our code. The module has
 two halves.
@@ -482,7 +503,7 @@ There are two tracks. They meet at M4.
 | # | Milestone | Done when |
 |---|---|---|
 | M0a ✅ (core) | Reference | Upstream Cemu builds here and boots WWHD under Xvfb + lavapipe. The deterministic-clock patch and GX2 call logging produce frames and traces for the scripted route. |
-| M0b | Runtime skeleton | Our frontend links Cemu's OS libraries **without Latte, gx2 or TCL**, plus our GX2 front half with the null backend. WWHD boots with Cemu's **interpreter**. Its GX2 call stream to the title screen matches the reference (D16.1). |
+| M0b ✅ | Runtime skeleton | Our frontend links Cemu's OS libraries **without Latte** (gx2 and TCL stay, see D12), plus the null GPU. WWHD boots with Cemu's **interpreter**. Its GX2 call stream to the title screen matches the reference (D16.1). |
 
 **CPU track**
 
@@ -523,6 +544,22 @@ emits all of them, and the fuzzer (`tools/recomp/fuzz/`) matches Cemu's interpre
 register and memory byte for the 154 that compute (about 1.8M randomized runs); `dcbf`/`dcbst`
 and `tw` are runtime hooks. Two findings: a signed-overflow UB in a naive `neg` that clang
 exploited, and NaN payloads, which depend on x86 operand order (see open question 4).
+
+**M0b status (2026-09-29):** done. `src/` builds two executables against the worker's Cemu
+build (`src/build.sh`). Both use our frontend (`src/frontend`, Cemu's `WindowSystem` without
+wxWidgets):
+
+* **`wwhd`** keeps Latte on Vulkan. Its frames are byte-identical to Cemu_release's.
+* **`wwhd-null`** is headless: `libCemuCafe.a` without Latte's 67 objects, with
+  `src/gpu/null_gpu.cpp` in their place.
+
+Along the scripted route, both give OS-call traces identical to Cemu_release's (59,531,239
+calls to f600), and `wwhd-null` is deterministic run to run. One trap: dropping objects changes
+the order of static constructors, which moves Cemu's `SysAllocator` slots in guest memory. So
+`wwhd-null` is linked with its archive members in `wwhd`'s order (`src/link_order.py`).
+
+The reference also renders on the worker's Intel GPU now. Its full-route trace equals the
+llvmpipe one (1,124,796,468 calls).
 
 The CPU track needs no rendering, and the graphics track can use Cemu's interpreter for the CPU
 (M0b), so the two proceed in parallel.

@@ -113,6 +113,9 @@ def main():
     x = sub.add_parser("diff"); x.add_argument("a"); x.add_argument("b")
     x.add_argument("--ignore-core", action="store_true",
                    help="compare without the core index (which core served a thread)")
+    x.add_argument("--mask-cemu-area", action="store_true",
+                   help="treat register values inside Cemu's private area (0x0E000000-0x0FFFFFFF) as equal:"
+                        " builds that link different Cemu objects lay out that host-side memory differently")
     args = ap.parse_args()
 
     if args.cmd == "summary":
@@ -136,10 +139,10 @@ def main():
             if c["frame"] >= lo and (not args.grep or args.grep in names.get(int(c["index"]), "")):
                 print(fmt(names, c))
     elif args.cmd == "diff":
-        sys.exit(diff(args.a, args.b, args.ignore_core))
+        sys.exit(diff(args.a, args.b, args.ignore_core, args.mask_cemu_area))
 
 
-def diff(path_a, path_b, ignore_core):
+def diff(path_a, path_b, ignore_core, mask_cemu_area=False):
     """Vectorized comparison of two traces. Function indices are mapped to normalized names (so
     runs with different HLE index tables or host-pointer stub names still compare), then whole
     numpy blocks are compared at once; only the first mismatch is rendered."""
@@ -158,6 +161,11 @@ def diff(path_a, path_b, ignore_core):
         k["pad"] = 0
         if ignore_core:
             k["core"] = 0
+        if mask_cemu_area:   # Cemu's private area 0x0E000000-0x0FFFFFFF: host-side allocations
+            g = k["gpr"]
+            g[(g >> 25) == 7] = 0x0E000000
+            t = k["thread"]
+            t[(t >> 25) == 7] = 0x0E000000
         return k
 
     ga, gb = blocks(path_a), blocks(path_b)

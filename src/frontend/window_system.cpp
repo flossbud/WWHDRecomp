@@ -3,13 +3,17 @@
 // vcpkg build ships has no video backends (Cemu uses it for controllers only). Cemu's own main() parses the command line (-g GAME, ...) and
 // calls WindowSystem::Create(), which here is the whole application: boot, one TV window, and an
 // event loop. Single screen by design: there is no GamePad window (D17).
+// Built with WWHD_NULL_GPU (wwhd-null, see src/gpu/null_gpu.cpp) it is headless: no window, no
+// renderer, and the process runs until the title exits it (e.g. CEMU_HLE_TRACE_EXIT_FRAME).
 #include "boot.h"
 #include "interface/WindowSystem.h"
 #include "config/ActiveSettings.h"
 #include "config/LaunchSettings.h"
 #include "Cafe/CafeSystem.h"
+#ifndef WWHD_NULL_GPU
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
+#endif
 #include "util/helpers/helpers.h"
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -32,12 +36,25 @@ void WindowSystem::Create()
 	wwhd::LoadConfig();
 	wwhd::CreateDefaultMLCFiles();
 	ActiveSettings::Init();
+#ifndef WWHD_NULL_GPU
 	LatteOverlay_init();
+#endif
 	CemuCommonInit();
 
 	auto game = LaunchSettings::GetLoadFile();
 	if (!game)
 		wwhd::Fatal("usage: wwhd -g <game.wua | title dir | .rpx>");
+	setSize(1920, 1080);
+	g_windowInfo.dpi_scale = 1.0;
+	g_windowInfo.pad_open = false;
+	g_windowInfo.app_active = true;
+
+#ifdef WWHD_NULL_GPU
+	wwhd::PrepareTitle(*game);
+	CafeSystem::LaunchForegroundTitle();
+	for (;;)
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+#else
 
 	Display* dpy = XOpenDisplay(nullptr);
 	if (!dpy)
@@ -55,10 +72,6 @@ void WindowSystem::Create()
 	canvas.display = dpy;
 	canvas.surface = reinterpret_cast<void*>(window);
 	g_windowInfo.window_main = canvas;
-	setSize(w, h);
-	g_windowInfo.dpi_scale = 1.0;
-	g_windowInfo.pad_open = false;
-	g_windowInfo.app_active = true;
 
 	if (!InitializeGlobalVulkan() || !g_vulkan_available)
 		wwhd::Fatal("Vulkan is not available");
@@ -94,6 +107,7 @@ void WindowSystem::Create()
 		default: break;
 		}
 	}
+#endif
 }
 
 void WindowSystem::ShowErrorDialog(std::string_view message, std::string_view title, std::optional<ErrorCategory>)
