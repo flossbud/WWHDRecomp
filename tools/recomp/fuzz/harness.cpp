@@ -14,6 +14,8 @@ static constexpr uint32 WIN = 0x10100000, WIN_SIZE = 0x10000;
 
 void rt_trap(PPCInterpreter_t*, uint32 ea) { fprintf(stderr, "trap at %08x\n", ea); abort(); }
 void rt_dcache_flush(uint32) {}
+bool g_rtJournalOn = false;
+void rt_journal_store(uint32, uint32) {}
 
 static std::mt19937_64 rng(1);
 

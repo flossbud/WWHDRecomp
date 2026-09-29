@@ -12,6 +12,12 @@
 
 extern uint8* memory_base;
 
+// Store journal (diff mode, D8.2): while g_rtJournalOn is set, every store first hands the runtime
+// the range it is about to overwrite, so that a native run can be rewound. Off otherwise.
+extern bool g_rtJournalOn;
+void rt_journal_store(uint32 ea, uint32 size);
+#define RT_STORE(ea, n) do { if (g_rtJournalOn) [[unlikely]] rt_journal_store((ea), (n)); } while (0)
+
 #define GPR(n) ctx->gpr[n]
 #define FPR(n) ctx->fpr[n]
 #define CRB(n) ctx->cr[n]
@@ -21,10 +27,11 @@ static inline uint8 rd8(uint32 ea) { return memory_base[ea]; }
 static inline uint16 rd16(uint32 ea) { uint16 v; memcpy(&v, memory_base + ea, 2); return __builtin_bswap16(v); }
 static inline uint32 rd32(uint32 ea) { uint32 v; memcpy(&v, memory_base + ea, 4); return __builtin_bswap32(v); }
 static inline uint64 rd64(uint32 ea) { uint64 v; memcpy(&v, memory_base + ea, 8); return __builtin_bswap64(v); }
-static inline void wr8(uint32 ea, uint8 v) { memory_base[ea] = v; }
-static inline void wr16(uint32 ea, uint16 v) { v = __builtin_bswap16(v); memcpy(memory_base + ea, &v, 2); }
-static inline void wr32(uint32 ea, uint32 v) { v = __builtin_bswap32(v); memcpy(memory_base + ea, &v, 4); }
-static inline void wr64(uint32 ea, uint64 v) { v = __builtin_bswap64(v); memcpy(memory_base + ea, &v, 8); }
+static inline void wr8(uint32 ea, uint8 v) { RT_STORE(ea, 1); memory_base[ea] = v; }
+static inline void wr16(uint32 ea, uint16 v) { RT_STORE(ea, 2); v = __builtin_bswap16(v); memcpy(memory_base + ea, &v, 2); }
+static inline void wr32(uint32 ea, uint32 v) { RT_STORE(ea, 4); v = __builtin_bswap32(v); memcpy(memory_base + ea, &v, 4); }
+static inline void wr64(uint32 ea, uint64 v) { RT_STORE(ea, 8); v = __builtin_bswap64(v); memcpy(memory_base + ea, &v, 8); }
+static inline void zero_line(uint32 ea) { ea &= ~31u; RT_STORE(ea, 32); memset(memory_base + ea, 0, 32); }   // dcbz
 
 // ---- condition register ------------------------------------------------------------------------
 static inline void cr_record(PPCInterpreter_t* ctx, uint32 r)       // Rc=1: CR0 from a result

@@ -292,6 +292,7 @@ class Emitter:
         # value (compare-and-swap); either way CR0 = 00 EQ SO, and a matching attempt clears it.
         return [f"{{ uint32 ea = {self._ea_x(i)}; bool ok = false;",
                 "\tif (ctx->reservedMemAddr == ea) {",
+                "\t\tif (g_rtJournalOn && rd32(ea) == ctx->reservedMemValue) rt_journal_store(ea, 4);   // it will store",
                 "\t\tstd::atomic_ref<uint32> w(*(uint32*)(memory_base + ea));",
                 "\t\tuint32 expect = __builtin_bswap32(ctx->reservedMemValue);",
                 f"\t\tok = w.compare_exchange_strong(expect, __builtin_bswap32(GPR({i.rT})));",
@@ -301,7 +302,7 @@ class Emitter:
                 "\tctx->cr[CR_BIT_LT] = 0; ctx->cr[CR_BIT_GT] = 0; ctx->cr[CR_BIT_EQ] = ok; }"]
 
     def op_dcbz(self, i, ea):
-        return [f"memset(memory_base + (({self._ea_x(i)}) & ~31u), 0, 32);"]
+        return [f"zero_line({self._ea_x(i)});"]
 
     def op_dcbf(self, i, ea):
         return [f"rt_dcache_flush({self._ea_x(i)});"]

@@ -10,7 +10,9 @@
 #include "config/ActiveSettings.h"
 #include "config/LaunchSettings.h"
 #include "Cafe/CafeSystem.h"
-#ifndef WWHD_NULL_GPU
+#ifdef WWHD_NULL_GPU
+#include "../runtime/runtime.h"
+#else
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
 #endif
@@ -51,6 +53,7 @@ void WindowSystem::Create()
 
 #ifdef WWHD_NULL_GPU
 	wwhd::PrepareTitle(*game);
+	wwhd::rt::Install();    // the execution seam: interprets, or runs diff mode (src/runtime)
 	CafeSystem::LaunchForegroundTitle();
 	for (;;)
 		std::this_thread::sleep_for(std::chrono::seconds(1));

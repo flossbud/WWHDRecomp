@@ -3,26 +3,34 @@
 # Run on the worker: tools/worker/job start wwhd-build src/build.sh
 #   build/wwhd/wwhd       Cemu's OS libraries + Latte on Vulkan + our frontend (M0b.1)
 #   build/wwhd/wwhd-null  the same without Latte: src/gpu/null_gpu.cpp consumes gx2's command
-#                         buffers and draws nothing; headless (M0b.2)
+#                         buffers and draws nothing; headless (M0b.2). It also carries the runtime
+#                         (src/runtime: the execution seam, rt_*, diff mode) and, when built, the
+#                         recompiled program (M3)
 # Our sources compile with Cemu's own flags (tools/cemu_flags.py). The link line is Cemu_release's
 # with Cemu's wxWidgets GUI library replaced by our frontend, which implements Cemu's
 # WindowSystem interface (Cemu's main.cpp stays and calls WindowSystem::Create()). For wwhd-null,
 # libCemuCafe.a is copied without the objects built from src/Cafe/HW/Latte (the address library
 # in HW/Latte/LatteAddrLib stays: gx2 computes surface layouts with it).
-# Env: CEMU_SRC (default /wwhd/opt/cemu-src).
+# Env: CEMU_SRC (default /wwhd/opt/cemu-src); RECOMP_DIR: the compiled generated code to link into
+# wwhd-null (tools/recomp/build.sh; default build/recomp if it has been built there, RECOMP_DIR=
+# for none: the runtime then only interprets).
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 cemu=${CEMU_SRC:-/wwhd/opt/cemu-src}
+recomp=${RECOMP_DIR-$root/build/recomp}
+[ -n "$recomp" ] && [ ! -f "$recomp/func_table.o" ] && recomp=
 out=$(mkdir -p "${1:-$root/build/wwhd}" && cd "${1:-$root/build/wwhd}" && pwd)
 
 mapfile -t flags < <(python3 "$root/tools/cemu_flags.py" "$cemu/build/compile_commands.json" Espresso/Interpreter/PPCInterpreterFPU.cpp)
-cxx=(clang++ "${flags[@]}" -fno-lto -include "$cemu/src/Common/precompiled.h" -I"$root/src/frontend" -O2)
+cxx=(clang++ "${flags[@]}" -fno-lto -include "$cemu/src/Common/precompiled.h" -I"$root/src/frontend"
+     -I"$root/tools/recomp/runtime" -O2)
 pids=()
 compile() { "${cxx[@]}" "${@:3}" -c "$1" -o "$out/$2" & pids+=($!); }
 compile "$root/src/frontend/cemu_boot.cpp" cemu_boot.o
 compile "$root/src/frontend/window_system.cpp" window_system.o
 compile "$root/src/frontend/window_system.cpp" window_system_null.o -DWWHD_NULL_GPU
 compile "$root/src/gpu/null_gpu.cpp" null_gpu.o
+for f in dispatch imports diff; do compile "$root/src/runtime/$f.cpp" "rt_$f.o"; done
 for p in "${pids[@]}"; do wait "$p"; done
 
 # libCemuCafe.a without Latte (object names come from compile_commands.json; they are unique)
@@ -49,7 +57,13 @@ link() {  # link NAME OBJECTS...
     eval "$cmd"
 }
 link wwhd "$out/cemu_boot.o" "$out/window_system.o"
-null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/null_gpu.o")
+null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/null_gpu.o" "$out"/rt_{dispatch,imports,diff}.o)
+if [ -n "$recomp" ]; then
+    null_objs+=("$recomp"/shard_*.o "$recomp/func_table.o" "$recomp/imports.o")
+    echo "wwhd: wwhd-null links the recompiled program from $recomp ($(ls "$recomp"/shard_*.o | wc -l) shards)"
+else
+    echo "wwhd: wwhd-null without recompiled code (the runtime interprets)"
+fi
 link wwhd-null "${null_objs[@]}"
 
 # Relink wwhd-null with its archive members as explicit objects in wwhd's inclusion order, so
