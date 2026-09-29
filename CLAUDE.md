@@ -3,6 +3,7 @@
 - Goal: static **recomp** of the game; decompile only what we need to change. See the plan.
 - **Heavy jobs run on the worker worker, never in the editing machine container** (Cemu, Ghidra
   rebuilds, big builds, trace analysis): `tools/worker/sync.sh` then `tools/worker/w <cmd>`.
+  Long-running worker jobs: `tools/worker/job start|wait|stop NAME`. Never kill by pattern.
   the editing machine is for editing, git and light checks. Tools reading big files must stream.
   See `tools/worker/README.md`.
 - Target: WWHD **USA v0** `cking.rpx` (sha256 in `orig/README.md`). All addresses assume it.

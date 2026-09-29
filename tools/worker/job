@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# job - named, detached jobs in the WWHD worker container (run from the editing machine checkout).
+#   job start NAME CMD...      run CMD (from /wwhd/WWHDRecomp) in its own process group;
+#                              log /wwhd/logs/NAME.log, last line EXIT=<code> when done
+#   job wait NAME [MINUTES]    block until NAME finishes (default 60 min), print the log tail;
+#                              exit 0 if it finished with EXIT=0, 1 if it failed, 2 on timeout
+#   job status NAME            running | done EXIT=n | unknown
+#   job stop NAME              kill NAME's whole process group (and nothing else)
+#   job tail NAME [N]          last N log lines (default 20)
+# Why: ad-hoc pkill/pattern kills once matched the wrong job's wrapper and silently cancelled it.
+set -euo pipefail
+cmd=${1:?usage: job start|wait|status|stop|tail NAME ...}; name=${2:?job name required}; shift 2
+case "$name" in *[!A-Za-z0-9._-]*) echo "job: bad name '$name'" >&2; exit 2 ;; esac
+log=/wwhd/logs/$name.log pid=/wwhd/logs/$name.pid
+# ssh joins its arguments into one string for the *remote* shell, so quote every word for it
+dx() { ssh -o BatchMode=yes worker "$(printf '%q ' docker exec "$@")"; }
+
+status() {
+    ssh -o BatchMode=yes worker "if grep -q '^EXIT=' $log 2>/dev/null; then echo \"done \$(grep '^EXIT=' $log | tail -1)\";
+        elif [ -f $pid ] && docker exec wwhd-worker kill -0 \$(cat $pid) 2>/dev/null; then echo running; else echo unknown; fi"
+}
+
+case "$cmd" in
+start)
+    [ $# -gt 0 ] || { echo "job start NAME CMD..." >&2; exit 2; }
+    [ "$(status)" = running ] && { echo "job $name is already running" >&2; exit 1; }
+    inner=$(printf '%q ' "$@")
+    dx -d -w /wwhd/WWHDRecomp wwhd-worker setsid bash -c \
+        "echo \$\$ > $pid; { $inner; } > $log 2>&1; echo EXIT=\$? >> $log"
+    echo "started $name (log $log)" ;;
+wait)
+    deadline=$(( $(date +%s) + ${1:-60} * 60 ))
+    until s=$(status); [[ $s == done* ]]; do
+        [ "$(date +%s)" -gt "$deadline" ] && { echo "job $name: still $s after ${1:-60} min" >&2; exit 2; }
+        sleep 15
+    done
+    ssh -o BatchMode=yes worker "grep -vE '^\[[0-9]+/[0-9]+\] ' $log | tail -15"
+    [[ $s == "done EXIT=0" ]] ;;
+status) status ;;
+stop)
+    ssh -o BatchMode=yes worker "[ -f $pid ] && docker exec wwhd-worker kill -- -\$(cat $pid) 2>/dev/null; echo stopped" ;;
+tail) ssh -o BatchMode=yes worker "tail -${1:-20} $log" ;;
+*) echo "job: unknown command $cmd" >&2; exit 2 ;;
+esac

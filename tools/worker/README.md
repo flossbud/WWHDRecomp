@@ -45,9 +45,15 @@ the editing machine keep running.
 tools/worker/sync.sh                     # push the working tree (committed or not) to the worker
 tools/worker/w tools/ghidra/rebuild.sh   # run any command in the container, from the checkout
 tools/worker/w -t bash                   # interactive shell
+tools/worker/job start NAME CMD...       # long jobs: detached, own process group, log /wwhd/logs/NAME.log
+tools/worker/job wait NAME [MIN]         #   block until done (timeout), print tail; status / stop / tail too
 tools/worker/sync.sh down config/US_v0/functions.csv   # bring generated results back
 git push worker <branch>               # off-machine copy of the history
 ```
+
+**Long jobs always go through `tools/worker/job`**, never `docker exec -d … &` plus `pkill`.
+A pattern-based kill once matched another job's wrapper and silently cancelled it. `job stop`
+kills exactly one job's process group.
 
 ## Setup (already done once; kept for rebuilding)
 
