@@ -1,0 +1,4 @@
+# Route: fresh boot in single-screen Pro-Controller mode, through to gameplay.
+# FRAME BUTTONS [FRAMES_HELD]; frames are GX2SwapScanBuffers counts (see cemu-patches/0007,0008).
+# Found with tools/reference/survey.sh; extend one screen at a time.
+200 A 5        # "Save data has been created." -> OK

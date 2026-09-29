@@ -2,8 +2,11 @@
 # job - named, detached jobs in the WWHD worker container (run from the editing machine checkout).
 #   job start NAME CMD...      run CMD (from /wwhd/WWHDRecomp) in its own process group;
 #                              log /wwhd/logs/NAME.log, last line EXIT=<code> when done
-#   job wait NAME [MINUTES]    block until NAME finishes (default 60 min), print the log tail;
-#                              exit 0 if it finished with EXIT=0, 1 if it failed, 2 on timeout
+#   job wait NAME [MINUTES] [STALL_MINUTES]
+#                              block until NAME finishes (default 60 min), print the log tail.
+#                              Returns early if the log hasn't grown for STALL_MINUTES (default 10)
+#                              or the job's process vanished without writing EXIT=.
+#                              exit 0 = EXIT=0, 1 = failed, 2 = timeout, 3 = stalled, 4 = died
 #   job status NAME            running | done EXIT=n | unknown
 #   job stop NAME              kill NAME's whole process group (and nothing else)
 #   job tail NAME [N]          last N log lines (default 20)
@@ -29,9 +32,23 @@ start)
         "echo \$\$ > $pid; { $inner; } > $log 2>&1; echo EXIT=\$? >> $log"
     echo "started $name (log $log)" ;;
 wait)
-    deadline=$(( $(date +%s) + ${1:-60} * 60 ))
-    until s=$(status); [[ $s == done* ]]; do
-        [ "$(date +%s)" -gt "$deadline" ] && { echo "job $name: still $s after ${1:-60} min" >&2; exit 2; }
+    deadline=$(( $(date +%s) + ${1:-60} * 60 )); stall=$(( ${2:-10} * 60 ))
+    last_size=-1; last_change=$(date +%s)
+    while :; do
+        s=$(status)
+        [[ $s == done* ]] && break
+        if [ "$s" = unknown ]; then
+            echo "job $name: process gone without EXIT= (died or was killed)" >&2
+            ssh -o BatchMode=yes worker "tail -5 $log" >&2; exit 4
+        fi
+        size=$(ssh -o BatchMode=yes worker "stat -c %s $log 2>/dev/null || echo 0")
+        now=$(date +%s)
+        if [ "$size" != "$last_size" ]; then last_size=$size; last_change=$now; fi
+        if [ $(( now - last_change )) -ge "$stall" ]; then
+            echo "job $name: log unchanged for ${2:-10} min (stalled?)" >&2
+            ssh -o BatchMode=yes worker "tail -5 $log" >&2; exit 3
+        fi
+        [ "$now" -gt "$deadline" ] && { echo "job $name: still running after ${1:-60} min" >&2; exit 2; }
         sleep 15
     done
     ssh -o BatchMode=yes worker "grep -vE '^\[[0-9]+/[0-9]+\] ' $log | tail -15"

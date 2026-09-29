@@ -23,6 +23,7 @@ for run in a b; do
             exit 3
         fi
         sleep 5
+        [ $(( $(date +%s) % 60 )) -lt 5 ] && echo "run $run: trace $(stat -c %s "$out/$run.zst" 2>/dev/null || echo 0) bytes"   # heartbeat
     done
     echo "run $run: $(stat -c %s "$out/$run.zst") bytes"
 done
