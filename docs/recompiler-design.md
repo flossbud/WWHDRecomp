@@ -212,12 +212,30 @@ The Phase 1 audit guarantees that every address-taken code location is a functio
 
 ### D6. Threads, yielding and stacks use Cemu's fibers
 
-> **Open for M4 (2026-09-29).** The reference now runs on a virtual clock (M0a): guest time *is* the
-> instruction count, and the timeslice boundaries, alarms and vsync all hang off it. "Coarse
-> accounting is fine" below predates that; native code that counts differently changes thread
-> interleaving and the trace stops matching the reference. M3 sidesteps it (diff mode leaves all
-> timing to the interpreter). How M4 accounts for guest time is decided with the owner before M4
-> starts, and recorded here.
+> **Revised 2026-09-29 (owner decision, before M4): exact accounting, per instruction.** The
+> reference runs on a virtual clock (M0a): guest time *is* the instruction count, and timeslice
+> boundaries, alarms and vsync all hang off it. "Coarse accounting is fine" below predates that:
+> native code that counts differently changes thread interleaving, and the trace stops matching
+> the reference. So:
+>
+> * Every generated instruction first does `if (--ctx->remainingCycles < 0) rt_yield(ctx);`, which is
+>   the same boundary as Cemu's `while ((--remainingCycles) >= 0)` loop. `rt_yield` clears the
+>   reservation and calls `PPCCore_switchToScheduler()` *in place*: the native frames wait on the
+>   fiber stack, and the instruction runs once the thread gets its next timeslice. No mid-function
+>   re-entry is needed.
+> * Import calls charge what the interpreter charges: one cycle for the trampoline instruction
+>   (with the same check), then `PPCInterpreter_virtualHLE`'s 300.
+> * M4's check stays the strongest one: the whole-route trace equals the reference's
+>   (1,124,796,468 calls).
+> * Cost: one decrement and branch per guest instruction. Counting per basic block (with a
+>   per-instruction checked copy for the block where the quantum runs out) is a later
+>   optimisation, held to the same trace.
+> * The shipped build runs on the real clock, where interleaving isn't reproducible anyway, so it
+>   may switch to coarse counting (below) with a build flag.
+>
+> Options considered: exact per block from the start (faster, more generator work up front, about
+> twice the code), and coarse counting with a relaxed per-thread call-sequence check (weakest
+> oracle; guest time drifts from the reference).
 
 Every guest thread already runs on its own Cemu fiber: a ucontext with a 2 MB stack
 (`util/Fiber/FiberUnix.cpp`), scheduled over three host threads for the three cores.

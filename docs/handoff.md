@@ -137,10 +137,10 @@ For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
 
 ### 1. M4: everything native
 
-M3 is done (design doc, "M3 status"). **Guest time is the first decision**, with the owner
-(design D6, open; see "M4 guest time" below). Then: native dispatch for all functions, the D10
-patches as overrides, the interpreter fallback counter to 0, all while the trace still equals the
-reference.
+M3 is done (design doc, "M3 status"). **Guest time is decided** (design D6, owner, 2026-09-29):
+exact accounting per instruction, yielding in place on the fiber, so the whole-route trace must
+still equal the reference. Then: native dispatch for all functions, the D10 patches as
+overrides, the interpreter fallback counter to 0.
 
 **M4 guest time.** Under the virtual clock, guest time *is* the instruction count: each timeslice
 is 45,000 + (LCG & 0x7F) instructions (`while (--remainingCycles >= 0)`), an OS call costs 300
@@ -148,8 +148,8 @@ more, and alarms, vsync and audio frames hang off the resulting clock. Native co
 timeslice on the same instruction as the interpreter, or thread interleaving changes and the trace
 stops matching. Because every guest thread is a Cemu fiber, native code can yield *in place*
 (`PPCCore_switchToScheduler()` from inside the generated function; its C++ frames wait on the
-fiber stack), so exact accounting needs no mid-function re-entry. The options and the owner's
-decision go in design D6.
+fiber stack), so exact accounting needs no mid-function re-entry. Decided: exact per instruction
+(D6 has the details and the options that were considered).
 
 The M4 work after that decision:
 1. The accounting itself in `emit.py`/`generate.py`, and `rt_import` charging the trampoline's own
