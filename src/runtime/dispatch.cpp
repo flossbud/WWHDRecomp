@@ -25,6 +25,7 @@
 //   WWHD_RT_LOG=path   the runtime's log (appended); default stderr
 #include "runtime.h"
 #include "rt_internal.h"
+#include "../os/os.h"
 #include "Cafe/HW/Espresso/Interpreter/PPCInterpreterInternal.h"
 #include <chrono>
 #include <cstdarg>
@@ -129,6 +130,7 @@ namespace wwhd::rt
 			if (FILE* f = fopen(path, "a"))
 				s_log = f;
 		}
+		wwhd::os::Install();                          // our OS functions over Cemu's (D18), in every mode
 		if (!Linked())
 		{
 			Log("no recompiled code linked: interpreting");

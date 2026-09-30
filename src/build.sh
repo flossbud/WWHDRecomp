@@ -38,6 +38,8 @@ for f in draw texture latte_glue; do
         -I"$cemu/dependencies/Vulkan-Headers/include" -c "$root/src/gpu/vk/$f.cpp" -o "$out/vk_$f.o" & pids+=($!)
 done
 for f in dispatch imports diff; do compile "$root/src/runtime/$f.cpp" "rt_$f.o"; done
+os_objs=()
+for f in "$root"/src/os/*.cpp; do n=os_$(basename "$f" .cpp).o; compile "$f" "$n"; os_objs+=("$out/$n"); done
 for p in "${pids[@]}"; do wait "$p"; done
 
 # libCemuCafe.a without Latte (object names come from compile_commands.json; they are unique).
@@ -70,7 +72,7 @@ link() {  # link NAME OBJECTS...
 }
 link wwhd "$out/cemu_boot.o" "$out/window_system.o"
 null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/null_gpu.o" "$out"/vk_{vk,renderer,draw,texture,latte_glue}.o
-           "$out"/rt_{dispatch,imports,diff}.o)
+           "$out"/rt_{dispatch,imports,diff}.o "${os_objs[@]}")
 limits=$(ls "$cemu"/build/vcpkg_installed/*/lib/libglslang-default-resource-limits.a | head -1)  # glslang's defaults (draw.cpp)
 if [ -n "$recomp" ]; then
     null_objs+=("$recomp"/shard_*.o "$recomp/func_table.o" "$recomp/imports.o")

@@ -643,6 +643,40 @@ rerun unchanged once the route reaches them.
 * **Later, second screen:** our own feature (e.g. map/inventory on a handheld's second display)
   built as overrides that draw extra views, not the DRC path.
 
+### D18. The shipped game does not depend on Cemu; Cemu stays the reference
+
+*Decided 2026-09-30.* The product will run on its own runtime; Cemu remains, indefinitely, the
+development-only reference that traces, captures and texture dumps are checked against.
+
+* **Why.** Portability (Cemu's runtime assumes a reserved 4 GiB guest region, per-platform fibers,
+  x86 habits in places and a large dependency tree), timing freedom (native code still counts every
+  instruction to reproduce Cemu's emulated three-core scheduler; a game-specific runtime can use host
+  threads and real-time pacing, which 60 fps needs), and size: the game needs a small, known part of
+  an operating system, not an emulator.
+* **The surface.** Along both scripted routes the game calls about 245 OS functions of the 426 it
+  imports: `coreinit` 87 (1.2 billion calls, nearly all message queues), `gx2` 85 (107 million),
+  `snd_core` 28, and about 45 more that are mostly trivial (`nn_boss`, `nn_olv`, `nn_act`, `nn_ac`,
+  `nn_save`, `swkbd`, `erreula`, `padscore`, `vpad`, `proc_ui`, `nlibcurl`, `nsysnet`). Behind them
+  sit the scheduler, heaps, the file system and save services, and the AX mixer
+  (`tools/reference/hle_trace.py summary` on the route traces).
+* **Vendor what is portable, rewrite what is emulator-shaped.** Self-contained C++ that is already
+  portable (the shader decompiler, texture decoders, the address library, the fetch-shader parser)
+  moves into this tree under MPL-2.0 with attribution. The scheduler and threads, memory model,
+  loader, file system and save services, audio output and the HLE calling convention are rewritten.
+* **The seam is the HLE table.** Our OS layer (`src/os`) implements imports and takes over their
+  entries in Cemu's HLE handler table at boot, so native code and the interpreter both reach it
+  while Cemu's dispatch still writes the trace and charges the 300 guest cycles (patch 0002). Every
+  function not yet ours falls back to Cemu's. `WWHD_OS=cemu` restores all of Cemu's, for comparison.
+  The table and `PPCInterpreter_t` stay the calling convention until the scheduler is ours.
+* **Order, least coupled first:** leaf functions (memory, cache operations) and service stubs;
+  the platform shell (own CMake build, SDL3 window, input and audio device, which is also M5); the
+  small libraries (input, save, keyboard and error screens); `gx2`'s front half; audio; `coreinit`
+  with the scheduler; the loader and memory map.
+* **Verification: the scheduler has two modes.** Traces are only comparable while scheduling is
+  identical, so our scheduler gets a deterministic mode that follows Cemu's rules on the virtual
+  clock (the one every check uses) and a real-time mode on host threads for players. Each replaced
+  function must keep the whole-route traces identical.
+
 ## Milestones
 
 There are two tracks. They meet at M4.
