@@ -716,6 +716,35 @@ development-only reference that traces, captures and texture dumps are checked a
     and `nsysnet` (setup the rest of the library checks), and `OSGetSystemInfo` (returns a
     structure in Cemu's memory).
 
+### Profile of the native build (2026-09-30)
+
+To design the scheduler's real-time mode on numbers: `WWHD_PROFILE=path` samples host CPU time
+(`src/runtime/profile.cpp`, `tools/profile_report.py`). The save route, native, headless, the trace
+filtered down to nothing (`CEMU_HLE_TRACE_FILTER=zzz.`), on the worker:
+
+* **Speed.** 1800 frames (60 s of game time) in 44 s: 1.36x real time with all three emulated
+  cores on one host thread. With the full trace written it takes 74 s: the trace is 40% of a
+  traced run.
+* **Threads.** The null GPU thread uses a whole host core (36.3 s of CPU, 95.6% in `sched_yield`:
+  it spins waiting for commands). The CPU thread (`OSSched[core=0]`) uses 36.0 s. Everything else
+  is under 2 s.
+* **The CPU thread** (samples, libc time counted for its caller): guest code 67%, its helpers
+  (FP compare, paired singles) 3.6%, runtime 3%; message queues 9.6%; the trace recorder 8.7%
+  (it locks a mutex on every OS call even when tracing is off); guest thread switches 2.8%; HLE
+  dispatch 1.8%; gx2 1.5%; the rest of the scheduler 1.4%; snd_core 0.6%.
+* **The message queues** are one guest thread pushing to and popping from its own queue: 68.9
+  million `OSSendMessage` (non-blocking) and `OSReceiveMessage` (blocking, never blocks) pairs
+  on the save route, 38,700 per frame, 80% of all OS calls. Both come from thin queue wrappers
+  (`f_02760338` push, `f_02760374` pop) in unnamed library code (0x0275xxxx-0x0281xxxx). Each
+  op is a full OS call: HLE dispatch, the trace recorder's mutex and Cemu's scheduler lock (a
+  recursive pthread mutex).
+
+What it means for the real-time scheduler: the GPU thread must wait instead of spinning; the
+per-call cost of uncontended OS calls (trace mutex, scheduler lock) matters more than thread
+switches, and with one host thread per core the global scheduler lock would be contended 77,000
+times a frame, so queues and mutexes need a cheap uncontended path; guest code itself is 70% of
+the CPU thread, where per-block cycle counting (D6) and register caching (D2) are the lever.
+
 ## Milestones
 
 There are two tracks. They meet at M4.

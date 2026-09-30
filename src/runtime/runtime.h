@@ -7,4 +7,7 @@
 namespace wwhd::rt
 {
 	void Install();
+
+	// WWHD_PROFILE=path samples where host CPU time goes (profile.cpp); call before anything starts.
+	void StartProfiler();
 }

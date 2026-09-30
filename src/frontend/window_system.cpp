@@ -310,6 +310,9 @@ static SDL_Window* OpenWindow()
 
 void WindowSystem::Create()
 {
+#ifdef WWHD_NULL_GPU
+	wwhd::rt::StartProfiler();
+#endif
 	SetThreadName("wwhd");
 	wwhd::SetupPaths();
 	wwhd::LoadConfig();
