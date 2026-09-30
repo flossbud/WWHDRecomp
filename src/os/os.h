@@ -37,7 +37,15 @@ namespace wwhd::os
 	inline uint8* Guest(uint32 addr) { return memory_base + addr; }
 	inline uint32 Read32(uint32 addr) { return _swapEndianU32(*(uint32*)Guest(addr)); }   // guest memory is big-endian
 	inline void Write32(uint32 addr, uint32 value) { *(uint32*)Guest(addr) = _swapEndianU32(value); }
+	inline void Write16(uint32 addr, uint16 value) { *(uint16*)Guest(addr) = _swapEndianU16(value); }
 	inline void Write8(uint32 addr, uint8 value) { *Guest(addr) = value; }
+	inline uint16 Read16(uint32 addr) { return _swapEndianU16(*(uint16*)Guest(addr)); }
+	inline void WriteFloat(uint32 addr, float value)
+	{
+		uint32 bits;
+		memcpy(&bits, &value, 4);
+		Write32(addr, bits);
+	}
 	inline void Return(PPCInterpreter_t* ctx) { ctx->instructionPointer = ctx->spr.LR; }
 	inline void Return(PPCInterpreter_t* ctx, uint32 value)
 	{
@@ -52,10 +60,12 @@ namespace wwhd::os
 	}
 
 	// What our functions still borrow from Cemu, each behind one accessor so it can move to our
-	// runtime (the clock) or our scheduler (the current thread) without touching the functions.
+	// runtime (the clock), our scheduler (the current thread) or our gx2 (the swap count) without
+	// touching the functions.
 	uint64 Timebase();          // the timer clock (core cycles / 20) since boot
 	uint64 TimebaseAt2000();    // the timer clock at boot, counted from 1 January 2000
 	uint32 CurrentThread();     // the guest OSThread running on the calling core
+	uint32 SwapCount();         // GX2SwapScanBuffers calls so far: the frame number input scripts use
 }
 
 // WWHD_OS_FUNCTION(coreinit, memcpy) { ... } defines and registers coreinit.memcpy; the body sees `ctx`.

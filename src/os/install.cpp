@@ -5,13 +5,15 @@
 #include <map>
 
 extern HLECALL s_ppcHleTable[];    // Cemu's HLE handler table (PPCInterpreterHLE.cpp), indexed by HLE id
+uint32 GX2_RefSwapCount();         // Cemu's gx2 (cemu-patches/0007)
 
 namespace wwhd::os
 {
-	// Cemu's clock (the virtual clock in deterministic runs) and scheduler state, see os.h
+	// Cemu's clock (the virtual clock in deterministic runs), scheduler and gx2 state, see os.h
 	uint64 Timebase() { return PPCInterpreter_getMainCoreCycleCounter() / 20; }
 	uint64 TimebaseAt2000() { return ppcCyclesSince2000TimerClock; }
 	uint32 CurrentThread() { return MEMPTR<OSThread_t>(coreinit::OSGetCurrentThread()).GetMPTR(); }
+	uint32 SwapCount() { return GX2_RefSwapCount(); }
 
 	std::vector<Export>& Exports()
 	{

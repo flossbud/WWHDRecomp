@@ -80,9 +80,12 @@ table, so Cemu's dispatch still traces the call and charges its cycles, and ever
 leave registers and guest memory exactly as Cemu's did: both route traces stay identical. What a
 function still needs from Cemu (the clock, the current thread) goes through an accessor in
 `os/os.h`. A library whose functions share state with each other moves whole. `WWHD_OS=cemu`
-leaves every handler Cemu's; the log says how many are ours. So far 35: memory and cache
+leaves every handler Cemu's; the log says how many are ours. So far 45: memory and cache
 operations, the clock, thread-specific slots and errno, the interrupt mask, a few system flags,
-and the stateless parts of `nn_ac` and `nn_act`.
+the stateless parts of `nn_ac` and `nn_act`, and input (`os/input.cpp`: `padscore` with one Pro
+Controller, `vpad` with no GamePad). Input comes from the input script when `CEMU_INPUT_SCRIPT`
+names one (the reference's format, so routes replay identically), otherwise from the window's
+keyboard and gamepad.
 
 **The renderer** (G2, design D13 as built) is off unless `WWHD_RENDER=vk`. It needs a Vulkan 1.3
 device with dynamic rendering (lavapipe: `REF_GPU=llvmpipe` in `tools/reference/run.sh`). It draws on
@@ -112,8 +115,11 @@ swap the renderer blits the TV image into it, scaled to fit and centred, with th
 has (the swapchain takes the scan buffer's sRGB encoding). F11 or Alt+Enter toggles fullscreen,
 `WWHD_VSYNC=1` asks for FIFO presentation instead of mailbox. Cemu's vcpkg SDL3 has no video, so
 `wwhd-null` links our build of the same version (`tools/worker/setup-volume.sh sdl3`) in its place;
-the traces are unchanged. Input and sound don't come through the window yet. On the worker, with
-lavapipe under Xvfb, the save route runs windowed at about 5 frames a second:
+the traces are unchanged. The window's keyboard and first gamepad are the Pro Controller: keys as
+the reference's `controller0.xml` (A=X B=Z X=S Y=A L=Q R=W ZL=1 ZR=2 +=Return -=Backspace, D-pad
+on the arrows, left stick I/J/K/L, right stick T/F/G/H), gamepad face buttons by their printed
+label, triggers as ZL/ZR, and rumble. Sound still goes through Cemu's audio output. On the
+worker, with lavapipe under Xvfb, the save route runs windowed at about 5 frames a second:
 
     tools/worker/job start win env CEMU_BIN=/wwhd/WWHDRecomp/build/wwhd/wwhd-null WWHD_NATIVE=on \
         REF_GPU=llvmpipe WWHD_RENDER=vk WWHD_WINDOW=1 REF_SAVE=/wwhd/data/saves/wwhd_100 \

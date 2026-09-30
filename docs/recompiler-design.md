@@ -676,9 +676,14 @@ development-only reference that traces, captures and texture dumps are checked a
   identical, so our scheduler gets a deterministic mode that follows Cemu's rules on the virtual
   clock (the one every check uses) and a real-time mode on host threads for players. Each replaced
   function must keep the whole-route traces identical.
-* **Status (2026-09-30):** 35 functions are ours (coreinit 31, nn_ac 2, nn_act 2), with both route
-  traces identical. What they still borrow from Cemu is two accessors: the clock and the current
-  thread. Held back until their library moves whole, because their functions share state:
+* **Status (2026-09-30):** 45 functions are ours (coreinit 31, nn_ac 2, nn_act 2, padscore 6,
+  vpad 4), with both route traces identical. Input is a whole library: the input script (for
+  routes) or the window's keyboard and gamepad (SDL3) drive one Pro Controller, and the GamePad is
+  absent. The platform shell has its window: SDL3, presented by our renderer. What our functions
+  still borrow from Cemu is three accessors: the clock, the current thread and gx2's swap count.
+  Imports Cemu never implemented (8 in padscore, `VPADBASEGetHeadphoneStatus`) have no HLE entry
+  to take over and wait for our loader. Held back until their library moves whole, because their
+  functions share state:
   `nn_act.Initialize` (loads accounts for the rest of nn_act), `nn_boss` and `nn_olv` (objects
   with vtables in Cemu's memory, IPC to Cemu's IOSU), `nlibcurl` and `nsysnet` (setup the rest
   of the library checks), and `OSGetSystemInfo` (returns a structure in Cemu's memory).
