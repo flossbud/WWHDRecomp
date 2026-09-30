@@ -136,6 +136,17 @@ namespace
 		Show((1920 - w) / 2, (1080 - h) / 2, c, w, h);
 	}
 
+	void DrawPreparing(uint32 done, uint32 total)
+	{
+		constexpr int w = 1100, h = 200;
+		Canvas c(w, h);
+		c.Text(40, 34, 3, "Preparing shaders", kText);
+		c.Fill(40, 88, w - 80, 36, kFrame);
+		c.Fill(44, 92, (int)((w - 88) * (total ? (double)done / total : 1.0)), 28, kField);
+		c.Text(40, 146, 2, fmt::format("{} of {}. Once per graphics driver: later starts are quick.", done, total), kHint);
+		Show((1920 - w) / 2, (1080 - h) / 2, c, w, h);
+	}
+
 	void DrawHomeSign()
 	{
 		constexpr int w = 620, h = 60;
@@ -147,6 +158,11 @@ namespace
 
 namespace wwhd
 {
+	void ShowPreparing(uint32 done, uint32 total)
+	{
+		DrawPreparing(done, total);
+	}
+
 	void UpdateOverlay()
 	{
 		static uint32 s_keyboard = ~0u, s_error = ~0u;

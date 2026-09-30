@@ -28,6 +28,19 @@ namespace wwhd::gpu
 	void SetOverlay(sint32 x, sint32 y, uint32 w, uint32 h, std::vector<uint32> rgba);
 
 	bool RendererOn();                                             // WWHD_RENDER=vk, and Vulkan came up
+
+	// The shader cache (docs/recompiler-design.md D20). Before the game starts, PrepareShaders builds
+	// every shader and pipeline the cache on disk knows (portable/shaderCache/wwhd), on all cores but
+	// the caller's, and calls progress(done, total) on the caller's thread about every 30 ms meanwhile.
+	// Nothing without WWHD_RENDER=vk.
+	void PrepareShaders(const std::function<void(uint32 done, uint32 total)>& progress);
+	void PresentOverlayOnly();                                     // the overlay alone on black: the progress screen
+	void SaveShaderCache();                                        // the driver's part to disk, now (at exit)
+	// shaders translated and pipelines built during play since the last call (first sights: the
+	// hitches), and the time they took
+	struct FirstSights { uint32 shaders = 0, pipelines = 0; double shaderMs = 0, pipelineMs = 0; };
+	FirstSights TakeFirstSights();
+
 	void RendererClear(const uint32be* body, uint32 nWords);       // IT_HLE_CLEAR_COLOR_DEPTH_STENCIL
 	void RendererCopyToScanBuffer(const uint32be* body, uint32 nWords); // IT_HLE_COPY_COLORBUFFER_TO_SCANBUFFER
 	void RendererSwap();                                           // IT_HLE_TRIGGER_SCANBUFFER_SWAP

@@ -38,7 +38,7 @@ compile "$root/src/frontend/window_system.cpp" window_system_null.o -DWWHD_NULL_
 compile "$root/src/frontend/audio_sdl.cpp" audio_sdl.o -I"$sdl3/include"
 compile "$root/src/frontend/overlay.cpp" overlay.o -I"$sdl3/include"
 compile "$root/src/gpu/null_gpu.cpp" null_gpu.o -I"$root/src/gpu" -I"$cemu/dependencies/Vulkan-Headers/include"
-for f in vk renderer present; do compile "$root/src/gpu/vk/$f.cpp" "vk_$f.o" -I"$cemu/dependencies/Vulkan-Headers/include"; done
+for f in vk renderer present shader_cache; do compile "$root/src/gpu/vk/$f.cpp" "vk_$f.o" -I"$cemu/dependencies/Vulkan-Headers/include"; done
 # draws compile with Cemu's flags for its Vulkan shader compiler (glslang's include paths)
 mapfile -t vkflags < <(python3 "$root/tools/cemu_flags.py" "$cemu/build/compile_commands.json" Latte/Renderer/Vulkan/RendererShaderVk.cpp)
 for f in draw texture latte_glue; do
@@ -108,7 +108,7 @@ link() {  # link NAME OBJECTS...
     eval "$cmd"
 }
 link wwhd "$out/cemu_boot.o" "$out/window_system.o"
-null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/audio_sdl.o" "$out/overlay.o" "$out/null_gpu.o" "$out"/vk_{vk,renderer,present,draw,texture,latte_glue}.o
+null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/audio_sdl.o" "$out/overlay.o" "$out/null_gpu.o" "$out"/vk_{vk,renderer,present,shader_cache,draw,texture,latte_glue}.o
            "$out"/rt_{dispatch,imports,diff,profile}.o "${os_objs[@]}")
 limits=$(ls "$cemu"/build/vcpkg_installed/*/lib/libglslang-default-resource-limits.a | head -1)  # glslang's defaults (draw.cpp)
 if [ -n "$recomp" ]; then

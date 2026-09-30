@@ -90,6 +90,18 @@ namespace wwhd::gpu
 	void PresentRecord(Image& scan);                              // before the swap's submit: into the next window image
 	void PresentQueue();                                          // after it
 
+	// shader_cache.cpp: the cache on disk (design D20); its records are draw.cpp's byte strings
+	namespace cache
+	{
+		void Open();                                              // after the device is up
+		const std::vector<std::vector<uint8>>& Shaders();         // the records read at Open
+		const std::vector<std::vector<uint8>>& Pipelines();
+		void AddShader(std::span<const uint8> record);            // appended as they are first seen
+		void AddPipeline(std::span<const uint8> record);
+		VkPipelineCache Driver();                                 // the driver's, for every pipeline built
+		void Save();                                              // the driver's to disk, now
+		void SaveNowAndThen();                                    // at a swap: saves on another thread when due
+	}
 	// draw.cpp
 	void DrawInit();
 	void EndRendering();                                          // before anything outside a render pass

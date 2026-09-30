@@ -149,9 +149,10 @@ namespace frametimes
 		size_t slow = s_ms.end() - std::upper_bound(s_ms.begin(), s_ms.end(), 50.0f);
 		uint64 idle = coreinit::__OSIdleNanoseconds();
 		double busy = 100.0 * (1.0 - (double)(idle - s_idleAtStart) / 1e9 / period);
+		wwhd::gpu::FirstSights f = wwhd::gpu::RendererOn() ? wwhd::gpu::TakeFirstSights() : wwhd::gpu::FirstSights{};
 		cemuLog_log(LogType::Force, "wwhd real time: {:.1f} fps over {:.0f} s, frame time median {:.1f} ms, 99th {:.1f} ms, "
-			"worst {:.1f} ms, {} over 50 ms; scheduler thread busy {:.0f}%",
-			s_ms.size() / period, period, at(0.5), at(0.99), s_ms.back(), slow, busy);
+			"worst {:.1f} ms, {} over 50 ms; scheduler thread busy {:.0f}%; first sights {} shaders ({:.0f} ms), {} pipelines ({:.0f} ms)",
+			s_ms.size() / period, period, at(0.5), at(0.99), s_ms.back(), slow, busy, f.shaders, f.shaderMs, f.pipelines, f.pipelineMs);
 		s_ms.clear();
 		s_periodStart = now;
 		s_idleAtStart = idle;

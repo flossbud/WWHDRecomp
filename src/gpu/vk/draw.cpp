@@ -61,9 +61,56 @@ namespace wwhd::gpu
 				Log(msg());
 		}
 
+		// ---- records for the cache on disk (shader_cache.cpp) -------------------------------------------
+		struct Writer
+		{
+			std::vector<uint8> bytes;
+			void Raw(const void* p, size_t n) { bytes.insert(bytes.end(), (const uint8*)p, (const uint8*)p + n); }
+			template<typename T> void Pod(const T& v) { static_assert(std::is_trivially_copyable_v<T>); Raw(&v, sizeof(T)); }
+			template<typename T> void Vec(const std::vector<T>& v)
+			{
+				Pod((uint32)v.size());
+				if (!v.empty())
+					Raw(v.data(), v.size() * sizeof(T));
+			}
+		};
+
+		struct Reader
+		{
+			std::span<const uint8> bytes;
+			size_t at = 0;
+			bool ok = true;
+			bool Raw(void* p, size_t n)
+			{
+				if (!ok || n > bytes.size() - at)
+					return ok = false;
+				memcpy(p, bytes.data() + at, n);
+				at += n;
+				return true;
+			}
+			template<typename T> bool Pod(T& v) { static_assert(std::is_trivially_copyable_v<T>); return Raw(&v, sizeof(T)); }
+			template<typename T> bool Vec(std::vector<T>& v)
+			{
+				uint32 n = 0;
+				if (!Pod(n) || n > (bytes.size() - at) / sizeof(T))
+					return ok = false;
+				v.resize(n);
+				return n == 0 || Raw(v.data(), n * sizeof(T));
+			}
+			bool End() const { return ok && at == bytes.size(); }
+		};
+
+		// shaders translated and pipelines built during play (not prepared), for the real-time log
+		FirstSights s_sights;
+		double MsSince(std::chrono::steady_clock::time_point t)
+		{
+			return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count();
+		}
+
 		// ---- shaders -------------------------------------------------------------------------------
 		struct Shader
 		{
+			uint64 key = 0;
 			LatteDecompilerShader* dec = nullptr;
 			LatteDecompilerOutputUniformOffsets uniforms;
 			LatteDecompilerShaderResourceMapping mapping;
@@ -73,8 +120,9 @@ namespace wwhd::gpu
 		};
 		std::unordered_map<uint64, Shader*> s_shaders;
 		std::unordered_map<uint64, LatteFetchShader*> s_fetchShaders;
-		std::unordered_map<uint64, VkPipelineLayout> s_layouts;
-		std::unordered_map<uint64, VkPipeline> s_pipelines;
+		std::map<std::pair<VkDescriptorSetLayout, VkDescriptorSetLayout>, VkPipelineLayout> s_layouts;
+		std::unordered_map<uint64, VkPipeline> s_pipelines;        // by the registers they come from, this run
+		std::unordered_map<uint64, VkPipeline> s_recipes;          // by recipe (PipelineDesc::Serialize), prepared or built
 
 		bool CompileSpirv(const std::string& glsl, EShLanguage stage, std::vector<uint32>& spirv, std::string& log)
 		{
@@ -138,11 +186,89 @@ namespace wwhd::gpu
 			return l;
 		}
 
+		// A shader as the cache on disk keeps it: its SPIR-V, the decompiler's uniform offsets and
+		// resource mapping, and the fields of its analysis the draws read. Keep the list complete: a
+		// draw that reads another field of dec must have it written here (and cache::kVersion bumped).
+		std::vector<uint8> SerializeShader(const Shader& sh, bool vertex, const std::vector<uint32>& spirv)
+		{
+			Writer w;
+			w.Pod(sh.key);
+			w.Pod((uint8)vertex);
+			w.Vec(spirv);
+			w.Pod(sh.uniforms);
+			w.Pod(sh.mapping);
+			const LatteDecompilerShader& d = *sh.dec;
+			w.Pod(d.pixelColorOutputMask);
+			w.Pod(d.textureUnitDim);
+			w.Pod(d.textureUnitSamplerAssignment);
+			w.Pod(d.textureUsesDepthCompare);
+			w.Vec(std::vector<LatteDecompilerShader::QuickBufferEntry>(d.list_quickBufferList.begin(), d.list_quickBufferList.end()));
+			w.Vec(d.list_remappedUniformEntries_register);
+			w.Pod((uint32)d.list_remappedUniformEntries_bufferGroups.size());
+			for (auto& g : d.list_remappedUniformEntries_bufferGroups)
+			{
+				w.Pod(g.bufferId);
+				w.Pod(g.kcacheBankIdOffset);
+				w.Vec(g.entries);
+			}
+			return std::move(w.bytes);
+		}
+
+		// the shader again from its record, without the decompiler or glslang; nullptr if it's damaged
+		Shader* LoadShader(std::span<const uint8> record)
+		{
+			Reader r{ record };
+			uint64 key = 0;
+			uint8 vertex = 0;
+			std::vector<uint32> spirv;
+			r.Pod(key);
+			r.Pod(vertex);
+			r.Vec(spirv);
+			auto* d = new LatteDecompilerShader(vertex ? LatteConst::ShaderType::Vertex : LatteConst::ShaderType::Pixel);
+			Shader* sh = new Shader;
+			sh->key = key;
+			sh->dec = d;
+			r.Pod(sh->uniforms);
+			r.Pod(sh->mapping);
+			r.Pod(d->pixelColorOutputMask);
+			r.Pod(d->textureUnitDim);
+			r.Pod(d->textureUnitSamplerAssignment);
+			r.Pod(d->textureUsesDepthCompare);
+			std::vector<LatteDecompilerShader::QuickBufferEntry> quick;
+			if (r.Vec(quick) && quick.size() <= LATTE_NUM_MAX_UNIFORM_BUFFERS)
+				for (auto& q : quick)
+					d->list_quickBufferList.push_back(q);
+			else
+				r.ok = false;
+			r.Vec(d->list_remappedUniformEntries_register);
+			uint32 groups = 0;
+			r.Pod(groups);
+			for (uint32 i = 0; r.ok && i < groups; i++)
+			{
+				uint16 id = 0, bank = 0;
+				r.Pod(id);
+				r.Pod(bank);
+				r.Vec(d->list_remappedUniformEntries_bufferGroups.emplace_back(id, bank).entries);
+			}
+			VkShaderModuleCreateInfo mi{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+			mi.codeSize = spirv.size() * 4;
+			mi.pCode = spirv.data();
+			if (!r.End() || spirv.empty() || vkCreateShaderModule(s.device, &mi, nullptr, &sh->module) != VK_SUCCESS)
+			{
+				delete d;
+				delete sh;
+				return nullptr;
+			}
+			sh->layout = CreateLayout(*sh, vertex ? VK_SHADER_STAGE_VERTEX_BIT : VK_SHADER_STAGE_FRAGMENT_BIT);
+			return sh;
+		}
+
 		Shader* GetShader(bool vertex, uint64 key, const uint8* code, uint32 size, LatteFetchShader* fetch)
 		{
 			auto it = s_shaders.find(key);
 			if (it != s_shaders.end())
 				return it->second;
+			auto start = std::chrono::steady_clock::now();
 			LatteDecompilerOptions opt;
 			opt.usesGeometryShader = false;
 			opt.useTFViaSSBO = false;
@@ -155,6 +281,7 @@ namespace wwhd::gpu
 				LatteDecompiler_DecompilePixelShader(key, LatteGPUState.contextRegister, (uint8*)code, size, opt, &out);
 			Shader* sh = new Shader;
 			s_shaders[key] = sh;
+			sh->key = key;
 			sh->dec = out.shader;
 			sh->uniforms = out.uniformOffsetsVK;
 			sh->mapping = out.resourceMappingVK;
@@ -187,6 +314,9 @@ namespace wwhd::gpu
 			mi.pCode = spirv.data();
 			Check(vkCreateShaderModule(s.device, &mi, nullptr, &sh->module), "vkCreateShaderModule");
 			sh->layout = CreateLayout(*sh, vertex ? VK_SHADER_STAGE_VERTEX_BIT : VK_SHADER_STAGE_FRAGMENT_BIT);
+			cache::AddShader(SerializeShader(*sh, vertex, spirv));
+			s_sights.shaders++;
+			s_sights.shaderMs += MsSince(start);
 			return sh;
 		}
 
@@ -322,10 +452,10 @@ namespace wwhd::gpu
 			}
 		}
 
+		// by the pair itself: a hash of two handles (pointers, often allocated side by side) collides
 		VkPipelineLayout PipelineLayout(Shader* vs, Shader* ps)
 		{
-			uint64 key = Mix((uint64)vs->layout, (uint64)ps->layout);
-			auto it = s_layouts.find(key);
+			auto it = s_layouts.find({ vs->layout, ps->layout });
 			if (it != s_layouts.end())
 				return it->second;
 			VkDescriptorSetLayout sets[2] = { vs->layout, ps->layout };
@@ -334,34 +464,73 @@ namespace wwhd::gpu
 			ci.pSetLayouts = sets;
 			VkPipelineLayout l;
 			Check(vkCreatePipelineLayout(s.device, &ci, nullptr, &l), "vkCreatePipelineLayout");
-			return s_layouts[key] = l;
+			return s_layouts[{ vs->layout, ps->layout }] = l;
 		}
 
-		VkPipeline GetPipeline(Shader* vs, Shader* ps, LatteFetchShader* fetch, VkPipelineLayout layout, const Targets& t,
+		// A pipeline's recipe: its Vulkan state and its shaders' keys. The cache on disk keeps it
+		// (shader_cache.cpp) so the pipeline can be built again before the game starts; its bytes
+		// (Serialize) are its identity from run to run.
+		struct PipelineDesc
+		{
+			uint64 vsKey = 0, psKey = 0;
+			std::vector<VkVertexInputBindingDescription> bindings;
+			std::vector<VkVertexInputAttributeDescription> attrs;
+			VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+			VkBool32 primitiveRestart = VK_FALSE, rasterizerDiscard = VK_FALSE, depthBias = VK_FALSE, depthClip = VK_TRUE;
+			VkCullModeFlags cull = VK_CULL_MODE_NONE;
+			VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+			uint32 colorCount = 0;
+			VkPipelineColorBlendAttachmentState blends[8]{};
+			VkFormat colorFormats[8]{};
+			VkBool32 logicOpEnable = VK_FALSE;
+			VkLogicOp logicOp = VK_LOGIC_OP_COPY;
+			VkBool32 depthTest = VK_FALSE, depthWrite = VK_FALSE, stencilTest = VK_FALSE;
+			VkCompareOp depthCompare = VK_COMPARE_OP_ALWAYS;
+			VkStencilOpState front{}, back{};
+			VkFormat depthFormat = VK_FORMAT_UNDEFINED, stencilFormat = VK_FORMAT_UNDEFINED;
+
+			template<typename IO, typename V> static bool Fields(IO& io, V& d)
+			{
+				io.Pod(d.vsKey); io.Pod(d.psKey);
+				io.Vec(d.bindings); io.Vec(d.attrs);
+				io.Pod(d.topology); io.Pod(d.primitiveRestart); io.Pod(d.rasterizerDiscard); io.Pod(d.depthBias); io.Pod(d.depthClip);
+				io.Pod(d.cull); io.Pod(d.frontFace);
+				io.Pod(d.colorCount);
+				for (uint32 i = 0; i < std::min<uint32>(d.colorCount, 8); i++)   // attachments past colorCount don't exist
+				{
+					io.Pod(d.blends[i]);
+					io.Pod(d.colorFormats[i]);
+				}
+				io.Pod(d.logicOpEnable); io.Pod(d.logicOp);
+				io.Pod(d.depthTest); io.Pod(d.depthWrite); io.Pod(d.stencilTest); io.Pod(d.depthCompare);
+				io.Pod(d.front); io.Pod(d.back);
+				io.Pod(d.depthFormat); io.Pod(d.stencilFormat);
+				return d.colorCount <= 8;
+			}
+			std::vector<uint8> Serialize() const
+			{
+				Writer w;
+				Fields(w, *this);
+				return std::move(w.bytes);
+			}
+			bool Parse(std::span<const uint8> record)
+			{
+				Reader r{ record };
+				return Fields(r, *this) && r.End();
+			}
+		};
+
+		// the recipe for a draw, from the registers
+		PipelineDesc Describe(Shader* vs, Shader* ps, LatteFetchShader* fetch, const Targets& t,
 			Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE prim)
 		{
 			const auto& r = LatteGPUState.contextNew;
 			const uint32* raw = LatteGPUState.contextRegister;
-			// everything the pipeline is built from
-			uint64 key = Mix((uint64)vs->module, (uint64)ps->module);
-			key = Mix(key, fetch->key);
-			for (auto& g : fetch->bufferGroups)
-				key = Mix(key, (raw[mmSQ_VTX_ATTRIBUTE_BLOCK_START + g.attributeBufferIndex * 7 + 2] >> 11) & 0xFFFF);
-			key = Mix(key, (uint64)prim);
-			for (uint32 reg : { (uint32)Latte::REGADDR::PA_SU_SC_MODE_CNTL, (uint32)Latte::REGADDR::PA_CL_CLIP_CNTL, (uint32)Latte::REGADDR::CB_COLOR_CONTROL,
-				(uint32)Latte::REGADDR::CB_TARGET_MASK, (uint32)Latte::REGADDR::DB_DEPTH_CONTROL, (uint32)Latte::REGADDR::DB_STENCILREFMASK,
-				(uint32)Latte::REGADDR::DB_STENCILREFMASK_BF, (uint32)Latte::REGADDR::PA_CL_VTE_CNTL })
-				key = Mix(key, raw[reg]);
-			for (uint32 i = 0; i < 8; i++)
-				key = Mix(Mix(key, raw[Latte::REGADDR::CB_BLEND0_CONTROL + i]), t.color[i] ? (uint64)t.color[i]->format : 0);
-			key = Mix(key, t.depth ? (uint64)t.depth->format + 1 : 0);
-			auto it = s_pipelines.find(key);
-			if (it != s_pipelines.end())
-				return it->second;
+			PipelineDesc d;
+			d.vsKey = vs->key;
+			d.psKey = ps->key;
 
 			// vertex input
-			std::vector<VkVertexInputAttributeDescription> attrs;
-			std::vector<VkVertexInputBindingDescription> bindings;
 			for (auto& g : fetch->bufferGroups)
 			{
 				std::optional<LatteConst::VertexFetchType2> fetchType;
@@ -371,72 +540,51 @@ namespace wwhd::gpu
 					uint32 location = vs->mapping.attributeMapping[a.semanticId];
 					if (location == (uint32)-1)
 						continue;
-					attrs.push_back({ location, a.attributeBufferIndex, VertexFormat(a.format), a.offset });
+					d.attrs.push_back({ location, a.attributeBufferIndex, VertexFormat(a.format), a.offset });
 					if (!fetchType)
 						fetchType = a.fetchType;
 				}
 				uint32 stride = (raw[mmSQ_VTX_ATTRIBUTE_BLOCK_START + g.attributeBufferIndex * 7 + 2] >> 11) & 0xFFFF;
-				bindings.push_back({ g.attributeBufferIndex, stride,
+				d.bindings.push_back({ g.attributeBufferIndex, stride,
 					fetchType == LatteConst::VertexFetchType2::INSTANCE_DATA ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX });
 			}
-			VkPipelineVertexInputStateCreateInfo vin{ VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
-			vin.vertexBindingDescriptionCount = (uint32)bindings.size();
-			vin.pVertexBindingDescriptions = bindings.data();
-			vin.vertexAttributeDescriptionCount = (uint32)attrs.size();
-			vin.pVertexAttributeDescriptions = attrs.data();
 
 			// input assembly (quads and quad strips arrive as triangle lists, see DecodeIndices)
 			using P = Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE;
-			VkPipelineInputAssemblyStateCreateInfo ia{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
-			ia.primitiveRestartEnable = VK_TRUE;
+			d.primitiveRestart = VK_TRUE;
 			switch (prim)
 			{
-			case P::POINTS: ia.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST; ia.primitiveRestartEnable = VK_FALSE; break;
-			case P::LINES: ia.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST; ia.primitiveRestartEnable = VK_FALSE; break;
-			case P::LINE_STRIP: case P::LINE_LOOP: ia.topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP; break;
-			case P::TRIANGLES: ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; ia.primitiveRestartEnable = VK_FALSE; break;
-			case P::TRIANGLE_FAN: ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN; break;
-			case P::TRIANGLE_STRIP: ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP; break;
-			default: ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; ia.primitiveRestartEnable = VK_FALSE; break;
+			case P::POINTS: d.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST; d.primitiveRestart = VK_FALSE; break;
+			case P::LINES: d.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST; d.primitiveRestart = VK_FALSE; break;
+			case P::LINE_STRIP: case P::LINE_LOOP: d.topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP; break;
+			case P::TRIANGLES: d.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; d.primitiveRestart = VK_FALSE; break;
+			case P::TRIANGLE_FAN: d.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN; break;
+			case P::TRIANGLE_STRIP: d.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP; break;
+			default: d.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; d.primitiveRestart = VK_FALSE; break;
 			}
-
-			VkPipelineViewportStateCreateInfo vp{ VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
-			vp.viewportCount = vp.scissorCount = 1;
 
 			// rasterizer
 			const auto& pm = r.PA_SU_SC_MODE_CNTL;
-			VkPipelineRasterizationStateCreateInfo rs{ VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
-			rs.rasterizerDiscardEnable = r.PA_CL_CLIP_CNTL.get_DX_RASTERIZATION_KILL();
+			d.rasterizerDiscard = r.PA_CL_CLIP_CNTL.get_DX_RASTERIZATION_KILL();
 			if (!r.PA_CL_VTE_CNTL.get_VPORT_X_OFFSET_ENA())             // GX2SetSpecialState(0, true) workaround
-				rs.rasterizerDiscardEnable = VK_FALSE;
-			rs.polygonMode = VK_POLYGON_MODE_FILL;
-			rs.depthClampEnable = VK_TRUE;
-			rs.lineWidth = 1.0f;
-			rs.depthBiasEnable = pm.get_OFFSET_FRONT_ENABLED() ? VK_TRUE : VK_FALSE;
+				d.rasterizerDiscard = VK_FALSE;
+			d.depthBias = pm.get_OFFSET_FRONT_ENABLED() ? VK_TRUE : VK_FALSE;
 			uint32 cullFront = pm.get_CULL_FRONT(), cullBack = pm.get_CULL_BACK();
-			rs.cullMode = (cullFront && cullBack) ? VK_CULL_MODE_FRONT_AND_BACK : cullFront ? VK_CULL_MODE_FRONT_BIT
+			d.cull = (cullFront && cullBack) ? VK_CULL_MODE_FRONT_AND_BACK : cullFront ? VK_CULL_MODE_FRONT_BIT
 				: cullBack ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE;
-			rs.frontFace = pm.get_FRONT_FACE() == Latte::LATTE_PA_SU_SC_MODE_CNTL::E_FRONTFACE::CCW ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
-			VkPipelineRasterizationDepthClipStateCreateInfoEXT clip{ VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_DEPTH_CLIP_STATE_CREATE_INFO_EXT };
-			clip.depthClipEnable = !r.PA_CL_CLIP_CNTL.get_ZCLIP_FAR_DISABLE();
-			if (s.depthClip)
-				rs.pNext = &clip;
-			VkPipelineMultisampleStateCreateInfo ms{ VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
-			ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+			d.frontFace = pm.get_FRONT_FACE() == Latte::LATTE_PA_SU_SC_MODE_CNTL::E_FRONTFACE::CCW ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
+			d.depthClip = !r.PA_CL_CLIP_CNTL.get_ZCLIP_FAR_DISABLE();
 
 			// blend
 			uint32 blendMask = r.CB_COLOR_CONTROL.get_BLEND_MASK(), targetMask = r.CB_TARGET_MASK.get_MASK();
-			VkPipelineColorBlendAttachmentState blends[8]{};
-			VkFormat colorFormats[8]{};
-			uint32 colorCount = 0;
 			for (uint32 i = 0; i < 8; i++)
 			{
-				colorFormats[i] = t.color[i] ? t.color[i]->format : VK_FORMAT_UNDEFINED;
+				d.colorFormats[i] = t.color[i] ? t.color[i]->format : VK_FORMAT_UNDEFINED;
 				if (t.color[i])
-					colorCount = i + 1;
-				auto& b = blends[i];
+					d.colorCount = i + 1;
+				auto& b = d.blends[i];
 				const auto& bc = r.CB_BLENDN_CONTROL[i];
-				b.blendEnable = (blendMask & (1 << i)) && !IsIntegerFormat(colorFormats[i]);
+				b.blendEnable = (blendMask & (1 << i)) && !IsIntegerFormat(d.colorFormats[i]);
 				b.colorWriteMask = (targetMask >> (i * 4)) & 0xF;
 				b.colorBlendOp = BlendOp((uint32)bc.get_COLOR_COMB_FCN());
 				b.srcColorBlendFactor = BlendFactor((uint32)bc.get_COLOR_SRCBLEND());
@@ -454,23 +602,18 @@ namespace wwhd::gpu
 					b.dstAlphaBlendFactor = b.dstColorBlendFactor;
 				}
 			}
-			VkPipelineColorBlendStateCreateInfo cb{ VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
 			auto rop = r.CB_COLOR_CONTROL.get_ROP();
-			cb.logicOpEnable = rop != Latte::LATTE_CB_COLOR_CONTROL::E_LOGICOP::COPY;
-			cb.logicOp = rop == Latte::LATTE_CB_COLOR_CONTROL::E_LOGICOP::SET ? VK_LOGIC_OP_SET
+			d.logicOpEnable = rop != Latte::LATTE_CB_COLOR_CONTROL::E_LOGICOP::COPY;
+			d.logicOp = rop == Latte::LATTE_CB_COLOR_CONTROL::E_LOGICOP::SET ? VK_LOGIC_OP_SET
 				: rop == Latte::LATTE_CB_COLOR_CONTROL::E_LOGICOP::CLEAR ? VK_LOGIC_OP_CLEAR
 				: rop == Latte::LATTE_CB_COLOR_CONTROL::E_LOGICOP::OR ? VK_LOGIC_OP_OR : VK_LOGIC_OP_COPY;
-			cb.attachmentCount = colorCount;
-			cb.pAttachments = blends;
 
 			// depth and stencil
 			const auto& dc = r.DB_DEPTH_CONTROL;
-			VkPipelineDepthStencilStateCreateInfo ds{ VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
-			ds.depthTestEnable = dc.get_Z_ENABLE();
-			ds.depthWriteEnable = dc.get_Z_WRITE_ENABLE();
-			ds.depthCompareOp = kCompare[(uint32)dc.get_Z_FUNC()];
-			ds.maxDepthBounds = 1.0f;
-			ds.stencilTestEnable = dc.get_STENCIL_ENABLE();
+			d.depthTest = dc.get_Z_ENABLE();
+			d.depthWrite = dc.get_Z_WRITE_ENABLE();
+			d.depthCompare = kCompare[(uint32)dc.get_Z_FUNC()];
+			d.stencilTest = dc.get_STENCIL_ENABLE();
 			auto face = [&](bool back) {
 				VkStencilOpState o{};
 				const auto& f = r.DB_STENCILREFMASK;
@@ -485,20 +628,62 @@ namespace wwhd::gpu
 				o.passOp = kStencilOp[(uint32)(useBack ? dc.get_STENCIL_ZPASS_B() : dc.get_STENCIL_ZPASS_F())];
 				return o;
 			};
-			ds.front = face(false);
-			ds.back = face(true);
+			d.front = face(false);
+			d.back = face(true);
+			d.depthFormat = t.depth ? t.depth->format : VK_FORMAT_UNDEFINED;
+			d.stencilFormat = t.depth && (t.depth->aspect & VK_IMAGE_ASPECT_STENCIL_BIT) ? t.depth->format : VK_FORMAT_UNDEFINED;
+			return d;
+		}
 
+		// the pipeline for a recipe, through the driver's cache; any thread (preparing uses several)
+		VkResult BuildPipeline(const PipelineDesc& d, Shader* vs, Shader* ps, VkPipelineLayout layout, VkPipeline& pipeline)
+		{
+			VkPipelineVertexInputStateCreateInfo vin{ VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
+			vin.vertexBindingDescriptionCount = (uint32)d.bindings.size();
+			vin.pVertexBindingDescriptions = d.bindings.data();
+			vin.vertexAttributeDescriptionCount = (uint32)d.attrs.size();
+			vin.pVertexAttributeDescriptions = d.attrs.data();
+			VkPipelineInputAssemblyStateCreateInfo ia{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
+			ia.topology = d.topology;
+			ia.primitiveRestartEnable = d.primitiveRestart;
+			VkPipelineViewportStateCreateInfo vp{ VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
+			vp.viewportCount = vp.scissorCount = 1;
+			VkPipelineRasterizationStateCreateInfo rs{ VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
+			rs.rasterizerDiscardEnable = d.rasterizerDiscard;
+			rs.polygonMode = VK_POLYGON_MODE_FILL;
+			rs.depthClampEnable = VK_TRUE;
+			rs.lineWidth = 1.0f;
+			rs.depthBiasEnable = d.depthBias;
+			rs.cullMode = d.cull;
+			rs.frontFace = d.frontFace;
+			VkPipelineRasterizationDepthClipStateCreateInfoEXT clip{ VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_DEPTH_CLIP_STATE_CREATE_INFO_EXT };
+			clip.depthClipEnable = d.depthClip;
+			if (s.depthClip)
+				rs.pNext = &clip;
+			VkPipelineMultisampleStateCreateInfo ms{ VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
+			ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+			VkPipelineColorBlendStateCreateInfo cb{ VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
+			cb.logicOpEnable = d.logicOpEnable;
+			cb.logicOp = d.logicOp;
+			cb.attachmentCount = d.colorCount;
+			cb.pAttachments = d.blends;
+			VkPipelineDepthStencilStateCreateInfo ds{ VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
+			ds.depthTestEnable = d.depthTest;
+			ds.depthWriteEnable = d.depthWrite;
+			ds.depthCompareOp = d.depthCompare;
+			ds.maxDepthBounds = 1.0f;
+			ds.stencilTestEnable = d.stencilTest;
+			ds.front = d.front;
+			ds.back = d.back;
 			VkDynamicState dyn[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_BLEND_CONSTANTS, VK_DYNAMIC_STATE_DEPTH_BIAS };
 			VkPipelineDynamicStateCreateInfo dy{ VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
 			dy.dynamicStateCount = 4;
 			dy.pDynamicStates = dyn;
-
 			VkPipelineRenderingCreateInfo rinfo{ VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
-			rinfo.colorAttachmentCount = colorCount;
-			rinfo.pColorAttachmentFormats = colorFormats;
-			rinfo.depthAttachmentFormat = t.depth ? t.depth->format : VK_FORMAT_UNDEFINED;
-			rinfo.stencilAttachmentFormat = t.depth && (t.depth->aspect & VK_IMAGE_ASPECT_STENCIL_BIT) ? t.depth->format : VK_FORMAT_UNDEFINED;
-
+			rinfo.colorAttachmentCount = d.colorCount;
+			rinfo.pColorAttachmentFormats = d.colorFormats;
+			rinfo.depthAttachmentFormat = d.depthFormat;
+			rinfo.stencilAttachmentFormat = d.stencilFormat;
 			VkPipelineShaderStageCreateInfo stages[2]{};
 			stages[0] = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, vs->module, "main", nullptr };
 			stages[1] = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, ps->module, "main", nullptr };
@@ -515,10 +700,46 @@ namespace wwhd::gpu
 			pi.pColorBlendState = &cb;
 			pi.pDynamicState = &dy;
 			pi.layout = layout;
+			return vkCreateGraphicsPipelines(s.device, cache::Driver(), 1, &pi, nullptr, &pipeline);
+		}
+
+		VkPipeline GetPipeline(Shader* vs, Shader* ps, LatteFetchShader* fetch, VkPipelineLayout layout, const Targets& t,
+			Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE prim)
+		{
+			const uint32* raw = LatteGPUState.contextRegister;
+			// everything the pipeline is built from (Mix of two values alone is their XOR's: start from 0,
+			// or two modules allocated side by side collide with another pair)
+			uint64 key = Mix(Mix(0, (uint64)vs->module), (uint64)ps->module);
+			key = Mix(key, fetch->key);
+			for (auto& g : fetch->bufferGroups)
+				key = Mix(key, (raw[mmSQ_VTX_ATTRIBUTE_BLOCK_START + g.attributeBufferIndex * 7 + 2] >> 11) & 0xFFFF);
+			key = Mix(key, (uint64)prim);
+			for (uint32 reg : { (uint32)Latte::REGADDR::PA_SU_SC_MODE_CNTL, (uint32)Latte::REGADDR::PA_CL_CLIP_CNTL, (uint32)Latte::REGADDR::CB_COLOR_CONTROL,
+				(uint32)Latte::REGADDR::CB_TARGET_MASK, (uint32)Latte::REGADDR::DB_DEPTH_CONTROL, (uint32)Latte::REGADDR::DB_STENCILREFMASK,
+				(uint32)Latte::REGADDR::DB_STENCILREFMASK_BF, (uint32)Latte::REGADDR::PA_CL_VTE_CNTL })
+				key = Mix(key, raw[reg]);
+			for (uint32 i = 0; i < 8; i++)
+				key = Mix(Mix(key, raw[Latte::REGADDR::CB_BLEND0_CONTROL + i]), t.color[i] ? (uint64)t.color[i]->format : 0);
+			key = Mix(key, t.depth ? (uint64)t.depth->format + 1 : 0);
+			auto it = s_pipelines.find(key);
+			if (it != s_pipelines.end())
+				return it->second;
+			// new to this run: prepared from the cache on disk, or built now (and added to it)
+			PipelineDesc d = Describe(vs, ps, fetch, t, prim);
+			std::vector<uint8> recipe = d.Serialize();
+			uint64 id = Fnv(recipe.data(), recipe.size());
+			if (auto prepared = s_recipes.find(id); prepared != s_recipes.end())
+				return s_pipelines[key] = prepared->second;
+			auto start = std::chrono::steady_clock::now();
 			VkPipeline pipeline;
-			Check(vkCreateGraphicsPipelines(s.device, VK_NULL_HANDLE, 1, &pi, nullptr, &pipeline), "vkCreateGraphicsPipelines");
+			Check(BuildPipeline(d, vs, ps, layout, pipeline), "vkCreateGraphicsPipelines");
+			cache::AddPipeline(recipe);
+			s_sights.pipelines++;
+			s_sights.pipelineMs += MsSince(start);
+			s_recipes[id] = pipeline;
 			return s_pipelines[key] = pipeline;
 		}
+
 
 		// ---- guest data ----------------------------------------------------------------------------------
 		// indices (LatteIndices_decode): swapped to host order, quads unpacked to triangles
@@ -869,6 +1090,7 @@ namespace wwhd::gpu
 		InstallNoopRenderer();
 		glslang::InitializeProcess();
 		TextureInit();
+		cache::Open();
 		if (const char* e = getenv("WWHD_RENDER_STATS"))
 			s_statsEvery = (uint32)atoi(e);
 	}
@@ -893,6 +1115,83 @@ namespace wwhd::gpu
 		if (s_statsEvery && frame % s_statsEvery == 0)
 			Log(fmt::format("frame {}: {} draws, {} skipped; {} shaders, {} pipelines", frame, s_draws, s_skipped, s_shaders.size(),
 				s_pipelines.size()));
+	}
+
+	void PrepareShaders(const std::function<void(uint32 done, uint32 total)>& progress)
+	{
+		if (!RendererOn())
+			return;
+		auto start = std::chrono::steady_clock::now();
+		// shaders: SPIR-V into modules (the driver compiles them with their pipelines)
+		uint32 damaged = 0;
+		for (auto& record : cache::Shaders())
+			if (Shader* sh = LoadShader(record))
+				s_shaders.try_emplace(sh->key, sh);
+			else
+				damaged++;
+		// pipelines: the recipes whose shaders are there, built on all cores but this one's
+		struct Job
+		{
+			PipelineDesc d;
+			uint64 id;
+			Shader *vs, *ps;
+			VkPipelineLayout layout;
+			VkPipeline pipeline = VK_NULL_HANDLE;
+		};
+		std::vector<Job> jobs;
+		for (auto& record : cache::Pipelines())
+		{
+			Job j;
+			if (!j.d.Parse(record))
+			{
+				damaged++;
+				continue;
+			}
+			auto vs = s_shaders.find(j.d.vsKey), ps = s_shaders.find(j.d.psKey);
+			if (vs == s_shaders.end() || ps == s_shaders.end() || !vs->second->module || !ps->second->module)
+				continue;
+			j.id = Fnv(record.data(), record.size());
+			j.vs = vs->second;
+			j.ps = ps->second;
+			j.layout = PipelineLayout(j.vs, j.ps);
+			jobs.push_back(std::move(j));
+		}
+		std::atomic<uint32> next{ 0 }, done{ 0 }, failed{ 0 };
+		uint32 total = (uint32)jobs.size();
+		// WWHD_SHADER_THREADS=n: how many build pipelines (default: all cores but this one's)
+		uint32 threads = std::clamp(std::thread::hardware_concurrency(), 2u, 64u) - 1;
+		if (const char* e = getenv("WWHD_SHADER_THREADS"); e && atoi(e) > 0)
+			threads = (uint32)atoi(e);
+		std::vector<std::thread> pool;
+		for (uint32 i = 0; i < std::min(threads, total); i++)
+			pool.emplace_back([&] {
+				for (uint32 k; (k = next++) < total; done++)
+					if (BuildPipeline(jobs[k].d, jobs[k].vs, jobs[k].ps, jobs[k].layout, jobs[k].pipeline) != VK_SUCCESS)
+					{
+						jobs[k].pipeline = VK_NULL_HANDLE;
+						failed++;
+					}
+			});
+		while (done < total)
+		{
+			progress(done, total);
+			std::this_thread::sleep_for(std::chrono::milliseconds(30));
+		}
+		for (auto& t : pool)
+			t.join();
+		progress(total, total);
+		for (auto& j : jobs)
+			if (j.pipeline)
+				s_recipes.try_emplace(j.id, j.pipeline);
+		if (total)
+			cache::Save();
+		Log(fmt::format("shader cache: prepared {} shaders and {} pipelines in {:.1f} s on {} threads ({} failed, {} records damaged)",
+			s_shaders.size(), s_recipes.size(), MsSince(start) / 1000, std::min(threads, total), failed.load(), damaged));
+	}
+
+	FirstSights TakeFirstSights()
+	{
+		return std::exchange(s_sights, FirstSights{});
 	}
 
 	// IT_DRAW_INDEX_2 (body: ?, index address, ?, count, ?) and IT_DRAW_INDEX_AUTO (body: count, ?),

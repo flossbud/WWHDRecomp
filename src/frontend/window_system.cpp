@@ -257,6 +257,39 @@ static SDL_Window* OpenWindow()
 	return window;
 }
 
+// Before the game starts (design D20): the renderer builds the shaders and pipelines its cache on
+// disk knows, and once that has taken 0.3 s the window shows how far it is. Only window events are
+// taken off SDL's queue meanwhile; the rest (keys, gamepads arriving) wait for the event loop.
+static void PrepareShaders(SDL_Window* window)
+{
+	if (!wwhd::gpu::RendererOn())
+		return;
+	auto start = std::chrono::steady_clock::now();
+	bool shown = false;
+	wwhd::gpu::PrepareShaders([&](uint32 done, uint32 total) {
+		if (!window)
+			return;
+		SDL_PumpEvents();
+		SDL_Event ev;
+		while (SDL_PeepEvents(&ev, 1, SDL_GETEVENT, SDL_EVENT_QUIT, SDL_EVENT_QUIT) > 0)
+			_exit(0);
+		while (SDL_PeepEvents(&ev, 1, SDL_GETEVENT, SDL_EVENT_WINDOW_FIRST, SDL_EVENT_WINDOW_LAST) > 0)
+			if (ev.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED)
+				_exit(0);
+			else if (ev.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)
+				StorePixelSize(window);
+			else if (ev.type == SDL_EVENT_WINDOW_FOCUS_GAINED || ev.type == SDL_EVENT_WINDOW_FOCUS_LOST)
+				g_windowInfo.app_active = ev.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
+		if (!shown && std::chrono::steady_clock::now() - start < std::chrono::milliseconds(300))
+			return;
+		wwhd::ShowPreparing(done, total);
+		wwhd::gpu::PresentOverlayOnly();
+		shown = true;
+	});
+	if (shown)
+		wwhd::gpu::SetOverlay(0, 0, 0, 0, {});
+}
+
 [[noreturn]] static void EventLoop(SDL_Window* window)
 {
 	for (;;)
@@ -274,6 +307,7 @@ static SDL_Window* OpenWindow()
 		case SDL_EVENT_QUIT:
 		case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
 			cemuLog_log(LogType::Force, "wwhd: window closed");
+			wwhd::gpu::SaveShaderCache();
 			_exit(0);   // like Cemu's own exit path mid-game: skip global destructors
 		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: StorePixelSize(window); break;
 		case SDL_EVENT_WINDOW_FOCUS_GAINED: g_windowInfo.app_active = true; break;
@@ -338,6 +372,7 @@ void WindowSystem::Create()
 		wwhd::OpenAudio();    // otherwise, or if it fails, snd_core opens Cemu's device
 	wwhd::PrepareTitle(*game);
 	wwhd::rt::Install();    // the execution seam: interprets, or runs diff mode (src/runtime)
+	PrepareShaders(window);
 	CafeSystem::LaunchForegroundTitle();
 	if (window)
 		EventLoop(window);

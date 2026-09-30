@@ -174,4 +174,9 @@ the sound to a file):
 keys and switches; `WWHD_SAVE=saves/wwhd_100` starts from the 100% save). **Real time** is every run
 without the virtual clock (design D19): guest time from `steady_clock`, the scheduler thread sleeping
 when no guest thread can run, the null GPU sleeping until the host-timed vsync, and every 10 s a
-line in `portable/log.txt` with the frame rate, frame times and how busy the scheduler thread was.
+line in `portable/log.txt` with the frame rate, frame times, how busy the scheduler thread was and
+the shaders and pipelines seen for the first time. **The shader cache** (design D20,
+`gpu/vk/shader_cache.cpp`) keeps every translated shader and pipeline recipe in
+`portable/shaderCache/wwhd` and builds them all before the game starts, with a "Preparing shaders"
+screen in the window when that takes more than 0.3 s (`WWHD_SHADER_THREADS=n` sets the threads);
+`tools/reference/shader_cache_check.sh` shows it changes nothing on screen.

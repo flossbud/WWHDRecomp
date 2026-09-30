@@ -177,9 +177,13 @@ the reference. Work goes least coupled first, each step keeping both route trace
   links. Windowed, the save route's trace is the reference's.
 - **Playable on a desktop, in real time** (design D19 step 2): `tools/play/deploy.sh HOST`, then
   `~/wwhd-play/play.sh` there. On the owner's desktop (desktop CPU, AMD GPU) it holds 30 fps
-  (frame time 99th percentile 35 ms once loaded); hitches are first sights of shaders (no pipeline
-  cache on disk yet). The game's task switcher spins (D19 "What real time showed"), so one host
-  core stays busy until a D9 override lets it sleep.
+  (frame time 99th percentile 35 ms once loaded). The game's task switcher spins (D19 "What real
+  time showed"), so one host core stays busy until a D9 override lets it sleep.
+- **Shader cache with a "Preparing shaders" screen** (design D20): what a run translates is kept on
+  disk and prepared before the next start, so first sights hitch only once;
+  `shader_cache_check.sh` holds it to identical frames. Next for it: shipping a recipe list so the
+  first playthrough doesn't hitch either, and fewer pipelines via dynamic state (both matter most
+  for Android).
 - **Next in D18's order:** make the forked scheduler ours in substance, as design D19 lays out
   (deterministic and real-time modes; per-block cycle counting, our context switch and real time on
   one host thread are done; next the D9 override for the task switcher's spin; gx2's core and proc_ui

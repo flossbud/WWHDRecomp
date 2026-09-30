@@ -704,5 +704,12 @@ namespace wwhd::gpu
 		PresentRecord(s.scan[0]);
 		SubmitAndWait();
 		PresentQueue();
+		cache::SaveNowAndThen();
+	}
+
+	void SaveShaderCache()
+	{
+		if (RendererOn())
+			cache::Save();
 	}
 }

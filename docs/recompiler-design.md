@@ -886,6 +886,73 @@ threads; (5) fast paths.
 **Open**: one host thread or three (item 4 decides); real vsync needs the GPU machine (open question
 8); whether Cemu's three-thread mode has known behaviour differences for this game.
 
+### D20. Shaders prepared before play, with a progress screen
+
+*2026-09-30, after the first real-time play (D19): the hitches are first sights of shaders.*
+The renderer (D13) translates a shader the first time a draw uses it: Cemu's decompiler (R600
+microcode and registers to GLSL), glslang with its optimiser (GLSL to SPIR-V), then the driver
+(`vkCreateGraphicsPipelines`), all on the GPU thread in the middle of a frame. Nothing was kept
+between runs, so every start hitched again (up to 1 s at boot, 50-190 ms loading Outset, on the
+owner's desktop). Modern PC games show a "preparing shaders" screen instead; this is ours.
+
+**Three layers, cached separately** (`src/gpu/vk/shader_cache.cpp`, `portable/shaderCache/wwhd`):
+1. *Shaders* (`shaders.bin`): per shader key (the renderer's, from the microcode's hash and the
+   registers the decompiler reads), the SPIR-V plus what the draws read of the decompiler's
+   analysis: uniform offsets, resource mapping, texture dimensions, sampler assignment, depth
+   compare, colour outputs, the remapped-uniform lists, the quick buffer list. Starting from it
+   needs no decompiler, no glslang, no game code and no registers.
+2. *Pipeline recipes* (`pipelines.bin`): each pipeline's Vulkan state (vertex input, topology,
+   raster, blend, depth/stencil, attachment formats) and its two shader keys; the recipe's bytes
+   are its identity from run to run.
+3. *The driver's cache* (`vulkan-<vendor>-<device>.bin`, a `VkPipelineCache`): used only if its
+   header names this device and driver (`pipelineCacheUUID`); written at the end of preparing, every
+   10 s while new pipelines appear, and when the window closes.
+Layers 1 and 2 are the same on every machine and platform. They hold translations of the game's
+shaders, so they stay on the player's machine, never in git. Records are appended as the game shows
+something new, each with a checksum; a torn record at the end is cut off, and a header version
+(`kVersion`) starts a file over when the translation changes.
+
+**Before the game starts** (`PrepareShaders`, called by the frontend before the title launches):
+every cached shader becomes a module, every recipe whose shaders are there is built on all cores
+but one through the driver's cache, and once that has taken 0.3 s the window shows "Preparing
+shaders" with a bar (the overlay on black; window events are handled, others wait). With a warm
+driver cache it takes a moment and shows nothing. During play, anything new is translated as
+before and added; the real-time log line counts these first sights and their cost.
+
+**Checked**: `tools/reference/shader_cache_check.sh` runs the save route twice with the virtual
+clock on lavapipe, from an empty cache and from the cache the first run filled: the TV captures
+must be the same bytes, and the second run must add nothing (no first sights). It passes: 30
+captures to f900 identical, 631 shaders and 430 pipelines prepared in 0.4 s on 11 threads.
+Getting there found an old renderer bug: `Mix(a, b)` of two values alone is `(a ^ b) * P + C`, and
+the pipeline-layout map and the per-run pipeline key started from two Vulkan handles, so pairs of
+handles with the same XOR (common when they are allocated side by side, as preparing does) got
+another pair's layout; lavapipe crashed on a binding the layout didn't have. Layouts are now keyed
+by the pair itself and the pipeline key starts from `Mix(Mix(0, vs), ps)`.
+
+**Measured** on the owner's desktop (AMD GPU, RADV), the save route in real time, headless:
+* first start (empty caches, Mesa's too): 633 shaders (1.0 s of translation) and 432 pipelines
+  (0.8 s) as first sights during the first minute, the worst frames 1 s and 347 ms;
+* second start: prepared in 0.0 s, no first sights;
+* as after a driver update (our cache, no driver cache, no Mesa cache): prepared in 0.1 s on 23
+  threads, so on this machine the screen never shows. RADV compiles fast; it is for slower drivers.
+The hitches left on a warm start (1 s during boot, ~100 ms loading Outset) are the same in every
+run and have no shader work in them: the game's own loading.
+
+**For Android** (and other platforms): the formats are plain bytes and SPIR-V; the directory comes
+from the platform (`SDL_GetPrefPath` there); drivers there keep no disk cache of their own and
+compile slowly (Adreno, Mali), so layer 3 is what makes the second start fast, and its header check
+matters (some drivers crash on another device's data); the thread pool follows the core count;
+records and the driver cache survive the app being killed. Layers 1 and 2 could be produced on the
+PC that builds the port, so a phone never runs the decompiler or glslang for known shaders.
+
+**Next**: (a) *the first start*: a list of recipes and shader keys gathered from playthroughs
+(hashes and register values, no game content) shipped with the port, from which the player's own
+build makes layers 1 and 2 out of their game files (the G1 extractor, D14, finds the programs), so
+even the first playthrough doesn't hitch; (b) fewer pipelines: stencil reference and masks as
+dynamic state (core Vulkan 1.0), then extended dynamic state where the device has it;
+(c) optionally, building a new pipeline off the GPU thread and skipping its draw until it is ready
+(Cemu's asynchronous compile), a choice between a hitch and a missing object for a few frames.
+
 ## Milestones
 
 There are two tracks. They meet at M4.

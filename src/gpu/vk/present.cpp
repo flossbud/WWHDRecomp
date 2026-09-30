@@ -217,11 +217,10 @@ namespace wwhd::gpu
 		return ok;
 	}
 
-	void PresentRecord(Image& scan)
+	// the next swapchain image (w.index, w.pending), the swapchain rebuilt first if needed
+	static bool Acquire(bool srgb)
 	{
 		w.pending = false;
-		if (!s_hasWindow || !scan.image)
-			return;
 		if (!w.acquired)
 		{
 			VkFenceCreateInfo fci{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
@@ -229,12 +228,11 @@ namespace wwhd::gpu
 		}
 		uint32 width = 0, height = 0;
 		s_window.size(width, height);
-		bool srgb = IsSrgb(scan.format);
 		for (int attempt = 0; attempt < 2; attempt++)
 		{
 			if (!w.chain || width != w.width || height != w.height || srgb != w.srgb || attempt > 0)
 				if (!Build(width, height, srgb))
-					return;
+					return false;
 			VkResult r = vkAcquireNextImageKHR(s.device, w.chain, UINT64_MAX, VK_NULL_HANDLE, w.acquired, &w.index);
 			if (r == VK_ERROR_OUT_OF_DATE_KHR)
 				continue;
@@ -245,7 +243,13 @@ namespace wwhd::gpu
 			w.pending = true;
 			break;
 		}
-		if (!w.pending)
+		return w.pending;
+	}
+
+	void PresentRecord(Image& scan)
+	{
+		w.pending = false;
+		if (!s_hasWindow || !scan.image || !Acquire(IsSrgb(scan.format)))
 			return;
 
 		VkImage target = w.images[w.index];
@@ -266,6 +270,24 @@ namespace wwhd::gpu
 		vkCmdBlitImage(s.cmd, scan.image, scan.layout, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b, VK_FILTER_LINEAR);
 		DrawOverlay(target, x, y, dw / 1920.0);
 		Barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	}
+
+	// before the game starts (design D20): the overlay on black, in a 1920x1080 frame fitted to the
+	// window as the TV image is
+	void PresentOverlayOnly()
+	{
+		if (!RendererOn() || !s_hasWindow || !Acquire(w.chain ? w.srgb : false))
+			return;
+		VkImage target = w.images[w.index];
+		Barrier(target, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		VkClearColorValue black{};
+		VkImageSubresourceRange range{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+		vkCmdClearColorImage(s.cmd, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1, &range);
+		double scale = std::min(w.width / 1920.0, w.height / 1080.0);
+		DrawOverlay(target, ((sint32)w.width - (sint32)(1920 * scale)) / 2, ((sint32)w.height - (sint32)(1080 * scale)) / 2, scale);
+		Barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+		SubmitAndWait();
+		PresentQueue();
 	}
 
 	void PresentQueue()
