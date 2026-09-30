@@ -1,4 +1,4 @@
-# Handoff: WWHD recomp, state as of 2026-09-29
+# Handoff: WWHD recomp, state as of 2026-09-30
 
 Read this first, then `CLAUDE.md`, `docs/recompiler-design.md` (decisions D1–D17, milestones,
 status paragraphs) and the READMEs in `tools/reference/`, `tools/recomp/`, `tools/worker/`, `src/`.
@@ -161,6 +161,20 @@ M3, M4, G0 and G1 are done, M4 and G0 on the scripted route (design doc status p
 `WWHD_NATIVE=on` runs the recompiled program, and its whole-route trace equals the reference's.
 G2 is done on the title screen (design doc "G2 status"); G3 is next.
 
+**Direction since 2026-09-30 (design D18): the shipped game will not depend on Cemu**; Cemu stays
+the reference. Work goes least coupled first, each step keeping both route traces identical:
+- **Our OS layer** (`src/os`, src/README): 45 imports are ours (coreinit 31, nn_ac 2, nn_act 2,
+  padscore 6, vpad 4). They take over entries in Cemu's HLE table; `WWHD_OS=cemu` turns them off.
+  What they borrow from Cemu is three accessors in `os/os.h` (clock, current thread, swap count).
+- **The platform shell** (`WWHD_WINDOW=1`): SDL3 window presented by our renderer, keyboard and
+  gamepad as the Pro Controller, TV sound on SDL3. `setup-volume.sh sdl3` builds the SDL3 it
+  links. Windowed, the save route's trace is the reference's.
+- **Next in D18's order:** the other small libraries (`nn_save`, `swkbd`, `erreula`, `proc_ui`;
+  swkbd needs a name-entry keyboard of our own), then gx2's front half, audio (`snd_core`),
+  coreinit with a scheduler of our own (deterministic and real-time modes), the loader and memory
+  map. Before any of that ships: our own CMake build (step 3), and a GPU machine for M5 (design
+  open question 8).
+
 ### 1. G3: render the whole route (design D13, D16.3)
 
 G2 is done (design doc "G2 status"): to f600 every captured frame is within 60 dB of the
@@ -197,14 +211,13 @@ with the reference, and rerun:
 - `route.sh` in native mode against the new baseline;
 - `g0_gx2.py` on the new trace, and `WWHD_GPU_STATS` in the same native run.
 
-### 3. Own CMake build for `src/` and an SDL3 window
+### 3. Own CMake build for `src/`
 
-- `src/build.sh` currently borrows Cemu's link line (wx libraries still listed, but harmless).
-- Cemu's vcpkg SDL3 is built with `default-features: false`, so it has **no video backends**,
-  which is why the window is plain Xlib.
-- Needed before interactive play, Wayland and Windows: a proper CMake project building Cemu's
-  sources without Latte (design D11), SDL3 with video, and keyboard/controller input wired to
-  `WindowSystem` (the frontend has no keyboard input yet; only scripted input works).
+- `src/build.sh` currently borrows Cemu's link line (wx libraries still listed, but harmless),
+  swapping in our SDL3 (with video) for vcpkg's, which Cemu builds for controllers only.
+- Needed before Windows or macOS: a proper CMake project building what we still use of Cemu
+  without Latte (design D11). The less of Cemu is left (D18), the smaller that is.
+- The SDL3 window, input and sound are done (above); `wwhd` (Cemu's Latte) keeps its Xlib window.
 
 ### 4. Later
 
