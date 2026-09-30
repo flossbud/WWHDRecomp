@@ -287,6 +287,48 @@ namespace gpustats
 	const bool s_enabled = Init();
 }
 
+// WWHD_GPU_STREAM=path writes, per frame (swap), a hash of every command packet the GPU executes: the
+// flattened stream, indirect buffers followed rather than hashed by address, so two builds that send
+// the same commands match even if they split them into buffers differently. Our gx2 (D18) must send
+// exactly what Cemu's did. Lines: frame, hash, packets.
+namespace streamhash
+{
+	FILE* s_file = nullptr;
+	uint64 s_hash = 0xCBF29CE484222325ull, s_packets = 0;
+	uint32 s_frame = 0;
+
+	bool Init()
+	{
+		const char* path = getenv("WWHD_GPU_STREAM");
+		if (!path || !*path)
+			return false;
+		s_file = fopen(path, "w");
+		return s_file != nullptr;
+	}
+	const bool s_enabled = Init();
+
+	inline void Word(uint32 w)
+	{
+		s_hash = (s_hash ^ w) * 0x100000001B3ull;
+	}
+
+	void Packet(uint32 header, const uint32be* body, uint32 nWords)
+	{
+		Word(header);
+		for (uint32 i = 0; i < nWords; i++)
+			Word(body[i]);
+		s_packets++;
+	}
+
+	void Frame()
+	{
+		fprintf(s_file, "%u %016llx %llu\n", s_frame++, (unsigned long long)s_hash, (unsigned long long)s_packets);
+		fflush(s_file);
+		s_hash = 0xCBF29CE484222325ull;
+		s_packets = 0;
+	}
+}
+
 // ---- command processing (LatteCommandProcessor.cpp) --------------------------------------------
 namespace
 {
@@ -412,6 +454,8 @@ namespace
 	// One type-3 packet. `body` points at its nWords payload words.
 	void packet(uint32 op, const uint32be* body, uint32 nWords, int depth)
 	{
+		if (streamhash::s_enabled && op != IT_INDIRECT_BUFFER_PRIV)
+			streamhash::Packet(op << 16 | nWords, body, nWords);
 		switch (op)
 		{
 		case IT_SET_CONTEXT_REG: case IT_SET_ALL_CONTEXTS: setRegisters<LATTE_REG_BASE_CONTEXT>(body, nWords); break;
@@ -465,6 +509,8 @@ namespace
 		}
 		case IT_HLE_REQUEST_SWAP_BUFFERS: LatteGPUState.flipRequestCount.fetch_add(1); break;
 		case IT_HLE_TRIGGER_SCANBUFFER_SWAP:
+			if (streamhash::s_enabled)
+				streamhash::Frame();
 			LatteGPUState.frameCounter++;
 			if (wwhd::gpu::RendererOn())
 				wwhd::gpu::RendererSwap();
@@ -514,6 +560,8 @@ namespace
 	// type-0 packets: only the two GX2 timestamp registers occur
 	void type0(uint32 header)
 	{
+		if (streamhash::s_enabled)
+			streamhash::Word(header);
 		if ((header & 0xFFFF) == 0x304A)
 			GX2::__GX2NotifyEvent(GX2::GX2CallbackEventType::TIMESTAMP_TOP);
 	}

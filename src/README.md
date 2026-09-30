@@ -16,6 +16,7 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 | `gpu/vk/texture.cpp` | textures: from surfaces (render to texture, sized copies, mip chains) or decoded from guest memory with Cemu's texture loader; samplers (derived from Cemu, MPL-2.0) |
 | `gpu/vk/latte_glue.cpp` | the pieces of Latte the decompiler calls, and a no-op `Renderer` (derived from Cemu, MPL-2.0) |
 | `gpu/vk/vk.h`, `vk.cpp` | Vulkan loaded at runtime, so `wwhd-null` runs without a driver when rendering is off |
+| `os/` | our OS layer (D18): the game's imports, taking over Cemu's handlers one by one (`os.h`); `os/gx2/` is gx2, ported from Cemu's |
 | `runtime/dispatch.cpp` | the execution seam (Cemu patch 0011): the hook that replaces Cemu's interpreter loop, the function table (D5), the D10 code check, `rt_call_ctr`/`rt_jump_ctr`/`rt_bad_branch` |
 | `runtime/imports.cpp` | `rt_import`/`rt_import_data` (D4), bound from what Cemu's loader wrote into guest memory |
 | `runtime/diff.cpp` | diff mode (D8.2, M3): pure functions run natively, are rewound, and are compared (registers, stores, cycles) with the interpreter's run of the same call |
@@ -84,10 +85,16 @@ function still needs from Cemu (the clock, the current thread) goes through an a
 `os/os.h`. A library whose functions share state with each other moves whole. `WWHD_OS=cemu`
 leaves every handler Cemu's; the log says how many are ours. Libraries the game loads itself
 (`swkbd`, `erreula`) register their handlers when it does, so `OSDynLoad_Acquire` is wrapped to take
-those over as they appear. So far 76: memory and cache operations, the clock, thread-specific slots
+those over as they appear. So far 192: memory and cache operations, the clock, thread-specific slots
 and errno, the interrupt mask, a few system flags, the stateless parts of `nn_ac` and `nn_act`,
 input (`os/input.cpp`: `padscore` with one Pro Controller, `vpad` with no GamePad), the software
-keyboard (`os/swkbd.cpp`) and the error dialogs (`os/erreula.cpp`). Input comes from the input
+keyboard (`os/swkbd.cpp`), the error dialogs (`os/erreula.cpp`) and 116 of gx2's (`os/gx2/`: state,
+shaders, textures and samplers, surfaces, draws, clears, copies, queries, stream-out). The gx2 files
+are Cemu's, ported by `tools/gx2_port.py` (MPL-2.0; our namespace and registration), and still send
+their commands through Cemu's command pipe. Every gx2 change must leave the GPU command stream
+exactly as Cemu's gx2 sent it: `tools/reference/stream_check.sh save|route NAME` checks the trace and
+a per-frame hash of every packet the GPU executes (`WWHD_GPU_STREAM=path`) against baselines
+recorded with Cemu's gx2 (45,955,744 packets on the save route, 143,098,119 on the whole route). Input comes from the input
 script when `CEMU_INPUT_SCRIPT` names one (the reference's format, so routes replay identically),
 otherwise from the window's keyboard and gamepad. The keyboard answers itself when
 `CEMU_SWKBD_AUTO` gives a name (as the reference's does; `tools/reference/run.sh` defaults to

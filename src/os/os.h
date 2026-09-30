@@ -72,6 +72,88 @@ namespace wwhd::os
 	void QueueGuestCallback(uint32 fn, uint32 r3, uint32 r4);
 }
 
+// Typed functions: WWHD_OS_EXPORT(gx2, GX2InitSampler, ns::GX2InitSampler) registers a plain C++
+// function, its arguments taken from the registers as Cemu's cafeExportRegister takes them (integers,
+// enums and bools from r3.. then the stack, 64-bit ones from an aligned register pair, pointers as
+// host pointers with 0 as null, floats from f1..), its result set likewise (pointers as guest
+// addresses, 64-bit in r3:r4, bool as 0/1; void leaves r3).
+namespace wwhd::os::detail
+{
+	struct ArgReader
+	{
+		PPCInterpreter_t* ctx;
+		int gpr = 0, fpr = 0;
+
+		uint32 Word()
+		{
+			uint32 v = gpr >= 8 ? Read32(ctx->gpr[1] + 8 + (gpr - 8) * 4) : ctx->gpr[3 + gpr];
+			gpr++;
+			return v;
+		}
+
+		template<typename T>
+		T Get()
+		{
+			if constexpr (std::is_pointer_v<T>)
+			{
+				uint32 addr = Word();
+				return addr ? (T)Guest(addr) : nullptr;
+			}
+			else if constexpr (std::is_base_of_v<MEMPTRBase, T>)
+				return T(Word());
+			else if constexpr (std::is_enum_v<T>)
+				return (T)Get<std::underlying_type_t<T>>();
+			else if constexpr (std::is_integral_v<T> && sizeof(T) == 8)
+			{
+				gpr = (gpr + 1) & ~1;
+				uint64 hi = Word(), lo = Word();
+				return (T)(hi << 32 | lo);
+			}
+			else if constexpr (std::is_integral_v<T>)
+				return (T)Word();
+			else if constexpr (std::is_floating_point_v<T>)
+				return (T)ctx->fpr[1 + fpr++].fpr;
+			else
+				static_assert(sizeof(T) == 0, "unsupported argument type");
+		}
+	};
+
+	template<typename R>
+	void SetResult(PPCInterpreter_t* ctx, R r)
+	{
+		if constexpr (std::is_pointer_v<R>)
+			ctx->gpr[3] = r ? (uint32)((uint8*)r - memory_base) : 0;
+		else if constexpr (std::is_enum_v<R>)
+			SetResult(ctx, (std::underlying_type_t<R>)r);
+		else if constexpr (std::is_integral_v<R> && sizeof(R) == 8)
+		{
+			ctx->gpr[3] = (uint32)((uint64)r >> 32);
+			ctx->gpr[4] = (uint32)r;
+		}
+		else if constexpr (std::is_integral_v<R>)
+			ctx->gpr[3] = (uint32)r;
+		else
+			static_assert(sizeof(R) == 0, "unsupported result type");
+	}
+
+	template<typename R, typename... A>
+	void Invoke(PPCInterpreter_t* ctx, R (*fn)(A...))
+	{
+		ArgReader reader{ ctx };
+		std::tuple<A...> args{ reader.Get<A>()... };   // braces: evaluated left to right
+		if constexpr (std::is_void_v<R>)
+			std::apply(fn, args);
+		else
+			SetResult(ctx, std::apply(fn, args));
+		ctx->instructionPointer = ctx->spr.LR;
+	}
+
+	template<auto Fn>
+	void Typed(PPCInterpreter_t* ctx) { Invoke(ctx, Fn); }
+}
+#define WWHD_OS_EXPORT(lib, name, fn) \
+	static ::wwhd::os::Registration wwhd_os_reg_##lib##_##name(#lib, #name, ::wwhd::os::detail::Typed<&fn>)
+
 // WWHD_OS_FUNCTION(coreinit, memcpy) { ... } defines and registers coreinit.memcpy; the body sees `ctx`.
 // Names that aren't identifiers (C++-mangled exports) use WWHD_OS_FUNCTION_NAMED with their own.
 #define WWHD_OS_FUNCTION_NAMED(lib, name, ident)                                                  \

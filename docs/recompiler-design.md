@@ -676,8 +676,15 @@ development-only reference that traces, captures and texture dumps are checked a
   identical, so our scheduler gets a deterministic mode that follows Cemu's rules on the virtual
   clock (the one every check uses) and a real-time mode on host threads for players. Each replaced
   function must keep the whole-route traces identical.
-* **Status (2026-09-30):** 76 functions are ours (coreinit 31, nn_ac 2, nn_act 2, padscore 6,
-  vpad 4, erreula 15, swkbd 16), with both route traces identical. Libraries the game loads itself
+* **Status (2026-09-30):** 192 functions are ours (coreinit 31, gx2 116, nn_ac 2, nn_act 2,
+  padscore 6, vpad 4, erreula 15, swkbd 16), with both route traces identical. gx2's front half
+  is Cemu's code ported into `src/os/gx2` (`tools/gx2_port.py`), file by file: so far every state
+  setter, shaders, textures, surfaces, draws, clears and copies, still writing through Cemu's
+  command pipe. Its check is stronger than the trace: the GPU command stream, hashed per frame,
+  must equal what Cemu's gx2 sent (`tools/reference/stream_check.sh`). Next: context states,
+  render targets, the legacy shader setters and tiling apertures, then the stateful core (the
+  command pool and display lists, timestamps and GPU waits, vsync and swap, GX2Init), which leans
+  on the scheduler and Cemu's TCL ring. Libraries the game loads itself
   (swkbd, erreula) are taken over right after `OSDynLoad_Acquire` loads them. Input is a whole
   library: the input script (for routes) or the window's keyboard and gamepad (SDL3) drive one Pro
   Controller, and the GamePad is absent. The software keyboard and error dialogs are ours, drawn by

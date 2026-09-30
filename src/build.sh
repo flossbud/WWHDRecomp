@@ -46,6 +46,7 @@ done
 for f in dispatch imports diff; do compile "$root/src/runtime/$f.cpp" "rt_$f.o"; done
 os_objs=()
 for f in "$root"/src/os/*.cpp; do n=os_$(basename "$f" .cpp).o; compile "$f" "$n"; os_objs+=("$out/$n"); done
+for f in "$root"/src/os/gx2/*.cpp; do n=os_gx2_$(basename "$f" .cpp).o; compile "$f" "$n"; os_objs+=("$out/$n"); done
 for p in "${pids[@]}"; do wait "$p"; done
 
 # libCemuCafe.a without Latte (object names come from compile_commands.json; they are unique).
