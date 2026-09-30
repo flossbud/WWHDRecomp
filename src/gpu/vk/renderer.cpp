@@ -54,10 +54,14 @@ namespace wwhd::gpu
 		VkApplicationInfo app{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
 		app.pApplicationName = "wwhd";
 		app.apiVersion = VK_API_VERSION_1_3;
+		std::vector<const char*> instanceExtensions = WindowInstanceExtensions();
 		VkInstanceCreateInfo ici{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
 		ici.pApplicationInfo = &app;
+		ici.enabledExtensionCount = (uint32)instanceExtensions.size();
+		ici.ppEnabledExtensionNames = instanceExtensions.data();
 		Check(vkCreateInstance(&ici, nullptr, &s.instance), "vkCreateInstance");
 		LoadInstance(s.instance);
+		CreateWindowSurface();
 		uint32 n = 0;
 		vkEnumeratePhysicalDevices(s.instance, &n, nullptr);
 		std::vector<VkPhysicalDevice> devices(n);
@@ -73,7 +77,7 @@ namespace wwhd::gpu
 		vkGetPhysicalDeviceQueueFamilyProperties(s.physical, &n, families.data());
 		s.queueFamily = UINT32_MAX;
 		for (uint32 i = 0; i < n; i++)
-			if (families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+			if ((families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && CanPresent(i))
 			{
 				s.queueFamily = i;
 				break;
@@ -96,6 +100,8 @@ namespace wwhd::gpu
 		std::vector<VkExtensionProperties> exts(n);
 		vkEnumerateDeviceExtensionProperties(s.physical, nullptr, &n, exts.data());
 		std::vector<const char*> enable;
+		if (HasWindow())
+			enable.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 		void** chain = &v13.pNext;
 		for (auto& e : exts)
 		{
@@ -695,6 +701,8 @@ namespace wwhd::gpu
 		if (s.frame > 1 && s.shotFrames.count(s.frame - 1) && s.scan[0].image)
 			WritePPM(s.scan[0], s.frame - 1);
 		ResetOverwrittenSurfaces();
+		PresentRecord(s.scan[0]);
 		SubmitAndWait();
+		PresentQueue();
 	}
 }

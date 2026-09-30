@@ -11,12 +11,16 @@
 # WindowSystem interface (Cemu's main.cpp stays and calls WindowSystem::Create()). For wwhd-null,
 # libCemuCafe.a is copied without the objects built from src/Cafe/HW/Latte (the address library
 # in HW/Latte/LatteAddrLib stays: gx2 computes surface layouts with it).
-# Env: CEMU_SRC (default /wwhd/opt/cemu-src); RECOMP_DIR: the compiled generated code to link into
+# wwhd-null links our SDL3 (tools/worker/setup-volume.sh sdl3: the same version, with video) in place
+# of vcpkg's, for its window (src/frontend/window_system.cpp).
+# Env: CEMU_SRC (default /wwhd/opt/cemu-src); SDL3_DIR (default /wwhd/opt/sdl3); RECOMP_DIR: the compiled generated code to link into
 # wwhd-null (tools/recomp/build.sh; default build/recomp if it has been built there, RECOMP_DIR=
 # for none: the runtime then only interprets).
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 cemu=${CEMU_SRC:-/wwhd/opt/cemu-src}
+sdl3=${SDL3_DIR:-/wwhd/opt/sdl3}
+[ -f "$sdl3/lib/libSDL3.a" ] || { echo "wwhd: no SDL3 in $sdl3 (tools/worker/setup-volume.sh sdl3)" >&2; exit 1; }
 recomp=${RECOMP_DIR-$root/build/recomp}
 [ -n "$recomp" ] && [ ! -f "$recomp/func_table.o" ] && recomp=
 out=$(mkdir -p "${1:-$root/build/wwhd}" && cd "${1:-$root/build/wwhd}" && pwd)
@@ -28,9 +32,9 @@ pids=()
 compile() { "${cxx[@]}" "${@:3}" -c "$1" -o "$out/$2" & pids+=($!); }
 compile "$root/src/frontend/cemu_boot.cpp" cemu_boot.o
 compile "$root/src/frontend/window_system.cpp" window_system.o
-compile "$root/src/frontend/window_system.cpp" window_system_null.o -DWWHD_NULL_GPU
+compile "$root/src/frontend/window_system.cpp" window_system_null.o -DWWHD_NULL_GPU -I"$sdl3/include"
 compile "$root/src/gpu/null_gpu.cpp" null_gpu.o -I"$root/src/gpu" -I"$cemu/dependencies/Vulkan-Headers/include"
-for f in vk renderer; do compile "$root/src/gpu/vk/$f.cpp" "vk_$f.o" -I"$cemu/dependencies/Vulkan-Headers/include"; done
+for f in vk renderer present; do compile "$root/src/gpu/vk/$f.cpp" "vk_$f.o" -I"$cemu/dependencies/Vulkan-Headers/include"; done
 # draws compile with Cemu's flags for its Vulkan shader compiler (glslang's include paths)
 mapfile -t vkflags < <(python3 "$root/tools/cemu_flags.py" "$cemu/build/compile_commands.json" Latte/Renderer/Vulkan/RendererShaderVk.cpp)
 for f in draw texture latte_glue; do
@@ -66,12 +70,15 @@ base=${base/"-Xlinker --dependency-file=src/CMakeFiles/CemuBin.dir/link.d"/}
 link() {  # link NAME OBJECTS...
     local name=$1 cmd=$base; shift
     cmd=${cmd/"-o $cemu/bin/Cemu_release"/"-o $out/$name $* -Wl,-Map=$out/$name.map"}
-    [ "$name" = wwhd-null ] && cmd=${cmd//"src/Cafe/libCemuCafe.a"/"$out/libCemuCafe_nolatte.a"}
+    if [ "$name" = wwhd-null ]; then
+        cmd=${cmd//"src/Cafe/libCemuCafe.a"/"$out/libCemuCafe_nolatte.a"}
+        cmd=${cmd//"vcpkg_installed/x64-linux/lib/libSDL3.a"/"$sdl3/lib/libSDL3.a"}
+    fi
     echo "wwhd: linking $name"
     eval "$cmd"
 }
 link wwhd "$out/cemu_boot.o" "$out/window_system.o"
-null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/null_gpu.o" "$out"/vk_{vk,renderer,draw,texture,latte_glue}.o
+null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/null_gpu.o" "$out"/vk_{vk,renderer,present,draw,texture,latte_glue}.o
            "$out"/rt_{dispatch,imports,diff}.o "${os_objs[@]}")
 limits=$(ls "$cemu"/build/vcpkg_installed/*/lib/libglslang-default-resource-limits.a | head -1)  # glslang's defaults (draw.cpp)
 if [ -n "$recomp" ]; then

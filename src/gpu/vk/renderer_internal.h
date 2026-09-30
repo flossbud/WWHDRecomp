@@ -82,6 +82,14 @@ namespace wwhd::gpu
 	// the surface at (addr, gx2 format), at least w x h with `layers` array slices
 	Image& Surface(uint32 addr, uint32 gx2, bool depth, uint32 w, uint32 h, uint32 layers = 1);
 
+	// present.cpp: the window (renderer.h), if there is one
+	bool HasWindow();
+	std::vector<const char*> WindowInstanceExtensions();
+	void CreateWindowSurface();                                   // after the instance
+	bool CanPresent(uint32 queueFamily);                          // true without a window
+	void PresentRecord(Image& scan);                              // before the swap's submit: into the next window image
+	void PresentQueue();                                          // after it
+
 	// draw.cpp
 	void DrawInit();
 	void EndRendering();                                          // before anything outside a render pass

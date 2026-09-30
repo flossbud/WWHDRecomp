@@ -67,7 +67,7 @@ tools/worker/image.sh                     # build the image (Dockerfile here)
 tools/worker/start.sh                     # create the capped container
 tools/worker/sync.sh                      # push the repo
 rsync the .wua to worker:/wwhd/data/rom/
-tools/worker/w tools/worker/setup-volume.sh all   # extract game files, install Ghidra, build Cemu
+tools/worker/w tools/worker/setup-volume.sh all   # extract game files, install Ghidra, build Cemu and SDL3
 ```
 
 SSH from the editing machine uses `~/.ssh/worker_ed25519` (alias `worker`). That key is

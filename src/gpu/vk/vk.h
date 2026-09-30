@@ -14,7 +14,9 @@ namespace wwhd::vk
 #define WWHD_VK_INSTANCE(X) \
 	X(vkEnumeratePhysicalDevices) X(vkGetPhysicalDeviceProperties) X(vkGetPhysicalDeviceQueueFamilyProperties) \
 	X(vkGetPhysicalDeviceMemoryProperties) X(vkGetPhysicalDeviceFormatProperties) X(vkGetPhysicalDeviceFeatures2) \
-	X(vkCreateDevice) X(vkGetDeviceProcAddr) X(vkDestroyInstance) X(vkEnumerateDeviceExtensionProperties)
+	X(vkCreateDevice) X(vkGetDeviceProcAddr) X(vkDestroyInstance) X(vkEnumerateDeviceExtensionProperties) \
+	X(vkDestroySurfaceKHR) X(vkGetPhysicalDeviceSurfaceSupportKHR) X(vkGetPhysicalDeviceSurfaceCapabilitiesKHR) \
+	X(vkGetPhysicalDeviceSurfaceFormatsKHR) X(vkGetPhysicalDeviceSurfacePresentModesKHR)
 #define WWHD_VK_DEVICE(X) \
 	X(vkGetDeviceQueue) X(vkDeviceWaitIdle) X(vkQueueSubmit) X(vkQueueWaitIdle) \
 	X(vkCreateCommandPool) X(vkAllocateCommandBuffers) X(vkBeginCommandBuffer) X(vkEndCommandBuffer) \
@@ -29,7 +31,9 @@ namespace wwhd::vk
 	X(vkCreateDescriptorPool) X(vkResetDescriptorPool) X(vkAllocateDescriptorSets) X(vkUpdateDescriptorSets) \
 	X(vkCreateSampler) X(vkCmdBeginRendering) X(vkCmdEndRendering) X(vkCmdBindPipeline) X(vkCmdBindDescriptorSets) \
 	X(vkCmdBindVertexBuffers) X(vkCmdBindIndexBuffer) X(vkCmdDraw) X(vkCmdDrawIndexed) X(vkCmdSetViewport) \
-	X(vkCmdSetScissor) X(vkCmdSetBlendConstants) X(vkCmdSetDepthBias)
+	X(vkCmdSetScissor) X(vkCmdSetBlendConstants) X(vkCmdSetDepthBias) \
+	X(vkCreateSwapchainKHR) X(vkDestroySwapchainKHR) X(vkGetSwapchainImagesKHR) X(vkAcquireNextImageKHR) \
+	X(vkQueuePresentKHR)
 
 #define WWHD_VK_DECLARE(f) extern PFN_##f f;
 	WWHD_VK_GLOBAL(WWHD_VK_DECLARE)

@@ -1,10 +1,12 @@
 // wwhd frontend: Cemu's WindowSystem interface, replacing the wxWidgets GUI
-// (docs/recompiler-design.md D11). The window is plain Xlib for now: the SDL3 that Cemu's
-// vcpkg build ships has no video backends (Cemu uses it for controllers only). Cemu's own main() parses the command line (-g GAME, ...) and
+// (docs/recompiler-design.md D11). Cemu's own main() parses the command line (-g GAME, ...) and
 // calls WindowSystem::Create(), which here is the whole application: boot, one TV window, and an
 // event loop. Single screen by design: there is no GamePad window (D17).
-// Built with WWHD_NULL_GPU (wwhd-null, see src/gpu/null_gpu.cpp) it is headless: no window, no
-// renderer, and the process runs until the title exits it (e.g. CEMU_HLE_TRACE_EXIT_FRAME).
+// wwhd (Cemu's Latte) has a plain Xlib window. wwhd-null (WWHD_NULL_GPU, see src/gpu/null_gpu.cpp)
+// is headless unless WWHD_WINDOW=1 opens an SDL3 window that our renderer (WWHD_RENDER=vk)
+// presents the TV image to (F11 or Alt+Enter: fullscreen). It links its own SDL3 build, with video,
+// in place of the one Cemu's vcpkg build ships for controllers only (src/build.sh). Headless, the
+// process runs until the title exits it (e.g. CEMU_HLE_TRACE_EXIT_FRAME).
 #include "boot.h"
 #include "interface/WindowSystem.h"
 #include "config/ActiveSettings.h"
@@ -12,6 +14,9 @@
 #include "Cafe/CafeSystem.h"
 #ifdef WWHD_NULL_GPU
 #include "../runtime/runtime.h"
+#include "../gpu/vk/renderer.h"
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
 #else
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
@@ -30,6 +35,79 @@ static void setSize(int w, int h)
 	g_windowInfo.width = w; g_windowInfo.height = h;
 	g_windowInfo.phys_width = w; g_windowInfo.phys_height = h;
 }
+
+#ifdef WWHD_NULL_GPU
+// The window's drawable size, kept by the event loop for the renderer's thread.
+static std::atomic<uint32> s_pixelWidth, s_pixelHeight;
+
+static void StorePixelSize(SDL_Window* window)
+{
+	int w = 0, h = 0;
+	SDL_GetWindowSizeInPixels(window, &w, &h);
+	s_pixelWidth = (uint32)w;
+	s_pixelHeight = (uint32)h;
+	setSize(w, h);
+}
+
+// WWHD_WINDOW=1: the TV window, handed to the renderer; nullptr otherwise
+static SDL_Window* OpenWindow()
+{
+	const char* on = getenv("WWHD_WINDOW");
+	if (!on || strcmp(on, "1") != 0)
+		return nullptr;
+	if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
+		wwhd::Fatal(fmt::format("SDL video: {}", SDL_GetError()));
+	SDL_Window* window = SDL_CreateWindow("The Legend of Zelda: The Wind Waker HD", 1280, 720,
+		SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+	if (!window)
+		wwhd::Fatal(fmt::format("SDL window: {}", SDL_GetError()));
+	StorePixelSize(window);
+	Uint32 n = 0;
+	const char* const* extensions = SDL_Vulkan_GetInstanceExtensions(&n);
+	if (!extensions)
+		wwhd::Fatal(fmt::format("SDL Vulkan: {}", SDL_GetError()));
+	wwhd::gpu::Window w;
+	w.instanceExtensions.assign(extensions, extensions + n);
+	w.createSurface = [window](void* instance) -> uint64 {
+		VkSurfaceKHR surface{};
+		if (!SDL_Vulkan_CreateSurface(window, (VkInstance)instance, nullptr, &surface))
+		{
+			cemuLog_log(LogType::Force, "wwhd: SDL_Vulkan_CreateSurface: {}", SDL_GetError());
+			return 0;
+		}
+		return (uint64)surface;
+	};
+	w.size = [](uint32& width, uint32& height) { width = s_pixelWidth; height = s_pixelHeight; };
+	wwhd::gpu::SetWindow(std::move(w));
+	cemuLog_log(LogType::Force, "wwhd: window on SDL's {} video driver", SDL_GetCurrentVideoDriver());
+	return window;
+}
+
+[[noreturn]] static void EventLoop(SDL_Window* window)
+{
+	for (;;)
+	{
+		SDL_Event ev;
+		if (!SDL_WaitEvent(&ev))
+			continue;
+		switch (ev.type)
+		{
+		case SDL_EVENT_QUIT:
+		case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+			cemuLog_log(LogType::Force, "wwhd: window closed");
+			_exit(0);   // like Cemu's own exit path mid-game: skip global destructors
+		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: StorePixelSize(window); break;
+		case SDL_EVENT_WINDOW_FOCUS_GAINED: g_windowInfo.app_active = true; break;
+		case SDL_EVENT_WINDOW_FOCUS_LOST: g_windowInfo.app_active = false; break;
+		case SDL_EVENT_KEY_DOWN:
+			if (!ev.key.repeat && (ev.key.key == SDLK_F11 || (ev.key.key == SDLK_RETURN && (ev.key.mod & SDL_KMOD_ALT))))
+				SDL_SetWindowFullscreen(window, !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN));
+			break;
+		default: break;
+		}
+	}
+}
+#endif
 
 void WindowSystem::Create()
 {
@@ -52,9 +130,12 @@ void WindowSystem::Create()
 	g_windowInfo.app_active = true;
 
 #ifdef WWHD_NULL_GPU
+	SDL_Window* window = OpenWindow();
 	wwhd::PrepareTitle(*game);
 	wwhd::rt::Install();    // the execution seam: interprets, or runs diff mode (src/runtime)
 	CafeSystem::LaunchForegroundTitle();
+	if (window)
+		EventLoop(window);
 	for (;;)
 		std::this_thread::sleep_for(std::chrono::seconds(1));
 #else

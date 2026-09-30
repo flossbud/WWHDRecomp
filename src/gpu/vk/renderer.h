@@ -13,6 +13,16 @@
 
 namespace wwhd::gpu
 {
+	// The window the TV image is presented to at every swap: the frontend's (SDL3), set before the
+	// renderer starts. Without one the renderer is headless.
+	struct Window
+	{
+		std::vector<const char*> instanceExtensions;              // what createSurface needs
+		std::function<uint64(void* instance)> createSurface;     // a VkSurfaceKHR for it, 0 on failure
+		std::function<void(uint32& w, uint32& h)> size;           // its drawable size in pixels
+	};
+	void SetWindow(Window window);
+
 	bool RendererOn();                                             // WWHD_RENDER=vk, and Vulkan came up
 	void RendererClear(const uint32be* body, uint32 nWords);       // IT_HLE_CLEAR_COLOR_DEPTH_STENCIL
 	void RendererCopyToScanBuffer(const uint32be* body, uint32 nWords); // IT_HLE_COPY_COLORBUFFER_TO_SCANBUFFER
