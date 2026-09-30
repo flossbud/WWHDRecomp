@@ -171,13 +171,14 @@ reference's captures go (`survey.sh` on both with the same frames; `compare_fram
 to find the draw (`WWHD_RENDER_SHADERS=dir` writes each shader's GLSL for reading it). First gameplay
 numbers, from the save route (Link on the Outset dock, f900-f1800): 40-45 dB, 0.2-0.9% of pixels
 off, on Beedle's shop ship and the objects at the left edge; the title and menus are exact.
-**That difference is the reference's, not ours.** The ambient-occlusion pass samples a depth
-texture whose level 1 the game draws separately, at 960x540 R16F with level 1 at `20009000`
-(pitch 512, the same layout as the target drawn there). Cemu's texture cache never relates its own
-texture for that target to the chain, so its level 1 is zeros and its occlusion comes out weaker;
-the renderer reads what was drawn, as the console's shared memory would. With level 1 zeroed like
-Cemu's, the same frames are at 55-61 dB. Decide how comparisons should treat this (a reference
-fix, a quirk switch, or a known difference) before chasing the rest of G3. Untested so far because the title doesn't use them:
+**That difference was the reference's, and is fixed there** (cemu-patches/0013). The
+ambient-occlusion pass samples a depth texture whose level 1 the game draws separately (960x540
+R16F, level 1 at `20009000`, pitch 512: the same layout as the target drawn there). Cemu's
+`LatteTexture_TrackTextureRelation` assumed a mip chain lies above its base level, dropped the
+relation, and left level 1 zero; the renderer read what was drawn, as the console would. With 0013
+the reference's traces are unchanged and the dock frames are at 55.4-61.3 dB (0.01-0.03% of pixels
+off); the title route's worst frame is 61.9 dB. The reference captures in `/wwhd/data/g2/ref` and
+`/wwhd/data/g3/save-ref` were re-recorded with 0013 (the old ones are `*-pre0013`). Untested so far because the title doesn't use them:
 - GPU-side `GX2CopySurface` (`IT_HLE_COPY_SURFACE_NEW`, only reported);
 - readback of a rendered surface into a linear-special destination (the reference reads back);
 - 3D textures, cube-map render targets, depth-stencil textures loaded from memory (zeroed, as

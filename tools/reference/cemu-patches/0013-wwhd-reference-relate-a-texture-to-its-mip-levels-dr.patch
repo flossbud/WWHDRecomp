@@ -1,0 +1,39 @@
+From c16e747d1cda5b3cd1edef99ed952ab7ef8293d8 Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 00:28:24 +0000
+Subject: [PATCH] wwhd-reference: relate a texture to its mip levels drawn as
+ separate targets when the mips lie below the base
+
+---
+ src/Cafe/HW/Latte/Core/LatteTexture.cpp | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/src/Cafe/HW/Latte/Core/LatteTexture.cpp b/src/Cafe/HW/Latte/Core/LatteTexture.cpp
+index 4c6de30..36744b1 100644
+--- a/src/Cafe/HW/Latte/Core/LatteTexture.cpp
++++ b/src/Cafe/HW/Latte/Core/LatteTexture.cpp
+@@ -618,8 +618,19 @@ bool LatteTexture_IsBlockedFormatRelation(LatteTexture* texture1, LatteTexture*
+ void LatteTexture_TrackTextureRelation(LatteTexture* texture1, LatteTexture* texture2)
+ {
+ 	// make sure texture 2 is always at texture 1 mip level 0 or beyond
+-	if (texture1->physAddress > texture2->physAddress)
+-		return LatteTexture_TrackTextureRelation(texture2, texture1);
++	// wwhd-reference: decided by which texture's slices/mips contain the other's start, not by address
++	// order: a mip chain can lie below its base level (GX2 surfaces with a separately allocated mip
++	// pointer), and then the texture drawn at a mip address never became related to the chain
++	if (texture1->physAddress != texture2->physAddress)
++	{
++		sint32 sliceIndex, mipIndex;
++		if (!LatteTexture_GetSubtextureSliceAndMip(texture1, texture2, &sliceIndex, &mipIndex))
++		{
++			if (!LatteTexture_GetSubtextureSliceAndMip(texture2, texture1, &sliceIndex, &mipIndex))
++				return;
++			std::swap(texture1, texture2);
++		}
++	}
+ 	// check if this texture relation is already tracked
+ 	cemu_assert_debug(texture1->physAddress != 0);
+ 	cemu_assert_debug(texture2->physAddress != 0);
+-- 
+2.47.3
+

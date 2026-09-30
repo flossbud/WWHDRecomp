@@ -58,8 +58,8 @@ Pro-Controller mode, chosen on its Controller Selection screen. The recomp is de
                                                     │               (no Latte, no gx2, no TCL)
                                                     └─ frontend    ← SDL3 WindowSystem, no wxWidgets
 
- reference (not shipped): unmodified upstream Cemu run under Xvfb + lavapipe, which produces
- reference frames and GX2 call traces for the same scripted input
+ reference (not shipped): upstream Cemu with our patches (tools/reference), run under Xvfb +
+ lavapipe, which produces reference frames and OS-call traces for the same scripted input
 ```
 
 **The seam.** We keep Cemu's boot path as it is:
@@ -610,11 +610,13 @@ rerun unchanged once the route reaches them.
 
 ### D16. Graphics verification
 
-* **The reference** is unmodified upstream Cemu, run under Xvfb with lavapipe, on the same
-  scripted input.
+* **The reference** is upstream Cemu, run under Xvfb with lavapipe, on the same scripted input.
+  Its patches (tools/reference/README.md) make it deterministic and observable, plus one rendering
+  fix where it disagreed with the console's shared memory (0013: a mip chain allocated below its
+  base level); a fix goes in only with evidence that the console would draw it that way.
 * **Determinism.** Both builds run with a test-mode clock (`OSGetTime`/`OSGetSystemTime` advance
   a fixed step per frame) and frame-indexed input. The same frame number then shows the same
-  scene. The reference Cemu needs a small patch for the clock; that patch is the only change to it.
+  scene. The reference Cemu needs patches for that (0001-0006).
 * **Three comparisons, strictest first:**
   1. **GX2 call streams** must match exactly (calls, arguments, and hashes of referenced
      buffers). A mismatch here is a CPU or front-half bug, not a rendering one.

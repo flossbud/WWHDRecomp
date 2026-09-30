@@ -1,4 +1,4 @@
-From 4d426eb6b6bb8c1afd7195bf051af01417b9c6c8 Mon Sep 17 00:00:00 2001
+From 33a6e8d6a7967f1aedb34b3be1be4c588c835d8b Mon Sep 17 00:00:00 2001
 From: flossbud <224492734+flossbud@users.noreply.github.com>
 Date: Tue, 29 Sep 2026 19:56:52 +0000
 Subject: [PATCH] wwhd-reference: texture dumps at given frames and
@@ -6,12 +6,12 @@ Subject: [PATCH] wwhd-reference: texture dumps at given frames and
 
 ---
  src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp  |  32 ++++
- src/Cafe/HW/Latte/Core/LatteTexture.cpp       |  15 ++
+ src/Cafe/HW/Latte/Core/LatteTexture.cpp       |  23 +++
  src/Cafe/HW/Latte/Core/LatteTextureCache.cpp  |   3 +
  src/Cafe/HW/Latte/Core/LatteTextureLegacy.cpp |   4 +
  .../Latte/Renderer/Vulkan/VulkanRenderer.cpp  | 156 ++++++++++++++++++
  .../HW/Latte/Renderer/Vulkan/VulkanRenderer.h |   3 +
- 6 files changed, 213 insertions(+)
+ 6 files changed, 221 insertions(+)
 
 diff --git a/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp b/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp
 index f1556f8..1d28a48 100644
@@ -80,7 +80,7 @@ index f1556f8..1d28a48 100644
  	{
  		g_renderer->texture_clearDepthSlice(texture, sliceIndex, mipIndex, hasDepthClear, hasStencilClear, depthValue, stencilValue);
 diff --git a/src/Cafe/HW/Latte/Core/LatteTexture.cpp b/src/Cafe/HW/Latte/Core/LatteTexture.cpp
-index 43b116f..af01fb2 100644
+index 43b116f..4c6de30 100644
 --- a/src/Cafe/HW/Latte/Core/LatteTexture.cpp
 +++ b/src/Cafe/HW/Latte/Core/LatteTexture.cpp
 @@ -442,8 +442,22 @@ void LatteTexture_MarkDynamicTextureAsChanged(LatteTextureView* textureView, sin
@@ -106,7 +106,38 @@ index 43b116f..af01fb2 100644
  	sint32 srcWidth = srcTexture->width;
  	sint32 srcHeight = srcTexture->height;
  	sint32 dstWidth = dstTexture->width;
-@@ -956,6 +970,7 @@ void LatteTexture_DeleteAbsorbedSubtextures(LatteTexture* texture)
+@@ -744,6 +758,8 @@ void LatteTexture_DeleteDataOverlapTracking(LatteTexture* texture)
+ 	}
+ }
+ 
++void LatteTexture_WwhdWatchEvent(const char* what, LatteTexture* t, LatteTexture* other);
++
+ void LatteTexture_GatherTextureRelations(LatteTexture* texture)
+ {
+ 	for (sint32 mipIndex = 0; mipIndex < texture->mipLevels; mipIndex++)
+@@ -772,15 +788,21 @@ void LatteTexture_GatherTextureRelations(LatteTexture* texture)
+ 								&& sliceMipInfo->tileMode == occupancy.sliceMipInfo->tileMode &&
+ 								LatteTexture_IsFormatViewCompatible(texture->format, itrTexture->format))
+ 							{
++								LatteTexture_WwhdWatchEvent(fmt::format("relation at mip {} slice {}", mipIndex, sliceIndex).c_str(), texture, itrTexture);
+ 								LatteTexture_TrackTextureRelation(texture, itrTexture);
+ 							}
+ 							else
+ 							{
+ 								// pitch not compatible or format not compatible
++								LatteTexture_WwhdWatchEvent(fmt::format("no relation at mip {} slice {}: pitch {}/{} tile mode {}/{}", mipIndex, sliceIndex,
++									sliceMipInfo->pitch, occupancy.sliceMipInfo->pitch, (uint32)sliceMipInfo->tileMode, (uint32)occupancy.sliceMipInfo->tileMode).c_str(), texture, itrTexture);
+ 							}
+ 						}
+ 						else
+ 						{
++							if (sliceMipInfo->addrStart == occupancy.addrStart)
++								LatteTexture_WwhdWatchEvent(fmt::format("overlap only at mip {} slice {}: subIndex {}/{}", mipIndex, sliceIndex,
++									sliceMipInfo->subIndex, occupancy.sliceMipInfo->subIndex).c_str(), texture, itrTexture);
+ 							LatteTexture_TrackDataOverlap(texture, sliceMipInfo, occupancy);
+ 						}
+ 					}
+@@ -956,6 +978,7 @@ void LatteTexture_DeleteAbsorbedSubtextures(LatteTexture* texture)
  
  void LatteTexture_RecreateTextureWithDifferentMipSliceCount(LatteTexture* texture, MPTR physMipAddr, sint32 newMipCount, sint32 newDepth)
  {
