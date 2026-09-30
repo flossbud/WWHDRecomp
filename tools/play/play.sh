@@ -6,7 +6,8 @@
 #   WWHD_SAVE=dir     first install the save files in dir (cking*.sav), replacing the current save
 #                     (e.g. WWHD_SAVE=saves/wwhd_100: Quest Log 1 is a 100% file)
 #   WWHD_VSYNC=1      present with FIFO (vsync) instead of mailbox
-#   WWHD_WINDOW=0     headless: no window, no sound (tests, with WWHD_EXIT_FRAME)
+#   WWHD_WINDOW=0     headless: no window and no sound (the sound is hashed into /dev/null), for
+#                     tests with WWHD_EXIT_FRAME
 # Other switches pass through (src/README.md): WWHD_EXIT_FRAME, CEMU_INPUT_SCRIPT, CEMU_SHOT_FRAMES,
 # CEMU_VIRTUAL_CLOCK, WWHD_PROFILE. Keys (the Pro Controller): A=X B=Z X=S Y=A L=Q R=W ZL=1 ZR=2
 # +=Return -=Backspace, D-pad on the arrows, left stick I/J/K/L, right stick T/F/G/H; F11 or
@@ -15,7 +16,7 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 export WWHD_NATIVE=${WWHD_NATIVE-on} WWHD_RENDER=${WWHD_RENDER-vk} WWHD_CEMU_DATA=$here/cemu CEMU_NO_GAMEPAD=1
 export WWHD_WINDOW=${WWHD_WINDOW-1}
-[ "$WWHD_WINDOW" = 0 ] && unset WWHD_WINDOW
+[ "$WWHD_WINDOW" = 0 ] && { unset WWHD_WINDOW; export WWHD_AUDIO_HASH=${WWHD_AUDIO_HASH:-/dev/null}; }
 if [ -n "${WWHD_SAVE:-}" ]; then
     save=$here/portable/mlc01/usr/save/00050000/10143500/user/80000001   # USA title, the default account
     ls "$WWHD_SAVE"/cking.sav >/dev/null

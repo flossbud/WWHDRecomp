@@ -1,35 +1,45 @@
-# Handoff: WWHD recomp, state as of 2026-09-30
+# Handoff: WWHD recomp, state as of 2026-09-30 (evening)
 
-Read this first, then `CLAUDE.md`, `docs/recompiler-design.md` (decisions D1–D17, milestones,
-status paragraphs) and the READMEs in `tools/reference/`, `tools/recomp/`, `tools/worker/`, `src/`.
-M3 was done on branch `ww02` (worktree `/srv/projects/WWHDRecomp/.worktrees/ww02`, based on
-`ww-2`), pushed to the `worker` remote. M4 and G0 followed on the same branch.
+Read this first, then `CLAUDE.md`, `docs/recompiler-design.md` (decisions D1–D20, milestones,
+status paragraphs) and the READMEs in `src/`, `tools/reference/`, `tools/recomp/`, `tools/worker/`.
+All work is on branch `ww02` (worktree `/srv/projects/WWHDRecomp/.worktrees/ww02`, based on
+`ww-2`), pushed to the `worker` remote. Latest work when this was written: `e1aae8b` (shader
+cache), then this handoff.
 
 ## What the project is
 
 A static **recompilation** of *The Legend of Zelda: The Wind Waker HD*. The target is the
 USA v0 `cking.rpx` (sha256 in `orig/README.md`).
-- The game's PowerPC code becomes C++ that runs on Cemu's OS libraries (HLE, scheduler, IOSU,
-  audio, input).
-- Graphics become our own Vulkan backend with shaders compiled ahead of time. That's the
-  owner's choice: "native graphics from the start", not Cemu's Latte.
+- The game's PowerPC code becomes C++ (`tools/recomp`), linked into our runtime (`src/`).
+- **The shipped game will not depend on Cemu** (design D18). Cemu stays the *reference*: a patched,
+  deterministic Cemu produces the OS-call traces, GPU command streams and sound every change is
+  checked against. Its OS libraries are being replaced piece by piece (our OS layer and forks,
+  below), least coupled first.
+- Graphics are our own Vulkan renderer (`src/gpu/vk`), not Cemu's Latte: "native graphics from the
+  start", the owner's choice.
 
 The scope is **single-screen, Pro Controller mode** (D17). The GamePad is reported absent, and
 there's no DRC output. The owner may later build their own dual-screen feature (e.g. for AYN
 Thor-like devices), but it isn't Nintendo's GamePad path, so don't design around it.
 
+**Keep a future Android release in mind** (the owner asked for this): no x86-only pieces without a
+portable fallback, Vulkan features Android drivers have, work that can move to build time does, and
+startup time and CPU use matter (phones throttle when hot). Design D19 and D20 have Android notes.
+
 ## Hard rules (from the owner and `CLAUDE.md`)
 
 - **Never commit or emit game data.** That means no `.rpx`/`.rpl`/`.wua`, no extracted assets,
-  no decompiler dumps and no generated recompiler output. Generated C++ and objects live only in
-  `build/`, which is gitignored, as is `orig/`. It's a personal project on a legally owned copy.
+  no decompiler dumps, no generated recompiler output, no shader caches, captures or saves.
+  Generated C++ and objects live only in `build/`, which is gitignored, as is `orig/`. It's a
+  personal project on a legally owned copy. Core dumps contain game memory: delete them.
 - **Heavy work runs on the worker worker, never on the editing machine.** Heavy means Cemu, builds,
   Ghidra and big traces. A 272 MB trace once crashed the editing machine VM. the editing machine is for editing,
-  git and light checks (the census and the generator run fine there).
+  git and light checks (the census and the generator run fine there). Real-time play and real-time
+  measurements go to the owner's desktop (below).
 - **Long jobs:** `tools/worker/job start NAME CMD…`, then `job wait NAME [MIN] [STALL_MIN]`, which
-  returns 0 ok / 1 failed / 2 timeout / 3 stalled / 4 died.
-  - Wait in bounded chunks (for example `job wait X 9 8`) and tell the owner what's running.
-  - They explicitly asked for no silent multi-hour waits.
+  returns 0 ok / 1 failed / 2 timeout / 3 stalled / 4 died; `job tail NAME` shows the log.
+  - A tool call can wait at most 10 minutes: wait in chunks (`job wait X 9`) and tell the owner
+    what's running between chunks. They explicitly asked for no silent multi-hour waits.
   - Scripts running under a job must print a heartbeat, or the stall detector fires.
 - **Never kill by pattern** (`pkill -f`). A pattern kill once took out the wrong job. Use
   `job stop NAME`, or kill by PID/pidfile.
@@ -37,254 +47,375 @@ Thor-like devices), but it isn't Nintendo's GamePad path, so don't design around
   replaces files by rename.
 - **Commits:** `git -c user.name="flossbud" -c user.email="224492734+flossbud@users.noreply.github.com" commit …`, with
   the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Push with
-  `git push worker <branch>`.
+  `git push worker ww02`. Commit when a step is done and its checks pass.
 - **Every rename or retype needs evidence** (`config/US_v0/symbols.csv` has an evidence column).
   A function counts as "done" only once an external check passes (fixture or trace diff).
 - **Talking to the owner:** they often read on a phone. Put choices as a numbered list at the end
-  of the message so they can reply with a digit, and say plainly what's running and what's done.
+  of the message so they can reply with a digit, and recommend one. Say plainly what's running and
+  what's done, and give a short progress line during long stretches of work.
+- **The owner's desktop is theirs:** test there headless (no window, no sound) unless they asked to
+  see or hear something, and say so before opening a window on it.
 
 ## Infrastructure
 
-- **Worker:** Docker `wwhd-worker` on the worker (a mini PC).
+- **Worker:** Docker `wwhd-worker` on the worker (a mini PC, 6-core CPU).
   - SSH alias `worker` (Tailscale), with key `~/.ssh/worker_ed25519`.
   - Limits: 24 GB RAM, no swap, 10 CPUs.
   - Volume `/wwhd` is a 250 GB sparse image. Paths: repo mirror `/wwhd/WWHDRecomp`, data
-    `/wwhd/data` (ROM, traces, shots), logs `/wwhd/logs`.
+    `/wwhd/data` (ROM, traces, saves, captures), logs `/wwhd/logs`.
   - `tools/worker/sync.sh` pushes the working tree. `tools/worker/w CMD` runs a command in the
-    container.
+    container (stdin passes through: `tools/worker/w python3 - args < script.py`).
 - **Power cap:** the host has a 60 W RAPL cap (PL1 45 W / PL2 60 W). Its 90 W adapter latched off
   under full load before the cap. The host also keeps IP LAN_ADDR via a timer. Details are in
   the the owner's KB (`an incident note`). Don't undo the cap.
-- **GPU:** Intel Intel iGPU through Mesa anv. Xvfb has no DRI3, so `run.sh` sets
-  `MESA_VK_WSI_DEBUG=sw`. `REF_GPU=llvmpipe` forces software rendering.
+  It's also why real-time runs on the worker are slow: time real time on the desktop.
+- **GPU (worker):** Intel Intel iGPU through Mesa anv. Xvfb has no DRI3, so `run.sh` sets
+  `MESA_VK_WSI_DEBUG=sw`. `REF_GPU=llvmpipe` forces software rendering (lavapipe), which every
+  frame comparison uses.
 - **Cemu source:**
   - the editing machine `~/opt/cemu-src`, branch `wwhd-reference`, for **editing only**; never build it
     on the editing machine.
   - The worker builds `/wwhd/opt/cemu-src` at pinned commit `c717fcab` plus
-    `tools/reference/cemu-patches/0001–0011` (0011 is the execution seam, null by default).
+    `tools/reference/cemu-patches/0001–0013` (0011 is the execution seam).
   - To change a patch: commit on the editing machine branch, run
     `git format-patch -1 --start-number N -o tools/reference/cemu-patches/`, sync, then
     `tools/worker/job start cemu-rebuild tools/worker/setup-volume.sh cemu-rebuild` (incremental,
-    about 5–10 min).
+    about 5–10 min). Our forks (`src/forks.txt`) are no longer reached by cemu-patches.
+  - Ghidra and its project (`ghidra/projects/`, disposable) are on the worker:
+    `tools/ghidra/headless.sh`, `rebuild.sh`.
+- **The owner's desktop, `desktop`** (on the tailnet): Fedora 44, desktop CPU (24 threads),
+  AMD GPU on RADV, GNOME on Wayland, three monitors, speakers.
+  - SSH: `ssh owner@DESKTOP_ADDR` (the default key works with `BatchMode=yes`). Use the IP: the
+    name `desktop` resolves to a public address through a search domain.
+  - It suspends when idle and then drops off the tailnet (`tailscale status` shows "offline").
+    That is not a crash.
+  - `~/wwhd-play`: **the owner's** copy (program, Cemu's data files, the game, the test save, and in
+    `portable/` their emulated NAND, saves and shader cache). Don't reset their saves or cache.
+  - `~/wwhd-test`: the agents' copy for headless tests (its `game/wwhd.wua` links to wwhd-play's).
+  - `tools/play/deploy.sh owner@DESKTOP_ADDR [DIR]` (from the editing machine, after `src/build.sh`)
+    streams the build there. It replaces the binary by rename (a running game is untouched) and
+    rewrites `play.sh`, `portable/settings.xml` and the game profile.
+  - Headless test: `cd ~/wwhd-test && WWHD_WINDOW=0 WWHD_SAVE=saves/wwhd_100
+    CEMU_INPUT_SCRIPT=$PWD/routes/continue-100.txt WWHD_EXIT_FRAME=1800 ./play.sh`. With
+    `WWHD_WINDOW=0` the sound goes to `/dev/null` (`WWHD_AUDIO_HASH`). Before that, a test played
+    through the owner's speakers. Results: the `wwhd real time:` lines in `portable/log.txt`;
+    `WWHD_PROFILE=/tmp/p.txt` records a profile (Known facts says how to read it).
+  - Launching the window for the owner (only when they ask): `systemd-run --user --unit=wwhd-play
+    --collect -p WorkingDirectory=$HOME/wwhd-play -p StandardOutput=file:$HOME/wwhd-play/play.log
+    -p StandardError=file:$HOME/wwhd-play/play.log $HOME/wwhd-play/play.sh` (the user manager has
+    the Wayland environment). The keys are in `tools/play/play.sh`'s header.
 
-## What exists (all verified; numbers are from the worker)
+## What exists (all verified)
 
 **Reference harness** (`tools/reference/`, M0a done). A patched Cemu that's deterministic:
 - virtual clock, synchronous IPC/GPU/ioctl, a single-core interpreter profile;
 - an OS-call tracer, scripted Pro Controller input, frame-indexed screenshots, swkbd auto-answer.
 
 The scripts:
-- `run.sh` (env options documented in its header);
-- `survey.sh ROUTE OUT LAST [STEP] [FIRST]` for contact sheets;
-- `determinism.sh OUT FRAMES [ROUTE]`;
-- `hle_trace.py summary|dump|diff`. The diff is vectorised: about 65M calls in 16 s. It takes
-  `--ignore-core` and `--mask-cemu-area`.
+- `run.sh` (env options documented in its header; it discards the program's stdout);
+- `route.sh OUT FRAMES ROUTE BASELINE`: one run plus a trace comparison;
+- `stream_check.sh save|route NAME`: trace, GPU command stream and sound against the baselines;
+- `timing.sh save|route OUT`: speed without the trace, with the profiler;
+- `survey.sh ROUTE OUT LAST [STEP] [FIRST]` for contact sheets; `compare_frames.py` for captures;
+- `shader_cache_check.sh OUT`: the shader cache changes nothing on screen (D20);
+- `determinism.sh OUT FRAMES [ROUTE]`; `hle_trace.py summary|dump|diff` (about 65M calls in
+  16 s, `--ignore-core`, `--mask-cemu-area`).
 
-`routes/title-to-game.txt` covers fresh boot → save dialog → title → controller select → file
-select → name entry ("Link") → the legend intro → Aryll's dialogue → gameplay on Outset at
-~f10450.
+**Routes** (`tools/reference/routes/`; input is keyed on the swap count, so routes also play in
+real time):
+- `title-to-game.txt`: fresh boot → save dialog → title → controller select → file select → name
+  entry → the legend intro → Aryll → gameplay on Outset at about f10450;
+- `continue-100.txt`: from the owner's 100% save, gameplay on the Outset dock at f870;
+- `tour-100.txt`: continue-100, then walk the dock and open the pause menu.
 
-**Baseline traces** on the worker, route to f10800, **1,124,796,468 calls**, all identical:
+**Baselines** on the worker:
 
-| Trace | What |
+| Baseline | What |
 |---|---|
-| `/wwhd/data/traces/det-gpu/a.zst` | reference on the GPU |
-| `/wwhd/data/traces/det-route/a.zst` | reference on llvmpipe |
-| `/wwhd/data/traces/null-route.zst` | `wwhd-null` |
+| `/wwhd/data/traces/null-route.zst`, `det-gpu/a.zst`, `det-route/a.zst` | whole route to f10800, **1,124,796,468 calls**, all identical |
+| `/wwhd/data/traces/save-det/{a,b}.zst` | save route to f1800, **172,954,163 calls** |
+| `/wwhd/data/gx2/{save,route}-cemu.txt` | GPU command streams: 45,955,744 and 143,098,119 packets |
+| `/wwhd/data/gx2/{save,route}-audio-cemu.txt` | sound: 5,180 and 30,219 blocks |
+| `/wwhd/data/g2/ref`, `/wwhd/data/g3/save-ref` | reference captures (title route f30–f600 every 30; save route every 60), with cemu-patches/0013 |
 
-For 600 frames (59,531,239 calls): `det-wwhd/a.zst` and `det-null/a.zst`.
-
-**Starting from a save.** The owner's 100% save (three quest logs, log 1: full Triforce, 3 pearls,
-20 hearts, Normal Mode, saved on Outset Island) is at `/wwhd/data/saves/wwhd_100` on the worker:
-`cking.sav`, 36 Pictograph photos, photo order and play log, extracted from the uploaded RAR (the
-archive is next to it). It is game data: never in git. `REF_SAVE=dir` (`run.sh`, so every harness
-script) installs a save into the default account's save folder on a fresh NAND;
-`routes/continue-100.txt` continues quest log 1 and is in gameplay on the Outset dock at f870,
-against f10450 for the new-game route. Baseline to f1800, **172,954,163 calls**: two reference runs
-identical (`/wwhd/data/traces/save-det/{a,b}.zst`), and `wwhd-null` native equals them in 69 s.
-Reference captures on llvmpipe every 60 frames: `/wwhd/data/g3/save-ref`.
+**The 100% save** (three quest logs; log 1: full Triforce, 3 pearls, 20 hearts, Normal Mode, saved
+on Outset) is at `/wwhd/data/saves/wwhd_100` on the worker and `~/wwhd-play/saves/wwhd_100` on the
+desktop. `REF_SAVE=dir` (run.sh) or `WWHD_SAVE=dir` (play.sh) installs it. It is game data.
 
 **Recompiler** (`tools/recomp/`, M1 and M2 done):
-- **`ppc.py`:** the decoder.
-- **`census.py`:** 2,351,474 instructions, 157 mnemonics, 0 undecodable. The game has no OE
-  forms, no FP record forms and no absolute branches, and touches only the SPRs LR, CTR and
-  UGQR2–5.
-- **`emit.py`:** one instruction to C++, mirroring Cemu's interpreter, quirks included.
-- **`fuzz/`:** runs emitted code against `PPCInterpreterSlim_executeInstruction`. All 154
-  computing mnemonics match over about 1.8M random runs; NaN payloads are tolerated and counted.
-  It links into Cemu_release's own link line via `-Wl,--wrap=main`.
-- **`generate.py`:** the whole program, 39,720 functions: 39,705 from the list, the `.syscall`
-  stub, and 14 synthesised GHS restore entries (D7). 0 errors.
-- **`build.sh`:** compiles it on the worker in about 10 min (about 4 before per-block counting
-  doubled the code), with 0 warnings; incremental since M3.
-- Since M3 it also emits purity (12,968 pure functions), code hashes, call edges, import sites and
-  a store census (`runtime/recomp_tables.h`). Two M2 bugs were fixed: all 294 jump tables are `b`
-  runs (the switches never matched), and `_iob+0x10` was emitted as `environ`.
+- `ppc.py`, the decoder.
+- `census.py`: 2,351,474 instructions, 157 mnemonics, 0 undecodable.
+- `emit.py`: one instruction to C++, mirroring Cemu's interpreter, quirks included.
+- `fuzz/`: emitted code against Cemu's interpreter. Run `tools/recomp/fuzz/build.sh`, then
+  `build/fuzz/fuzz ITER MNEMONIC`; record forms are fuzzed under the base mnemonic.
+- `generate.py`: 39,720 functions, 0 errors, with exact per-basic-block cycle counting (D6 as
+  built). It also emits purity (12,968 pure functions), code hashes, call edges, import sites and
+  a store census.
+- `build.sh`: compiles on the worker in about 11 min, longer than one tool call.
 
-**Runtime** (`src/runtime/`, M3 and M4 done). Linked into `wwhd-null` with the generated program:
-- **`WWHD_NATIVE=on` runs the recompiled program.** The whole-route trace equals the reference's
-  (1,124,796,468 calls) in 359 s, with 0 game instructions interpreted. Guest time is exact per
-  instruction, counted per basic block (`RT_FITS`/`RT_CHARGE`, `RT_TICK`/`rt_yield`, design D6 as
-  built), and Cemu's boot patches are in the
-  generated code (`config/US_v0/code_patches.csv`, D10).
-- Cemu patch 0011's hook replaces the interpreter loop; by default it interprets exactly.
-- At boot: function table (D5), code hashes vs guest memory (Cemu patches `f_027F9994` and
-  `f_028137E0`, D10), imports bound from guest memory (397 functions, 10 data; 0 differences from
-  Cemu's name tables).
-- All `rt_*` exist. `rt_import`/`rt_call_ctr`/`rt_jump_ctr` are bound and checked but only run once
-  non-pure code goes native (M4).
-- `WWHD_NATIVE=diff`: diff mode (D8.2). Over the whole route: 3,875,261 sampled pure calls checked,
-  all equal to the interpreter; 4,616 functions, all clean; trace identical to `null-route.zst`.
-  Since M4 it also compares cycles: clean over the whole route as well.
-- `WWHD_GPU_STATS=path` (null GPU) and `tools/reference/g0_gx2.py`: the G0 measurements (D15).
-- `WWHD_GPU_DUMP=dir` (null GPU) and `tools/shaders/`: the G1 corpus, 30,011 programs, all
-  translated to valid SPIR-V (D14).
-- `tools/reference/route.sh OUT FRAMES ROUTE BASELINE`: one run plus a trace comparison.
-- `WWHD_RENDER=vk` (`src/gpu/vk`): the G2 renderer; `survey.sh` captures and
-  `compare_frames.py` compares with `/wwhd/data/g2/ref` (the reference's captures, f30-f600 every 30).
-  Surface-level comparison: cemu-patches/0012 (`CEMU_TEX_DUMP_FRAME`, `CEMU_TEX_WATCH`),
-  `WWHD_RENDER_DUMP`, `compare_dumps.py`, `WWHD_RENDER_TRACE` (src/README.md).
+**Runtime** (`src/`; `src/build.sh` builds on the worker in about 5 min):
+- **`build/wwhd/wwhd-null` is the product.** It holds the recompiled program
+  (`WWHD_NATIVE=on`), our OS layer, the null GPU and, with `WWHD_RENDER=vk`, our renderer.
+  - The null GPU (`src/gpu/null_gpu.cpp`) is a command processor that keeps the register file and
+    does every guest-visible effect.
+  - `build/wwhd/wwhd` is Cemu's Latte with our frontend, kept for comparison.
+- **Link order matters.** Cemu's archives are linked in `wwhd`'s member order
+  (`src/link_order.py`), or Cemu's `SysAllocator` slots shift and guest addresses in 0x0E000000+
+  differ. Forks replace Cemu's objects at the same position. Archives that lose objects are
+  linked as `lib<name>_wwhd.a`.
+- **`WWHD_NATIVE=diff`** is diff mode (D8.2): pure calls and cycles checked against the
+  interpreter. Latest on the save route: 1,118,003 checked calls, 0 mismatches.
+- **Our OS layer** (`src/os`, src/README):
+  - 255 imports are ours: coreinit 31, gx2 179, nn_ac 2, nn_act 2, padscore 6, vpad 4,
+    erreula 15, swkbd 16.
+  - **25 Cemu source files are forked** (`src/forks.txt`): snd_core; the scheduler and its
+    threads, queues, alarms and sync; gx2's core; TCL; proc_ui; the HLE dispatch; the timer;
+    fibers.
+  - Forks started as Cemu's code and differ where the design doc says.
+  - `WWHD_OS=cemu` turns our imports off.
+- **The platform shell** (`WWHD_WINDOW=1`): an SDL3 window presented by our renderer, keyboard and
+  gamepad as the Pro Controller, TV sound on SDL3. The system keyboard and error dialogs are drawn
+  by the frontend (`frontend/overlay.cpp`).
+- **Real time on one host thread** (D19 step 2), when `CEMU_VIRTUAL_CLOCK` is unset:
+  - guest time is `steady_clock`;
+  - the idle scheduler sleeps, and the null GPU sleeps until the host-timed vsync;
+  - every 10 s `portable/log.txt` gets a line: fps, frame-time median, 99th percentile and worst,
+    how busy the scheduler thread was, and first sights of shaders and pipelines;
+  - the fiber context switch is our own (x86-64 assembly, ucontext elsewhere).
+- **The renderer** (`src/gpu/vk`, D13; G2 done on the title route): Cemu's shader decompiler to
+  GLSL, glslang to SPIR-V, Vulkan 1.3 with dynamic rendering.
+- **The shader cache** (D20, `src/gpu/vk/shader_cache.cpp`), in `portable/shaderCache/wwhd`:
+  - it keeps shaders (SPIR-V plus the decompiler facts the draws read), pipeline recipes and the
+    driver's `VkPipelineCache`;
+  - everything cached is built before the title launches, with a "Preparing shaders" screen when
+    that takes over 0.3 s;
+  - `WWHD_SHADER_THREADS=n` sets how many threads build pipelines.
+- **Playing on a desktop:** `tools/play/deploy.sh` and `tools/play/play.sh` (above).
 
-**Runtime** (`src/`, M0b done). `src/build.sh` builds two binaries against the worker's Cemu:
-- **`build/wwhd/wwhd`:** our frontend (`src/frontend`, Cemu's `WindowSystem` without wxWidgets,
-  an Xlib window) with Latte on Vulkan. Its frames are byte-identical to Cemu_release's.
-- **`build/wwhd/wwhd-null`:** headless, with no Latte. `src/gpu/null_gpu.cpp` is a command
-  processor that keeps the register file and does every guest-visible effect but draws nothing.
-  **Its trace is identical to the reference over the whole route, in 12 min.** It's the fast
-  harness for CPU work.
-  - It must be linked with its archive members in `wwhd`'s order (`src/link_order.py`).
-    Otherwise Cemu's `SysAllocator` slots shift and addresses in 0x0E000000+ differ.
-  - D12 was revised: Cemu's gx2 and TCL stay as the exact front half, and only Latte is
-    replaced.
+**Speed** (`timing.sh`, virtual clock, no trace, from launch):
 
-## Next steps, in order
+| | Save route (1800 frames) | Whole route (10800) |
+|---|---|---|
+| Before the quick wins | 44 s | — |
+| Now | 29.6 s, 2.03x real time | 117.7 s, 3.06x |
 
-M3, M4, G0 and G1 are done, M4 and G0 on the scripted route (design doc status paragraphs). `wwhd-null` with
-`WWHD_NATIVE=on` runs the recompiled program, and its whole-route trace equals the reference's.
-G2 is done on the title screen (design doc "G2 status"); G3 is next.
+- **Profile of the CPU thread** (save route, virtual clock): guest code 81%, message queues 8%,
+  helpers 3%, HLE dispatch 2.5%, gx2 1.5%, thread switches 0.9%.
+- **Ruled out:** keeping guest registers in host locals was measured and rejected (the D2 note).
+- **In real time on the desktop:** a steady 30 fps and a 99th-percentile frame time of about
+  35 ms once loaded. But the scheduler thread is busy 100% of the time (next step 1).
 
-**Direction since 2026-09-30 (design D18): the shipped game will not depend on Cemu**; Cemu stays
-the reference. Work goes least coupled first, each step keeping both route traces identical:
-- **Our OS layer** (`src/os`, src/README): 255 imports are ours (coreinit 31, gx2 179, nn_ac 2,
-  nn_act 2, padscore 6, vpad 4, erreula 15, swkbd 16), and 22 Cemu source files are forked
-  (`src/forks.txt`, linked in place of Cemu's objects): snd_core, the scheduler, gx2's core,
-  proc_ui. Forks are unchanged Cemu code so far; cemu-patches no longer reach them. They take over entries in Cemu's HLE
-  table; `WWHD_OS=cemu` turns them off. gx2 and snd_core changes are checked with
-  `tools/reference/stream_check.sh` (GPU command stream and sound against Cemu's). What they borrow from Cemu goes through accessors in `os/os.h`.
-  The software keyboard and error dialogs are drawn by the frontend (`frontend/overlay.cpp`).
-- **The platform shell** (`WWHD_WINDOW=1`): SDL3 window presented by our renderer, keyboard and
-  gamepad as the Pro Controller, TV sound on SDL3. `setup-volume.sh sdl3` builds the SDL3 it
-  links. Windowed, the save route's trace is the reference's.
-- **Playable on a desktop, in real time** (design D19 step 2): `tools/play/deploy.sh HOST`, then
-  `~/wwhd-play/play.sh` there. On the owner's desktop (desktop CPU, AMD GPU) it holds 30 fps
-  (frame time 99th percentile 35 ms once loaded). The game's task switcher spins (D19 "What real
-  time showed"), so one host core stays busy until a D9 override lets it sleep.
-- **Shader cache with a "Preparing shaders" screen** (design D20): what a run translates is kept on
-  disk and prepared before the next start, so first sights hitch only once;
-  `shader_cache_check.sh` holds it to identical frames. Next for it: shipping a recipe list so the
-  first playthrough doesn't hitch either, and fewer pipelines via dynamic state (both matter most
-  for Android).
-- **Next in D18's order:** make the forked scheduler ours in substance, as design D19 lays out
-  (deterministic and real-time modes; per-block cycle counting, our context switch and real time on
-  one host thread are done; next the D9 override for the task switcher's spin; gx2's core and proc_ui
-  with it), the file system (`nn_save` with it), the loader
-  and memory map (where the guest OS objects in Cemu's memory, the SysAllocators, get our own home). Before any of that ships: our own CMake build (step 3),
-  and a GPU machine for M5 (design open question 8).
+**Which checks for which change:**
 
-### 1. G3: render the whole route (design D13, D16.3)
+| You changed | Run |
+|---|---|
+| anything the guest can see (OS layer, scheduler, forks, runtime, generated code) | `stream_check.sh save NAME`, then `route NAME`: trace, command stream and sound identical |
+| generated code or its runtime helpers | the fuzzer for touched mnemonics; diff mode (below): MISMATCH 0 |
+| speed | `timing.sh save OUT` (and `route`), then `python3 tools/profile_report.py OUT/profile.txt` |
+| the renderer or the shader cache | `shader_cache_check.sh`; `survey.sh` + `compare_frames.py` against the reference captures (threshold 60 dB), or against your own "before" captures (byte-identical when nothing on screen should change) |
+| real-time behaviour | headless on the desktop (above): the `wwhd real time:` lines, and a profile |
 
-G2 is done (design doc "G2 status"): to f600 every captured frame is within 60 dB of the
-reference, most within one level. Next, the same comparison over the whole route, as far as the
-reference's captures go (`survey.sh` on both with the same frames; `compare_frames.py --threshold
-60`). When a frame differs, compare surfaces at that swap: `CEMU_TEX_DUMP_FRAME` on the reference,
-`WWHD_RENDER_DUMP` on ours, `tools/reference/compare_dumps.py`, then `WWHD_RENDER_TRACE` with a pixel
-to find the draw (`WWHD_RENDER_SHADERS=dir` writes each shader's GLSL for reading it). First gameplay
-numbers, from the save route (Link on the Outset dock, f900-f1800): 40-45 dB, 0.2-0.9% of pixels
-off, on Beedle's shop ship and the objects at the left edge; the title and menus are exact.
-**That difference was the reference's, and is fixed there** (cemu-patches/0013). The
-ambient-occlusion pass samples a depth texture whose level 1 the game draws separately (960x540
-R16F, level 1 at `20009000`, pitch 512: the same layout as the target drawn there). Cemu's
-`LatteTexture_TrackTextureRelation` assumed a mip chain lies above its base level, dropped the
-relation, and left level 1 zero; the renderer read what was drawn, as the console would. With 0013
-the reference's traces are unchanged and the dock frames are at 55.4-61.3 dB (0.01-0.03% of pixels
-off); the title route's worst frame is 61.9 dB. The reference captures in `/wwhd/data/g2/ref` and
-`/wwhd/data/g3/save-ref` were re-recorded with 0013 (the old ones are `*-pre0013`). Untested so far because the title doesn't use them:
-- GPU-side `GX2CopySurface` (`IT_HLE_COPY_SURFACE_NEW`, only reported);
-- readback of a rendered surface into a linear-special destination (the reference reads back);
-- 3D textures, cube-map render targets, depth-stencil textures loaded from memory (zeroed, as
-  Cemu does);
-- targets of one address and format at different sizes: Cemu keeps separate textures, here they
-  share one surface (the bloom blur's ping-pong targets do this; harmless on the title).
-- A segfault inside lavapipe's JIT code was seen once early in a run and not reproduced.
+Diff mode on the save route:
+`tools/worker/job start diff env CEMU_BIN=/wwhd/WWHDRecomp/build/wwhd/wwhd-null WWHD_NATIVE=diff
+WWHD_RT_LOG=/wwhd/data/traces/diff/rt.log REF_SAVE=/wwhd/data/saves/wwhd_100
+tools/reference/route.sh /wwhd/data/traces/diff 1800 tools/reference/routes/continue-100.txt
+/wwhd/data/traces/save-det/a.zst`, then `grep "diff (final)" /wwhd/data/traces/diff/rt.log`.
 
-### 2. Extend the route, then rerun G0 and the native check
+## Next steps, in order (the owner chose 1, then 2, then onwards)
 
-Routes can now start from the 100% save (above), so later locations no longer need the whole
-story first: warp with the Ballad of Gales, sail, or walk into a dungeon from `continue-100.txt`.
-The new-game route stops on Outset. D15 also wants sailing, a dungeon room, the menus and the Pictograph
-Box. Extend `routes/title-to-game.txt` (with `survey.sh` for contact sheets), record new baselines
-with the reference, and rerun:
-- `route.sh` in native mode against the new baseline;
-- `g0_gx2.py` on the new trace, and `WWHD_GPU_STATS` in the same native run.
+### 1. D9 overrides, then let the game's task switcher sleep in real time
 
-### 3. Own CMake build for `src/`
+**The problem** (D19, "What real time showed"): in real time the scheduler thread never idles.
+- 85% of it is the game's task switcher, `f_02760ACC` → `f_0275FFCC`, a coroutine-style
+  scheduler built on OS message queues. A task pushes a message to its own thread's queue, then
+  waits for that message: `f_0275FFCC` pops until the expected value arrives. It is reached
+  through a function pointer after `OSSetThreadSpecific`.
+- When no task is ready, it keeps switching to itself. 38% of the thread is `OSSendMessage` and
+  `OSReceiveMessage` (20.8% and 14.9% self).
+- Other hot functions under it:
+  - `f_0275FCCC` (13.5% self);
+  - `f_0203DEEC` (41% inclusive, possibly real task work);
+  - `f_0203DDC0`, `f_0203E284`, `f_0275FEFC`, `f_02760374`, `f_02760338`, `f_0281B4EC`,
+    `f_0275EBC0`, `f_0281B970`.
+- From the virtual-clock traces (`sched.slice` records):
+  - core 1: thread 1603f4a8 holds 68% of the core in 1.1 million timeslices (it's the thread of
+    the 69 million message-queue pairs); 0e074ec0 holds 30%;
+  - core 2: 0e005f40 holds 72%;
+  - core 0: 104b7818 holds 62%.
+- The Wii U's core spins the same way. On a PC it costs a core; on a phone it costs battery and
+  heat, and heat throttles. 30 fps holds either way.
 
-- `src/build.sh` currently borrows Cemu's link line (wx libraries still listed, but harmless),
-  swapping in our SDL3 (with video) for vcpkg's, which Cemu builds for controllers only.
-- Needed before Windows or macOS: a proper CMake project building what we still use of Cemu
-  without Latte (design D11). The less of Cemu is left (D18), the smaller that is.
-- The SDL3 window, input and sound are done (above); `wwhd` (Cemu's Latte) keeps its Xlib window.
+**Step A: overrides.** D9 is designed but not built.
+- The design: a generated function can be replaced by a strong definition in `src/overrides/`,
+  and the original stays callable as `orig_f_X`.
+- None of it exists yet: `generate.py` emits plain definitions, and there's no `src/overrides/`.
+- Two ways to build it:
+  - emit every function `weak`, with an `orig_f_X` body (XenonRecomp's way);
+  - or keep a list (e.g. `config/US_v0/overrides.txt`) and rename only the listed functions'
+    bodies to `orig_f_X`, leaving `f_X` to `src/overrides/`.
+- Weak symbols block inlining within a shard. If you go that way, measure `timing.sh save`
+  against 29.6 s.
+- Every reference must reach the override: direct calls between shards, tail calls, the function
+  table (D5) and `rt_direct` (indirect calls, `src/runtime/dispatch.cpp`).
+- Regenerating means `tools/recomp/build.sh` (about 11 min), then `src/build.sh`.
+- Check: with an override that just calls `orig_f_X`, both routes stay identical.
 
-### 4. Later
+**Step B: the idle round.**
+- Read the switcher, either as the generated C++ in `build/recomp` on the worker (read-only) or
+  in Ghidra. Find out:
+  - what a task waits on;
+  - what makes one ready (vsync callbacks, alarms, messages from other threads);
+  - how the switcher decides there's nothing to do.
+- Then write an override that, **in real time only** (`PPCTimer_isVirtualClock()` false):
+  - recognises a round with no task ready;
+  - blocks the thread until something can change: the next vsync or alarm, or a message
+    another thread sends;
+  - does it in a way the game can't tell apart from a spin that found nothing.
+- A cheaper first step is D19's switch-to-self shortcut: push to the own queue with no other
+  waiter, then wait for that same message, all without the two OS calls. But only blocking lets
+  the host thread sleep.
+- The deterministic mode must never take the new path: its traces stay identical.
+- Record what you learn about these functions in `config/US_v0/symbols.csv`, with evidence.
 
-- G3 (every scene on the route), M5 (playable on a GPU machine), M6 (60 fps).
-- Native speed, when it matters: per-block counting (D6), host-local registers (D2). Keep the
-  whole-route trace check for every step. The shipped real-clock build may count coarsely behind a
-  flag (D6).
-- The GamePad view (an 864×480 pass, about 7 draws per frame) can be skipped with an override now
-  that the renderer exists.
+**Done when:**
+- in real time on the desktop, the `wwhd real time:` line shows the scheduler thread well under
+  100% busy;
+- the frame rate and frame times stay as they are (30 fps, 99th ≈ 35 ms);
+- the sound doesn't break up. Ask the owner to listen, and launch the window only when they're
+  ready;
+- both routes' `stream_check` are identical, and diff mode is clean;
+- D19 and this handoff are updated.
+
+### 2. Fewer pipelines: more dynamic state (D20 "Next" b)
+
+**Today** (`PipelineDesc` in `src/gpu/vk/draw.cpp`):
+- Baked into every pipeline: vertex input, topology, primitive restart, rasterizer discard,
+  depth-bias enable, cull mode, front face, depth clip, per-attachment blend and write masks,
+  logic op, depth test/write/compare, stencil test/ops, **stencil reference and masks**, and
+  attachment formats.
+- Already dynamic: viewport, scissor, blend constants, depth-bias values.
+- The save route builds 432 pipelines from 633 shaders.
+
+**The plan:**
+1. Make stencil reference, compare mask and write mask dynamic state (core Vulkan 1.0). Use
+   `vkCmdSetStencilReference`, `vkCmdSetStencilCompareMask` and `vkCmdSetStencilWriteMask`,
+   added to the function table in `vk.h`, set per draw for front and back.
+2. Then extended dynamic state 1 and 2, which are core in Vulkan 1.3 (already required by the
+   renderer): cull mode, front face, topology within its class, depth test/write/compare, stencil
+   test and ops, rasterizer discard, depth-bias enable, primitive restart.
+3. Extended dynamic state 3 (blend, write masks, logic op, depth clip) only where the device has
+   it, with a fallback: Android support is patchy.
+4. `PipelineDesc` changes meaning, so bump `kVersion` in `shader_cache.cpp`.
+
+**Done when:**
+- pipeline counts on the save and title routes are down (report before and after);
+- captures are byte-identical to captures made before the change (same settings, lavapipe);
+- `shader_cache_check.sh` passes;
+- D20 says what's dynamic now.
+
+An Android note: requiring Vulkan 1.3 (for dynamic rendering) already excludes many older phones.
+That's a separate decision for the owner.
+
+### 3. Then, roughly in this order (ask the owner)
+
+- **The first playthrough without hitches** (D20 "Next" a). Gather shader keys and pipeline
+  recipes from playthroughs and ship the list with the port: it holds hashes and register values,
+  no game content. The player's machine makes the shaders from its own game files (the G1
+  extractor, D14, finds the programs), so the progress screen appears on the first start instead
+  of hitches.
+- **G3: render the whole route** (D13, D16.3).
+  - Where it stands: G2 is done to f600 of the title route (within 60 dB of the reference, most
+    within one level), and the save route's dock frames are at 55–61 dB.
+  - Method: capture the same frames on both sides (`survey.sh`), then
+    `compare_frames.py --threshold 60`.
+  - For a difference: compare surfaces at that swap (`CEMU_TEX_DUMP_FRAME` on the reference,
+    `WWHD_RENDER_DUMP` on ours, `compare_dumps.py`), then `WWHD_RENDER_TRACE` with a pixel to find
+    the draw. `WWHD_RENDER_SHADERS=dir` writes each shader's GLSL.
+  - Untested so far:
+    - GPU-side `GX2CopySurface` (only reported);
+    - readback into linear-special destinations;
+    - 3D textures and cube-map targets;
+    - depth-stencil textures loaded from memory;
+    - one address and format at different sizes (the bloom blur's ping-pong targets share one
+      surface).
+- **Extend the routes**: sailing, a dungeon room, the menus and the Pictograph Box. Start from the
+  100% save and warp with the Ballad of Gales. Record new baselines with the reference, then run
+  native, G0 and timing on them. D19 step 4 uses heavier routes to decide between one host thread
+  and three.
+- **Our own CMake build** for `src/`. Today `src/build.sh` borrows Cemu's link line. It's needed
+  before Windows, macOS or Android.
+- **The rest of D18:**
+  - the file system, with `nn_save`;
+  - the loader and memory map, giving the guest OS objects in Cemu's memory (the SysAllocators)
+    their own home;
+  - gx2's core rewritten;
+  - proc_ui.
+- **Later:**
+  - M5, playable on a GPU machine (the desktop is one now);
+  - M6, 60 fps, via overrides written against Phase 2 names;
+  - an arm64 context switch for Android (D19);
+  - the GamePad view skipped with an override.
 
 ## Known facts and gotchas worth not rediscovering
 
 - **Cemu's interpreter quirks the emitter mirrors:**
   - singles round through `float`;
-  - `fmuls`/`fmadds` truncate frC to 25 bits (`roundTo25BitAccuracy`);
+  - `fmuls`/`fmadds` truncate frC to 25 bits;
   - `ps_mul`/`ps_madd` flush denormals;
-  - `divw` by 0 gives 0 or -1.
-  - Also, `fcmpo` decodes as `fcmpu`, and `mtfsb0`, `mtfsfi` and `ps_cmpo1` are unimplemented;
-    the game uses none of these.
-  - Build generated code with `-ffp-contract=off` (Cemu targets baseline x86-64, so it never
-    fuses).
-  - Never write `-(sint32)x`: it's UB for INT_MIN and clang exploits it. Use `0u - x`.
+  - `divw` by 0 gives 0 or -1;
+  - `fcmpo` decodes as `fcmpu`;
+  - `mtfsb0`, `mtfsfi` and `ps_cmpo1` are unimplemented, and the game doesn't use them.
+  - Build generated code with `-ffp-contract=off`. Never write `-(sint32)x`; use `0u - x`.
 - **Relocations:**
-  - all internal relocations are already applied in the file;
-  - calls to imports are `REL24` into `.fimport_*`;
-  - 58 immediates point at `.dimport_*` data imports;
-  - two `bl` go to weak address 0.
-  - `functions.csv` lists only function imports, so `generate.py` reads imports (426) from the
-    RPX symbol table.
-- **GHS save/restore helpers** at 0x028F5EE0–0x028F626C: epilogues branch into their middles,
-  and `generate.py` synthesises those entries (D7).
-- **Reference determinism took patches 0001–0006** (`tools/reference/README.md`, "What it took").
-  Screenshots of two runs can differ by a few hundred llvmpipe edge pixels, but the traces don't.
-- **Recompiler facts found in M3:** jump tables are `b` runs (switch on CTR's slot address);
-  relocations must be keyed by symbol (addends exist: `_iob+0x10`); the GHS restore-and-exit helpers
-  return to their caller's caller; `spr.XER`'s CA/SO/OV copies go stale after a context switch
-  (compare `PPCInterpreter_getXER`); Cemu's `tw` with TO=0 is its debugger's breakpoint.
-- **Size and speed:** a full-route trace is about 665 MB compressed. The GPU reference route
-  takes about 25 min; `wwhd-null` about 12 min.
-- **Cemu's GX2 writes Cemu-only `IT_HLE_*` packets into display lists,** so their sizes differ
-  from real GX2. That's why its gx2 stays (D12).
-- **Renderer facts found in G2:**
-  - the reference's screenshot N is the image its (N+1)th swap presents; compare accordingly;
-  - WWHD reuses memory for transient targets of other formats within a frame; the shadow map is a
-    2D array drawn per slice; the bloom chain's mip levels are drawn as separate targets;
-  - the G-buffer's normal target is never cleared; the reference zeroes it lazily when an
-    overlapping target overwrites it (texture-cache cleanup, wall-clock gated);
+  - internal ones are already applied in the file;
+  - import calls are `REL24` into `.fimport_*`;
+  - 58 immediates point at `.dimport_*`;
+  - two `bl` go to weak address 0;
+  - `generate.py` reads imports (426) from the RPX symbol table.
+- **GHS save/restore helpers** at 0x028F5EE0–0x028F626C: epilogues branch into their middles, and
+  `generate.py` synthesises those entries (D7). The restore-and-exit helpers return to their
+  caller's caller.
+- **Recompiler facts from M3:**
+  - jump tables are `b` runs;
+  - relocations are keyed by symbol (addends exist: `_iob+0x10`);
+  - `spr.XER`'s CA/SO/OV copies go stale after a context switch;
+  - Cemu's `tw` with TO=0 is its debugger's breakpoint.
+- **Reference determinism took patches 0001–0006.** Screenshots of two reference runs can differ
+  by a few hundred llvmpipe edge pixels; the traces don't.
+- **Cemu's GX2 writes Cemu-only `IT_HLE_*` packets into display lists**, so their sizes differ from
+  real GX2. That's why its gx2 front half is ported rather than rewritten (D12).
+- **Renderer facts from G2:**
+  - the reference's screenshot N is the image its (N+1)th swap presents;
+  - WWHD reuses memory for transient targets of other formats within a frame;
+  - the shadow map is a 2D array drawn per slice;
+  - the bloom chain's mip levels are drawn as separate targets;
+  - the G-buffer's normal target is never cleared (the reference zeroes it lazily);
   - the reference's depth clear also clears colour textures at the same address.
+- **`Mix(a, b)` in `draw.cpp` is `(a ^ b) * P + C`**, so a key made of two values alone depends
+  only on their XOR. Keys that started from two Vulkan handles collided (fixed in e1aae8b). Start a
+  key from a hash, or from `Mix(0, a)`.
+- **When a run dies silently:**
+  - `run.sh` discards stdout, so rerun the program directly with its output kept;
+  - Cemu's crash handler writes the stack to `portable/log.txt`;
+  - for Debian's libraries (e.g. lavapipe), fetch debug info by build-id from
+    `https://debuginfod.debian.net/buildid/<id>/debuginfo` and use `llvm-symbolizer --obj=`.
+- **Exits:** `WWHD_EXIT_FRAME` uses `quick_exit`, so end-of-run work registers with
+  `at_quick_exit` as well as `atexit`. Closing the window calls `_exit` (the shader cache saves
+  first).
+- **Profiles from the desktop:** the `exe` line names the desktop's path. Rewrite it to
+  `/wwhd/WWHDRecomp/build/play/wwhd-null` (the stripped copy `deploy.sh` made, same addresses) and
+  run `tools/profile_report.py` on the worker.
+- **Real time vs the virtual clock:** in real time the game is bound to 30 fps and the host has
+  headroom; the virtual clock runs flat out (2–3x). The frame-time hitches on a warm start (about
+  1 s at boot, about 100 ms loading Outset) are the game's own loading, not shaders.
+- **Session scratchpads are temporary.** Put any tool worth keeping in `tools/`.
+- **Size and speed:** a full-route trace is about 665 MB compressed. `stream_check route` takes
+  about 10 min, `save` about 2.
 
 ## Unfinished odds and ends
 
 - An upstream report of nWiiURecomp's missing `fdivs` validator (`xo5==18`) was never posted.
 - `symbols.csv` has only 110 names (from the TWW randomizer's linker map). Phase 2 naming is
   needed for M6.
+- A segfault inside lavapipe's JIT code was seen once early in a G2 run and not reproduced. The
+  handle-key collision fixed in e1aae8b is a candidate cause.
