@@ -739,6 +739,18 @@ filtered down to nothing (`CEMU_HLE_TRACE_FILTER=zzz.`), on the worker:
   op is a full OS call: HLE dispatch, the trace recorder's mutex and Cemu's scheduler lock (a
   recursive pthread mutex).
 
+**After the quick wins** (same day; `tools/reference/timing.sh`, no trace at all, `WWHD_EXIT_FRAME`
+ends the run): the GPU thread sleeps until the CPU submits, and the CPU sleeps until a submission
+retires under the virtual clock (both used to spin; `src/os/tcl`, forked, notifies); the trace
+recorder no longer runs, or locks, when there is no trace. The save route takes 37.5 s from launch,
+1.60x real time (44 s before, with the trace filtered down to nothing, the fastest the old build
+could end a route); the whole route 155 s, 2.32x. The GPU thread's CPU time went from 36.3 s to
+0.7 s on the save route. On the CPU thread guest code is now 74%, message queues 9.3% (of it the
+scheduler lock, a recursive pthread mutex, 3%), guest-code helpers 4.5%, runtime 3.5%, thread
+switches 2.5%, HLE dispatch 2.5%. A cheaper scheduler lock would save at most ~2% and needs the
+same per-thread owner check (the lock is held across fiber switches), so it waits for the
+real-time scheduler's own locking. Traces, command streams and sound stay identical.
+
 What it means for the real-time scheduler: the GPU thread must wait instead of spinning; the
 per-call cost of uncontended OS calls (trace mutex, scheduler lock) matters more than thread
 switches, and with one host thread per core the global scheduler lock would be contended 77,000

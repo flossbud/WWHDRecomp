@@ -16,6 +16,7 @@
 #include "Cafe/HW/Espresso/PPCState.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
 #include "Cafe/OS/libs/gx2/GX2_Event.h"
+#include "../os/tcl/tcl_host.h"
 #include "Cafe/OS/libs/TCL/TCL.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Time.h"
 #include "Cafe/CafeSystem.h"
@@ -592,17 +593,23 @@ namespace
 		}
 	}
 
+	// The next word of the ring: after a few quick looks (a submission usually follows closely), the
+	// thread sleeps until the CPU submits (os/tcl) instead of spinning, waking every millisecond for
+	// host-timed vsync and shutdown.
 	uint32 ringWord()
 	{
 		uint32 w;
-		for (;;)
+		for (int spins = 0;; spins++)
 		{
 			if (TCL::TCLGPUReadRBWord(w))
 				return w;
 			if (!s_running)
 				threadExit();
 			handleTimedVsync();
-			std::this_thread::yield();
+			if (spins < 64)
+				std::this_thread::yield();
+			else
+				TCL::TCLGPUWaitForCommands(std::chrono::microseconds(1000));
 		}
 	}
 

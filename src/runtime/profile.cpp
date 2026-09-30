@@ -3,8 +3,10 @@
 //
 // A CPU-time timer (ITIMER_PROF, WWHD_PROFILE_HZ per CPU-second, default 997) interrupts whichever
 // thread is running; the handler records its thread id, the interrupted instruction and, unless
-// WWHD_PROFILE_STACKS=0, the return addresses above it (glibc's unwinder; Cemu's code keeps no frame
-// pointers). Samples go into a buffer allocated up front; at exit (normal or quick_exit, which the
+// WWHD_PROFILE_STACKS=0, the return addresses above it: unwound by glibc when the thread was in our
+// program's own code (Cemu's code keeps no frame pointers). Elsewhere (libc, the vDSO, the middle of
+// a fiber switch) unwinding can fault, so it takes just the first address of our program's code
+// found near the stack pointer, read with process_vm_readv, which cannot fault: the likely caller. Samples go into a buffer allocated up front; at exit (normal or quick_exit, which the
 // trace's exit frame uses) the file gets the program's load address, every thread's name and CPU
 // time from /proc, every loaded object's executable segments, and the samples as hex addresses. tools/profile_report.py symbolizes and sums
 // them. Nothing here touches guest state: traces are the same with the profiler on.
@@ -21,6 +23,7 @@
 #include <string>
 #include <sys/syscall.h>
 #include <sys/time.h>
+#include <sys/uio.h>
 #include <ucontext.h>
 #include <unistd.h>
 
@@ -44,6 +47,9 @@ namespace wwhd::rt
 		const char* s_path = nullptr;
 		int s_hz = 997;
 		std::atomic<bool> s_written{ false };
+		uintptr_t s_textLo = 0, s_textHi = 0;      // our program's executable segment(s)
+
+		bool InText(uintptr_t a) { return a >= s_textLo && a < s_textHi; }
 
 		void OnSample(int, siginfo_t*, void* context)
 		{
@@ -51,17 +57,30 @@ namespace wwhd::rt
 			if (i >= kCapacity)
 				return;
 			Sample& s = s_samples[i];
+			const greg_t* regs = ((ucontext_t*)context)->uc_mcontext.gregs;
 			s.tid = (uint32_t)syscall(SYS_gettid);
-			s.pc[0] = (uintptr_t)((ucontext_t*)context)->uc_mcontext.gregs[REG_RIP];
+			s.pc[0] = (uintptr_t)regs[REG_RIP];
 			s.depth = 1;
-			if (s_stacks)
+			if (!s_stacks)
+				return;
+			if (InText(s.pc[0]))
 			{
 				// [0] this handler, [1] the signal trampoline, [2] the interrupted function, [3..] its callers
 				void* frames[kDepth + 2];
 				int n = backtrace(frames, kDepth + 2);
 				for (int f = 3; f < n && s.depth < (uint32_t)kDepth; f++)
 					s.pc[s.depth++] = (uintptr_t)frames[f];
+				return;
 			}
+			uintptr_t words[16];
+			iovec local{ words, sizeof(words) }, remote{ (void*)regs[REG_RSP], sizeof(words) };
+			if (process_vm_readv(getpid(), &local, 1, &remote, 1, 0) == (ssize_t)sizeof(words))
+				for (uintptr_t w : words)
+					if (InText(w))
+					{
+						s.pc[s.depth++] = w;
+						break;
+					}
 		}
 
 		uintptr_t LoadAddress()
@@ -151,6 +170,19 @@ namespace wwhd::rt
 		s_samples = (Sample*)calloc(kCapacity, sizeof(Sample));
 		if (!s_samples)
 			return;
+		dl_iterate_phdr([](dl_phdr_info* info, size_t, void*) {
+			for (int i = 0; i < info->dlpi_phnum; i++)
+			{
+				const auto& ph = info->dlpi_phdr[i];
+				if (ph.p_type == PT_LOAD && (ph.p_flags & PF_X))
+				{
+					uintptr_t lo = info->dlpi_addr + ph.p_vaddr, hi = lo + ph.p_memsz;
+					s_textLo = s_textLo ? std::min(s_textLo, lo) : lo;
+					s_textHi = std::max(s_textHi, hi);
+				}
+			}
+			return 1;                              // the first object is the program itself
+		}, nullptr);
 		void* warm[4];
 		backtrace(warm, 4);                        // loads the unwinder now, not inside the handler
 		struct sigaction sa{};

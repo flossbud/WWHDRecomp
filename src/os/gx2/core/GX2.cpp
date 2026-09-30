@@ -107,6 +107,14 @@ static void _refShotRequest(uint32 frame)
 void gx2Export_GX2SwapScanBuffers(PPCInterpreter_t* hCPU)
 {
 	_refShotRequest(++s_refSwapCount);
+	// wwhd: WWHD_EXIT_FRAME=N ends the run when the Nth swap begins, as CEMU_HLE_TRACE_EXIT_FRAME does
+	// for traced runs: timing and profiling without the trace (tools/reference/timing.sh)
+	static const uint32 s_exitFrame = [] { const char* e = getenv("WWHD_EXIT_FRAME"); return e ? (uint32)atoi(e) : 0u; }();
+	if (s_exitFrame && s_refSwapCount >= s_exitFrame)
+	{
+		cemuLog_log(LogType::Force, "wwhd: reached frame {}, exiting (WWHD_EXIT_FRAME)", s_refSwapCount.load());
+		std::quick_exit(0);
+	}
 	cemuLog_log(LogType::GX2, "GX2SwapScanBuffers()");
 
 	bool isPokken = false;

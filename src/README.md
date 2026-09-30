@@ -20,7 +20,8 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 | `os/snd_core/`, `os/coreinit/`, `os/gx2/core/`, `os/proc_ui/`, `runtime/espresso/` | forks of Cemu's sources (`forks.txt`): snd_core, the scheduler, gx2's core, proc_ui, the cores' timeslices and timer |
 | `runtime/dispatch.cpp` | the execution seam (Cemu patch 0011): the hook that replaces Cemu's interpreter loop, the function table (D5), the D10 code check, `rt_call_ctr`/`rt_jump_ctr`/`rt_bad_branch` |
 | `runtime/imports.cpp` | `rt_import`/`rt_import_data` (D4), bound from what Cemu's loader wrote into guest memory |
-| `runtime/profile.cpp` | a sampling profiler (`WWHD_PROFILE=path`): where host CPU time goes; `tools/profile_report.py` summarises it |
+| `runtime/profile.cpp` | a sampling profiler (`WWHD_PROFILE=path`): where host CPU time goes; `tools/profile_report.py` summarises it, `tools/reference/timing.sh` times a route without the trace (`WWHD_EXIT_FRAME=N` ends a run) |
+| `os/tcl/tcl_host.h` | host waits on TCL (forked): the GPU thread sleeps until the CPU submits, the CPU until a submission retires |
 | `runtime/diff.cpp` | diff mode (D8.2, M3): pure functions run natively, are rewound, and are compared (registers, stores, cycles) with the interpreter's run of the same call |
 | `build.sh` | builds `build/wwhd/wwhd` and `build/wwhd/wwhd-null` on the worker against its Cemu build |
 | `link_order.py` | orders `wwhd-null`'s archive members like `wwhd`'s link (see below) |

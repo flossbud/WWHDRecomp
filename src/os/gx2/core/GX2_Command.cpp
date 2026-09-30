@@ -14,6 +14,7 @@
 #include "Cafe/HW/Latte/ISA/RegDefines.h"
 #include "GX2.h"
 #include "GX2_Command.h"
+#include "../../tcl/tcl_host.h"
 #include "GX2_Shader.h"
 #include "GX2_Misc.h"
 #include "OS/libs/coreinit/coreinit_MEM.h"
@@ -300,17 +301,13 @@ namespace GX2
 				// CPU writes later.
 				if (PPCTimer_isVirtualClock())
 				{
+					// wwhd: a few quick looks, then sleep until the GPU retires it (os/tcl) instead of spinning
 					const uint64 target = GX2GetLastSubmittedTimeStamp();
 					const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-					while (GX2GetRetiredTimeStamp() < target)
-					{
-						if (std::chrono::steady_clock::now() > deadline)
-						{
-							cemuLog_log(LogType::Force, "virtual clock: GPU submission not retired after 2 s, continuing asynchronously");
-							break;
-						}
+					for (int spins = 0; GX2GetRetiredTimeStamp() < target && spins < 64; spins++)
 						std::this_thread::yield();
-					}
+					if (GX2GetRetiredTimeStamp() < target && !TCL::TCLWaitRetiredHost(target, deadline))
+						cemuLog_log(LogType::Force, "virtual clock: GPU submission not retired after 2 s, continuing asynchronously");
 				}
 			}
 			else

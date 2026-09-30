@@ -96,6 +96,16 @@ a difference starts. Two things in the reference's texture cache matter for such
 compares the trace with a known-good one (for example `wwhd-null` in diff mode against
 `/wwhd/data/traces/null-route.zst`), in half the time.
 
+`stream_check.sh save|route NAME` runs `wwhd-null` along a route and checks three things against
+baselines from Cemu's own libraries: the trace, the GPU command stream (a hash per frame of every
+packet) and the sound (a hash of every mixed block). Our OS layer and forks (`src/os`, design D18)
+must leave all three exactly as Cemu's.
+
+`timing.sh save|route OUT` runs `wwhd-null` along a route without the trace (which costs ~40%),
+ending at the route's last frame with `WWHD_EXIT_FRAME`, and profiles it (`WWHD_PROFILE`): wall time,
+speed against real time, CPU time per thread; `tools/profile_report.py OUT/profile.txt` for where it
+went.
+
 `hle_trace.py diff` normalizes Cemu's `PPCCallback<host pointer>` stub names, which change with
 ASLR. `--ignore-core` compares without the core index.
 
