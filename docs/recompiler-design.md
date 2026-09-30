@@ -153,6 +153,15 @@ How the Espresso registers map onto it:
 a function. We can do the same once everything works, but state must be written back before any
 call, HLE call or yield point.
 
+**Looked at (2026-09-30), not worth it.** With `ctx` marked `__restrict` the compiler already keeps
+registers in host registers within straight-line code and writes them back only before a call,
+exit or yield, which is what host locals would do. Exactness forbids more: a callee (the GHS save
+and restore helpers among them) may read any register, so every register must be current in `ctx`
+at every call and exit, and a liveness analysis would remove nothing. Forcing the hot helpers
+inline (single/double conversion, compares, CR updates) gained about 1% for 25% more compile time
+and was reverted. Guest code costs about 3 host cycles per guest instruction; what is left is the
+game's own work.
+
 ### D3. Memory is Cemu's flat 4 GiB region
 
 Guest address `ea` maps to `memory_base + ea`: one reservation, identity-mapped, big-endian. Loads
@@ -841,6 +850,12 @@ Every check runs the virtual clock on one host thread, and so does play today.
   that the guest can't tell: first the switch-to-self (push to the own queue with no other waiter,
   then wait for that same message), 9% of the CPU thread. They change the OS-call sequence, so the
   deterministic mode never uses them.
+
+**Done so far** (2026-09-30): our own context switch (`src/runtime/fiber/FiberUnix.cpp`, a fork of
+Cemu's: callee-saved registers, MXCSR and the x87 control word on the fiber's stack, no system
+call; thread switches went from 3.6% of the CPU thread to 0.9%), and the queue operations skip a
+division for in-range ring indices (exact). The switch-to-self shortcut needs D9's overrides and a
+real-time mode to use it in, so it waits for step (2).
 
 **Order**: (1) exact per-block cycle counting (D6's planned optimisation, held to the trace; done
 2026-09-30: 1.89x real time on the save route, traces identical);

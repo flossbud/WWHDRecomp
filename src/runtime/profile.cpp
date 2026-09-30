@@ -27,6 +27,10 @@
 #include <ucontext.h>
 #include <unistd.h>
 
+#if defined(__x86_64__) && !defined(_WIN32)
+extern "C" char wwhd_fiber_switch[], wwhd_fiber_switch_end[];   // src/runtime/fiber/FiberUnix.cpp
+#endif
+
 namespace wwhd::rt
 {
 	namespace
@@ -63,7 +67,13 @@ namespace wwhd::rt
 			s.depth = 1;
 			if (!s_stacks)
 				return;
-			if (InText(s.pc[0]))
+#if defined(__x86_64__) && !defined(_WIN32)
+			// in the middle of a fiber switch the stack pointer belongs to either fiber: no unwinding
+			const bool switching = s.pc[0] >= (uintptr_t)wwhd_fiber_switch && s.pc[0] < (uintptr_t)wwhd_fiber_switch_end;
+#else
+			const bool switching = false;
+#endif
+			if (InText(s.pc[0]) && !switching)
 			{
 				// [0] this handler, [1] the signal trampoline, [2] the interrupted function, [3..] its callers
 				void* frames[kDepth + 2];

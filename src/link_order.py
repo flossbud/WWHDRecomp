@@ -6,7 +6,8 @@ included" section), ordered as REFERENCE's link included them; members REFERENCE
 last. MEMBER=OBJECT puts our OBJECT where REFERENCE had Cemu's MEMBER (printed as "-<TAB>OBJECT"):
 how our forks of Cemu's sources (src/os/snd_core) take their place. Static constructors run in link order, and Cemu's SysAllocators take their slots in guest
 memory in constructor order, so wwhd-null must be linked in wwhd's member order to get the same
-guest memory layout (src/build.sh). Archive names are compared without a "_nolatte" suffix.
+guest memory layout (src/build.sh). Archive names are compared without the "_wwhd" suffix of the
+copies build.sh makes (without Latte, without the objects our forks replace).
 """
 import re
 import sys
@@ -27,7 +28,7 @@ def members(path):
 
 
 def key(archive, member):
-    return (archive.replace("_nolatte.a", ".a").rsplit("/", 1)[-1], member)
+    return (archive.replace("_wwhd.a", ".a").rsplit("/", 1)[-1], member)
 
 
 reference = members(sys.argv[1])

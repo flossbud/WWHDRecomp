@@ -17,7 +17,7 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 | `gpu/vk/latte_glue.cpp` | the pieces of Latte the decompiler calls, and a no-op `Renderer` (derived from Cemu, MPL-2.0) |
 | `gpu/vk/vk.h`, `vk.cpp` | Vulkan loaded at runtime, so `wwhd-null` runs without a driver when rendering is off |
 | `os/` | our OS layer (D18): the game's imports, taking over Cemu's handlers one by one (`os.h`); `os/gx2/` is gx2, ported from Cemu's |
-| `os/snd_core/`, `os/coreinit/`, `os/gx2/core/`, `os/proc_ui/`, `runtime/espresso/` | forks of Cemu's sources (`forks.txt`): snd_core, the scheduler, gx2's core, proc_ui, the cores' timeslices and timer |
+| `os/snd_core/`, `os/coreinit/`, `os/gx2/core/`, `os/proc_ui/`, `os/tcl/`, `runtime/espresso/`, `runtime/fiber/` | forks of Cemu's sources (`forks.txt`): snd_core, the scheduler, gx2's core, proc_ui, TCL, the cores' timeslices, timer and HLE dispatch, fibers |
 | `runtime/dispatch.cpp` | the execution seam (Cemu patch 0011): the hook that replaces Cemu's interpreter loop, the function table (D5), the D10 code check, `rt_call_ctr`/`rt_jump_ctr`/`rt_bad_branch` |
 | `runtime/imports.cpp` | `rt_import`/`rt_import_data` (D4), bound from what Cemu's loader wrote into guest memory |
 | `runtime/profile.cpp` | a sampling profiler (`WWHD_PROFILE=path`): where host CPU time goes; `tools/profile_report.py` summarises it, `tools/reference/timing.sh` times a route without the trace (`WWHD_EXIT_FRAME=N` ends a run) |
@@ -106,10 +106,12 @@ route, 30,219 on the whole route).
 **Forks.** Libraries that Cemu's own code calls into can't be taken over at the HLE table (the
 scheduler calls snd_core's `AXOut_update` directly; CafeSystem and coreinit call gx2's core). Those
 are forked instead: our copy of Cemu's source file, under Cemu's names, which `build.sh` links in
-place of Cemu's object. `src/forks.txt` lists them (22 so far: snd_core; the scheduler, i.e.
+place of Cemu's object. `src/forks.txt` lists them (25 so far: snd_core; the scheduler, i.e.
 coreinit's threads, scheduler, alarms, message and thread queues, spinlocks, synchronization and
-callbacks, and the Espresso timeslices and timer with the virtual clock; gx2's core; proc_ui) and
-`tools/cemu_fork.py` creates missing ones. They compile exactly as Cemu compiles them (its flags for
+callbacks, and the Espresso timeslices and timer with the virtual clock; gx2's core; proc_ui; TCL;
+the HLE dispatcher and trace recorder; fibers, with our own context switch) and
+`tools/cemu_fork.py` creates missing ones. Every Cemu archive that loses objects (Latte's, or
+forked ones) is linked as a filtered copy, `lib<name>_wwhd.a`. They compile exactly as Cemu compiles them (its flags for
 that file, ThinLTO bitcode) and `link_order.py` puts them at Cemu's objects' positions, so static
 constructors, and the guest-memory slots of their SysAllocators, keep their order and addresses. A
 fork is ours to change from then on (Cemu patches in `tools/reference/cemu-patches` no longer reach
@@ -141,7 +143,7 @@ single-channel float as 16-bit PGM, like the reference's (cemu-patches/0012).
         /wwhd/data/g2/vk 600 30 0
     tools/worker/w uv run -q tools/reference/compare_frames.py /wwhd/data/g2/ref /wwhd/data/g2/vk
 
-For the renderer `libCemuCafe_nolatte.a` also keeps Latte's shader decompiler, fetch- and
+For the renderer `libCemuCafe_wwhd.a` (Cemu's, without Latte) also keeps Latte's shader decompiler, fetch- and
 GS-copy-shader parsers and texture loader; `gpu/vk/latte_glue.cpp` stands in for the rest of Latte
 they call.
 

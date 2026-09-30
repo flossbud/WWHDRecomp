@@ -66,24 +66,31 @@ fork_objs=() fork_members=()
 done < "$root/src/forks.txt"
 for p in "${pids[@]}"; do wait "$p"; done
 
-# libCemuCafe.a without Latte (object names come from compile_commands.json; they are unique).
-# Kept: the address library (gx2 computes surface layouts with it), and for the renderer (G2) the
-# shader decompiler, the fetch- and GS-copy-shader parsers and the texture loader, with
-# src/gpu/vk/latte_glue.cpp standing in for the rest of Latte they call.
-python3 - "$cemu/build/compile_commands.json" "${WWHD_FORKS:-1}" "$root/src/forks.txt" > "$out/latte-objects.txt" <<'PY'
+# Cemu's archives as wwhd-null links them: libCemuCafe.a without Latte, and every archive without the
+# objects our forks replace (src/forks.txt), each as lib<name>_wwhd.a (object names come from
+# compile_commands.json; they are unique). Kept of Latte: the address library (gx2 computes surface
+# layouts with it), and for the renderer (G2) the shader decompiler, the fetch- and GS-copy-shader
+# parsers and the texture loader, with src/gpu/vk/latte_glue.cpp standing in for the rest of Latte.
+python3 - "$cemu/build/compile_commands.json" "${WWHD_FORKS:-1}" "$root/src/forks.txt" > "$out/removed-objects.txt" <<'PY'
 import json, os, sys
 keep = ("/LatteAddrLib/", "/LegacyShaderDecompiler/", "/Core/FetchShader.cpp", "/Core/LatteGSCopyShaderParser.cpp",
         "/Core/LatteTextureLoader.cpp")
 forked = () if sys.argv[2] == "0" else tuple("/src/" + l.split()[1] for l in open(sys.argv[3])
                                              if l.strip() and not l.startswith("#"))   # ours: src/forks.txt
 for e in json.load(open(sys.argv[1])):
-    f = e["file"]
-    latte = "/src/Cafe/HW/Latte/" in f and not any(k in f for k in keep)
-    if "/CemuCafe.dir/" in e["command"] and (latte or any(k in f for k in forked)):
-        print(os.path.basename(e["command"].split(" -o ")[1].split()[0]))
+    f, obj = e["file"], e["command"].split(" -o ")[1].split()[0]
+    latte = "/CemuCafe.dir/" in obj and "/src/Cafe/HW/Latte/" in f and not any(k in f for k in keep)
+    if latte or any(f.endswith(k) for k in forked):
+        where, rest = obj.split("/CMakeFiles/")
+        print(f"{where}/lib{rest.split('.dir/')[0]}.a\t{os.path.basename(obj)}")
 PY
-cp "$cemu/build/src/Cafe/libCemuCafe.a" "$out/libCemuCafe_nolatte.a"
-xargs -a "$out/latte-objects.txt" llvm-ar d "$out/libCemuCafe_nolatte.a"
+archive_subst=()
+while read -r archive; do
+    copy=$out/$(basename "$archive" .a)_wwhd.a
+    cp "$cemu/build/$archive" "$copy"
+    awk -F'\t' -v a="$archive" '$1 == a { print $2 }' "$out/removed-objects.txt" | xargs llvm-ar d "$copy"
+    archive_subst+=("$archive=$copy")
+done < <(cut -f1 "$out/removed-objects.txt" | sort -u)
 
 cd "$cemu/build"
 base=$(ninja -t commands "$cemu/bin/Cemu_release" | tail -1)
@@ -94,7 +101,7 @@ link() {  # link NAME OBJECTS...
     local name=$1 cmd=$base; shift
     cmd=${cmd/"-o $cemu/bin/Cemu_release"/"-o $out/$name $* -Wl,-Map=$out/$name.map"}
     if [ "$name" = wwhd-null ]; then
-        cmd=${cmd//"src/Cafe/libCemuCafe.a"/"$out/libCemuCafe_nolatte.a"}
+        for sub in "${archive_subst[@]}"; do cmd=${cmd//"${sub%%=*}"/"${sub#*=}"}; done
         cmd=${cmd//"vcpkg_installed/x64-linux/lib/libSDL3.a"/"$sdl3/lib/libSDL3.a"}
     fi
     echo "wwhd: linking $name"

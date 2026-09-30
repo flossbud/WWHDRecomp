@@ -26,3 +26,4 @@ os/gx2/core/GX2_Misc.cpp                 Cafe/OS/libs/gx2/GX2_Misc.cpp          
 os/proc_ui/proc_ui.cpp                   Cafe/OS/libs/proc_ui/proc_ui.cpp               proc_ui: foreground and background, the HOME menu, exit
 os/tcl/TCL.cpp                           Cafe/OS/libs/TCL/TCL.cpp                       TCL: the ring the CPU submits command buffers to, and their retirement
 runtime/espresso/PPCInterpreterHLE.cpp   Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp the HLE table and dispatch, and the reference's call tracer
+runtime/fiber/FiberUnix.cpp              util/Fiber/FiberUnix.cpp                       fibers: each guest thread's stack, and switching between them
