@@ -410,7 +410,7 @@ class Emitter:
     def op_fctiw(self, i, ea): return [f"FPR({i.frD}).guint = fctiw_result(FPR({i.frB}).fpr, false);"]
 
     def op_fcmpu(self, i, ea):
-        return [f"fcmpu_espresso(ctx, {i.crfD * 4}, FPR({i.frA}).fp0, FPR({i.frB}).fp0);"]
+        return [f"rt_fcmpu(ctx, {i.crfD * 4}, FPR({i.frA}).fp0, FPR({i.frB}).fp0);"]
 
     def op_mffs(self, i, ea): return [f"FPR({i.frD}).guint = (uint64)ctx->fpscr;"]
 
@@ -498,14 +498,14 @@ class Emitter:
     def op_ps_merge11(self, i, ea): return self._merge(i, 1, 1)
 
     def op_ps_cmpu0(self, i, ea):
-        return [f"fcmpu_espresso(ctx, {i.crfD * 4}, FPR({i.frA}).fp0, FPR({i.frB}).fp0);"]
+        return [f"rt_fcmpu(ctx, {i.crfD * 4}, FPR({i.frA}).fp0, FPR({i.frB}).fp0);"]
 
     def op_ps_cmpu1(self, i, ea):
-        return [f"fcmpu_espresso(ctx, {i.crfD * 4}, FPR({i.frA}).fp1, FPR({i.frB}).fp1);"]
+        return [f"rt_fcmpu(ctx, {i.crfD * 4}, FPR({i.frA}).fp1, FPR({i.frB}).fp1);"]
 
     def op_ps_cmpo0(self, i, ea):
         # Cemu's PS_CMPO0 is fcmpu without the VXSNAN update
-        return [f"{{ uint32 fpscr = ctx->fpscr; fcmpu_espresso(ctx, {i.crfD * 4}, FPR({i.frA}).fp0, FPR({i.frB}).fp0);",
+        return [f"{{ uint32 fpscr = ctx->fpscr; rt_fcmpu(ctx, {i.crfD * 4}, FPR({i.frA}).fp0, FPR({i.frB}).fp0);",
                 "\tctx->fpscr = (ctx->fpscr & ~FPSCR_VXSNAN) | (fpscr & FPSCR_VXSNAN); }"]
 
     # condition register -------------------------------------------------------------------------

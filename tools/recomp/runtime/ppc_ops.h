@@ -29,9 +29,43 @@ void rt_journal_store(uint32 ea, uint32 size);
 #define RT_FITS(n) (ctx->remainingCycles >= (sint32)(n))
 #define RT_CHARGE(n) (ctx->remainingCycles -= (sint32)(n))
 
+// Indirect calls (bctrl, bctr): straight to the recompiled function when CTR holds the entry of one
+// that runs natively, else the runtime (rt_call_ctr/rt_jump_ctr: HLE trampolines, patched code,
+// the interpreter), exactly as the runtime's Dispatch would. rt_direct has one slot per guest code
+// word; the runtime fills it at install (src/runtime/dispatch.cpp).
+using rt_fn = void (*)(PPCInterpreter_t*);
+extern rt_fn* rt_direct;
+extern uint32 rt_directBase, rt_directWords;
+static inline rt_fn rt_direct_at(uint32 target)
+{
+	uint32 w = (target - rt_directBase) >> 2;
+	return w < rt_directWords ? rt_direct[w] : nullptr;
+}
+#define RT_CALL_CTR() do { rt_fn f_ = rt_direct_at(ctx->spr.CTR & ~3u); if (f_) [[likely]] f_(ctx); else rt_call_ctr(ctx); } while (0)
+#define RT_JUMP_CTR() do { rt_fn f_ = rt_direct_at(ctx->spr.CTR & ~3u); \
+	if (f_) [[likely]] { [[clang::musttail]] return f_(ctx); } [[clang::musttail]] return rt_jump_ctr(ctx); } while (0)
+
 #define GPR(n) ctx->gpr[n]
 #define FPR(n) ctx->fpr[n]
 #define CRB(n) ctx->cr[n]
+
+// Cemu's fcmpu_espresso (PPCInterpreterFPU.cpp), inline: CR field crfD from comparing a and b (LT,
+// GT, EQ, or SO when unordered), FPSCR's FPCC, and VXSNAN for a signalling NaN. The fuzzer checks it
+// against Cemu's interpreter (fcmpu, ps_cmpu0/1, ps_cmpo0).
+static inline void rt_fcmpu(PPCInterpreter_t* ctx, int crfD, double a, double b)
+{
+	uint64 ia, ib;
+	memcpy(&ia, &a, 8);
+	memcpy(&ib, &b, 8);
+	uint32 c = (IS_NAN(ia) || IS_NAN(ib)) ? 1 : a < b ? 8 : a > b ? 4 : 2;
+	ctx->cr[crfD + CR_BIT_LT] = (c >> 3) & 1;
+	ctx->cr[crfD + CR_BIT_GT] = (c >> 2) & 1;
+	ctx->cr[crfD + CR_BIT_EQ] = (c >> 1) & 1;
+	ctx->cr[crfD + CR_BIT_SO] = c & 1;
+	if (IS_SNAN(ia) || IS_SNAN(ib))
+		ctx->fpscr |= FPSCR_VXSNAN;
+	ctx->fpscr = (ctx->fpscr & 0xffff0fff) | (c << 12);
+}
 
 // ---- memory (big-endian guest, identity-mapped at memory_base) ----------------------------------
 static inline uint8 rd8(uint32 ea) { return memory_base[ea]; }

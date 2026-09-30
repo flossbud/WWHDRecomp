@@ -31,6 +31,12 @@ What the generator knows beyond single instructions:
   (`RT_FITS`/`RT_CHARGE`) and runs unchecked; otherwise a second copy with `RT_TICK(address)` before
   every instruction runs. Blocks end at branches, calls, imports and runtime hooks, so nothing in
   one can see the difference. `generate.py --tick instruction` emits only the checked form.
+* **Indirect calls (D5).** `bctrl`/`bctr` go straight to the recompiled function when CTR holds
+  the entry of one that runs natively (`RT_CALL_CTR`/`RT_JUMP_CTR`: `rt_direct`, one slot per guest
+  code word, filled by the runtime), else to the runtime as before.
+* **Helpers.** Cemu's `fcmpu_espresso` is inlined as `rt_fcmpu` (the fuzzer checks it: 3.6 million
+  runs of `fcmpu`, `ps_cmpu0/1` and `ps_cmpo0`, 0 differences). Every generated function takes
+  `PPCInterpreter_t* __restrict ctx`: guest memory never overlaps the register state.
 * **Cemu's boot patches (D10).** `config/US_v0/code_patches.csv` (the words Cemu's GamePatch changes,
   with evidence) is applied first, so the generated code is the code Cemu runs.
 * **Purity (D8.2).** A function is pure if it makes no import call, no indirect call or jump and

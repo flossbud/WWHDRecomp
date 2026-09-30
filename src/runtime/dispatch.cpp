@@ -123,6 +123,20 @@ namespace wwhd::rt
 			g_codeBase, g_codeBase + g_codeWords * 4, patched);
 	}
 
+	// Generated code's inline indirect calls (ppc_ops.h RT_CALL_CTR/RT_JUMP_CTR): per guest code word,
+	// the recompiled function that starts there if it runs natively, as Dispatch would pick it
+	static void BuildDirectTable()
+	{
+		static std::vector<void (*)(PPCInterpreter_t*)> table;
+		table.assign(g_codeWords, nullptr);
+		for (size_t i = 0; i < g_funcCount; i++)
+			if (!g_patched[i])
+				table[(g_funcTable[i].address - g_codeBase) / 4] = g_funcTable[i].fn;
+		rt_directBase = g_codeBase;
+		rt_directWords = g_codeWords;
+		rt_direct = table.data();
+	}
+
 	static void Init()
 	{
 		if (const char* path = getenv("WWHD_RT_LOG"); path && *path)
@@ -141,6 +155,7 @@ namespace wwhd::rt
 				&g_recompTablesVersion ? g_recompTablesVersion : 0, kRecompTablesVersion);
 		BuildTable();
 		CheckCode();
+		BuildDirectTable();
 		BindImports();
 		const char* mode = getenv("WWHD_NATIVE");
 		if (DiffInit())
@@ -321,6 +336,9 @@ namespace wwhd::rt
 }
 
 using namespace wwhd::rt;
+
+void (**rt_direct)(PPCInterpreter_t*) = nullptr;       // ppc_ops.h: filled by BuildDirectTable
+uint32 rt_directBase = 0, rt_directWords = 0;
 
 // ---- called by generated code (funcs.h, ppc_ops.h) -------------------------------------------------
 void rt_yield(PPCInterpreter_t* ctx, uint32 pc)

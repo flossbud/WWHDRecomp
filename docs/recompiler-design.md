@@ -256,6 +256,18 @@ route runs in 31.8 s from launch, 1.89x real time (37.5 s before), the whole rou
 (155 s); the CPU thread does 17% less work, guest code 22% less. The price: twice the generated
 code (340 MB of objects) and about 10 minutes to compile.
 
+**Then** (same day, same checks, 0 diff-mode mismatches): indirect calls go straight to the
+recompiled function through a per-word table of host functions instead of the runtime's Dispatch;
+`fcmpu` and the paired-single compares call an inline copy of Cemu's helper (fuzzed: 3.6 million
+runs, 0 differences); the scheduler lock is an inline futex-style lock instead of a recursive
+pthread mutex (`src/os/coreinit/coreinit_Scheduler.cpp`); `ctx` is `__restrict` (no measurable
+change: the compiler already kept registers in host registers within straight-line code). Save
+route 30.4 s, 1.97x real time; whole route 121.7 s, 2.96x; the CPU thread 8% lighter on the whole
+route. Guest code is now 78% of the CPU thread, message queues 9.3%, `swapcontext` 2.9%: what is
+left is the game's own work, where the next lever is keeping registers in host locals with a
+liveness analysis (store only what a call or exit needs), and D19's context switch and queue
+fast path.
+
 The runtime keeps a callback depth per guest thread. Import calls and calls into the trampoline
 > area tick for the trampoline instruction before `PPCInterpreter_virtualHLE` charges its 300. Diff
 > mode checks the accounting per function: a native run starts with an unlimited slice, and the

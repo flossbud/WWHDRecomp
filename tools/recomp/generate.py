@@ -256,11 +256,11 @@ class FunctionFlow:
     def branch_ctr(self, ea, cond, link):
         if link:
             self.impure.append("bctrl")
-            return self._wrap(cond, [f"ctx->spr.LR = {emit.hx(ea + 4)};", "rt_call_ctr(ctx);"])
+            return self._wrap(cond, [f"ctx->spr.LR = {emit.hx(ea + 4)};", "RT_CALL_CTR();"])
         table = self.prog.jump_tables.get(ea)
         if table is None:
             self.impure.append("bctr")
-            return self._wrap(cond, ["[[clang::musttail]] return rt_jump_ctr(ctx);"])
+            return self._wrap(cond, ["RT_JUMP_CTR();"])
         body = ["switch (ctx->spr.CTR & ~3u) {"]
         for t in sorted(set(table)):
             if self.start <= t < self.end:
@@ -304,7 +304,7 @@ def relocated(prog, i, ea):
 # an instruction ends its basic block (for cycle counting) if it may branch, call or return, or calls
 # into the runtime, which could look at the timeslice
 BLOCK_END_OPS = {"b", "bc", "bclr", "bcctr"}
-BLOCK_END_CODE = ("rt_import(", "rt_call_ctr(", "rt_jump_ctr(", "rt_bad_branch(", "rt_trap(", "rt_dcache_flush(",
+BLOCK_END_CODE = ("rt_import(", "RT_CALL_CTR(", "RT_JUMP_CTR(", "rt_bad_branch(", "rt_trap(", "rt_dcache_flush(",
                   "return", "goto ", "switch (")
 MIN_BLOCK = 3            # shorter blocks keep one RT_TICK per instruction
 TICK_PER_INSTRUCTION = False
@@ -376,7 +376,10 @@ def generate_function(prog, em, start, end, errors):
             lines = [f"rt_bad_branch(ctx, {emit.hx(ea)}, 0u); return;"]
         body.append((ea, i.op, lines))
         last = i
-    out = [f"void {fname(start)}(PPCInterpreter_t* ctx)", "{"]
+    # __restrict: guest memory (memory_base) never overlaps the register state, so the compiler may
+    # keep registers in host registers across guest stores (the shards build with
+    # -fno-strict-aliasing); calls still receive ctx, so it writes back and reloads around them
+    out = [f"void {fname(start)}(PPCInterpreter_t* __restrict ctx)", "{"]
     out += emit_blocks(body, flow.labels)      # one cycle per instruction, charged per block (D6)
     if last is None or not is_terminator(last):
         if end in prog.entries:

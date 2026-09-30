@@ -6,23 +6,38 @@
 #include "Cafe/OS/common/OSCommon.h"
 #include "coreinit_Scheduler.h"
 
-thread_local sint32 s_schedulerLockCount = 0;
+thread_local sint32 s_schedulerLockCount = 0;   // this host thread's holds (it may hold it across fiber switches)
 
-#if BOOST_OS_WINDOWS
-#include <synchapi.h>
-CRITICAL_SECTION s_csSchedulerLock;
-#else
-#include <pthread.h>
-pthread_mutex_t s_ptmSchedulerLock;
-#endif
+// wwhd: the scheduler lock, inline, in place of a recursive pthread mutex (a PLT call and an owner
+// check in libc on every OS call that touches the scheduler: ~6% of the CPU thread, design doc
+// "Profile of the native build"). Three states, as a futex lock: free, held, held with waiters;
+// recursion per host thread comes from s_schedulerLockCount, as the pthread mutex gave it.
+static std::atomic<uint32> s_schedulerLock{ 0 };  // 0 free, 1 held, 2 held and a thread waits
+
+static inline void SchedulerLockAcquire()
+{
+	uint32 c = 0;
+	if (s_schedulerLock.compare_exchange_strong(c, 1, std::memory_order_acquire)) [[likely]]
+		return;
+	if (c != 2)
+		c = s_schedulerLock.exchange(2, std::memory_order_acquire);
+	while (c != 0)
+	{
+		s_schedulerLock.wait(2, std::memory_order_relaxed);
+		c = s_schedulerLock.exchange(2, std::memory_order_acquire);
+	}
+}
+
+static inline void SchedulerLockRelease()
+{
+	if (s_schedulerLock.exchange(0, std::memory_order_release) == 2) [[unlikely]]
+		s_schedulerLock.notify_one();
+}
 
 void __OSLockScheduler(void* obj)
 {
-#if BOOST_OS_WINDOWS
-	EnterCriticalSection(&s_csSchedulerLock);
-#else
-	pthread_mutex_lock(&s_ptmSchedulerLock);
-#endif
+	if (s_schedulerLockCount == 0)
+		SchedulerLockAcquire();
 	s_schedulerLockCount++;
 	cemu_assert_debug(s_schedulerLockCount <= 1); // >= 2 should not happen. Scheduler lock does not allow recursion
 }
@@ -34,29 +49,22 @@ bool __OSHasSchedulerLock()
 
 bool __OSTryLockScheduler(void* obj)
 {
-	bool r;
-#if BOOST_OS_WINDOWS
-	r = TryEnterCriticalSection(&s_csSchedulerLock);
-#else
-	r = pthread_mutex_trylock(&s_ptmSchedulerLock) == 0;
-#endif
-	if (r)
+	if (s_schedulerLockCount == 0)
 	{
-		s_schedulerLockCount++;
-		return true;
+		uint32 c = 0;
+		if (!s_schedulerLock.compare_exchange_strong(c, 1, std::memory_order_acquire))
+			return false;
 	}
-	return false;
+	s_schedulerLockCount++;
+	return true;
 }
 
 void __OSUnlockScheduler(void* obj)
 {
 	s_schedulerLockCount--;
 	cemu_assert_debug(s_schedulerLockCount >= 0);
-#if BOOST_OS_WINDOWS
-	LeaveCriticalSection(&s_csSchedulerLock);
-#else
-	pthread_mutex_unlock(&s_ptmSchedulerLock);
-#endif
+	if (s_schedulerLockCount == 0)
+		SchedulerLockRelease();
 }
 
 namespace coreinit
@@ -112,14 +120,6 @@ namespace coreinit
 
 	void InitializeSchedulerLock()
 	{
-#if BOOST_OS_WINDOWS
-		InitializeCriticalSection(&s_csSchedulerLock);
-#else
-		pthread_mutexattr_t ma;
-		pthread_mutexattr_init(&ma);
-		pthread_mutexattr_settype(&ma, PTHREAD_MUTEX_RECURSIVE);
-		pthread_mutex_init(&s_ptmSchedulerLock, &ma);
-#endif
 		cafeExportRegister("coreinit", __OSLockScheduler, LogType::Placeholder);
 		cafeExportRegister("coreinit", __OSUnlockScheduler, LogType::Placeholder);
 

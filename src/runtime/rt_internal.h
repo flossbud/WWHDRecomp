@@ -4,6 +4,10 @@
 #define RECOMP_TABLES_WEAK
 #include "recomp_tables.h"
 
+// generated code's inline indirect calls (tools/recomp/runtime/ppc_ops.h), filled by dispatch.cpp
+extern void (**rt_direct)(PPCInterpreter_t*);
+extern uint32 rt_directBase, rt_directWords;
+
 // what generated code calls (declared for it in funcs.h and ppc_ops.h)
 void rt_import(PPCInterpreter_t* ctx, uint32 importId);
 uint32 rt_import_data(uint32 importId);
