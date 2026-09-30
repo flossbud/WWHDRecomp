@@ -22,6 +22,10 @@ namespace wwhd::gpu
 		std::function<void(uint32& w, uint32& h)> size;           // its drawable size in pixels
 	};
 	void SetWindow(Window window);
+	// An image laid over the TV image in the window, never in captures: the system's own screens
+	// (keyboard, error dialogs). RGBA8 pixels, placed at (x, y) and sized w x h in the TV image's
+	// 1920x1080 frame, scaled with it. No pixels: nothing.
+	void SetOverlay(sint32 x, sint32 y, uint32 w, uint32 h, std::vector<uint32> rgba);
 
 	bool RendererOn();                                             // WWHD_RENDER=vk, and Vulkan came up
 	void RendererClear(const uint32be* body, uint32 nWords);       // IT_HLE_CLEAR_COLOR_DEPTH_STENCIL

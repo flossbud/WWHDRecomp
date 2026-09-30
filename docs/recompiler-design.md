@@ -676,18 +676,26 @@ development-only reference that traces, captures and texture dumps are checked a
   identical, so our scheduler gets a deterministic mode that follows Cemu's rules on the virtual
   clock (the one every check uses) and a real-time mode on host threads for players. Each replaced
   function must keep the whole-route traces identical.
-* **Status (2026-09-30):** 45 functions are ours (coreinit 31, nn_ac 2, nn_act 2, padscore 6,
-  vpad 4), with both route traces identical. Input is a whole library: the input script (for
-  routes) or the window's keyboard and gamepad (SDL3) drive one Pro Controller, and the GamePad is
-  absent. The platform shell has its window, input and sound on SDL3 (Linux: X11 or Wayland),
-presented by our renderer; windowed, the save route's trace is still the reference's. What our functions
-  still borrow from Cemu is three accessors: the clock, the current thread and gx2's swap count.
-  Imports Cemu never implemented (8 in padscore, `VPADBASEGetHeadphoneStatus`) have no HLE entry
-  to take over and wait for our loader. Held back until their library moves whole, because their
-  functions share state:
-  `nn_act.Initialize` (loads accounts for the rest of nn_act), `nn_boss` and `nn_olv` (objects
-  with vtables in Cemu's memory, IPC to Cemu's IOSU), `nlibcurl` and `nsysnet` (setup the rest
-  of the library checks), and `OSGetSystemInfo` (returns a structure in Cemu's memory).
+* **Status (2026-09-30):** 76 functions are ours (coreinit 31, nn_ac 2, nn_act 2, padscore 6,
+  vpad 4, erreula 15, swkbd 16), with both route traces identical. Libraries the game loads itself
+  (swkbd, erreula) are taken over right after `OSDynLoad_Acquire` loads them. Input is a whole
+  library: the input script (for routes) or the window's keyboard and gamepad (SDL3) drive one Pro
+  Controller, and the GamePad is absent. The software keyboard and error dialogs are ours, drawn by
+  the frontend over the game; the name-entry route replays through them. The platform shell has
+  its window, input and sound on SDL3 (Linux: X11 or Wayland), presented by our renderer; windowed,
+  the save route's trace is still the reference's. What our functions still borrow from Cemu goes
+  through accessors in `src/os/os.h`: the clock, the current thread, sleeping, guest callbacks,
+  gx2's swap count and the system area. Imports Cemu never implemented (8 in padscore,
+  `VPADBASEGetHeadphoneStatus`) have no HLE entry to take over and wait for our loader.
+  Held back until what they stand on is ours:
+  - with the scheduler: `proc_ui` (threads, events and rendezvous of its own, the system message
+    queue);
+  - with the file system: `nn_save` (every call an asynchronous FS request waited on through the
+    scheduler);
+  - with their whole library: `nn_act.Initialize` (loads accounts for the rest of nn_act),
+    `nn_boss` and `nn_olv` (objects with vtables in Cemu's memory, IPC to Cemu's IOSU), `nlibcurl`
+    and `nsysnet` (setup the rest of the library checks), and `OSGetSystemInfo` (returns a
+    structure in Cemu's memory).
 
 ## Milestones
 

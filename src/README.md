@@ -7,6 +7,7 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 |---|---|
 | `frontend/window_system.cpp` | Cemu's `WindowSystem` interface: boot, one TV window, event loop. `wwhd`: Xlib. `wwhd-null`: headless, or an SDL3 window with `WWHD_WINDOW=1` |
 | `frontend/audio_sdl.cpp` | the TV's sound on SDL3, as Cemu's audio device (windowed `wwhd-null`) |
+| `frontend/overlay.cpp` | the system's keyboard, error dialogs and HOME sign, drawn over the game in the window |
 | `frontend/cemu_boot.cpp` | paths, config, default NAND files, title preparation (derived from Cemu's wx GUI, MPL-2.0) |
 | `gpu/null_gpu.cpp` | null GPU in place of Latte: consumes gx2's command buffers, keeps the register file, performs every guest-visible effect, and hands draws, clears, copies and swaps to the renderer when it is on (derived from Latte, MPL-2.0) |
 | `gpu/vk/renderer.cpp` | the Vulkan renderer (G2, `WWHD_RENDER=vk`): device, surfaces, clears, scan-out, frame capture, surface dumps |
@@ -81,12 +82,18 @@ table, so Cemu's dispatch still traces the call and charges its cycles, and ever
 leave registers and guest memory exactly as Cemu's did: both route traces stay identical. What a
 function still needs from Cemu (the clock, the current thread) goes through an accessor in
 `os/os.h`. A library whose functions share state with each other moves whole. `WWHD_OS=cemu`
-leaves every handler Cemu's; the log says how many are ours. So far 45: memory and cache
-operations, the clock, thread-specific slots and errno, the interrupt mask, a few system flags,
-the stateless parts of `nn_ac` and `nn_act`, and input (`os/input.cpp`: `padscore` with one Pro
-Controller, `vpad` with no GamePad). Input comes from the input script when `CEMU_INPUT_SCRIPT`
-names one (the reference's format, so routes replay identically), otherwise from the window's
-keyboard and gamepad.
+leaves every handler Cemu's; the log says how many are ours. Libraries the game loads itself
+(`swkbd`, `erreula`) register their handlers when it does, so `OSDynLoad_Acquire` is wrapped to take
+those over as they appear. So far 76: memory and cache operations, the clock, thread-specific slots
+and errno, the interrupt mask, a few system flags, the stateless parts of `nn_ac` and `nn_act`,
+input (`os/input.cpp`: `padscore` with one Pro Controller, `vpad` with no GamePad), the software
+keyboard (`os/swkbd.cpp`) and the error dialogs (`os/erreula.cpp`). Input comes from the input
+script when `CEMU_INPUT_SCRIPT` names one (the reference's format, so routes replay identically),
+otherwise from the window's keyboard and gamepad. The keyboard answers itself when
+`CEMU_SWKBD_AUTO` gives a name (as the reference's does; `tools/reference/run.sh` defaults to
+`Link`, `CEMU_SWKBD_AUTO=` leaves it to the player); otherwise the window shows it and the player
+types. The system draws the keyboard and error dialogs, not the game, so the frontend does
+(`frontend/overlay.cpp`), over the TV image in the window and never into captures.
 
 **The renderer** (G2, design D13 as built) is off unless `WWHD_RENDER=vk`. It needs a Vulkan 1.3
 device with dynamic rendering (lavapipe: `REF_GPU=llvmpipe` in `tools/reference/run.sh`). It draws on
@@ -119,7 +126,10 @@ has (the swapchain takes the scan buffer's sRGB encoding). F11 or Alt+Enter togg
 the traces are unchanged. The window's keyboard and first gamepad are the Pro Controller: keys as
 the reference's `controller0.xml` (A=X B=Z X=S Y=A L=Q R=W ZL=1 ZR=2 +=Return -=Backspace, D-pad
 on the arrows, left stick I/J/K/L, right stick T/F/G/H), gamepad face buttons by their printed
-label, triggers as ZL/ZR, and rumble. The TV's sound plays through SDL3 too (`frontend/audio_sdl.cpp`,
+label, triggers as ZL/ZR, and rumble. While the keyboard or an error dialog is up the game gets no
+input: typing goes to the keyboard (Enter or Start for OK), A and B answer a dialog. Cemu's SDL
+controller provider is dropped when the window opens: its thread would otherwise take events off
+SDL's queue. The TV's sound plays through SDL3 too (`frontend/audio_sdl.cpp`,
 fed by Cemu's AX mixer until `snd_core` is ours; `WWHD_AUDIO=cemu` keeps Cemu's Cubeb device). On
 the worker, with lavapipe under Xvfb, the save route runs windowed at about 5 frames a second, and
 its trace stays the reference's with the window, input and sound on (`SDL_AUDIO_DRIVER=disk` writes

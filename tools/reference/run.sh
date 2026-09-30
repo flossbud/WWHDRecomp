@@ -11,7 +11,8 @@
 #   CEMU_HLE_TRACE_FILTER=gx2.    only trace names with these prefixes (comma-separated)
 #   CEMU_HLE_TRACE_EXIT_FRAME=N   end the trace and exit Cemu when frame N begins
 #   CEMU_INPUT_SCRIPT=route.txt   frame-keyed controller input (patched build; see tools/reference/routes/)
-#   CEMU_SWKBD_AUTO=Link          answer the software keyboard (name entry) with this text
+#   CEMU_SWKBD_AUTO=Link          answer the software keyboard (name entry) with this text (default
+#                                 Link; CEMU_SWKBD_AUTO= leaves it to the player: our own frontend)
 #   CEMU_SHOT_FRAMES=0-900/60     capture TV/pad at these frames into $CEMU_SHOT_DIR (PPM)
 #   CEMU_NO_GAMEPAD=1             GamePad reported absent: the project's single-screen, Pro-Controller
 #                                 mode (default 1; set CEMU_NO_GAMEPAD= to re-enable the GamePad)
@@ -42,7 +43,7 @@ export DISPLAY=${DISPLAY:-:99}
 [ -n "${REF_VIRTUAL_CLOCK:-}" ] && export CEMU_VIRTUAL_CLOCK=1
 export CEMU_NO_GAMEPAD=${CEMU_NO_GAMEPAD-1}; [ -z "$CEMU_NO_GAMEPAD" ] && unset CEMU_NO_GAMEPAD
 export CEMU_HLE_TRACE CEMU_HLE_TRACE_FILTER CEMU_HLE_TRACE_EXIT_FRAME CEMU_INPUT_SCRIPT CEMU_SHOT_FRAMES CEMU_SHOT_DIR
-export CEMU_SWKBD_AUTO=${CEMU_SWKBD_AUTO-Link}
+export CEMU_SWKBD_AUTO=${CEMU_SWKBD_AUTO-Link}; [ -z "$CEMU_SWKBD_AUTO" ] && unset CEMU_SWKBD_AUTO
 [ -n "${REF_FRESH:-}" ] && rm -rf "$portable/mlc01"
 if [ -n "${REF_SAVE:-}" ]; then
     save=$portable/mlc01/usr/save/00050000/10143500/user/80000001   # USA title, Cemu's default account

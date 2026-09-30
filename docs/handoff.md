@@ -163,16 +163,16 @@ G2 is done on the title screen (design doc "G2 status"); G3 is next.
 
 **Direction since 2026-09-30 (design D18): the shipped game will not depend on Cemu**; Cemu stays
 the reference. Work goes least coupled first, each step keeping both route traces identical:
-- **Our OS layer** (`src/os`, src/README): 45 imports are ours (coreinit 31, nn_ac 2, nn_act 2,
-  padscore 6, vpad 4). They take over entries in Cemu's HLE table; `WWHD_OS=cemu` turns them off.
-  What they borrow from Cemu is three accessors in `os/os.h` (clock, current thread, swap count).
+- **Our OS layer** (`src/os`, src/README): 76 imports are ours (coreinit 31, nn_ac 2, nn_act 2,
+  padscore 6, vpad 4, erreula 15, swkbd 16). They take over entries in Cemu's HLE table;
+  `WWHD_OS=cemu` turns them off. What they borrow from Cemu goes through accessors in `os/os.h`.
+  The software keyboard and error dialogs are drawn by the frontend (`frontend/overlay.cpp`).
 - **The platform shell** (`WWHD_WINDOW=1`): SDL3 window presented by our renderer, keyboard and
   gamepad as the Pro Controller, TV sound on SDL3. `setup-volume.sh sdl3` builds the SDL3 it
   links. Windowed, the save route's trace is the reference's.
-- **Next in D18's order:** the other small libraries (`nn_save`, `swkbd`, `erreula`, `proc_ui`;
-  swkbd needs a name-entry keyboard of our own), then gx2's front half, audio (`snd_core`),
-  coreinit with a scheduler of our own (deterministic and real-time modes), the loader and memory
-  map. Before any of that ships: our own CMake build (step 3), and a GPU machine for M5 (design
+- **Next in D18's order:** gx2's front half, audio (`snd_core`), coreinit with a scheduler of our
+  own (deterministic and real-time modes; `proc_ui` moves with it), the file system (`nn_save`
+  with it), the loader and memory map. Before any of that ships: our own CMake build (step 3), and a GPU machine for M5 (design
   open question 8).
 
 ### 1. G3: render the whole route (design D13, D16.3)
@@ -225,7 +225,6 @@ with the reference, and rerun:
 - Native speed, when it matters: per-block counting (D6), host-local registers (D2). Keep the
   whole-route trace check for every step. The shipped real-clock build may count coarsely behind a
   flag (D6).
-- The recomp needs its own name-entry keyboard; the reference uses `CEMU_SWKBD_AUTO`.
 - The GamePad view (an 864×480 pass, about 7 draws per frame) can be skipped with an override now
   that the renderer exists.
 

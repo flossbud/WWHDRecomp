@@ -60,12 +60,16 @@ namespace wwhd::os
 	}
 
 	// What our functions still borrow from Cemu, each behind one accessor so it can move to our
-	// runtime (the clock), our scheduler (the current thread) or our gx2 (the swap count) without
-	// touching the functions.
+	// runtime (the clock), our scheduler (the current thread, sleeping, callbacks), our gx2 (the swap
+	// count) or our memory map (the system area) without touching the functions.
 	uint64 Timebase();          // the timer clock (core cycles / 20) since boot
 	uint64 TimebaseAt2000();    // the timer clock at boot, counted from 1 January 2000
 	uint32 CurrentThread();     // the guest OSThread running on the calling core
 	uint32 SwapCount();         // GX2SwapScanBuffers calls so far: the frame number input scripts use
+	void SleepTicks(uint64 ticks);                  // the calling guest thread sleeps (the scheduler's)
+	uint32 AllocSystemArea(uint32 size, uint32 alignment); // guest memory for the OS's own data (Cemu's system area)
+	// run the guest function `fn` with r3, r4 on the OS's callback thread (Cemu's async callbacks)
+	void QueueGuestCallback(uint32 fn, uint32 r3, uint32 r4);
 }
 
 // WWHD_OS_FUNCTION(coreinit, memcpy) { ... } defines and registers coreinit.memcpy; the body sees `ctx`.

@@ -17,6 +17,9 @@
 #include "../runtime/runtime.h"
 #include "../gpu/vk/renderer.h"
 #include "../os/input.h"
+#include "../os/swkbd.h"
+#include "../os/erreula.h"
+#include "input/InputManager.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #else
@@ -113,6 +116,30 @@ static void Stick(SDL_Gamepad* g, SDL_GamepadAxis ax, SDL_GamepadAxis ay, float&
 	y = std::clamp(y + sy * scale, -1.0f, 1.0f);
 }
 
+// While the system's keyboard or an error dialog is up the game gets no input: the keyboard takes
+// typing (text events) and Enter or Start for OK, a dialog takes A (or Enter) and B (or Escape).
+static void SystemScreenInput(uint32 buttons, const bool* key)
+{
+	using namespace wwhd::os;
+	static uint32 s_prev = 0;
+	uint32 pressed = buttons & ~s_prev;
+	s_prev = buttons;
+	if (erreula::Current().dialog)
+	{
+		if (pressed & (input::A | input::PLUS))
+			erreula::Choose(false);
+		else if ((pressed & input::B) || key[SDL_SCANCODE_ESCAPE])
+			erreula::Choose(true);
+	}
+	else if (swkbd::Current().open && (pressed & input::PLUS) && !key[SDL_SCANCODE_RETURN])   // Enter comes as a key event
+		swkbd::Confirm();
+}
+
+static bool SystemScreenUp()
+{
+	return wwhd::os::erreula::Current().dialog || wwhd::os::swkbd::Current().open;
+}
+
 static void PublishInput()
 {
 	using namespace wwhd::os::input;
@@ -154,7 +181,25 @@ static void PublishInput()
 			Stick(g, SDL_GAMEPAD_AXIS_RIGHTX, SDL_GAMEPAD_AXIS_RIGHTY, pad.rx, pad.ry);
 		}
 	}
+	if (SystemScreenUp())
+	{
+		SystemScreenInput(pad.buttons, key);
+		pad = Pad{};
+	}
+	else
+		SystemScreenInput(0, key);
 	SetLive(pad);
+}
+
+// typing into the system keyboard: printable ASCII from SDL's UTF-8 text
+static void TypeText(const char* utf8)
+{
+	std::u16string chars;
+	for (const char* c = utf8; *c; c++)
+		if ((uint8)*c < 0x80)
+			chars.push_back((char16_t)*c);
+	if (!chars.empty())
+		wwhd::os::swkbd::Type(chars);
 }
 
 static void Rumble(bool on)
@@ -164,12 +209,23 @@ static void Rumble(bool on)
 		SDL_RumbleGamepad(s_gamepad, on ? 0xC000 : 0, on ? 0xC000 : 0, on ? 10000 : 0);   // until stopped (10 s at most)
 }
 
+// Cemu's input goes unused (src/os/input.cpp), but its SDL controller provider runs a thread that
+// waits on SDL's event queue: it would take our keys, text and window events, and pump the window's
+// events off the main thread, which SDL doesn't allow. Dropping the provider stops that thread.
+static void DropCemuSdlInput()
+{
+	auto& providers = const_cast<std::remove_cvref_t<decltype(InputManager::instance().get_api_providers())>&>(
+		InputManager::instance().get_api_providers());
+	providers[InputAPI::SDLController].clear();
+}
+
 // WWHD_WINDOW=1: the TV window, handed to the renderer; nullptr otherwise
 static SDL_Window* OpenWindow()
 {
 	const char* on = getenv("WWHD_WINDOW");
 	if (!on || strcmp(on, "1") != 0)
 		return nullptr;
+	DropCemuSdlInput();
 	if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
 		wwhd::Fatal(fmt::format("SDL video: {}", SDL_GetError()));
 	if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
@@ -205,8 +261,13 @@ static SDL_Window* OpenWindow()
 {
 	for (;;)
 	{
+		// the system's keyboard and dialogs come and go with the game: look at least every 50 ms
+		wwhd::UpdateOverlay();
+		bool typing = wwhd::os::swkbd::Current().open;
+		if (typing != SDL_TextInputActive(window))
+			typing ? SDL_StartTextInput(window) : SDL_StopTextInput(window);
 		SDL_Event ev;
-		if (!SDL_WaitEvent(&ev))
+		if (!SDL_WaitEventTimeout(&ev, 50))
 			continue;
 		switch (ev.type)
 		{
@@ -220,7 +281,18 @@ static SDL_Window* OpenWindow()
 		case SDL_EVENT_KEY_DOWN:
 			if (!ev.key.repeat && (ev.key.key == SDLK_F11 || (ev.key.key == SDLK_RETURN && (ev.key.mod & SDL_KMOD_ALT))))
 				SDL_SetWindowFullscreen(window, !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN));
+			else if (wwhd::os::swkbd::Current().open)
+			{
+				if (ev.key.key == SDLK_BACKSPACE)
+					wwhd::os::swkbd::Backspace();
+				else if ((ev.key.key == SDLK_RETURN || ev.key.key == SDLK_KP_ENTER) && !ev.key.repeat)
+					wwhd::os::swkbd::Confirm();
+			}
 			PublishInput();
+			break;
+		case SDL_EVENT_TEXT_INPUT:
+			if (wwhd::os::swkbd::Current().open)
+				TypeText(ev.text.text);
 			break;
 		case SDL_EVENT_KEY_UP:
 		case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
