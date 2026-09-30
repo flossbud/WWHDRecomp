@@ -167,3 +167,11 @@ the sound to a file):
     tools/worker/job start win env CEMU_BIN=/wwhd/WWHDRecomp/build/wwhd/wwhd-null WWHD_NATIVE=on \
         REF_GPU=llvmpipe WWHD_RENDER=vk WWHD_WINDOW=1 REF_SAVE=/wwhd/data/saves/wwhd_100 \
         tools/reference/route.sh /wwhd/data/traces/win 1200 tools/reference/routes/continue-100.txt
+
+**Playing it** on a desktop with a GPU: `tools/play/deploy.sh HOST` (from the editing machine, after
+`src/build.sh`) streams the build, Cemu's data files, the game and the test saves from the worker to
+`~/wwhd-play` on HOST, and `~/wwhd-play/play.sh` runs it windowed in real time (its header lists the
+keys and switches; `WWHD_SAVE=saves/wwhd_100` starts from the 100% save). **Real time** is every run
+without the virtual clock (design D19): guest time from `steady_clock`, the scheduler thread sleeping
+when no guest thread can run, the null GPU sleeping until the host-timed vsync, and every 10 s a
+line in `portable/log.txt` with the frame rate, frame times and how busy the scheduler thread was.

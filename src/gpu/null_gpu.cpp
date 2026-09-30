@@ -23,6 +23,7 @@
 #include "util/highresolutiontimer/HighResolutionTimer.h"
 #include "util/helpers/helpers.h"
 #include "vk/renderer.h"
+#include <algorithm>
 #include <map>
 #include <set>
 
@@ -101,6 +102,60 @@ static void handleTimedVsync()
 	uint64 period = timeBetweenVSync();
 	uint64 missed = (now - LatteGPUState.timer_nextVSync) / period;
 	LatteGPUState.timer_nextVSync += period * (missed >= 2 ? missed + 1 : 1);
+}
+
+// Real time: how long until the next host-timed vsync, at most 1 ms, so the GPU thread sleeps that
+// long when it waits (for a flip, or for commands) instead of spinning or sleeping past it.
+static std::chrono::microseconds untilTimedVsync()
+{
+	uint64 now = HighResolutionTimer::now().getTick();
+	uint64 next = LatteGPUState.timer_nextVSync;
+	if (next <= now)
+		return std::chrono::microseconds(0);
+	return std::chrono::microseconds(std::min<uint64>(HighResolutionTimer::ticksToMicroseconds(next - now), 1000));
+}
+
+namespace coreinit
+{
+	uint64 __OSIdleNanoseconds();   // os/coreinit/coreinit_Thread.cpp
+}
+
+// Real time: every 10 s the log (portable/log.txt) gets the frame rate, frame times (from swap to
+// swap) and how much of the time the scheduler thread had work, to see how the game plays and how
+// much headroom it has (design D19, requirement 4).
+namespace frametimes
+{
+	using Clock = std::chrono::steady_clock;
+	std::vector<float> s_ms;                       // this period's frame times
+	Clock::time_point s_last, s_periodStart;
+	uint64 s_idleAtStart = 0;
+
+	void Swap()
+	{
+		Clock::time_point now = Clock::now();
+		if (s_last == Clock::time_point{})
+		{
+			s_last = s_periodStart = now;
+			s_idleAtStart = coreinit::__OSIdleNanoseconds();
+			return;
+		}
+		s_ms.push_back(std::chrono::duration<float, std::milli>(now - s_last).count());
+		s_last = now;
+		double period = std::chrono::duration<double>(now - s_periodStart).count();
+		if (period < 10.0)
+			return;
+		std::sort(s_ms.begin(), s_ms.end());
+		auto at = [](double q) { return s_ms[std::min(s_ms.size() - 1, (size_t)(q * s_ms.size()))]; };
+		size_t slow = s_ms.end() - std::upper_bound(s_ms.begin(), s_ms.end(), 50.0f);
+		uint64 idle = coreinit::__OSIdleNanoseconds();
+		double busy = 100.0 * (1.0 - (double)(idle - s_idleAtStart) / 1e9 / period);
+		cemuLog_log(LogType::Force, "wwhd real time: {:.1f} fps over {:.0f} s, frame time median {:.1f} ms, 99th {:.1f} ms, "
+			"worst {:.1f} ms, {} over 50 ms; scheduler thread busy {:.0f}%",
+			s_ms.size() / period, period, at(0.5), at(0.99), s_ms.back(), slow, busy);
+		s_ms.clear();
+		s_periodStart = now;
+		s_idleAtStart = idle;
+	}
 }
 
 // ---- G0 draw statistics (docs/recompiler-design.md D15) -----------------------------------------
@@ -515,6 +570,8 @@ namespace
 			LatteGPUState.frameCounter++;
 			if (wwhd::gpu::RendererOn())
 				wwhd::gpu::RendererSwap();
+			if (!PPCTimer_isVirtualClock())
+				frametimes::Swap();
 			break;
 		case IT_HLE_WAIT_FOR_FLIP:
 		{
@@ -524,7 +581,10 @@ namespace
 				handleTimedVsync();
 				if (!s_running)
 					threadExit();
-				std::this_thread::yield();
+				if (PPCTimer_isVirtualClock())
+					std::this_thread::yield();
+				else
+					std::this_thread::sleep_for(untilTimedVsync());
 			}
 			break;
 		}
@@ -595,7 +655,7 @@ namespace
 
 	// The next word of the ring: after a few quick looks (a submission usually follows closely), the
 	// thread sleeps until the CPU submits (os/tcl) instead of spinning, waking every millisecond for
-	// host-timed vsync and shutdown.
+	// shutdown, and in real time at the host-timed vsync.
 	uint32 ringWord()
 	{
 		uint32 w;
@@ -609,7 +669,7 @@ namespace
 			if (spins < 64)
 				std::this_thread::yield();
 			else
-				TCL::TCLGPUWaitForCommands(std::chrono::microseconds(1000));
+				TCL::TCLGPUWaitForCommands(PPCTimer_isVirtualClock() ? std::chrono::microseconds(1000) : untilTimedVsync());
 		}
 	}
 

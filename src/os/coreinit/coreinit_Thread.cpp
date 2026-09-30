@@ -763,6 +763,63 @@ namespace coreinit
 		return true;
 	}
 
+	// wwhd: real time (design D19). With one host thread for the three cores and no guest thread
+	// runnable on any of them, the scheduler thread sleeps instead of polling: until another host
+	// thread queues one (the GPU's vsync and flip events, file-system replies), the next alarm is
+	// due, or 1 ms has passed (sound and NFC are polled, __OSCheckSystemEvents). A wake-up that races
+	// the check costs at most that millisecond. The virtual clock never sleeps: it jumps instead.
+	static std::mutex s_idleMutex;
+	static std::condition_variable s_idleCondition;
+	static std::atomic<bool> s_idleWaiting{ false };
+	static std::atomic<uint64> s_idleNanoseconds{ 0 };
+
+	static void __OSWakeIdle()
+	{
+		if (s_idleWaiting.load(std::memory_order_relaxed)) [[unlikely]]
+		{
+			std::lock_guard lock(s_idleMutex);
+			s_idleCondition.notify_one();
+		}
+	}
+
+	static bool __OSAnyRunnable()
+	{
+		for (sint32 i = 0; i < PPC_CORE_COUNT; i++)
+			if (!g_coreRunQueueThreadCount[i].isZero())
+				return true;
+		return false;
+	}
+
+	static void __OSIdleWait()
+	{
+		if (__OSAnyRunnable())
+			return;
+		auto wait = std::chrono::microseconds(1000);
+		uint64 alarm = OSHostAlarmSoonestFire(); // in OSGetTime ticks
+		if (alarm != 0 && alarm != std::numeric_limits<uint64>::max())
+		{
+			uint64 now = coreinit::OSGetTime();
+			if (alarm <= now)
+				return;
+			wait = std::min(wait, std::chrono::microseconds((alarm - now) * 1000000 / Espresso::TIMER_CLOCK));
+		}
+		auto start = std::chrono::steady_clock::now();
+		{
+			std::unique_lock lock(s_idleMutex);
+			s_idleWaiting.store(true);
+			if (!__OSAnyRunnable())
+				s_idleCondition.wait_for(lock, wait);
+			s_idleWaiting.store(false);
+		}
+		s_idleNanoseconds += (uint64)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count();
+	}
+
+	// time the scheduler thread has slept for want of work (real time), for the frame-time log
+	uint64 __OSIdleNanoseconds()
+	{
+		return s_idleNanoseconds.load(std::memory_order_relaxed);
+	}
+
 	// adds the thread to each core's run queue if in runable state
 	void __OSAddReadyThreadToRunQueue(OSThread_t* thread)
 	{
@@ -784,6 +841,7 @@ namespace coreinit
 			g_coreRunQueue.GetPtr()[i].addThread(thread, thread->linkRun + i);
 			thread->currentRunQueue[i] = (g_coreRunQueue.GetPtr() + i);
 			g_coreRunQueueThreadCount[i].increment();
+			__OSWakeIdle();
 		}
 	}
 
@@ -1332,7 +1390,11 @@ namespace coreinit
 					__OSVirtualClockEvents(coreIndex);
 				__OSCheckSystemEvents();
 				if(g_isMulticoreMode == false)
+				{
 					coreIndex = (coreIndex + 1) % 3;
+					if (!PPCTimer_isVirtualClock())
+						__OSIdleWait();
+				}
 			}
 			else
 			{

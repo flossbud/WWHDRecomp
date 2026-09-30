@@ -175,9 +175,15 @@ the reference. Work goes least coupled first, each step keeping both route trace
 - **The platform shell** (`WWHD_WINDOW=1`): SDL3 window presented by our renderer, keyboard and
   gamepad as the Pro Controller, TV sound on SDL3. `setup-volume.sh sdl3` builds the SDL3 it
   links. Windowed, the save route's trace is the reference's.
+- **Playable on a desktop, in real time** (design D19 step 2): `tools/play/deploy.sh HOST`, then
+  `~/wwhd-play/play.sh` there. On the owner's desktop (desktop CPU, AMD GPU) it holds 30 fps
+  (frame time 99th percentile 35 ms once loaded); hitches are first sights of shaders (no pipeline
+  cache on disk yet). The game's task switcher spins (D19 "What real time showed"), so one host
+  core stays busy until a D9 override lets it sleep.
 - **Next in D18's order:** make the forked scheduler ours in substance, as design D19 lays out
-  (deterministic and real-time modes; first exact per-block cycle counting, then real time on one
-  host thread; gx2's core and proc_ui with it), the file system (`nn_save` with it), the loader
+  (deterministic and real-time modes; per-block cycle counting, our context switch and real time on
+  one host thread are done; next the D9 override for the task switcher's spin; gx2's core and proc_ui
+  with it), the file system (`nn_save` with it), the loader
   and memory map (where the guest OS objects in Cemu's memory, the SysAllocators, get our own home). Before any of that ships: our own CMake build (step 3),
   and a GPU machine for M5 (design open question 8).
 

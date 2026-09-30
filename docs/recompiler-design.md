@@ -857,10 +857,30 @@ call; thread switches went from 3.6% of the CPU thread to 0.9%), and the queue o
 division for in-range ring indices (exact). The switch-to-self shortcut needs D9's overrides and a
 real-time mode to use it in, so it waits for step (2).
 
+**Real time on one host thread** (step 2, 2026-09-30): without the virtual clock, guest time is
+`steady_clock` (the forked `PPCTimer.cpp`; no 3-second TSC measurement at start); with no guest
+thread runnable on any core the scheduler thread sleeps until one is queued (any host thread that
+queues one wakes it), the next alarm, or 1 ms (sound and NFC polling); the null GPU sleeps until the
+host-timed vsync when it waits for a flip or for commands instead of spinning; every 10 s the log
+gets frame rate, frame-time median, 99th percentile and worst, and how busy the scheduler thread
+was. The virtual clock takes none of these paths (save route: trace, command stream and sound
+identical). Played on the owner's desktop (desktop CPU, AMD GPU on RADV, `tools/play/`),
+headless along the save route: 30 fps from the title on, frame time median 33.3 ms and 99th 35 ms
+once loaded; the hitches are first sights of shaders (worst 1 s during boot, 50-190 ms loading
+Outset), which a pipeline cache on disk would take away on the next run.
+**What real time showed:** the scheduler thread is busy 100% of the time and never sleeps: 85% of
+it is the game's task switcher (`f_02760ACC` -> `f_0275FFCC`), which, with no task ready, keeps
+switching to itself through its message queue (38% of the thread in `OSSendMessage` and
+`OSReceiveMessage`). The Wii U's core spins the same way. The host thread only goes idle with an
+override (D9) that recognises the empty round and waits for the next event (vsync, a message);
+that is the real-time fast path above, and now the next thing for CPU use (not for speed: 30 fps
+holds with room to spare).
+
 **Order**: (1) exact per-block cycle counting (D6's planned optimisation, held to the trace; done
 2026-09-30: 1.89x real time on the save route, traces identical);
-(2) real time on one host thread: host clock, sleeping idle, vsync from presentation; (3) our
-context switch; (4) heavier routes (sailing, a dungeon, Windfall) timed, to decide on three host
+(2) real time on one host thread: host clock, sleeping idle, vsync from presentation (done
+2026-09-30 but vsync, still host-timed; the game's own spin keeps the thread busy, above); (3) our
+context switch (done); (4) heavier routes (sailing, a dungeon, Windfall) timed, to decide on three host
 threads; (5) fast paths.
 
 **Open**: one host thread or three (item 4 decides); real vsync needs the GPU machine (open question
