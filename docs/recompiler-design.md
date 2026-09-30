@@ -757,6 +757,75 @@ switches, and with one host thread per core the global scheduler lock would be c
 times a frame, so queues and mutexes need a cheap uncontended path; guest code itself is 70% of
 the CPU thread, where per-block cycle counting (D6) and register caching (D2) are the lever.
 
+### D19. The scheduler: exact for checks, real time for play
+
+*Proposed 2026-09-30, from the profile above and the save route's trace; open points at the end.*
+The scheduler is Cemu's, forked (D18): guest threads are fibers, three emulated cores, a 45,000-cycle
+timeslice (plus jitter), one global scheduler lock (a recursive pthread mutex), and two host layouts:
+one host thread running the three cores in turn, or one host thread per core (Cemu's "multicore
+recompiler" mode). Guest time is host rdtsc, or, with the virtual clock, the instructions executed.
+Every check runs the virtual clock on one host thread, and so does play today.
+
+**What the game does** (save route, virtual clock, `sched.slice` records):
+* All three cores are busy all the time: the idle jumps add up to 0.0% of guest time.
+* Core 1: one thread (1603f4a8) holds 68% of the core in 1.1 million timeslices; it is the thread
+  of the 69 million message-queue pairs (the profile above). It pushes a message to its own queue
+  and then waits for that message (`f_0275FFCC` pops until the expected value arrives, reached
+  through a function pointer after `OSSetThreadSpecific`): a coroutine-style task switch built on
+  OS queues, which, when it switches to the running task, costs two OS calls and changes nothing.
+  Another thread (0e074ec0) has 30%.
+* Core 2: one thread (0e005f40) 72%, with 16.5% and 9.2% for two others. Core 0: one thread
+  (104b7818) 62%, then 15%, 12% and smaller ones. Two threads move between cores.
+* One host thread runs all this at 1.60x real time on the save route and 2.32x on the whole route
+  (`timing.sh`), 74% of it in guest code.
+
+**Requirements.**
+1. *Checks stay exact.* The deterministic mode is today's behaviour, bit for bit: virtual clock,
+   one host thread, per-instruction accounting (D6). Any change to shared scheduler code keeps
+   traces, GPU command streams and sound identical (`stream_check.sh`).
+2. *Play runs on real time without waste.* Guest time follows the host clock; frames are paced by
+   the display's vsync and sound by the audio device; no host thread spins: an idle core sleeps
+   until a thread becomes runnable, an alarm is due or vsync comes (today the single-thread idle
+   loop polls `__OSCheckSystemEvents` without sleeping, which burns a host core whenever the game
+   waits). Enough headroom for a steady 30 fps, and later 60 fps interpolation (M6).
+3. *Portable.* No x86-only pieces: `std::chrono::steady_clock` (or the platform's counter) instead
+   of rdtsc; a small context switch per ABI (x86-64 System V and Windows, arm64) instead of
+   ucontext, whose `swapcontext` makes a signal-mask system call on every switch (2.5% of the CPU
+   thread) and is deprecated on macOS.
+4. *Measured.* `timing.sh` and the profiler for cost; for real time, frame-time percentiles and
+   per-thread CPU, and the scripted routes still play (their input is keyed on the swap count, not
+   on time) to the same end scene.
+
+**Design.**
+* **One scheduler, two modes**, chosen at start: *deterministic* (the virtual clock, what every
+  check uses) and *real-time* (the product's default). They share the run queues, thread states,
+  the guest-visible structures and the OS functions; they differ in where time comes from, how an
+  idle core waits, and cycle accounting (exact per instruction, or per basic block once that is
+  exact too, item 2 below; real time may count coarsely).
+* **Real time starts on one host thread**, as today: it already runs 1.6x real time, and one host
+  thread keeps the single scheduler lock uncontended. Three host threads (one per core) come
+  second, only if heavier routes need them: they turn 77,000 scheduler-lock acquisitions a frame
+  into contention, so they need per-object locks for queues, mutexes and events, with the global
+  lock only on the slow path (a thread blocks or wakes), and a per-core run queue.
+* **Waiting**: an idle core sleeps on a condition variable (woken by `__OSMakeRunnable`, an alarm
+  deadline or vsync); the GPU thread sleeps until work is submitted (done); the audio frame cadence
+  comes from the device's demand, as Cemu's real-time path does.
+* **Vsync** comes from presentation (FIFO) when there is a window, else from a host timer at 60 Hz.
+* **Fibers stay** (native frames live on a guest thread's fiber stack, D6), with our own context
+  switch in place of ucontext.
+* **Hot OS patterns** get real-time-only fast paths through overrides (D9), each with an argument
+  that the guest can't tell: first the switch-to-self (push to the own queue with no other waiter,
+  then wait for that same message), 9% of the CPU thread. They change the OS-call sequence, so the
+  deterministic mode never uses them.
+
+**Order**: (1) exact per-block cycle counting (D6's planned optimisation, held to the trace);
+(2) real time on one host thread: host clock, sleeping idle, vsync from presentation; (3) our
+context switch; (4) heavier routes (sailing, a dungeon, Windfall) timed, to decide on three host
+threads; (5) fast paths.
+
+**Open**: one host thread or three (item 4 decides); real vsync needs the GPU machine (open question
+8); whether Cemu's three-thread mode has known behaviour differences for this game.
+
 ## Milestones
 
 There are two tracks. They meet at M4.
