@@ -681,9 +681,13 @@ development-only reference that traces, captures and texture dumps are checked a
   clock (the one every check uses) and a real-time mode on host threads for players. Each replaced
   function must keep the whole-route traces identical.
 * **Status (2026-09-30):** 255 functions are ours at the HLE table (coreinit 31, gx2 179, nn_ac 2,
-  nn_act 2, padscore 6, vpad 4, erreula 15, swkbd 16), and snd_core is ours whole, forked
-  (`src/os/snd_core`: voices, the mixer, the interrupt-service thread, output; its sound hashed
-  block by block equals Cemu's on both routes), with both route traces identical. gx2's front half
+  nn_act 2, padscore 6, vpad 4, erreula 15, swkbd 16), and 22 of Cemu's source files are forked
+  (`src/forks.txt`): snd_core whole (its sound, hashed block by block, equals Cemu's on both
+  routes), the scheduler (coreinit's threads, scheduler, alarms, message and thread queues,
+  spinlocks, synchronization, callbacks; the Espresso timeslices and the timer with the virtual
+  clock), gx2's core (GX2.cpp, command pool, events, GX2Init) and proc_ui. Both route traces, GPU
+  command streams and sound are identical to Cemu's. The forks are Cemu's code, unchanged so far:
+  ours to change, and where the scheduler's deterministic and real-time modes get built. gx2's front half
   is Cemu's code ported into `src/os/gx2` (`tools/gx2_port.py`, file by file): every state setter,
   shaders, textures and samplers, surfaces, render targets, context states, draws, clears, copies,
   GX2R resources, still writing through Cemu's command pipe; 96.3% of the route's 82 million gx2

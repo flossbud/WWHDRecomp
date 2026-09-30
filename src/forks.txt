@@ -1,0 +1,26 @@
+# Forks of Cemu's sources (docs/recompiler-design.md D18): our copy of a Cemu source file, under
+# Cemu's names, that src/build.sh links into wwhd-null in place of Cemu's object and at its position,
+# compiled with Cemu's flags for it. tools/cemu_fork.py creates the missing ones.
+# our file (under src/)                  Cemu's (under $CEMU_SRC/src/)                 what it is
+os/snd_core/ax_aux.cpp                   Cafe/OS/libs/snd_core/ax_aux.cpp               the auxiliary (effect) buses
+os/snd_core/ax_exports.cpp               Cafe/OS/libs/snd_core/ax_exports.cpp           the exports, AXInit and the module registration
+os/snd_core/ax_ist.cpp                   Cafe/OS/libs/snd_core/ax_ist.cpp               the AX interrupt service thread: frame callbacks, mixing, final mix, upsampling
+os/snd_core/ax_mix.cpp                   Cafe/OS/libs/snd_core/ax_mix.cpp               the voice mixer: ADPCM and PCM decoding, sample-rate conversion, volume ramps
+os/snd_core/ax_multivoice.cpp            Cafe/OS/libs/snd_core/ax_multivoice.cpp        multi-channel voices
+os/snd_core/ax_out.cpp                   Cafe/OS/libs/snd_core/ax_out.cpp               the output: frames to the audio device, and what drives them
+os/snd_core/ax_voice.cpp                 Cafe/OS/libs/snd_core/ax_voice.cpp             voices: acquiring, freeing, their parameters and protection
+os/coreinit/coreinit_Thread.cpp          Cafe/OS/libs/coreinit/coreinit_Thread.cpp      threads and the scheduler: the per-core host threads and fibers, scheduling, timeslices
+os/coreinit/coreinit_Scheduler.cpp       Cafe/OS/libs/coreinit/coreinit_Scheduler.cpp   the scheduler lock and interrupt masks
+os/coreinit/coreinit_Alarm.cpp           Cafe/OS/libs/coreinit/coreinit_Alarm.cpp       alarms
+os/coreinit/coreinit_MessageQueue.cpp    Cafe/OS/libs/coreinit/coreinit_MessageQueue.cpp message queues
+os/coreinit/coreinit_ThreadQueue.cpp     Cafe/OS/libs/coreinit/coreinit_ThreadQueue.cpp thread queues
+os/coreinit/coreinit_Spinlock.cpp        Cafe/OS/libs/coreinit/coreinit_Spinlock.cpp    spinlocks
+os/coreinit/coreinit_Synchronization.cpp Cafe/OS/libs/coreinit/coreinit_Synchronization.cpp events, semaphores, mutexes and condition variables
+os/coreinit/coreinit_Callbacks.cpp       Cafe/OS/libs/coreinit/coreinit_Callbacks.cpp   callbacks the OS runs on guest threads
+runtime/espresso/PPCScheduler.cpp        Cafe/HW/Espresso/PPCScheduler.cpp             the cores' timeslices and remaining cycles
+runtime/espresso/PPCTimer.cpp            Cafe/HW/Espresso/PPCTimer.cpp                 the timer: host time, or the virtual clock
+os/gx2/core/GX2.cpp                      Cafe/OS/libs/gx2/GX2.cpp                       gx2's module: swaps, scan buffers, registration
+os/gx2/core/GX2_Command.cpp              Cafe/OS/libs/gx2/GX2_Command.cpp               gx2's command pool, display lists and submission
+os/gx2/core/GX2_Event.cpp                Cafe/OS/libs/gx2/GX2_Event.cpp                 gx2's events: vsync, flips, timestamps, GX2DrawDone
+os/gx2/core/GX2_Misc.cpp                 Cafe/OS/libs/gx2/GX2_Misc.cpp                  GX2Init and gx2's small functions
+os/proc_ui/proc_ui.cpp                   Cafe/OS/libs/proc_ui/proc_ui.cpp               proc_ui: foreground and background, the HOME menu, exit
