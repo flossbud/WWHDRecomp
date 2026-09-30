@@ -13,6 +13,8 @@
 # in HW/Latte/LatteAddrLib stays: gx2 computes surface layouts with it).
 # wwhd-null links our SDL3 (tools/worker/setup-volume.sh sdl3: the same version, with video) in place
 # of vcpkg's, for its window (src/frontend/window_system.cpp).
+# Forks of Cemu's sources (src/os/snd_core) replace Cemu's objects in wwhd-null; WWHD_FORKS=0 keeps
+# Cemu's (for baselines: WWHD_FORKS=0 src/build.sh build/wwhd-cemu).
 # Env: CEMU_SRC (default /wwhd/opt/cemu-src); SDL3_DIR (default /wwhd/opt/sdl3); RECOMP_DIR: the compiled generated code to link into
 # wwhd-null (tools/recomp/build.sh; default build/recomp if it has been built there, RECOMP_DIR=
 # for none: the runtime then only interprets).
@@ -47,19 +49,34 @@ for f in dispatch imports diff; do compile "$root/src/runtime/$f.cpp" "rt_$f.o";
 os_objs=()
 for f in "$root"/src/os/*.cpp; do n=os_$(basename "$f" .cpp).o; compile "$f" "$n"; os_objs+=("$out/$n"); done
 for f in "$root"/src/os/gx2/*.cpp; do n=os_gx2_$(basename "$f" .cpp).o; compile "$f" "$n"; os_objs+=("$out/$n"); done
+# Forks of Cemu's sources (src/os/snd_core) replace Cemu's objects: compiled exactly as Cemu compiles
+# them (ThinLTO bitcode included) and linked at their positions, so static constructors, and with
+# them the guest-memory slots of their SysAllocators, keep Cemu's order.
+# WWHD_FORKS=0 builds with Cemu's objects instead, to record baselines (tools/reference/stream_check.sh).
+fork_objs=() fork_members=()
+[ "${WWHD_FORKS:-1}" = 0 ] || {
+mapfile -t sndflags < <(python3 "$root/tools/cemu_flags.py" "$cemu/build/compile_commands.json" OS/libs/snd_core/ax_ist.cpp)
+for f in "$root"/src/os/snd_core/*.cpp; do
+    b=$(basename "$f" .cpp)
+    clang++ "${sndflags[@]}" -flto=thin -include "$cemu/src/Common/precompiled.h" -c "$f" -o "$out/fork_$b.o" & pids+=($!)
+    fork_objs+=("$out/fork_$b.o"); fork_members+=("$b.cpp.o=$out/fork_$b.o")
+done
+}
 for p in "${pids[@]}"; do wait "$p"; done
 
 # libCemuCafe.a without Latte (object names come from compile_commands.json; they are unique).
 # Kept: the address library (gx2 computes surface layouts with it), and for the renderer (G2) the
 # shader decompiler, the fetch- and GS-copy-shader parsers and the texture loader, with
 # src/gpu/vk/latte_glue.cpp standing in for the rest of Latte they call.
-python3 - "$cemu/build/compile_commands.json" > "$out/latte-objects.txt" <<'PY'
+python3 - "$cemu/build/compile_commands.json" "${WWHD_FORKS:-1}" > "$out/latte-objects.txt" <<'PY'
 import json, os, sys
 keep = ("/LatteAddrLib/", "/LegacyShaderDecompiler/", "/Core/FetchShader.cpp", "/Core/LatteGSCopyShaderParser.cpp",
         "/Core/LatteTextureLoader.cpp")
+forked = ("/src/Cafe/OS/libs/snd_core/",) if sys.argv[2] != "0" else ()   # ours: src/os/snd_core
 for e in json.load(open(sys.argv[1])):
     f = e["file"]
-    if "/CemuCafe.dir/" in e["command"] and "/src/Cafe/HW/Latte/" in f and not any(k in f for k in keep):
+    latte = "/src/Cafe/HW/Latte/" in f and not any(k in f for k in keep)
+    if "/CemuCafe.dir/" in e["command"] and (latte or any(k in f for k in forked)):
         print(os.path.basename(e["command"].split(" -o ")[1].split()[0]))
 PY
 cp "$cemu/build/src/Cafe/libCemuCafe.a" "$out/libCemuCafe_nolatte.a"
@@ -90,7 +107,7 @@ if [ -n "$recomp" ]; then
 else
     echo "wwhd: wwhd-null without recompiled code (the runtime interprets)"
 fi
-link wwhd-null "${null_objs[@]}" "$limits"
+link wwhd-null "${null_objs[@]}" "${fork_objs[@]}" "$limits"
 
 # Relink wwhd-null with its archive members as explicit objects in wwhd's inclusion order, so
 # static constructors (and with them Cemu's SysAllocator slots in guest memory) run in the same
@@ -98,9 +115,10 @@ link wwhd-null "${null_objs[@]}" "$limits"
 members=$out/members; rm -rf "$members"; mkdir -p "$members"
 ordered=()
 while IFS=$'\t' read -r archive member; do
+    [ "$archive" = - ] && { ordered+=("$member"); continue; }   # one of our forks, in Cemu's object's place
     dir=$members/$(basename "$archive" .a)
     [ -d "$dir" ] || { mkdir -p "$dir"; (cd "$dir" && llvm-ar x "$(cd "$cemu/build" && readlink -f "$archive")"); }
     ordered+=("$dir/$member")
-done < <(python3 "$root/src/link_order.py" "$out/wwhd.map" "$out/wwhd-null.map")
+done < <(python3 "$root/src/link_order.py" "$out/wwhd.map" "$out/wwhd-null.map" "${fork_members[@]}")
 link wwhd-null "${null_objs[@]}" "${ordered[@]}"
 echo "wwhd: built $out/wwhd $out/wwhd-null (${#ordered[@]} members in wwhd order)"

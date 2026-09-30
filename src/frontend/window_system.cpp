@@ -331,7 +331,7 @@ void WindowSystem::Create()
 #ifdef WWHD_NULL_GPU
 	SDL_Window* window = OpenWindow();
 	const char* audio = getenv("WWHD_AUDIO");
-	if (window && !(audio && strcmp(audio, "cemu") == 0))
+	if (!wwhd::OpenAudioHash() && window && !(audio && strcmp(audio, "cemu") == 0))
 		wwhd::OpenAudio();    // otherwise, or if it fails, snd_core opens Cemu's device
 	wwhd::PrepareTitle(*game);
 	wwhd::rt::Install();    // the execution seam: interprets, or runs diff mode (src/runtime)

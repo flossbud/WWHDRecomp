@@ -16,7 +16,7 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 | `gpu/vk/texture.cpp` | textures: from surfaces (render to texture, sized copies, mip chains) or decoded from guest memory with Cemu's texture loader; samplers (derived from Cemu, MPL-2.0) |
 | `gpu/vk/latte_glue.cpp` | the pieces of Latte the decompiler calls, and a no-op `Renderer` (derived from Cemu, MPL-2.0) |
 | `gpu/vk/vk.h`, `vk.cpp` | Vulkan loaded at runtime, so `wwhd-null` runs without a driver when rendering is off |
-| `os/` | our OS layer (D18): the game's imports, taking over Cemu's handlers one by one (`os.h`); `os/gx2/` is gx2, ported from Cemu's |
+| `os/` | our OS layer (D18): the game's imports, taking over Cemu's handlers one by one (`os.h`); `os/gx2/` is gx2, ported from Cemu's; `os/snd_core/` is snd_core, forked |
 | `runtime/dispatch.cpp` | the execution seam (Cemu patch 0011): the hook that replaces Cemu's interpreter loop, the function table (D5), the D10 code check, `rt_call_ctr`/`rt_jump_ctr`/`rt_bad_branch` |
 | `runtime/imports.cpp` | `rt_import`/`rt_import_data` (D4), bound from what Cemu's loader wrote into guest memory |
 | `runtime/diff.cpp` | diff mode (D8.2, M3): pure functions run natively, are rewound, and are compared (registers, stores, cycles) with the interpreter's run of the same call |
@@ -96,7 +96,17 @@ swap and GX2Init (3.7% of the route's gx2 calls), which rests on the scheduler a
 Every gx2 change must leave the GPU command stream exactly as Cemu's gx2 sent it:
 `tools/reference/stream_check.sh save|route NAME` checks the trace and a per-frame hash of every
 packet the GPU executes (`WWHD_GPU_STREAM=path`) against baselines recorded with Cemu's gx2
-(45,955,744 packets on the save route, 143,098,119 on the whole route). Input comes from the input
+(45,955,744 packets on the save route, 143,098,119 on the whole route), and the sound: a hash of
+every mixed block (`WWHD_AUDIO_HASH=path`, a device that plays nothing; 5,180 blocks on the save
+route, 30,219 on the whole route).
+
+**Forks.** Libraries that Cemu's own code calls into can't be taken over at the HLE table: the
+scheduler calls snd_core's `AXOut_update` directly. Those are forked instead: `os/snd_core/` is
+Cemu's snd_core source, under Cemu's names, and `build.sh` links it in place of Cemu's objects. It
+compiles them exactly as Cemu does (ThinLTO bitcode) and `link_order.py` puts them at Cemu's
+objects' positions, so static constructors, and the guest-memory slots of their SysAllocators, keep
+their order and addresses. A fork is ours to change from then on; `WWHD_FORKS=0 src/build.sh
+build/wwhd-cemu` builds with Cemu's objects instead, to record baselines. Input comes from the input
 script when `CEMU_INPUT_SCRIPT` names one (the reference's format, so routes replay identically),
 otherwise from the window's keyboard and gamepad. The keyboard answers itself when
 `CEMU_SWKBD_AUTO` gives a name (as the reference's does; `tools/reference/run.sh` defaults to
