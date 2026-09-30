@@ -35,12 +35,27 @@ namespace wwhd::os
 
 	inline uint32 Arg(PPCInterpreter_t* ctx, int i) { return ctx->gpr[3 + i]; }   // integer arguments 0-7
 	inline uint8* Guest(uint32 addr) { return memory_base + addr; }
+	inline uint32 Read32(uint32 addr) { return _swapEndianU32(*(uint32*)Guest(addr)); }   // guest memory is big-endian
+	inline void Write32(uint32 addr, uint32 value) { *(uint32*)Guest(addr) = _swapEndianU32(value); }
+	inline void Write8(uint32 addr, uint8 value) { *Guest(addr) = value; }
 	inline void Return(PPCInterpreter_t* ctx) { ctx->instructionPointer = ctx->spr.LR; }
 	inline void Return(PPCInterpreter_t* ctx, uint32 value)
 	{
 		ctx->gpr[3] = value;
 		ctx->instructionPointer = ctx->spr.LR;
 	}
+	inline void Return64(PPCInterpreter_t* ctx, uint64 value)    // high word in r3, low in r4
+	{
+		ctx->gpr[3] = (uint32)(value >> 32);
+		ctx->gpr[4] = (uint32)value;
+		ctx->instructionPointer = ctx->spr.LR;
+	}
+
+	// What our functions still borrow from Cemu, each behind one accessor so it can move to our
+	// runtime (the clock) or our scheduler (the current thread) without touching the functions.
+	uint64 Timebase();          // the timer clock (core cycles / 20) since boot
+	uint64 TimebaseAt2000();    // the timer clock at boot, counted from 1 January 2000
+	uint32 CurrentThread();     // the guest OSThread running on the calling core
 }
 
 // WWHD_OS_FUNCTION(coreinit, memcpy) { ... } defines and registers coreinit.memcpy; the body sees `ctx`.

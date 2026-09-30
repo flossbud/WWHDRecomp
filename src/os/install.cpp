@@ -1,12 +1,18 @@
 // Installing our OS functions over Cemu's HLE handlers (os.h, D18).
 #include "os.h"
 #include "Cafe/OS/common/OSCommon.h"
+#include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
 #include <map>
 
 extern HLECALL s_ppcHleTable[];    // Cemu's HLE handler table (PPCInterpreterHLE.cpp), indexed by HLE id
 
 namespace wwhd::os
 {
+	// Cemu's clock (the virtual clock in deterministic runs) and scheduler state, see os.h
+	uint64 Timebase() { return PPCInterpreter_getMainCoreCycleCounter() / 20; }
+	uint64 TimebaseAt2000() { return ppcCyclesSince2000TimerClock; }
+	uint32 CurrentThread() { return MEMPTR<OSThread_t>(coreinit::OSGetCurrentThread()).GetMPTR(); }
+
 	std::vector<Export>& Exports()
 	{
 		static std::vector<Export> exports;

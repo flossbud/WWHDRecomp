@@ -73,6 +73,16 @@ writes them through Cemu's `nn_save` and FS, so saving and loading work as on th
 from an existing save, copy its files there; `tools/reference/run.sh` does it with `REF_SAVE=dir`
 (after `REF_FRESH` wipes the NAND).
 
+**Our OS layer** (`os/`, design D18) implements the game's imports one at a time, replacing Cemu's.
+At the first timeslice `os::Install` writes each function over its import's entry in Cemu's HLE
+table, so Cemu's dispatch still traces the call and charges its cycles, and every function must
+leave registers and guest memory exactly as Cemu's did: both route traces stay identical. What a
+function still needs from Cemu (the clock, the current thread) goes through an accessor in
+`os/os.h`. A library whose functions share state with each other moves whole. `WWHD_OS=cemu`
+leaves every handler Cemu's; the log says how many are ours. So far 35: memory and cache
+operations, the clock, thread-specific slots and errno, the interrupt mask, a few system flags,
+and the stateless parts of `nn_ac` and `nn_act`.
+
 **The renderer** (G2, design D13 as built) is off unless `WWHD_RENDER=vk`. It needs a Vulkan 1.3
 device with dynamic rendering (lavapipe: `REF_GPU=llvmpipe` in `tools/reference/run.sh`). It draws on
 the GPU thread and never writes guest memory, so the trace is the same with it on or off. Options:
