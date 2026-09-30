@@ -8,4 +8,5 @@ namespace wwhd
 	void LoadConfig();              // portable/settings.xml (created with defaults if missing)
 	void CreateDefaultMLCFiles();   // the emulated NAND's base folders and files
 	void PrepareTitle(const fs::path& path);
+	bool OpenAudio();               // the TV's sound on SDL3 in place of Cemu's device (audio_sdl.cpp, wwhd-null)
 }

@@ -6,6 +6,7 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 | Path | What |
 |---|---|
 | `frontend/window_system.cpp` | Cemu's `WindowSystem` interface: boot, one TV window, event loop. `wwhd`: Xlib. `wwhd-null`: headless, or an SDL3 window with `WWHD_WINDOW=1` |
+| `frontend/audio_sdl.cpp` | the TV's sound on SDL3, as Cemu's audio device (windowed `wwhd-null`) |
 | `frontend/cemu_boot.cpp` | paths, config, default NAND files, title preparation (derived from Cemu's wx GUI, MPL-2.0) |
 | `gpu/null_gpu.cpp` | null GPU in place of Latte: consumes gx2's command buffers, keeps the register file, performs every guest-visible effect, and hands draws, clears, copies and swaps to the renderer when it is on (derived from Latte, MPL-2.0) |
 | `gpu/vk/renderer.cpp` | the Vulkan renderer (G2, `WWHD_RENDER=vk`): device, surfaces, clears, scan-out, frame capture, surface dumps |
@@ -118,8 +119,11 @@ has (the swapchain takes the scan buffer's sRGB encoding). F11 or Alt+Enter togg
 the traces are unchanged. The window's keyboard and first gamepad are the Pro Controller: keys as
 the reference's `controller0.xml` (A=X B=Z X=S Y=A L=Q R=W ZL=1 ZR=2 +=Return -=Backspace, D-pad
 on the arrows, left stick I/J/K/L, right stick T/F/G/H), gamepad face buttons by their printed
-label, triggers as ZL/ZR, and rumble. Sound still goes through Cemu's audio output. On the
-worker, with lavapipe under Xvfb, the save route runs windowed at about 5 frames a second:
+label, triggers as ZL/ZR, and rumble. The TV's sound plays through SDL3 too (`frontend/audio_sdl.cpp`,
+fed by Cemu's AX mixer until `snd_core` is ours; `WWHD_AUDIO=cemu` keeps Cemu's Cubeb device). On
+the worker, with lavapipe under Xvfb, the save route runs windowed at about 5 frames a second, and
+its trace stays the reference's with the window, input and sound on (`SDL_AUDIO_DRIVER=disk` writes
+the sound to a file):
 
     tools/worker/job start win env CEMU_BIN=/wwhd/WWHDRecomp/build/wwhd/wwhd-null WWHD_NATIVE=on \
         REF_GPU=llvmpipe WWHD_RENDER=vk WWHD_WINDOW=1 REF_SAVE=/wwhd/data/saves/wwhd_100 \

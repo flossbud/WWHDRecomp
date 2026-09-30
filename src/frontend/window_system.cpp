@@ -4,7 +4,8 @@
 // event loop. Single screen by design: there is no GamePad window (D17).
 // wwhd (Cemu's Latte) has a plain Xlib window. wwhd-null (WWHD_NULL_GPU, see src/gpu/null_gpu.cpp)
 // is headless unless WWHD_WINDOW=1 opens an SDL3 window that our renderer (WWHD_RENDER=vk)
-// presents the TV image to (F11 or Alt+Enter: fullscreen). It links its own SDL3 build, with video,
+// presents the TV image to (F11 or Alt+Enter: fullscreen), with the keyboard and a gamepad as the
+// Pro Controller and the sound on SDL3 too (WWHD_AUDIO=cemu keeps Cemu's device). It links its own SDL3 build, with video,
 // in place of the one Cemu's vcpkg build ships for controllers only (src/build.sh). Headless, the
 // process runs until the title exits it (e.g. CEMU_HLE_TRACE_EXIT_FRAME).
 #include "boot.h"
@@ -257,6 +258,9 @@ void WindowSystem::Create()
 
 #ifdef WWHD_NULL_GPU
 	SDL_Window* window = OpenWindow();
+	const char* audio = getenv("WWHD_AUDIO");
+	if (window && !(audio && strcmp(audio, "cemu") == 0))
+		wwhd::OpenAudio();    // otherwise, or if it fails, snd_core opens Cemu's device
 	wwhd::PrepareTitle(*game);
 	wwhd::rt::Install();    // the execution seam: interprets, or runs diff mode (src/runtime)
 	CafeSystem::LaunchForegroundTitle();

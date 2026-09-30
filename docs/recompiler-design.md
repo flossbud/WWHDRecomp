@@ -679,7 +679,8 @@ development-only reference that traces, captures and texture dumps are checked a
 * **Status (2026-09-30):** 45 functions are ours (coreinit 31, nn_ac 2, nn_act 2, padscore 6,
   vpad 4), with both route traces identical. Input is a whole library: the input script (for
   routes) or the window's keyboard and gamepad (SDL3) drive one Pro Controller, and the GamePad is
-  absent. The platform shell has its window: SDL3, presented by our renderer. What our functions
+  absent. The platform shell has its window, input and sound on SDL3 (Linux: X11 or Wayland),
+presented by our renderer; windowed, the save route's trace is still the reference's. What our functions
   still borrow from Cemu is three accessors: the clock, the current thread and gx2's swap count.
   Imports Cemu never implemented (8 in padscore, `VPADBASEGetHeadphoneStatus`) have no HLE entry
   to take over and wait for our loader. Held back until their library moves whole, because their

@@ -33,6 +33,7 @@ compile() { "${cxx[@]}" "${@:3}" -c "$1" -o "$out/$2" & pids+=($!); }
 compile "$root/src/frontend/cemu_boot.cpp" cemu_boot.o
 compile "$root/src/frontend/window_system.cpp" window_system.o
 compile "$root/src/frontend/window_system.cpp" window_system_null.o -DWWHD_NULL_GPU -I"$sdl3/include"
+compile "$root/src/frontend/audio_sdl.cpp" audio_sdl.o -I"$sdl3/include"
 compile "$root/src/gpu/null_gpu.cpp" null_gpu.o -I"$root/src/gpu" -I"$cemu/dependencies/Vulkan-Headers/include"
 for f in vk renderer present; do compile "$root/src/gpu/vk/$f.cpp" "vk_$f.o" -I"$cemu/dependencies/Vulkan-Headers/include"; done
 # draws compile with Cemu's flags for its Vulkan shader compiler (glslang's include paths)
@@ -78,7 +79,7 @@ link() {  # link NAME OBJECTS...
     eval "$cmd"
 }
 link wwhd "$out/cemu_boot.o" "$out/window_system.o"
-null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/null_gpu.o" "$out"/vk_{vk,renderer,present,draw,texture,latte_glue}.o
+null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/audio_sdl.o" "$out/null_gpu.o" "$out"/vk_{vk,renderer,present,draw,texture,latte_glue}.o
            "$out"/rt_{dispatch,imports,diff}.o "${os_objs[@]}")
 limits=$(ls "$cemu"/build/vcpkg_installed/*/lib/libglslang-default-resource-limits.a | head -1)  # glslang's defaults (draw.cpp)
 if [ -n "$recomp" ]; then
