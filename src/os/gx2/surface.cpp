@@ -1,7 +1,7 @@
-// gx2: surface sizes and layouts (docs/recompiler-design.md D18). Derived from Cemu's src/Cafe/OS/libs/gx2/GX2_Surface.cpp
-// (Mozilla Public License 2.0), unchanged but for the namespace and registration. Commands go through
-// gx2's command pipe (GX2_Command.h) and must stay byte for byte what Cemu's sent (WWHD_GPU_STREAM,
-// tools/reference/stream_check.sh).
+// gx2: surface sizes and layouts (docs/recompiler-design.md D18). Derived from Cemu's
+// src/Cafe/OS/libs/gx2/GX2_Surface.cpp (Mozilla Public License 2.0) by tools/gx2_port.py: our namespace
+// and registration. Commands go through gx2's command pipe (GX2_Command.h) and must stay byte for byte
+// what Cemu's sent (WWHD_GPU_STREAM, tools/reference/stream_check.sh).
 #include "Cafe/OS/common/OSCommon.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
 #include "Cafe/OS/libs/gx2/GX2_Surface.h"
@@ -11,6 +11,7 @@
 #include "Cafe/HW/Latte/Core/LattePM4.h"
 #include "Cafe/HW/Latte/LatteAddrLib/LatteAddrLib.h"
 #include "Cafe/OS/libs/gx2/GX2_Command.h"
+#include "ported.h"
 #include "../os.h"
 
 namespace wwhd::gx2
@@ -21,7 +22,7 @@ namespace wwhd::gx2
 	uint32 GX2GetSurfaceMipPitch(GX2Surface* surface, uint32 level)
 	{
 		LatteAddrLib::AddrSurfaceInfo_OUT surfOut;
-		GX2::GX2CalculateSurfaceInfo(surface, level, &surfOut);
+		wwhd::gx2::GX2CalculateSurfaceInfo(surface, level, &surfOut);
 		return surfOut.pitch;
 	}
 
@@ -45,7 +46,7 @@ namespace wwhd::gx2
 	uint32 GX2GetSurfaceMipSliceSize(GX2Surface* surface, uint32 level)
 	{
 		LatteAddrLib::AddrSurfaceInfo_OUT surfOut;
-		GX2::GX2CalculateSurfaceInfo(surface, level, &surfOut);
+		wwhd::gx2::GX2CalculateSurfaceInfo(surface, level, &surfOut);
 		return wwhd::gx2::_GX2CalculateSliceSize(surface, &surfOut);		
 	}
 

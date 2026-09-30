@@ -1,7 +1,7 @@
-// gx2: surface copies (docs/recompiler-design.md D18). Derived from Cemu's src/Cafe/OS/libs/gx2/GX2_Surface_Copy.cpp
-// (Mozilla Public License 2.0), unchanged but for the namespace and registration. Commands go through
-// gx2's command pipe (GX2_Command.h) and must stay byte for byte what Cemu's sent (WWHD_GPU_STREAM,
-// tools/reference/stream_check.sh).
+// gx2: surface copies (docs/recompiler-design.md D18). Derived from Cemu's
+// src/Cafe/OS/libs/gx2/GX2_Surface_Copy.cpp (Mozilla Public License 2.0) by tools/gx2_port.py: our namespace
+// and registration. Commands go through gx2's command pipe (GX2_Command.h) and must stay byte for byte
+// what Cemu's sent (WWHD_GPU_STREAM, tools/reference/stream_check.sh).
 #include "Cafe/OS/common/OSCommon.h"
 #include "Cafe/HW/Latte/ISA/RegDefines.h"
 #include "Cafe/HW/Latte/Core/LattePM4.h"
@@ -14,6 +14,7 @@
 #include "Cafe/OS/libs/gx2/GX2.h"
 #include "Cafe/OS/libs/gx2/GX2_Resource.h"
 #include "Cafe/OS/libs/gx2/GX2_Command.h"
+#include "ported.h"
 #include "../os.h"
 
 namespace wwhd::gx2
@@ -199,9 +200,9 @@ void GX2CopySurfaceInternal(GX2Surface* srcSurface, uint32 srcMip, uint32 srcSli
 	auto dstHwFormat = Latte::GetHWFormat(dstFormat);
 	// get texture info
 	LatteAddrLib::AddrSurfaceInfo_OUT surfOutSrc = {0};
-	GX2::GX2CalculateSurfaceInfo(srcSurface, srcMip, &surfOutSrc);
+	wwhd::gx2::GX2CalculateSurfaceInfo(srcSurface, srcMip, &surfOutSrc);
 	LatteAddrLib::AddrSurfaceInfo_OUT surfOutDst = {0};
-	GX2::GX2CalculateSurfaceInfo(dstSurface, dstMip, &surfOutDst);
+	wwhd::gx2::GX2CalculateSurfaceInfo(dstSurface, dstMip, &surfOutDst);
 	// check parameters
 	if (srcSurface->numLevels == 0)
 	{
@@ -496,9 +497,9 @@ void gx2Export_GX2ConvertDepthBufferToTextureSurface(PPCInterpreter_t* hCPU)
 		debugBreakpoint();
 	// get texture info
 	LatteAddrLib::AddrSurfaceInfo_OUT surfOutSrc = { 0 };
-	GX2::GX2CalculateSurfaceInfo(&depthBuffer->surface, 0, &surfOutSrc);
+	wwhd::gx2::GX2CalculateSurfaceInfo(&depthBuffer->surface, 0, &surfOutSrc);
 	LatteAddrLib::AddrSurfaceInfo_OUT surfOutDst = { 0 };
-	GX2::GX2CalculateSurfaceInfo(dstSurface, 0, &surfOutDst);
+	wwhd::gx2::GX2CalculateSurfaceInfo(dstSurface, 0, &surfOutDst);
 
 	if (depthBuffer->surface.imagePtr == dstSurface->imagePtr)
 	{

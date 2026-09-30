@@ -1,7 +1,7 @@
-// gx2: draws (docs/recompiler-design.md D18). Derived from Cemu's src/Cafe/OS/libs/gx2/GX2_Draw.cpp
-// (Mozilla Public License 2.0), unchanged but for the namespace and registration. Commands go through
-// gx2's command pipe (GX2_Command.h) and must stay byte for byte what Cemu's sent (WWHD_GPU_STREAM,
-// tools/reference/stream_check.sh).
+// gx2: draws (docs/recompiler-design.md D18). Derived from Cemu's
+// src/Cafe/OS/libs/gx2/GX2_Draw.cpp (Mozilla Public License 2.0) by tools/gx2_port.py: our namespace
+// and registration. Commands go through gx2's command pipe (GX2_Command.h) and must stay byte for byte
+// what Cemu's sent (WWHD_GPU_STREAM, tools/reference/stream_check.sh).
 #include "Cafe/HW/Latte/ISA/RegDefines.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
 #include "Cafe/HW/Latte/Core/Latte.h"
@@ -14,6 +14,7 @@
 #include "Cafe/OS/libs/gx2/GX2_Command.h"
 #include "Cafe/OS/libs/gx2/GX2_Draw.h"
 #include "Cafe/OS/libs/gx2/GX2_Command.h"
+#include "ported.h"
 #include "../os.h"
 
 namespace wwhd::gx2

@@ -85,16 +85,18 @@ function still needs from Cemu (the clock, the current thread) goes through an a
 `os/os.h`. A library whose functions share state with each other moves whole. `WWHD_OS=cemu`
 leaves every handler Cemu's; the log says how many are ours. Libraries the game loads itself
 (`swkbd`, `erreula`) register their handlers when it does, so `OSDynLoad_Acquire` is wrapped to take
-those over as they appear. So far 192: memory and cache operations, the clock, thread-specific slots
+those over as they appear. So far 255: memory and cache operations, the clock, thread-specific slots
 and errno, the interrupt mask, a few system flags, the stateless parts of `nn_ac` and `nn_act`,
 input (`os/input.cpp`: `padscore` with one Pro Controller, `vpad` with no GamePad), the software
-keyboard (`os/swkbd.cpp`), the error dialogs (`os/erreula.cpp`) and 116 of gx2's (`os/gx2/`: state,
-shaders, textures and samplers, surfaces, draws, clears, copies, queries, stream-out). The gx2 files
-are Cemu's, ported by `tools/gx2_port.py` (MPL-2.0; our namespace and registration), and still send
-their commands through Cemu's command pipe. Every gx2 change must leave the GPU command stream
-exactly as Cemu's gx2 sent it: `tools/reference/stream_check.sh save|route NAME` checks the trace and
-a per-frame hash of every packet the GPU executes (`WWHD_GPU_STREAM=path`) against baselines
-recorded with Cemu's gx2 (45,955,744 packets on the save route, 143,098,119 on the whole route). Input comes from the input
+keyboard (`os/swkbd.cpp`), the error dialogs (`os/erreula.cpp`) and 179 of gx2's (`os/gx2/`). The
+gx2 files are Cemu's, ported by `tools/gx2_port.py` (MPL-2.0; our namespace and registration;
+`os/gx2/misc.cpp` by hand), and still send their commands through Cemu's command pipe. What stays
+Cemu's is gx2's core: the command pool and display lists, flush, GPU timestamps and waits, vsync,
+swap and GX2Init (3.7% of the route's gx2 calls), which rests on the scheduler and Cemu's TCL ring.
+Every gx2 change must leave the GPU command stream exactly as Cemu's gx2 sent it:
+`tools/reference/stream_check.sh save|route NAME` checks the trace and a per-frame hash of every
+packet the GPU executes (`WWHD_GPU_STREAM=path`) against baselines recorded with Cemu's gx2
+(45,955,744 packets on the save route, 143,098,119 on the whole route). Input comes from the input
 script when `CEMU_INPUT_SCRIPT` names one (the reference's format, so routes replay identically),
 otherwise from the window's keyboard and gamepad. The keyboard answers itself when
 `CEMU_SWKBD_AUTO` gives a name (as the reference's does; `tools/reference/run.sh` defaults to

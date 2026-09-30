@@ -1,13 +1,14 @@
-// gx2: stream-out (docs/recompiler-design.md D18). Derived from Cemu's src/Cafe/OS/libs/gx2/GX2_Streamout.cpp
-// (Mozilla Public License 2.0), unchanged but for the namespace and registration. Commands go through
-// gx2's command pipe (GX2_Command.h) and must stay byte for byte what Cemu's sent (WWHD_GPU_STREAM,
-// tools/reference/stream_check.sh).
+// gx2: stream-out (docs/recompiler-design.md D18). Derived from Cemu's
+// src/Cafe/OS/libs/gx2/GX2_Streamout.cpp (Mozilla Public License 2.0) by tools/gx2_port.py: our namespace
+// and registration. Commands go through gx2's command pipe (GX2_Command.h) and must stay byte for byte
+// what Cemu's sent (WWHD_GPU_STREAM, tools/reference/stream_check.sh).
 #include "Cafe/OS/libs/gx2/GX2_Streamout.h"
 #include "Cafe/OS/libs/gx2/GX2_Command.h"
 #include "Cafe/HW/Latte/ISA/RegDefines.h"
 #include "Cafe/HW/Latte/Core/LattePM4.h"
 #include "Cafe/OS/common/OSCommon.h"
 #include "Cafe/OS/libs/gx2/GX2_Command.h"
+#include "ported.h"
 #include "../os.h"
 
 namespace wwhd::gx2
@@ -47,7 +48,7 @@ namespace wwhd::gx2
 		gx2WriteGather_submitU32AsBE((mmVGT_STRMOUT_BUFFER_BASE_0 + bufferIndex * 4) - 0xA000);
 		gx2WriteGather_submitU32AsBE((physMem >> 8));
 		// todo: Research and send IT_STRMOUT_BASE_UPDATE (0x72)
-		// note: Other stream out registers maybe set in GX2SetVertexShader() or GX2SetGeometryShader()
+		// note: Other stream out registers maybe set in wwhd::gx2::GX2SetVertexShader() or GX2SetGeometryShader()
 	}
 
 	void GX2SetStreamOutEnable(uint32 enable)

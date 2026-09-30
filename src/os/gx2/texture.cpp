@@ -1,7 +1,7 @@
-// gx2: textures and samplers (docs/recompiler-design.md D18). Derived from Cemu's src/Cafe/OS/libs/gx2/GX2_Texture.cpp
-// (Mozilla Public License 2.0), unchanged but for the namespace and registration. Commands go through
-// gx2's command pipe (GX2_Command.h) and must stay byte for byte what Cemu's sent (WWHD_GPU_STREAM,
-// tools/reference/stream_check.sh).
+// gx2: textures and samplers (docs/recompiler-design.md D18). Derived from Cemu's
+// src/Cafe/OS/libs/gx2/GX2_Texture.cpp (Mozilla Public License 2.0) by tools/gx2_port.py: our namespace
+// and registration. Commands go through gx2's command pipe (GX2_Command.h) and must stay byte for byte
+// what Cemu's sent (WWHD_GPU_STREAM, tools/reference/stream_check.sh).
 #include "Cafe/OS/common/OSCommon.h"
 #include "Cafe/HW/Latte/ISA/RegDefines.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
@@ -12,6 +12,7 @@
 #include "Cafe/HW/Latte/Core/LattePM4.h"
 #include "Cafe/HW/Latte/ISA/LatteReg.h"
 #include "Cafe/OS/libs/gx2/GX2_Command.h"
+#include "ported.h"
 #include "../os.h"
 
 namespace wwhd::gx2
@@ -127,7 +128,7 @@ namespace wwhd::gx2
 		if (HAS_FLAG(format, Latte::E_GX2SURFFMT::FMT_BIT_SRGB))
 			newRegWord4.set_FORCE_DEGAMMA(true);
 
-		newRegWord4.set_ENDIAN_SWAP(GX2::GetSurfaceFormatSwapMode((Latte::E_GX2SURFFMT)format));
+		newRegWord4.set_ENDIAN_SWAP(wwhd::gx2::GetSurfaceFormatSwapMode((Latte::E_GX2SURFFMT)format));
 
 		newRegWord4.set_REQUEST_SIZE(2);
 

@@ -163,7 +163,7 @@ G2 is done on the title screen (design doc "G2 status"); G3 is next.
 
 **Direction since 2026-09-30 (design D18): the shipped game will not depend on Cemu**; Cemu stays
 the reference. Work goes least coupled first, each step keeping both route traces identical:
-- **Our OS layer** (`src/os`, src/README): 192 imports are ours (coreinit 31, gx2 116, nn_ac 2,
+- **Our OS layer** (`src/os`, src/README): 255 imports are ours (coreinit 31, gx2 179, nn_ac 2,
   nn_act 2, padscore 6, vpad 4, erreula 15, swkbd 16). gx2 changes are checked with
   `tools/reference/stream_check.sh` (the GPU command stream against Cemu's gx2's). They take over entries in Cemu's HLE table;
   `WWHD_OS=cemu` turns them off. What they borrow from Cemu goes through accessors in `os/os.h`.
@@ -171,9 +171,10 @@ the reference. Work goes least coupled first, each step keeping both route trace
 - **The platform shell** (`WWHD_WINDOW=1`): SDL3 window presented by our renderer, keyboard and
   gamepad as the Pro Controller, TV sound on SDL3. `setup-volume.sh sdl3` builds the SDL3 it
   links. Windowed, the save route's trace is the reference's.
-- **Next in D18's order:** the rest of gx2's front half (design doc D18 status), audio (`snd_core`), coreinit with a scheduler of our
-  own (deterministic and real-time modes; `proc_ui` moves with it), the file system (`nn_save`
-  with it), the loader and memory map. Before any of that ships: our own CMake build (step 3), and a GPU machine for M5 (design
+- **Next in D18's order:** audio (`snd_core`), then coreinit with a scheduler of our own
+  (deterministic and real-time modes), with which gx2's core (command pool, display lists, waits,
+  vsync, swap), `proc_ui` and the guest OS objects in Cemu's memory move; the file system (`nn_save`
+  with it), the loader and memory map.
   open question 8).
 
 ### 1. G3: render the whole route (design D13, D16.3)
