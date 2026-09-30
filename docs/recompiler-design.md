@@ -244,7 +244,19 @@ The Phase 1 audit guarantees that every address-taken code location is a functio
 > * `PPCCore_executeCallbackInternal` switches (`OSYieldThread`) and then resets the budget to the
 >   bare quantum.
 >
-> The runtime keeps a callback depth per guest thread. Import calls and calls into the trampoline
+> **Per basic block (2026-09-30).** The planned optimisation, held to the same trace: a block (from a
+label, or the instruction after a branch, call, import or runtime hook, to the next such end) of at
+least 3 instructions checks once whether it fits in the slice; if so it is charged at once
+(`RT_FITS`/`RT_CHARGE`) and runs without ticks, otherwise its checked copy runs with an `RT_TICK`
+before every instruction, so the yield lands on the same instruction. Nothing inside a block can see
+the difference: blocks end before anything that could read the budget, and guest time only advances
+when a slice ends. Both route traces, command streams and sound stay identical, and diff mode on the
+save route checks 1,118,003 calls of 4,345 functions with 0 mismatches (cycles included). The save
+route runs in 31.8 s from launch, 1.89x real time (37.5 s before), the whole route in 131 s, 2.74x
+(155 s); the CPU thread does 17% less work, guest code 22% less. The price: twice the generated
+code (340 MB of objects) and about 10 minutes to compile.
+
+The runtime keeps a callback depth per guest thread. Import calls and calls into the trampoline
 > area tick for the trampoline instruction before `PPCInterpreter_virtualHLE` charges its 300. Diff
 > mode checks the accounting per function: a native run starts with an unlimited slice, and the
 > cycles it spent must equal the instructions the interpreter executed for the same call. Over the
@@ -818,7 +830,8 @@ Every check runs the virtual clock on one host thread, and so does play today.
   then wait for that same message), 9% of the CPU thread. They change the OS-call sequence, so the
   deterministic mode never uses them.
 
-**Order**: (1) exact per-block cycle counting (D6's planned optimisation, held to the trace);
+**Order**: (1) exact per-block cycle counting (D6's planned optimisation, held to the trace; done
+2026-09-30: 1.89x real time on the save route, traces identical);
 (2) real time on one host thread: host clock, sleeping idle, vsync from presentation; (3) our
 context switch; (4) heavier routes (sailing, a dungeon, Windfall) timed, to decide on three host
 threads; (5) fast paths.

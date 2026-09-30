@@ -24,6 +24,10 @@ void rt_journal_store(uint32 ea, uint32 size);
 // (rt_yield switches fibers in place; the native frames wait on the fiber's stack).
 [[gnu::cold]] void rt_yield(PPCInterpreter_t* ctx, uint32 pc);
 #define RT_TICK(pc) do { if (--ctx->remainingCycles < 0) [[unlikely]] rt_yield(ctx, (pc)); } while (0)
+// Per basic block (tools/recomp/generate.py): a block of n instructions that fits in the slice (no
+// RT_TICK in it would yield) is charged at once and runs unchecked; otherwise its checked copy runs.
+#define RT_FITS(n) (ctx->remainingCycles >= (sint32)(n))
+#define RT_CHARGE(n) (ctx->remainingCycles -= (sint32)(n))
 
 #define GPR(n) ctx->gpr[n]
 #define FPR(n) ctx->fpr[n]

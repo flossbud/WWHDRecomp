@@ -25,8 +25,12 @@ runtime functions they call (`rt_import`, `rt_import_data`, `rt_call_ctr`, `rt_j
 
 What the generator knows beyond single instructions:
 
-* **Guest time (D6).** `RT_TICK(address)` precedes every instruction: one cycle of the timeslice,
-  and a yield in place (`rt_yield`) when it runs out, exactly where Cemu's interpreter would switch.
+* **Guest time (D6).** Every instruction costs one cycle of the timeslice, and the thread yields in
+  place (`rt_yield`) where it runs out, exactly where Cemu's interpreter would switch. Counted per
+  basic block: a block of 3 or more instructions that fits in the slice is charged at once
+  (`RT_FITS`/`RT_CHARGE`) and runs unchecked; otherwise a second copy with `RT_TICK(address)` before
+  every instruction runs. Blocks end at branches, calls, imports and runtime hooks, so nothing in
+  one can see the difference. `generate.py --tick instruction` emits only the checked form.
 * **Cemu's boot patches (D10).** `config/US_v0/code_patches.csv` (the words Cemu's GamePatch changes,
   with evidence) is applied first, so the generated code is the code Cemu runs.
 * **Purity (D8.2).** A function is pure if it makes no import call, no indirect call or jump and

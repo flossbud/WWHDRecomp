@@ -115,7 +115,8 @@ Reference captures on llvmpipe every 60 frames: `/wwhd/data/g3/save-ref`.
   It links into Cemu_release's own link line via `-Wl,--wrap=main`.
 - **`generate.py`:** the whole program, 39,720 functions: 39,705 from the list, the `.syscall`
   stub, and 14 synthesised GHS restore entries (D7). 0 errors.
-- **`build.sh`:** compiles it on the worker in about 4 min, with 0 warnings; incremental since M3.
+- **`build.sh`:** compiles it on the worker in about 10 min (about 4 before per-block counting
+  doubled the code), with 0 warnings; incremental since M3.
 - Since M3 it also emits purity (12,968 pure functions), code hashes, call edges, import sites and
   a store census (`runtime/recomp_tables.h`). Two M2 bugs were fixed: all 294 jump tables are `b`
   runs (the switches never matched), and `_iob+0x10` was emitted as `environ`.
@@ -123,7 +124,8 @@ Reference captures on llvmpipe every 60 frames: `/wwhd/data/g3/save-ref`.
 **Runtime** (`src/runtime/`, M3 and M4 done). Linked into `wwhd-null` with the generated program:
 - **`WWHD_NATIVE=on` runs the recompiled program.** The whole-route trace equals the reference's
   (1,124,796,468 calls) in 359 s, with 0 game instructions interpreted. Guest time is exact per
-  instruction (`RT_TICK`/`rt_yield`, design D6 as built), and Cemu's boot patches are in the
+  instruction, counted per basic block (`RT_FITS`/`RT_CHARGE`, `RT_TICK`/`rt_yield`, design D6 as
+  built), and Cemu's boot patches are in the
   generated code (`config/US_v0/code_patches.csv`, D10).
 - Cemu patch 0011's hook replaces the interpreter loop; by default it interprets exactly.
 - At boot: function table (D5), code hashes vs guest memory (Cemu patches `f_027F9994` and

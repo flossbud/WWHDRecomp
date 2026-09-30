@@ -1,7 +1,7 @@
 """Whole-program generator (docs/recompiler-design.md D1, D4, D5, D7; milestone M2).
 
 Usage:
-    python3 tools/recomp/generate.py orig/0005000010143500_v0/code/cking.rpx OUT_DIR [--per-shard 256]
+    python3 tools/recomp/generate.py orig/0005000010143500_v0/code/cking.rpx OUT_DIR [--per-shard 256] [--tick instruction]
 
 Writes OUT_DIR/shard_NNN.cpp (one C++ function per guest function in functions.csv), funcs.h
 (declarations), func_table.cpp ({guest address, host function}) and imports.cpp (the import
@@ -19,8 +19,15 @@ imports.cpp also lists every import relocation site, so the runtime can bind and
 each import against what Cemu's loader wrote into guest memory, and a census of store
 instructions that the runtime's store decoder (diff mode) must reproduce.
 
-Every instruction is preceded by RT_TICK(address): one cycle of the timeslice, and a yield in
-place when it runs out (D6, as revised for M4).
+Every instruction costs one cycle of the timeslice, and the thread yields in place, before the
+instruction at which the slice runs out (D6, as revised for M4). Counted per basic block: a block
+(from a label or the instruction after a branch, call, import or runtime hook, to the next) of at
+least 3 instructions that fits in what is left of the slice is charged at once (RT_FITS/RT_CHARGE)
+and runs without checks; one that doesn't fit runs a second copy with RT_TICK(address) before every
+instruction, so the yield lands on the same instruction. Nothing inside a block can tell the
+difference: a block ends before anything that could look at the budget (calls, imports, the
+runtime's hooks), and guest time only advances when a slice ends. --tick instruction emits only
+the checked form (one RT_TICK per instruction), as before.
 
 Control flow (D1): branches inside a function become gotos; a branch to another function's
 entry is a musttail call; bl is a call; blr is return; a bctr listed in jump_tables.csv is a
@@ -32,6 +39,7 @@ runtime. Anything the generator cannot place is an error, listed at the end; exi
 """
 import bisect
 import collections
+import re
 import csv
 import hashlib
 import pathlib
@@ -293,6 +301,54 @@ def relocated(prog, i, ea):
     return ppc.Insn(i.op, i.word, f)
 
 
+# an instruction ends its basic block (for cycle counting) if it may branch, call or return, or calls
+# into the runtime, which could look at the timeslice
+BLOCK_END_OPS = {"b", "bc", "bclr", "bcctr"}
+BLOCK_END_CODE = ("rt_import(", "rt_call_ctr(", "rt_jump_ctr(", "rt_bad_branch(", "rt_trap(", "rt_dcache_flush(",
+                  "return", "goto ", "switch (")
+MIN_BLOCK = 3            # shorter blocks keep one RT_TICK per instruction
+TICK_PER_INSTRUCTION = False
+
+
+def ends_block(op, lines):
+    return op in BLOCK_END_OPS or any(c in l for l in lines for c in BLOCK_END_CODE) or \
+        any(re.search(r"\bf_[0-9A-F]{8}\(ctx\)", l) for l in lines)
+
+
+def emit_blocks(body, labels):
+    """body: [(ea, op, lines)] of one function, in order; returns its C++ lines, counted per block."""
+    blocks, cur = [], []
+    for ea, op, lines in body:
+        if cur and ea in labels:
+            blocks.append(cur)
+            cur = []
+        cur.append((ea, lines))
+        if ends_block(op, lines):
+            blocks.append(cur)
+            cur = []
+    if cur:
+        blocks.append(cur)
+    out = []
+    for block in blocks:
+        if block[0][0] in labels:
+            out.append(f"L_{block[0][0]:08X}:;")
+        if TICK_PER_INSTRUCTION or len(block) < MIN_BLOCK:
+            for ea, lines in block:
+                out.append(f"\tRT_TICK({emit.hx(ea)});")
+                out += ["\t" + l for l in lines]
+            continue
+        out.append(f"\tif (RT_FITS({len(block)})) [[likely]] {{")
+        out.append(f"\t\tRT_CHARGE({len(block)});")
+        for ea, lines in block:
+            out += ["\t\t" + l for l in lines]
+        out.append("\t} else {")
+        for ea, lines in block:
+            out.append(f"\t\tRT_TICK({emit.hx(ea)});")
+            out += ["\t\t" + l for l in lines]
+        out.append("\t}")
+    return out
+
+
 def generate_function(prog, em, start, end, errors):
     flow = FunctionFlow(prog, start, end, errors)
     em.flow = flow
@@ -303,12 +359,12 @@ def generate_function(prog, em, start, end, errors):
         if i is None:
             errors.append(f"{ea:08X}: undecodable {prog.word(ea):08X}")
             flow.impure.append("error")
-            body.append((ea, [f"rt_bad_branch(ctx, {emit.hx(ea)}, 0u); return;"]))
+            body.append((ea, None, [f"rt_bad_branch(ctx, {emit.hx(ea)}, 0u); return;"]))
             continue
         if ea in prog.imm_import:
             r = relocated(prog, i, ea)
             if isinstance(r, str):
-                body.append((ea, [r]))
+                body.append((ea, i.op, [r]))
                 last = i
                 continue
             i = r
@@ -318,14 +374,10 @@ def generate_function(prog, em, start, end, errors):
             errors.append(f"{ea:08X}: {e}")
             flow.impure.append("error")
             lines = [f"rt_bad_branch(ctx, {emit.hx(ea)}, 0u); return;"]
-        body.append((ea, lines))
+        body.append((ea, i.op, lines))
         last = i
     out = [f"void {fname(start)}(PPCInterpreter_t* ctx)", "{"]
-    for ea, lines in body:
-        if ea in flow.labels:
-            out.append(f"L_{ea:08X}:;")
-        out.append(f"\tRT_TICK({emit.hx(ea)});")      # one cycle per instruction (D6)
-        out += ["\t" + l for l in lines]
+    out += emit_blocks(body, flow.labels)      # one cycle per instruction, charged per block (D6)
     if last is None or not is_terminator(last):
         if end in prog.entries:
             flow.callees.add(end)
@@ -378,6 +430,8 @@ def main():
     out = pathlib.Path(args[1])
     out.mkdir(parents=True, exist_ok=True)
     per = int(args[args.index("--per-shard") + 1]) if "--per-shard" in args else 256
+    global TICK_PER_INSTRUCTION
+    TICK_PER_INSTRUCTION = "--tick" in args and args[args.index("--tick") + 1] == "instruction"
     em = emit.Emitter(None)
     errors = []
     header = "// Generated by tools/recomp/generate.py from the game's code: never commit.\n"
