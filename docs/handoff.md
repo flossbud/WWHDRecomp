@@ -75,7 +75,8 @@ startup time and CPU use matter (phones throttle when hot). Design D19 and D20 h
   - the editing machine `~/opt/cemu-src`, branch `wwhd-reference`, for **editing only**; never build it
     on the editing machine.
   - The worker builds `/wwhd/opt/cemu-src` at pinned commit `c717fcab` plus
-    `tools/reference/cemu-patches/0001–0013` (0011 is the execution seam).
+    `tools/reference/cemu-patches/0001–0014` (0011 is the execution seam; 0013 and 0014 are
+    rendering fixes, see D16).
   - To change a patch: commit on the editing machine branch, run
     `git format-patch -1 --start-number N -o tools/reference/cemu-patches/`, sync, then
     `tools/worker/job start cemu-rebuild tools/worker/setup-volume.sh cemu-rebuild` (incremental,
@@ -137,7 +138,9 @@ real time):
 | `/wwhd/data/traces/save-det/{a,b}.zst` | save route to f1800, **172,954,163 calls** |
 | `/wwhd/data/gx2/{save,route}-cemu.txt` | GPU command streams: 45,955,744 and 143,098,119 packets |
 | `/wwhd/data/gx2/{save,route}-audio-cemu.txt` | sound: 5,180 and 30,219 blocks |
-| `/wwhd/data/g2/ref`, `/wwhd/data/g3/save-ref` | reference captures (title route f30–f600 every 30; save route every 60), with cemu-patches/0013 |
+| `/wwhd/data/g3/route-ref14`, `save-ref14`, `tour-ref14` | reference captures every 60 frames (title route to f10800, save route to f1800, tour route to f2160), with cemu-patches/0014: the G3 baselines |
+| `/wwhd/data/g3/route-vk`, `save-vk`, `tour-vk2` | the renderer's captures of the same frames (G3: all within 60 dB) |
+| `/wwhd/data/g2/ref`, `/wwhd/data/g3/save-ref` | older reference captures (title route f30–f600 every 30; save route every 60), before 0014 |
 
 **The 100% save** (three quest logs; log 1: full Triforce, 3 pearls, 20 hearts, Normal Mode, saved
 on Outset) is at `/wwhd/data/saves/wwhd_100` on the worker and `~/wwhd-play/saves/wwhd_100` on the
@@ -276,22 +279,24 @@ Pipelines come from shader variants, not state, so nothing was changed.
   For phones: a first start reads 222 MB from the 34 files (the largest, 47 MB, whole in memory
   while it's walked); reading SARC members with seeks would keep that small.
 
-### 4. Then, roughly in this order (ask the owner)
-- **G3: render the whole route** (D13, D16.3).
-  - Where it stands: G2 is done to f600 of the title route (within 60 dB of the reference, most
-    within one level), and the save route's dock frames are at 55–61 dB.
-  - Method: capture the same frames on both sides (`survey.sh`), then
-    `compare_frames.py --threshold 60`.
-  - For a difference: compare surfaces at that swap (`CEMU_TEX_DUMP_FRAME` on the reference,
-    `WWHD_RENDER_DUMP` on ours, `compare_dumps.py`), then `WWHD_RENDER_TRACE` with a pixel to find
-    the draw. `WWHD_RENDER_SHADERS=dir` writes each shader's GLSL.
-  - Untested so far:
-    - GPU-side `GX2CopySurface` (only reported);
-    - readback into linear-special destinations;
-    - 3D textures and cube-map targets;
-    - depth-stencil textures loaded from memory;
-    - one address and format at different sizes (the bloom blur's ping-pong targets share one
-      surface).
+### 4. G3: the scripted routes render within tolerance: done (WW-3, the owner's choice)
+
+- All three routes, every 60 frames, against the reference (D13, D16.3; "G3 status" in the design
+  doc): the title route 180 of 180 frames, worst 74.3 dB, 133 identical; the save route 30 of 30,
+  worst 91.1 dB; the tour route 36 of 36, worst 74.6 dB.
+- The fix was in the reference: Cemu patch 0014 (a draw that samples its own colour target reads the
+  image from before the draw, as the renderer and the console's caches do). The owner chose that
+  over matching Cemu's in-place reads.
+- To check a renderer change: capture both sides (`survey.sh`, or `run.sh` with `CEMU_SHOT_FRAMES`
+  for the save and tour routes) and `compare_frames.py --threshold 60` against the `*-ref14`
+  captures. For a difference: `compare_dumps.py` at that swap (take a fresh reference dump; old
+  dumps may predate a patch), `WWHD_RENDER_TRACE=N:0` for every draw of a frame with its targets and
+  textures, `WWHD_RENDER_TRACE=N:ADDR:X,Y` for one pixel.
+- Still untested (not on these routes): GPU-side `GX2CopySurface` (only reported), readback into
+  linear-special destinations, 3D textures and cube-map targets, depth-stencil textures loaded from
+  memory. New routes would show them.
+
+### 5. Then, roughly in this order (ask the owner)
 - **Extend the routes**: sailing, a dungeon room, the menus and the Pictograph Box. Start from the
   100% save and warp with the Ballad of Gales. Record new baselines with the reference, then run
   native, G0 and timing on them. D19 step 4 uses heavier routes to decide between one host thread
@@ -363,6 +368,12 @@ Pipelines come from shader variants, not state, so nothing was changed.
   headroom; the virtual clock runs flat out (2–3x). The frame-time hitches on a warm start (about
   1 s at boot, about 100 ms loading Outset) are the game's own loading, not shaders.
 - **Session scratchpads are temporary.** Put any tool worth keeping in `tools/`.
+- **One `wwhd-null` at a time per directory.** Our frontend keeps its portable folder (NAND, saves,
+  log, shader cache) next to the binary and ignores `CEMU_PORTABLE`, so a second run of
+  `build/wwhd/wwhd-null` shares the first one's saves. For a second run alongside, copy the binary
+  to a folder of its own (e.g. `/wwhd/data/g3/bin-dump/`). The reference Cemu has its own folder.
+- **Rendering on lavapipe is slow:** about 40 frames a minute at 1080p with two runs side by side,
+  so the whole title route takes about 4 hours per side.
 - **Size and speed:** a full-route trace is about 665 MB compressed. `stream_check route` takes
   about 10 min, `save` about 2.
 

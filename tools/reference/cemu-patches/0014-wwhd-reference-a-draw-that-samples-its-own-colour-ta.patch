@@ -1,0 +1,289 @@
+From 105484c6b45314eda52f588cccbc340e1a3ba3ad Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 02:33:00 +0000
+Subject: [PATCH] wwhd-reference: a draw that samples its own colour target
+ reads it as it was before the draw
+
+Cemu samples the target while the same draw writes it (VK_EXT_attachment_feedback_loop_layout, or a
+render pass split). Vulkan leaves reads of texels the draw itself writes undefined; on lavapipe they
+follow its shading order, so WWHD's in-place antialiasing pass blends some edge pixels with
+neighbours it has already blended. The draw now renders into a scratch copy of the target, copied
+back afterwards, and the shader samples the untouched target. CEMU_FEEDBACK_INPLACE=1 restores
+Cemu's behaviour.
+---
+ .../HW/Latte/Renderer/Vulkan/VulkanRenderer.h |   3 +
+ .../Renderer/Vulkan/VulkanRendererCore.cpp    | 209 ++++++++++++++++++
+ 2 files changed, 212 insertions(+)
+
+diff --git a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h
+index dc33f30..e03fa45 100644
+--- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h
++++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h
+@@ -544,6 +544,9 @@ private:
+ 
+ 	void draw_setRenderPass();
+ 	void draw_endRenderPass();
++	// wwhd-reference: a draw whose pixel shader samples its own colour target reads it as it was before the draw
++	bool wwhd_feedbackCopyBegin();
++	void wwhd_feedbackCopyEnd();
+ 
+ 	void draw_beginSequence() override;
+ 	void draw_execute(uint32 baseVertex, uint32 baseInstance, uint32 instanceCount, uint32 count, MPTR indexDataMPTR, Latte::LATTE_VGT_DMA_INDEX_TYPE::E_INDEX_TYPE indexType, const LatteDrawcallContext& drawcallContext) override;
+diff --git a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRendererCore.cpp b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRendererCore.cpp
+index 8ea16a8..e81ae73 100644
+--- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRendererCore.cpp
++++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRendererCore.cpp
+@@ -1,6 +1,8 @@
+ #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
+ #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
+ #include "Cafe/HW/Latte/Renderer/Vulkan/LatteTextureVk.h"
++#include "Cafe/HW/Latte/Renderer/Vulkan/LatteTextureViewVk.h"
++#include "Cafe/HW/Latte/Renderer/Vulkan/CachedFBOVk.h"
+ #include "Cafe/HW/Latte/Renderer/Vulkan/RendererShaderVk.h"
+ #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanPipelineCompiler.h"
+ 
+@@ -1355,6 +1357,207 @@ void VulkanRenderer::draw_beginSequence()
+ 		m_state.drawSequenceSkip = true;
+ }
+ 
++// wwhd-reference (cemu-patches/0014): a draw whose pixel shader samples one of its own colour targets reads
++// that target as it was before the draw. Cemu samples the target while the same draw writes it (through
++// VK_EXT_attachment_feedback_loop_layout, or a render pass split); Vulkan leaves reads of texels the draw
++// itself writes undefined, and on lavapipe they follow its shading order: WWHD's antialiasing pass, which
++// blends edge pixels with their neighbours in place, then blends some with neighbours it has already
++// blended. Instead the draw renders into a scratch copy of the target, which is copied back afterwards, so
++// the shader samples the untouched target. CEMU_FEEDBACK_INPLACE=1 restores Cemu's behaviour.
++namespace
++{
++	struct WwhdScratch
++	{
++		VkImage image = VK_NULL_HANDLE;
++		VkDeviceMemory memory = VK_NULL_HANDLE;
++		VKRObjectTextureView* view = nullptr;                    // Cemu's wrappers, so a framebuffer can hold it
++	};
++	struct WwhdFeedbackTarget
++	{
++		VkImage image;
++		uint32 mip, layer, width, height;
++		VkImageLayout layout;
++		WwhdScratch* scratch;
++	};
++	std::map<std::tuple<uint32, VkFormat, uint32, uint32>, WwhdScratch> s_wwhdScratch;   // by attachment, format and size
++	std::vector<WwhdFeedbackTarget> s_wwhdFeedback;
++	VkRenderingAttachmentInfoKHR s_wwhdColor[8];
++	VkRenderingInfoKHR s_wwhdRendering;
++	VKRObjectFramebuffer* s_wwhdFramebuffer = nullptr;
++
++	void WwhdBarrier(VkCommandBuffer cmd, VkImage image, uint32 mip, uint32 layer, VkImageLayout from, VkImageLayout to)
++	{
++		VkImageMemoryBarrier b{};
++		b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
++		b.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
++		b.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
++		b.oldLayout = from;
++		b.newLayout = to;
++		b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++		b.image = image;
++		b.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, layer, 1 };
++		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
++	}
++
++	void WwhdCopy(VkCommandBuffer cmd, VkImage src, uint32 srcMip, uint32 srcLayer, VkImage dst, uint32 dstMip, uint32 dstLayer, uint32 w, uint32 h)
++	{
++		VkImageCopy region{};
++		region.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, srcMip, srcLayer, 1 };
++		region.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, dstMip, dstLayer, 1 };
++		region.extent = { w, h, 1 };
++		vkCmdCopyImage(cmd, src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
++	}
++}
++
++bool VulkanRenderer::wwhd_feedbackCopyBegin()
++{
++	static const bool inPlace = [] { const char* e = getenv("CEMU_FEEDBACK_INPLACE"); return e && *e && *e != '0'; }();
++	auto& dep = m_state.m_curRenderpassSelfDependencyInfo;
++	if (inPlace || !dep.HasSelfDependency() || dep.HasVertexOrGeometrySelfDependency() || !(dep.GetAspectMask() & VK_IMAGE_ASPECT_COLOR_BIT) ||
++		!m_state.activePixelDS || !m_state.activeFBO)
++		return false;
++	CachedFBOVk* fbo = m_state.activeFBO;
++	s_wwhdFeedback.clear();
++	WwhdScratch* scratchOf[8]{};
++	const auto& sampled = m_state.activePixelDS->list_fboCandidates;
++	for (uint32 i = 0; i < 8; i++)
++	{
++		LatteTextureView* view = fbo->colorBuffer[i].texture;
++		if (!view)
++			continue;
++		LatteTextureVk* texture = static_cast<LatteTextureVk*>(view->baseTexture);
++		if (std::find(sampled.begin(), sampled.end(), texture) == sampled.end())
++			continue;
++		sint32 w, h;
++		texture->GetEffectiveSize(w, h, view->firstMip);
++		const VkFormat format = static_cast<LatteTextureViewVk*>(view)->GetFormat();
++		VkImageSubresource sub{ VK_IMAGE_ASPECT_COLOR_BIT, (uint32)view->firstMip, (uint32)view->firstSlice };
++		const VkImageLayout layout = texture->GetImageLayout(sub);
++		WwhdScratch& scratch = s_wwhdScratch[{ i, format, (uint32)w, (uint32)h }];
++		if (!scratch.image)
++		{
++			VkImageCreateInfo ci{};
++			ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
++			ci.imageType = VK_IMAGE_TYPE_2D;
++			ci.format = format;
++			ci.extent = { (uint32)w, (uint32)h, 1 };
++			ci.mipLevels = 1;
++			ci.arrayLayers = 1;
++			ci.samples = VK_SAMPLE_COUNT_1_BIT;
++			ci.tiling = VK_IMAGE_TILING_OPTIMAL;
++			ci.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
++			if (UseAttachmentFeedbackLoop())
++				ci.usage |= VK_IMAGE_USAGE_ATTACHMENT_FEEDBACK_LOOP_BIT_EXT;  // it takes the target's layout, which may be the feedback one
++			ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
++			if (vkCreateImage(m_logicalDevice, &ci, nullptr, &scratch.image) != VK_SUCCESS)
++				UnrecoverableError("wwhd-reference: can't create a feedback scratch image");
++			VkMemoryRequirements req;
++			vkGetImageMemoryRequirements(m_logicalDevice, scratch.image, &req);
++			uint32 type = 0;
++			if (!memoryManager->FindMemoryType(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, type))
++				UnrecoverableError("wwhd-reference: no memory for a feedback scratch image");
++			VkMemoryAllocateInfo ai{};
++			ai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
++			ai.allocationSize = req.size;
++			ai.memoryTypeIndex = type;
++			if (vkAllocateMemory(m_logicalDevice, &ai, nullptr, &scratch.memory) != VK_SUCCESS || vkBindImageMemory(m_logicalDevice, scratch.image, scratch.memory, 0) != VK_SUCCESS)
++				UnrecoverableError("wwhd-reference: can't allocate a feedback scratch image");
++			VkImageViewCreateInfo vi{};
++			vi.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
++			vi.image = scratch.image;
++			vi.viewType = VK_IMAGE_VIEW_TYPE_2D;
++			vi.format = format;
++			vi.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
++			VkImageView imageView;
++			if (vkCreateImageView(m_logicalDevice, &vi, nullptr, &imageView) != VK_SUCCESS)
++				UnrecoverableError("wwhd-reference: can't create a feedback scratch view");
++			auto* textureObj = new VKRObjectTexture();                // kept for the run (the memory is ours)
++			textureObj->m_image = scratch.image;
++			textureObj->m_format = format;
++			textureObj->m_imageAspect = VK_IMAGE_ASPECT_COLOR_BIT;
++			scratch.view = new VKRObjectTextureView(textureObj, imageView);
++		}
++		s_wwhdFeedback.push_back({ texture->GetImageObj()->m_image, (uint32)view->firstMip, (uint32)view->firstSlice, (uint32)w, (uint32)h, layout, &scratch });
++		scratchOf[i] = &scratch;
++	}
++	if (s_wwhdFeedback.empty())
++		return false;
++	draw_endRenderPass();
++	VkCommandBuffer cmd = m_state.currentCommandBuffer;
++	for (auto& f : s_wwhdFeedback)
++	{
++		WwhdBarrier(cmd, f.image, f.mip, f.layer, f.layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
++		WwhdBarrier(cmd, f.scratch->image, 0, 0, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
++		WwhdCopy(cmd, f.image, f.mip, f.layer, f.scratch->image, 0, 0, f.width, f.height);
++		WwhdBarrier(cmd, f.image, f.mip, f.layer, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, f.layout);
++		WwhdBarrier(cmd, f.scratch->image, 0, 0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, f.layout);
++	}
++	// the draw's pass: the same attachments, with each scratch copy in its target's place
++	if (m_featureControl.deviceExtensions.dynamic_rendering)
++	{
++		const VkRenderingInfoKHR* info = fbo->GetRenderingInfo();
++		s_wwhdRendering = *info;
++		for (uint32 i = 0; i < info->colorAttachmentCount; i++)
++		{
++			s_wwhdColor[i] = info->pColorAttachments[i];
++			if (scratchOf[i])
++				s_wwhdColor[i].imageView = scratchOf[i]->view->m_textureImageView;
++		}
++		s_wwhdRendering.pColorAttachments = s_wwhdColor;
++		vkCmdBeginRenderingKHR(cmd, &s_wwhdRendering);
++	}
++	else
++	{
++		std::array<VKRObjectTextureView*, 9> views{};
++		uint32 n = 0;
++		for (uint32 i = 0; i < 8; i++)
++			if (fbo->colorBuffer[i].texture)
++				views[n++] = scratchOf[i] ? scratchOf[i]->view : static_cast<LatteTextureViewVk*>(fbo->colorBuffer[i].texture)->GetViewRGBA();
++		if (fbo->depthBuffer.texture)
++			views[n++] = static_cast<LatteTextureViewVk*>(fbo->depthBuffer.texture)->GetViewRGBA();
++		s_wwhdFramebuffer = new VKRObjectFramebuffer(fbo->GetRenderPassObj(), std::span<VKRObjectTextureView*>(views.data(), n), fbo->m_size);
++		VkRenderPassBeginInfo bi{};
++		bi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
++		bi.renderPass = fbo->GetRenderPassObj()->m_renderPass;
++		bi.framebuffer = s_wwhdFramebuffer->m_frameBuffer;
++		bi.renderArea.extent = fbo->GetExtend();
++		vkCmdBeginRenderPass(cmd, &bi, VK_SUBPASS_CONTENTS_INLINE);
++		fbo->GetRenderPassObj()->flagForCurrentCommandBuffer();
++		s_wwhdFramebuffer->flagForCurrentCommandBuffer();
++	}
++	if (UseAttachmentFeedbackLoop() && m_state.feedbackLoopImageAspect != 0)
++	{
++		m_state.feedbackLoopImageAspect = 0;
++		vkCmdSetAttachmentFeedbackLoopEnableEXT(cmd, 0);
++	}
++	static uint32 logged = 0;
++	if (logged++ < 3)
++		cemuLog_log(LogType::Force, "wwhd-reference: a draw samples its own colour target: it reads a copy from before the draw (cemu-patches/0014)");
++	return true;
++}
++
++void VulkanRenderer::wwhd_feedbackCopyEnd()
++{
++	VkCommandBuffer cmd = m_state.currentCommandBuffer;
++	if (s_wwhdFramebuffer)
++	{
++		vkCmdEndRenderPass(cmd);
++		ReleaseDestructibleObject(s_wwhdFramebuffer);              // destroyed once the command buffer is done
++		s_wwhdFramebuffer = nullptr;
++	}
++	else
++		vkCmdEndRenderingKHR(cmd);
++	for (auto& f : s_wwhdFeedback)
++	{
++		WwhdBarrier(cmd, f.scratch->image, 0, 0, f.layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
++		WwhdBarrier(cmd, f.image, f.mip, f.layer, f.layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
++		WwhdCopy(cmd, f.scratch->image, 0, 0, f.image, f.mip, f.layer, f.width, f.height);
++		WwhdBarrier(cmd, f.image, f.mip, f.layer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, f.layout);
++		WwhdBarrier(cmd, f.scratch->image, 0, 0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, f.layout);
++	}
++	s_wwhdFeedback.clear();
++}
++
+ void VulkanRenderer::draw_execute_first(uint32 baseVertex, uint32 baseInstance, uint32 instanceCount, uint32 count, MPTR indexDataMPTR, Latte::LATTE_VGT_DMA_INDEX_TYPE::E_INDEX_TYPE indexType, const LatteDrawcallContext& drawcallContext)
+ {
+ 	if (m_state.drawSequenceSkip)
+@@ -1462,6 +1665,7 @@ void VulkanRenderer::draw_execute_first(uint32 baseVertex, uint32 baseInstance,
+ 	m_state.descriptorSetsChanged = true;
+ 
+ 	draw_setRenderPass();
++	const bool wwhdFeedbackCopy = wwhd_feedbackCopyBegin();
+ 
+ 	if (m_state.currentPipeline != vkObjPipeline->GetPipeline())
+ 	{
+@@ -1519,6 +1723,8 @@ void VulkanRenderer::draw_execute_first(uint32 baseVertex, uint32 baseInstance,
+ 		vkCmdDrawIndexed(m_state.currentCommandBuffer, hostIndexCount, instanceCount, 0, baseVertex, baseInstance);
+ 	else
+ 		vkCmdDraw(m_state.currentCommandBuffer, count, instanceCount, baseVertex, baseInstance);
++	if (wwhdFeedbackCopy)
++		wwhd_feedbackCopyEnd();
+ 	LatteStreamout_FinishDrawcall(m_useHostMemoryForCache);
+ }
+ 
+@@ -1656,6 +1862,7 @@ void VulkanRenderer::draw_execute_continued(uint32 baseVertex, uint32 baseInstan
+ 	}
+ 
+ 	draw_setRenderPass();
++	const bool wwhdFeedbackCopy = wwhd_feedbackCopyBegin();
+ 
+ 	if (m_state.currentPipeline != vkObjPipeline->GetPipeline())
+ 	{
+@@ -1742,6 +1949,8 @@ void VulkanRenderer::draw_execute_continued(uint32 baseVertex, uint32 baseInstan
+ 		vkCmdDrawIndexed(m_state.currentCommandBuffer, hostIndexCount, instanceCount, 0, baseVertex, baseInstance);
+ 	else
+ 		vkCmdDraw(m_state.currentCommandBuffer, count, instanceCount, baseVertex, baseInstance);
++	if (wwhdFeedbackCopy)
++		wwhd_feedbackCopyEnd();
+ 
+ 	LatteStreamout_FinishDrawcall(m_useHostMemoryForCache);
+ }
+-- 
+2.47.3
+

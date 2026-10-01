@@ -1069,7 +1069,8 @@ namespace wwhd::gpu
 		// WWHD_RENDER_TRACE=FRAME:ADDR logs every draw into the color target at ADDR (hex) during swap
 		// interval FRAME (after the FRAME-1th swap): programs, alpha test, depth, and each pixel
 		// texture unit with where its data comes from. For hunting a surface that differs from the
-		// reference's (tools/reference: CEMU_TEX_DUMP_FRAME).
+		// reference's (tools/reference: CEMU_TEX_DUMP_FRAME). ADDR 0: every draw of the frame, with
+		// its targets and the area it draws.
 		void TraceDraw(Shader* vs, Shader* ps, uint64 vsKey, uint64 psKey, const Targets& t,
 			Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE prim, uint32 count, uint32 hostCount);
 
@@ -1097,17 +1098,28 @@ namespace wwhd::gpu
 			const uint32* regs = LatteGPUState.contextRegister;
 			sint32 slot = -1;
 			for (uint32 i = 0; i < 8 && slot < 0; i++)
-				if (t.color[i] && (regs[mmCB_COLOR0_BASE + i] & 0xFFFFF800u) == (addr & 0xFFFFF800u))
+				if (t.color[i] && (addr == 0 || (regs[mmCB_COLOR0_BASE + i] & 0xFFFFF800u) == (addr & 0xFFFFF800u)))
 					slot = (sint32)i;
-			if (slot < 0)
+			if (slot < 0 && !(addr == 0 && t.depth))                // ADDR 0: every draw of the frame
 				return;
-			Image* target = t.color[slot];
+			Image* target = slot >= 0 ? t.color[slot] : nullptr;
 			static uint32 n = 0;
 			const auto& r = LatteGPUState.contextNew;
 			std::string line = fmt::format("trace #{} slot {} of {:02x} vs {:016x} ps {:016x} prim {} count {} ({}) alpha {:x} ref {} depth {:08x} blend {:08x} cull {:x} mask {:08x}",
 				n++, slot, [&] { uint32 m = 0; for (uint32 i = 0; i < 8; i++) m |= t.color[i] ? 1u << i : 0; return m; }(), vsKey, psKey, (uint32)prim, count, hostCount, regs[Latte::REGADDR::SX_ALPHA_TEST_CONTROL], r.SX_ALPHA_REF.get_ALPHA_TEST_REF(),
 				regs[Latte::REGADDR::DB_DEPTH_CONTROL], regs[Latte::REGADDR::CB_BLEND0_CONTROL], regs[Latte::REGADDR::PA_SU_SC_MODE_CNTL] & 3,
 				regs[Latte::REGADDR::CB_TARGET_MASK]);
+			if (addr == 0)                                           // which targets, and the area drawn
+			{
+				for (uint32 i = 0; i < 8; i++)
+					if (t.color[i])
+						line += fmt::format(" | c{} {:08x} fmt {:x} {}x{}", i, regs[mmCB_COLOR0_BASE + i] & 0xFFFFFF00, (uint32)LatteMRT::GetColorBufferFormat(i, r),
+							t.color[i]->width, t.color[i]->height);
+				if (t.depth)
+					line += fmt::format(" | z {:08x} {}x{}", regs[mmDB_HTILE_DATA_BASE] << 8, t.depth->width, t.depth->height);
+				line += fmt::format(" | scissor {},{}-{},{} vport {}x{}", r.PA_SC_GENERIC_SCISSOR_TL.get_TL_X(), r.PA_SC_GENERIC_SCISSOR_TL.get_TL_Y(),
+					r.PA_SC_GENERIC_SCISSOR_BR.get_BR_X(), r.PA_SC_GENERIC_SCISSOR_BR.get_BR_Y(), r.PA_CL_VPORT_XSCALE.get_SCALE() * 2, r.PA_CL_VPORT_YSCALE.get_SCALE() * -2);
+			}
 			for (sint32 i = 0; i < ps->mapping.getTextureCount(); i++)
 			{
 				uint32 unit = ps->mapping.getRelativeTextureUnitFromRelativeBindingPoint(i);
@@ -1125,7 +1137,7 @@ namespace wwhd::gpu
 			if (frame)
 				Log(line);
 			// with :X,Y, the pixel after the draw, when it changed
-			if (px != UINT32_MAX && px < target->width && py < target->height)
+			if (target && px != UINT32_MAX && px < target->width && py < target->height)
 			{
 				static VkBuffer buf = VK_NULL_HANDLE;
 				static uint32* mapped = nullptr;

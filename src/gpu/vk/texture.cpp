@@ -773,6 +773,9 @@ namespace wwhd::gpu
 				VkImageView v = View(c->img.image, c->img.format, c->img.aspect, viewType, firstMip, mips, 0, 1, comp, c->views);
 				return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
 			}
+			// a draw that samples its own target reads it as it was before the draw (a copy): what Vulkan defines,
+			// and what the console's separate colour and texture caches give; the reference does the same
+			// (cemu-patches/0014; G3 status in docs/recompiler-design.md)
 			if (feedback || d.width != surface->width || d.height != surface->height || format != surface->format)
 				img = &CopyOf(*surface, d.width, d.height, format);
 			else if (surface->layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)

@@ -658,9 +658,12 @@ rerun unchanged once the route reaches them.
 ### D16. Graphics verification
 
 * **The reference** is upstream Cemu, run under Xvfb with lavapipe, on the same scripted input.
-  Its patches (tools/reference/README.md) make it deterministic and observable, plus one rendering
-  fix where it disagreed with the console's shared memory (0013: a mip chain allocated below its
-  base level); a fix goes in only with evidence that the console would draw it that way.
+  Its patches (tools/reference/README.md) make it deterministic and observable, plus two rendering
+  fixes where it disagreed with the console: 0013 (a mip chain allocated below its base level, which
+  the console's shared memory relates to its levels) and 0014 (a draw that samples its own colour
+  target reads the image from before the draw: Cemu read it in place, which Vulkan leaves undefined
+  and lavapipe answered in its shading order; the console's separate colour and texture caches read
+  the pre-draw image). A fix goes in only with evidence that the console would draw it that way.
 * **Determinism.** Both builds run with a test-mode clock (`OSGetTime`/`OSGetSystemTime` advance
   a fixed step per frame) and frame-indexed input. The same frame number then shows the same
   scene. The reference Cemu needs patches for that (0001-0006).
@@ -1062,7 +1065,7 @@ There are two tracks. They meet at M4.
 | G0 ✅ (route) | Trace | The D15 trace scopes the backend. |
 | G1 ✅ | Shader corpus | Every program in the game files is extracted and translated to SPIR-V that passes `spirv-val`, and every program seen in the G0 trace is in the corpus. |
 | G2 ✅ (title) | First pixels | The title screen (TV) renders within tolerance of the reference on lavapipe. |
-| G3 | The route | Every scene on the scripted route is within tolerance. |
+| G3 ✅ (routes) | The route | Every scene on the scripted route is within tolerance. |
 
 **Together**
 
@@ -1160,6 +1163,34 @@ pixel probe (`WWHD_RENDER_TRACE`). Beyond the draws themselves:
   native, 380 s).
 
 Seen once and not reproduced: a segfault inside lavapipe's JIT code early in a run.
+
+**G3 status (2026-10-01):** done on the three scripted routes. Captured every 60 frames on both
+sides (lavapipe, virtual clock) and compared with `compare_frames.py --threshold 60`: the whole title
+route (f60-f10800: title, file select, name entry, the legend, Aryll, Outset) 180 of 180 frames, worst
+74.3 dB, 133 byte-identical; the save route (the dock from the 100% save) 30 of 30, worst 91.1 dB; the
+tour route (the dock, then the pause menu) 36 of 36, worst 74.6 dB, the menu frames byte-identical.
+Two reference runs differ from each other by about as much (73-75 dB).
+* **What it took: the reference.** Before, every frame from Aryll's scene on (42 of the title route's,
+  and all of the dock's) was at 53-60 dB: specks on silhouettes, 0.01-0.06% of pixels, the reference
+  brighter. Surface dumps at the same swap (`compare_dumps.py`, with a fresh reference dump: the
+  old one predated 0013) matched to the byte up to the scene buffer, and a frame trace
+  (`WWHD_RENDER_TRACE=N:0`, every draw with its targets and textures) showed the last pass:
+  antialiasing that reads the scene buffer `f5807800` and a luma mask while drawing into
+  `f5807800`, blending edge pixels with their neighbours. The renderer samples a copy from before
+  the draw; Cemu sampled the target in place (`VK_EXT_attachment_feedback_loop_layout`), whose
+  reads of what the draw itself writes Vulkan leaves undefined, and lavapipe answered them in its
+  shading order, so some edges were blended with neighbours already blended. A pixel probe on such
+  a speck showed the renderer never writing it in that pass while the reference blended it. Cemu
+  patch 0014 makes the reference read a copy too (the draw renders into a scratch copy of the target,
+  copied back after it), on the evidence that the console's colour and texture caches are separate,
+  so its texture reads see the image from before the pass; the dock went from 55-61 dB to 91-108 dB.
+  The reference's OS-call trace is unchanged (172,954,163 calls on the save route).
+* **Not on these routes yet** (so untested): GPU-side `GX2CopySurface` (only reported), readback into
+  linear-special destinations, 3D textures and cube-map targets, depth-stencil textures loaded from
+  memory. One address and format at several sizes in a frame is on the routes (the bloom blur's
+  scratch target at 240x135, 120x67 and 60x33, `f41a8800`): each reader sees the right part.
+* **Baselines** (worker): `/wwhd/data/g3/route-ref14`, `save-ref14`, `tour-ref14` (reference, with
+  0014) and `route-vk`, `save-vk`, `tour-vk2` (the renderer).
 
 **M4 status (2026-09-29):** done on the scripted route. `WWHD_NATIVE=on` runs the recompiled
 program: the hook calls the generated function at every entry, generated code ticks and yields

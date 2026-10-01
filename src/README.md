@@ -144,7 +144,7 @@ logs draw counts every N frames, `WWHD_RENDER_DUMP=N` writes every surface at th
 into the shot directory (compare with the reference's using `tools/reference/compare_dumps.py`),
 `WWHD_RENDER_TRACE=N:ADDR[:X,Y]` logs every draw into the color target at ADDR in frame N (state,
 programs, texture sources) and, with a pixel, which draw changed it (N=0: every frame, pixel
-changes only), `WWHD_RENDER_SHADERS=dir` writes every shader's GLSL as `<key>.<vs|ps>.glsl` (keys
+changes only; ADDR 0: every draw of frame N, with its targets, the area it draws and its textures), `WWHD_RENDER_SHADERS=dir` writes every shader's GLSL as `<key>.<vs|ps>.glsl` (keys
 as the trace prints them; game-derived, keep it out of git), and `WWHD_RENDER_COPIES=1` reports
 GX2's GPU-side surface copies. Dumps write every array layer, colour as 8-bit PPM and depth and
 single-channel float as 16-bit PGM, like the reference's (cemu-patches/0012).
