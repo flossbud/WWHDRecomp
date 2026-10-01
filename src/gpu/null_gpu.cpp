@@ -743,6 +743,8 @@ namespace
 void Latte_Start()
 {
 	std::unique_lock lock(s_stateMutex);
+	if (const char* hz = getenv("WWHD_VSYNC_HZ"); hz && atoi(hz) > 0)
+		LatteTiming_setCustomVsyncFrequency(atoi(hz));   // the vsync rate (os/coreinit/coreinit_Thread.cpp has it with the virtual clock)
 	s_running = true;
 	s_initDone = false;
 	s_thread = std::thread(threadEntry);

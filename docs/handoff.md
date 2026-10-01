@@ -423,14 +423,23 @@ Pipelines come from shader variants, not state, so nothing was changed.
   run the game's code: save, menus and warp identical, diff mode clean.
 - Tools left: `WWHD_BACKTRACE`, `WWHD_SHOT_DRC` (`src/README.md`), `tools/ghidra/decompile.py`.
 
-### 11. Then, roughly in this order (ask the owner)
+### 11. 60 fps (M6): started (WW-3, the owner's choice)
+
+- Design D21 has the findings: the frame loop (sead's framework on the main thread; per-frame
+  function `f_0274C264`; swap interval 2 set once at boot), and the experiment that shows play is
+  frame-locked while scenery follows the clock (`WWHD_VSYNC_HZ=120`: Link, camera and boat as at
+  30 fps at frame N, clouds and waves not). So M6 is tick interpolation, not a faster tick.
+- Next: tell the framework's tick calls from its draw calls, see whether a draw can run without a
+  tick, find the camera's and actors' matrices at draw time.
+- `WWHD_VSYNC_HZ` (default 60) sets the vsync rate with the virtual clock and in real time.
+
+### 12. Then, roughly in this order (ask the owner)
 - **The rest of D18:**
   - the loader and memory map (the rest of item 8);
   - gx2's core rewritten (no speed in it: 1.2% of the CPU thread, item 9);
   - proc_ui.
 - **Later:**
   - M5, playable on a GPU machine (the desktop is one now);
-  - M6, 60 fps, via overrides written against Phase 2 names;
   - an arm64 context switch for Android (D19);
 
 ## Known facts and gotchas worth not rediscovering

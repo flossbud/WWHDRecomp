@@ -1106,6 +1106,31 @@ Making stencil reference and masks dynamic (core 1.0) saves none, extended dynam
 registers the shader keys hold), so the owner chose the shipped list of shaders and recipes (a)
 instead. `PipelineDesc` is unchanged.
 
+### D21. 60 fps (M6): what the game does each frame
+
+*Started 2026-10-01; findings so far, no enhancement yet.*
+
+* **The frame loop** is sead's game framework on the main thread (core 1): main (`f_02005EA8`)
+  sets `GX2SetSwapInterval(2)` once, then the framework's loop (`f_027476D8` -> `f_0274BF78` ->
+  `f_0274C00C`) runs the per-frame function `f_0274C264` (sead's `procFrame_` by shape): virtual
+  calls at framework vtable slots 0xd4, 0xdc and 0x6c, then (unless paused) 0xec and
+  `f_0274C038`, then `gfx_EndFrame` through `f_020350C4` (draw done, the outputs' copies, flush,
+  `GX2SwapScanBuffers`); it waits for vsync itself (`GX2WaitForVsync` about twice a frame, from
+  `f_0274C874`) and records the frame's duration (+0x78) and start (+0x80). The game reads the
+  clock about 100 times a frame (`OSGetSystemTime`, through one wrapper at `f_02760DE8`).
+* **Frame-locked play, clock-driven scenery.** With `WWHD_VSYNC_HZ=120` (vsync twice as often,
+  so the game makes 60 frames a second; with the virtual clock, lavapipe captures), frame N of
+  the save route has Link, the camera, the boat and its bobbing and the HUD exactly where they are
+  at 30 fps, while the clouds, the waves, a fish's shadow and the rupee sparkle are elsewhere
+  (15-17 dB). Gameplay advances one tick per frame; the scenery follows the clock. Running the
+  game at 60 fps would double its speed under a sky that keeps real time, so M6 is tick
+  interpolation, as planned (D9): 30 ticks a second, and between two ticks one more frame drawn
+  from interpolated camera and actor transforms. (Link stands still at those frames; a route
+  where he moves would confirm it for him.)
+* **Next:** which of the per-frame calls tick the game and which draw it (the framework's vtable
+  slots), whether drawing can run again without a tick, and where the camera and the actors'
+  matrices come from at draw time (D9 overrides, Phase 2 names from zeldaret/tww).
+
 ## Milestones
 
 There are two tracks. They meet at M4.

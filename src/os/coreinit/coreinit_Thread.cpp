@@ -1325,7 +1325,12 @@ namespace coreinit
 	// far, so flip bookkeeping never depends on how far the GPU thread happened to get. When no
 	// guest thread can run, guest time jumps to the next event (alarm, vsync, audio frame).
 	static uint64 s_nextVirtualVsync = 0;
-	constexpr uint64 kVirtualVsyncCycles = ESPRESSO_CORE_CLOCK / 60;
+	// wwhd: WWHD_VSYNC_HZ (default 60) sets the vsync rate, here and in real time (gpu/null_gpu.cpp):
+	// an experiment for 60 fps (M6), which runs the game's frames twice as often at 120
+	static const uint64 kVirtualVsyncCycles = ESPRESSO_CORE_CLOCK / [] {
+		const char* hz = getenv("WWHD_VSYNC_HZ");
+		return hz && atoi(hz) > 0 ? (uint64)atoi(hz) : 60ull;
+	}();
 
 	void __OSVirtualClockEvents(sint32 coreIndex)
 	{
