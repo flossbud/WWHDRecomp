@@ -1137,11 +1137,21 @@ instead. `PipelineDesc` is unchanged.
   own profiler labels), each running its list of render jobs. `RenderDisplay_draw` copies the
   camera's 3x4 matrix into `DAT_104b45f8` and builds the projection from the camera's field of
   view and aspect before the jobs run.
-* **The plan this gives M6:** (1) a prototype in real time behind a switch: present at 60 Hz
-  (swap interval 1), and every other frame skip the tick (`f_02746790`) and draw the same state
-  again, to see what else moves per frame (sead's measured frame time, input, timers); (2) the
-  camera: on the frame between two ticks, draw with the camera matrix halfway between theirs (the
-  most visible motion); (3) actors' and skeletons' matrices, where `zeldaret/tww` names help.
+* **The prototype** (`WWHD_60FPS=1`, real time only, `wwhd::rt::SixtyFps`): our
+  `GX2SetSwapInterval` turns the game's 2 into 1 and an override of the tick (`f_02746790`, sead's
+  method-tree calc of the root task: `f_02747C6C(root + 0x40)`) lets every other call through.
+  `fw_waitForVsync` waits for flips, not a count, so the game then presents every vsync. Found:
+  ticking every frame (the game at double speed), it presents a steady 60.1 fps (median 16.7 ms,
+  99th 18.7 ms) on the worker; skipping the tick on alternate frames hangs at once, at boot or
+  after 2,000 ticks of play (`WWHD_60FPS_AFTER=n`): the main thread spins in the job system
+  waiting for a render job list. Drawing depends on per-frame work inside the tick, so "draw the
+  same state again" needs the tick split: the render preparation (whatever kicks the render jobs
+  and advances the render frame) every frame, the game's logic every other frame.
+* **The plan this gives M6:** (1) map the root task's method tree (sead's `TaskMgr` and
+  `MethodTreeMgr`: which child tasks' calc methods prepare rendering, which run the game) and
+  split the tick there; (2) the camera: on the frame between two ticks, draw with the camera
+  matrix halfway between theirs (`RenderDisplay_draw` copies it to `DAT_104b45f8`), the most
+  visible motion; (3) actors' and skeletons' matrices, where `zeldaret/tww` names help.
 
 ## Milestones
 

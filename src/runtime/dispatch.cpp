@@ -391,6 +391,15 @@ namespace wwhd::rt
 		return s_fastPaths;
 	}
 
+	bool SixtyFps()
+	{
+		static const bool asked = [] {
+			const char* e = getenv("WWHD_60FPS");
+			return e && atoi(e) == 1;
+		}();
+		return asked && s_fastPaths;
+	}
+
 	uint64 QuietBegin(PPCInterpreter_t* ctx, uint32 low, uint32 high)
 	{
 		g_quiet = { ++s_quietTokens, ctx, low, high, coreinit::OSGetCurrentThread()->wakeUpCount, 0, false };

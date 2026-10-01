@@ -6,3 +6,4 @@
 # address   where                              what
 0275FFCC    src/overrides/task_loop.cpp        the task message loop: in real time, sleeps through idle ticks (D19)
 027D6BB0    src/overrides/gamepad_view.cpp     a view of a scene: the GamePad's screen is skipped in real time (nothing shows it)
+02746790    src/overrides/tick.cpp             the game's tick: every other frame in the 60 fps prototype (D21)

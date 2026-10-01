@@ -433,9 +433,14 @@ Pipelines come from shader variants, not state, so nothing was changed.
   `RenderDisplay_draw` (camera matrix to `DAT_104b45f8`, projection, render jobs) then
   `RenderDisplay_calcGPU`; then `game_procPresent` (swap) and `fw_waitForVsync`. Named in
   `symbols.csv` from the game's profiler labels and the framework's vtable (0x10004E88).
-- Next (D21's plan): a real-time prototype behind a switch, 60 Hz presentation with the tick
-  skipped every other frame; then camera interpolation; then actors. The owner judges smoothness
-  on the desktop, windowed.
+- Prototype (D21; `WWHD_60FPS=1`, real time only; `src/overrides/tick.cpp`, swap interval in
+  `os/gx2/core/GX2_Misc.cpp`): presenting every vsync works (60.1 fps, 16.7 ms, ticking every
+  frame, so the game runs at double speed); skipping the tick on alternate frames hangs (the main
+  thread waits on a render job list), at boot and after `WWHD_60FPS_AFTER=2000` ticks alike.
+  Drawing needs per-frame work done inside the tick.
+- Next: map the root task's method tree (sead `TaskMgr`/`MethodTreeMgr`) to split the tick into
+  render preparation (every frame) and logic (every other frame); then camera interpolation;
+  then actors. The owner judges smoothness on the desktop, windowed.
 - Tools: `tools/ghidra/decompile.py` (C with callers and callees) and `tools/ghidra/lookup.py`
   (references, words with function names, `find` a value: vtables). Their output stays on the
   worker (`/wwhd/data/ghidra-out`).

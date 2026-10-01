@@ -18,6 +18,8 @@
 
 #include "Cafe/HW/Latte/ISA/LatteReg.h"
 
+namespace wwhd::rt { bool SixtyFps(); }   // runtime/dispatch.cpp
+
 void gx2Export_GX2SetSwapInterval(PPCInterpreter_t* hCPU)
 {
 	cemuLog_log(LogType::GX2, "GX2SetSwapInterval({})", hCPU->gpr[3]);
@@ -26,7 +28,14 @@ void gx2Export_GX2SetSwapInterval(PPCInterpreter_t* hCPU)
 		cemuLog_log(LogType::Force, "GX2SetSwapInterval() called with out of range value ({})", hCPU->gpr[3]);
 	}
 	else
-		LatteGPUState.sharedArea->swapInterval = hCPU->gpr[3];
+	{
+		// wwhd: the 60 fps prototype (D21) presents every vsync; the game asks for every other one
+		// (30 fps) and ticks every frame, so the tick goes every other frame (src/overrides/tick.cpp)
+		uint32 interval = hCPU->gpr[3];
+		if (interval == 2 && wwhd::rt::SixtyFps())
+			interval = 1;
+		LatteGPUState.sharedArea->swapInterval = interval;
+	}
 	osLib_returnFromFunction(hCPU, 0);
 }
 

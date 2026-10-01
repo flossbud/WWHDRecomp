@@ -13,6 +13,10 @@ namespace wwhd::rt
 	// with WWHD_FAST_PATHS=0. An override that isn't the game's code step for step asks this first.
 	bool FastPaths();
 
+	// The 60 fps prototype (D21, M6): WWHD_60FPS=1, and only where the fast paths run (real time).
+	// The game then presents every vsync (swap interval 1) and ticks every other frame.
+	bool SixtyFps();
+
 	// The quiet watch: whether one guest call by the calling thread changed anything another thread,
 	// or the caller's next call, could see. Begin it right before the call, with [low, high) the stack
 	// that is dead once the call returns (from the thread's stack end up to the caller's frame); end it
