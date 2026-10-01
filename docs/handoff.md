@@ -251,37 +251,14 @@ tools/reference/route.sh /wwhd/data/traces/diff 1800 tools/reference/routes/cont
   second, at the cost of noticing memory-only changes later; D19's three-host-thread mode would need
   the quiet watch per host thread.
 
-### 2. Fewer pipelines: more dynamic state (D20 "Next" b)
+### 2. Fewer pipelines through dynamic state: measured, dropped (owner's choice, 2026-10-01)
 
-**Today** (`PipelineDesc` in `src/gpu/vk/draw.cpp`):
-- Baked into every pipeline: vertex input, topology, primitive restart, rasterizer discard,
-  depth-bias enable, cull mode, front face, depth clip, per-attachment blend and write masks,
-  logic op, depth test/write/compare, stencil test/ops, **stencil reference and masks**, and
-  attachment formats.
-- Already dynamic: viewport, scissor, blend constants, depth-bias values.
-- The save route builds 432 pipelines from 633 shaders.
+`tools/shaders/recipes.py` on both routes' recipes (629 pipelines, played in real time on the
+desktop): stencil reference and masks as dynamic state save 0, extended dynamic state 1 and 2
+(core 1.3) 5, extended dynamic state 3 24 more; 586 distinct shader pairs are the floor (D20).
+Pipelines come from shader variants, not state, so nothing was changed.
 
-**The plan:**
-1. Make stencil reference, compare mask and write mask dynamic state (core Vulkan 1.0). Use
-   `vkCmdSetStencilReference`, `vkCmdSetStencilCompareMask` and `vkCmdSetStencilWriteMask`,
-   added to the function table in `vk.h`, set per draw for front and back.
-2. Then extended dynamic state 1 and 2, which are core in Vulkan 1.3 (already required by the
-   renderer): cull mode, front face, topology within its class, depth test/write/compare, stencil
-   test and ops, rasterizer discard, depth-bias enable, primitive restart.
-3. Extended dynamic state 3 (blend, write masks, logic op, depth clip) only where the device has
-   it, with a fallback: Android support is patchy.
-4. `PipelineDesc` changes meaning, so bump `kVersion` in `shader_cache.cpp`.
-
-**Done when:**
-- pipeline counts on the save and title routes are down (report before and after);
-- captures are byte-identical to captures made before the change (same settings, lavapipe);
-- `shader_cache_check.sh` passes;
-- D20 says what's dynamic now.
-
-An Android note: requiring Vulkan 1.3 (for dynamic rendering) already excludes many older phones.
-That's a separate decision for the owner.
-
-### 3. Then, roughly in this order (ask the owner)
+### 3. Then, roughly in this order (ask the owner; they chose the first one next)
 
 - **The first playthrough without hitches** (D20 "Next" a). Gather shader keys and pipeline
   recipes from playthroughs and ship the list with the port: it holds hashes and register values,

@@ -993,10 +993,17 @@ PC that builds the port, so a phone never runs the decompiler or glslang for kno
 **Next**: (a) *the first start*: a list of recipes and shader keys gathered from playthroughs
 (hashes and register values, no game content) shipped with the port, from which the player's own
 build makes layers 1 and 2 out of their game files (the G1 extractor, D14, finds the programs), so
-even the first playthrough doesn't hitch; (b) fewer pipelines: stencil reference and masks as
-dynamic state (core Vulkan 1.0), then extended dynamic state where the device has it;
-(c) optionally, building a new pipeline off the GPU thread and skipping its draw until it is ready
+even the first playthrough doesn't hitch; (b) fewer pipelines through dynamic state: measured and
+dropped (2026-10-01, below); (c) optionally, building a new pipeline off the GPU thread and skipping its draw until it is ready
 (Cemu's asynchronous compile), a choice between a hitch and a missing object for a few frames.
+
+**Dynamic state doesn't pay** (measured 2026-10-01, `tools/shaders/recipes.py` on the recipes of
+both routes played in real time, 629 pipelines): nearly every pipeline is its own pair of shaders.
+Making stencil reference and masks dynamic (core 1.0) saves none, extended dynamic state 1 and 2
+(core 1.3) 5, and extended dynamic state 3 (blend, write masks, logic op, depth clip) 24 more, while
+586 distinct shader pairs are the floor. What makes pipelines is shader variants (programs, and the
+registers the shader keys hold), so the owner chose the shipped list of shaders and recipes (a)
+instead. `PipelineDesc` is unchanged.
 
 ## Milestones
 

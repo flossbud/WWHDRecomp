@@ -9,6 +9,7 @@ to `build/` or the worker's `/wwhd/data`, never into git.
 | `corpus.py` | walks the title's `content/` (Yaz0, SARC, SHARCFB v9, GFD `.gsh`, and GFD files embedded in BFRES), writes each distinct program once (`programs/<hash>.<vs\|ps>`: its GX2 registers and microcode) and `index.csv`; checks the programs a run used are all there |
 | `translate.cpp` | Cemu's shader decompiler plus glslang, as Cemu's Vulkan renderer runs them, but offline: GLSL and SPIR-V for every program |
 | `build.sh` | builds `build/shaders/translate` against the worker's Cemu (Cemu_release's link line with `--wrap=main`, like the M1 fuzzer) |
+| `recipes.py` | counts the pipelines in the renderer's recipe file (`pipelines.bin`, D20), and how many more dynamic state would save |
 
 Programs are keyed by the FNV-1a hash of their microcode as the GPU reads it, the same hash the
 null GPU's G0 statistics use (`WWHD_GPU_STATS`).
