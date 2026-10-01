@@ -106,6 +106,11 @@ ending at the route's last frame with `WWHD_EXIT_FRAME`, and profiles it (`WWHD_
 speed against real time, CPU time per thread; `tools/profile_report.py OUT/profile.txt` for where it
 went.
 
+`shader_cache_check.sh OUT` and `shader_list_check.sh OUT` render the save route on lavapipe with
+the virtual clock, twice each, from an empty shader cache (design D20): the cache's second run, and a
+first start from the shader list that a capture run made (`WWHD_SHADER_SOURCES`), must give the same
+captures, byte for byte, and meet nothing during play that wasn't prepared before it.
+
 `hle_trace.py diff` normalizes Cemu's `PPCCallback<host pointer>` stub names, which change with
 ASLR. `--ignore-core` compares without the core index.
 

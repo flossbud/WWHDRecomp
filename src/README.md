@@ -190,4 +190,11 @@ the shaders and pipelines seen for the first time. **The shader cache** (design 
 `gpu/vk/shader_cache.cpp`) keeps every translated shader and pipeline recipe in
 `portable/shaderCache/wwhd` and builds them all before the game starts, with a "Preparing shaders"
 screen in the window when that takes more than 0.3 s (`WWHD_SHADER_THREADS=n` sets the threads);
-`tools/reference/shader_cache_check.sh` shows it changes nothing on screen.
+`tools/reference/shader_cache_check.sh` shows it changes nothing on screen. **The shader list**
+(`gpu/vk/shader_list.cpp`, `config/US_v0/shader_list.txt`, which `tools/play/deploy.sh` puts in
+`cemu/wwhd/`) makes a first start the same: whatever playthroughs have translated and built that the
+cache doesn't have yet is translated before the game starts, from the programs in the player's own
+game files and the registers the list keeps (`WWHD_SHADER_LIST=path`, or `none`).
+`WWHD_SHADER_SOURCES=path` makes a run record everything it meets for the first time, for
+`tools/shaders/shader_list.py` to merge into the list (such a run prepares nothing, so it meets
+everything); `tools/reference/shader_list_check.sh` checks a first start from the list.

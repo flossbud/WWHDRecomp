@@ -263,12 +263,35 @@ namespace wwhd::gpu
 			return sh;
 		}
 
-		Shader* GetShader(bool vertex, uint64 key, const uint8* code, uint32 size, LatteFetchShader* fetch)
+		constexpr size_t kRegisterCount = sizeof(LatteGPUState.contextRegister) / sizeof(uint32);
+
+		// A shader's key: its program, and the registers its translation depends on (as Cemu's
+		// shader cache keys it). The PS input table must be the registers' (LatteShader_UpdatePSInputs).
+		uint64 VertexKey(const uint32* regs, uint64 program, const LatteFetchShader* fetch)
 		{
-			auto it = s_shaders.find(key);
-			if (it != s_shaders.end())
-				return it->second;
-			auto start = std::chrono::steady_clock::now();
+			const auto& r = *(const LatteContextRegister*)regs;
+			uint64 key = Mix(Mix(Mix(program, fetch->key), LatteSHRC_GetPSInputTable()->key), regs[Latte::REGADDR::PA_CL_VTE_CNTL] ^ 0x43F);
+			key = Mix(Mix(Mix(key, r.VGT_PRIMITIVE_TYPE.get_PRIMITIVE_MODE() == Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE::POINTS),
+				r.PA_CL_CLIP_CNTL.get_DX_CLIP_SPACE_DEF()), 1);
+			for (uint32 u = 0; u < LATTE_NUM_MAX_TEX_UNITS; u++)
+				key = Mix(key, regs[Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_VS + u * 7 + 4] & 0x300);
+			return key;
+		}
+
+		uint64 PixelKey(const uint32* regs, uint64 program)
+		{
+			uint64 key = Mix(Mix(Mix(program, LatteSHRC_GetPSInputTable()->key), regs[mmCB_SHADER_MASK]),
+				regs[Latte::REGADDR::SX_ALPHA_TEST_CONTROL] & 0xF);
+			for (uint32 u = 0; u < LATTE_NUM_MAX_TEX_UNITS; u++)
+				key = Mix(Mix(key, regs[Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_PS + u * 7] & 7),
+					regs[Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_PS + u * 7 + 4] & 0x300);
+			return key | 1;
+		}
+
+		// Cemu's decompiler on the register file (and the PS input table), then glslang: sh gets the
+		// decompiler's output and spirv the module's code. False, and a line in the log once, if either fails.
+		bool Translate(bool vertex, uint64 key, const uint8* code, uint32 size, LatteFetchShader* fetch, Shader& sh, std::vector<uint32>& spirv)
+		{
 			LatteDecompilerOptions opt;
 			opt.usesGeometryShader = false;
 			opt.useTFViaSSBO = false;
@@ -279,19 +302,17 @@ namespace wwhd::gpu
 				LatteDecompiler_DecompileVertexShader(key, LatteGPUState.contextRegister, (uint8*)code, size, fetch, opt, &out);
 			else
 				LatteDecompiler_DecompilePixelShader(key, LatteGPUState.contextRegister, (uint8*)code, size, opt, &out);
-			Shader* sh = new Shader;
-			s_shaders[key] = sh;
-			sh->key = key;
-			sh->dec = out.shader;
-			sh->uniforms = out.uniformOffsetsVK;
-			sh->mapping = out.resourceMappingVK;
-			if (!sh->dec || sh->dec->hasError || !sh->dec->strBuf_shaderSource)
+			sh.key = key;
+			sh.dec = out.shader;
+			sh.uniforms = out.uniformOffsetsVK;
+			sh.mapping = out.resourceMappingVK;
+			if (!sh.dec || sh.dec->hasError || !sh.dec->strBuf_shaderSource)
 			{
 				LogOnce(fmt::format("dec{:x}", key), [&] { return fmt::format("{} shader {:016x}: decompiler error, its draws are skipped",
 					vertex ? "vertex" : "pixel", key); });
-				return sh;
+				return false;
 			}
-			std::string glsl = sh->dec->strBuf_shaderSource->c_str();
+			std::string glsl = sh.dec->strBuf_shaderSource->c_str();
 			// WWHD_RENDER_SHADERS=dir: every shader's GLSL as dir/<key>.<vs|ps>.glsl (the key is the one
 			// WWHD_RENDER_TRACE prints)
 			static const char* shaderDir = getenv("WWHD_RENDER_SHADERS");
@@ -301,20 +322,76 @@ namespace wwhd::gpu
 					fwrite(glsl.data(), 1, glsl.size(), f);
 					fclose(f);
 				}
-			std::vector<uint32> spirv;
 			std::string log;
 			if (!CompileSpirv(glsl, vertex ? EShLangVertex : EShLangFragment, spirv, log))
 			{
 				LogOnce(fmt::format("glsl{:x}", key), [&] { return fmt::format("{} shader {:016x}: GLSL doesn't compile ({}), its draws are skipped",
 					vertex ? "vertex" : "pixel", key, log.substr(0, 200)); });
-				return sh;
+				return false;
 			}
+			return true;
+		}
+
+		// a translated shader becomes one to draw with, and a record in the cache on disk
+		void Finish(Shader& sh, bool vertex, const std::vector<uint32>& spirv)
+		{
 			VkShaderModuleCreateInfo mi{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
 			mi.codeSize = spirv.size() * 4;
 			mi.pCode = spirv.data();
-			Check(vkCreateShaderModule(s.device, &mi, nullptr, &sh->module), "vkCreateShaderModule");
-			sh->layout = CreateLayout(*sh, vertex ? VK_SHADER_STAGE_VERTEX_BIT : VK_SHADER_STAGE_FRAGMENT_BIT);
-			cache::AddShader(SerializeShader(*sh, vertex, spirv));
+			Check(vkCreateShaderModule(s.device, &mi, nullptr, &sh.module), "vkCreateShaderModule");
+			sh.layout = CreateLayout(sh, vertex ? VK_SHADER_STAGE_VERTEX_BIT : VK_SHADER_STAGE_FRAGMENT_BIT);
+			cache::AddShader(SerializeShader(sh, vertex, spirv));
+		}
+
+		// WWHD_SHADER_SOURCES (shader_list.cpp): the lines for a shader just translated, once the
+		// registers its line keeps are shown to be enough: alone in the register file, they give the
+		// same key and translate to the same record.
+		std::set<uint64> s_capturedPrograms;
+		uint32 s_capturedShaders = 0, s_captureFailures = 0;
+		void CaptureShader(bool vertex, const Shader& sh, const std::vector<uint32>& spirv, const uint8* code, uint32 size,
+			LatteFetchShader* fetch, uint64 fetchHash)
+		{
+			uint32* regs = LatteGPUState.contextRegister;
+			uint64 program = Fnv(code, size);
+			std::string listed = shaderlist::Registers(regs);
+			std::vector<uint32> saved(regs, regs + kRegisterCount);
+			shaderlist::SetRegisters(regs, kRegisterCount, listed);
+			LatteShader_UpdatePSInputs(regs);
+			Shader again;
+			std::vector<uint32> spirvAgain;
+			bool sameKey = (vertex ? VertexKey(regs, program, fetch) : PixelKey(regs, program)) == sh.key;
+			bool same = sameKey && Translate(vertex, sh.key, code, size, fetch, again, spirvAgain) &&
+				SerializeShader(again, vertex, spirvAgain) == SerializeShader(sh, vertex, spirv);
+			memcpy(regs, saved.data(), kRegisterCount * sizeof(uint32));
+			LatteShader_UpdatePSInputs(regs);
+			s_capturedShaders++;
+			if (!same)
+			{
+				if (s_captureFailures++ < 20)
+					Log(fmt::format("shader list: {} shader {:016x} doesn't {} from the registers its line keeps", vertex ? "vertex" : "pixel",
+						sh.key, sameKey ? "translate the same" : "get the same key"));
+				return;
+			}
+			if (s_capturedPrograms.insert(program).second)
+				shaderlist::Capture(fmt::format("program {:016x} {}", program, size));
+			shaderlist::Capture(vertex ? fmt::format("vs {:016x} {:016x} {:016x} {}", sh.key, program, fetchHash, listed)
+				: fmt::format("ps {:016x} {:016x} {}", sh.key, program, listed));
+		}
+
+		Shader* GetShader(bool vertex, uint64 key, const uint8* code, uint32 size, LatteFetchShader* fetch, uint64 fetchHash)
+		{
+			auto it = s_shaders.find(key);
+			if (it != s_shaders.end())
+				return it->second;
+			auto start = std::chrono::steady_clock::now();
+			Shader* sh = new Shader;
+			s_shaders[key] = sh;
+			std::vector<uint32> spirv;
+			if (!Translate(vertex, key, code, size, fetch, *sh, spirv))
+				return sh;
+			Finish(*sh, vertex, spirv);
+			if (shaderlist::Capturing())
+				CaptureShader(vertex, *sh, spirv, code, size, fetch, fetchHash);
 			s_sights.shaders++;
 			s_sights.shaderMs += MsSince(start);
 			return sh;
@@ -734,6 +811,8 @@ namespace wwhd::gpu
 			VkPipeline pipeline;
 			Check(BuildPipeline(d, vs, ps, layout, pipeline), "vkCreateGraphicsPipelines");
 			cache::AddPipeline(recipe);
+			if (shaderlist::Capturing())
+				shaderlist::Capture("pipeline " + shaderlist::Hex(recipe));
 			s_sights.pipelines++;
 			s_sights.pipelineMs += MsSince(start);
 			s_recipes[id] = pipeline;
@@ -1117,11 +1196,109 @@ namespace wwhd::gpu
 				s_pipelines.size()));
 	}
 
+	// The first start without hitches (D20): everything the shader list (shader_list.cpp) has that the
+	// cache on disk doesn't yet is made now, as the run that captured it made it: its fetch shaders from
+	// their code and registers, its shaders translated from the programs in the game's files with the
+	// registers they were first met with (each must give its listed key again), and its pipeline recipes
+	// added to the cache's. Returns how many shaders it translated; `steps` is how far it moved the
+	// progress bar. WWHD_SHADER_LIST=none: no list.
+	static uint32 PrepareFromList(std::vector<std::vector<uint8>>& recipes, const std::function<void(uint32 done, uint32 total)>& progress,
+		uint32& steps)
+	{
+		shaderlist::List list;
+		const char* e = getenv("WWHD_SHADER_LIST");
+		if ((e && (!*e || !strcmp(e, "none"))) || !shaderlist::Read(list))
+			return 0;
+		auto start = std::chrono::steady_clock::now();
+		uint32* regs = LatteGPUState.contextRegister;
+		std::vector<uint32> saved(regs, regs + kRegisterCount);
+		for (auto& [hash, f] : list.fetches)
+			if (!s_fetchShaders.count(hash) && shaderlist::SetRegisters(regs, kRegisterCount, f.registers))
+				s_fetchShaders[hash] = LatteShaderRecompiler_createFetchShader(LatteFetchShader::CalculateCacheHash(f.code.data(), (uint32)f.code.size()),
+					regs, (uint32*)f.code.data(), (uint32)f.code.size());
+		std::set<uint64> known;
+		for (auto& r : recipes)
+			known.insert(Fnv(r.data(), r.size()));
+		uint32 pipelines = 0;
+		for (auto& r : list.pipelines)
+			if (known.insert(Fnv(r.data(), r.size())).second)
+			{
+				cache::AddPipeline(r);
+				recipes.push_back(r);
+				pipelines++;
+			}
+		std::vector<const shaderlist::List::Shader*> todo;
+		std::set<uint64> keys, programs;
+		for (auto& sh : list.shaders)
+			if (!s_shaders.count(sh.key) && keys.insert(sh.key).second)
+			{
+				todo.push_back(&sh);
+				programs.insert(sh.program);
+			}
+		uint32 translated = 0, noProgram = 0, otherKey = 0, failed = 0;
+		steps = (uint32)todo.size();
+		if (!todo.empty())
+		{
+			const uint32 total = (uint32)(todo.size() + recipes.size());
+			progress(0, total);
+			std::unordered_map<uint64, std::vector<uint8>> code = shaderlist::FindPrograms(list, programs);
+			auto shown = std::chrono::steady_clock::now();
+			for (uint32 i = 0; i < todo.size(); i++)
+			{
+				if (std::chrono::steady_clock::now() - shown > std::chrono::milliseconds(30))
+				{
+					progress(i, total);
+					shown = std::chrono::steady_clock::now();
+				}
+				const shaderlist::List::Shader& l = *todo[i];
+				auto program = code.find(l.program);
+				auto fetch = s_fetchShaders.find(l.fetch);
+				if (program == code.end() || (l.vertex && fetch == s_fetchShaders.end()))
+				{
+					noProgram++;
+					continue;
+				}
+				const std::vector<uint8>& c = program->second;
+				shaderlist::SetRegisters(regs, kRegisterCount, l.registers);
+				LatteShader_UpdatePSInputs(regs);
+				uint64 h = Fnv(c.data(), c.size());
+				if ((l.vertex ? VertexKey(regs, h, fetch->second) : PixelKey(regs, h)) != l.key)
+				{
+					otherKey++;
+					continue;
+				}
+				Shader* sh = new Shader;
+				std::vector<uint32> spirv;
+				if (!Translate(l.vertex, l.key, c.data(), (uint32)c.size(), l.vertex ? fetch->second : nullptr, *sh, spirv))
+				{
+					delete sh;
+					failed++;
+					continue;
+				}
+				Finish(*sh, l.vertex, spirv);
+				s_shaders[l.key] = sh;
+				translated++;
+			}
+			memcpy(regs, saved.data(), kRegisterCount * sizeof(uint32));
+			LatteShader_UpdatePSInputs(regs);
+		}
+		else
+			memcpy(regs, saved.data(), kRegisterCount * sizeof(uint32));
+		Log(fmt::format("shader list: {} shaders translated from the game's files in {:.1f} s ({} without their program, {} with another "
+			"key, {} failed), {} pipelines added", translated, MsSince(start) / 1000, noProgram, otherKey, failed, pipelines));
+		return translated;
+	}
+
 	void PrepareShaders(const std::function<void(uint32 done, uint32 total)>& progress)
 	{
 		if (!RendererOn())
 			return;
 		auto start = std::chrono::steady_clock::now();
+		if (shaderlist::Capturing())
+		{
+			Log("shader list: capturing (WWHD_SHADER_SOURCES), so nothing is prepared: every shader and pipeline is met for the first time");
+			return;
+		}
 		// shaders: SPIR-V into modules (the driver compiles them with their pipelines)
 		uint32 damaged = 0;
 		for (auto& record : cache::Shaders())
@@ -1129,6 +1306,10 @@ namespace wwhd::gpu
 				s_shaders.try_emplace(sh->key, sh);
 			else
 				damaged++;
+		// the shader list: what playthroughs saw and this cache doesn't have yet, from the game's files
+		std::vector<std::vector<uint8>> recipes = cache::Pipelines();
+		uint32 steps = 0;
+		uint32 translated = PrepareFromList(recipes, progress, steps);
 		// pipelines: the recipes whose shaders are there, built on all cores but this one's
 		struct Job
 		{
@@ -1139,7 +1320,7 @@ namespace wwhd::gpu
 			VkPipeline pipeline = VK_NULL_HANDLE;
 		};
 		std::vector<Job> jobs;
-		for (auto& record : cache::Pipelines())
+		for (auto& record : recipes)
 		{
 			Job j;
 			if (!j.d.Parse(record))
@@ -1174,19 +1355,20 @@ namespace wwhd::gpu
 			});
 		while (done < total)
 		{
-			progress(done, total);
+			progress(steps + done, steps + total);
 			std::this_thread::sleep_for(std::chrono::milliseconds(30));
 		}
 		for (auto& t : pool)
 			t.join();
-		progress(total, total);
+		progress(steps + total, steps + total);
 		for (auto& j : jobs)
 			if (j.pipeline)
 				s_recipes.try_emplace(j.id, j.pipeline);
 		if (total)
 			cache::Save();
-		Log(fmt::format("shader cache: prepared {} shaders and {} pipelines in {:.1f} s on {} threads ({} failed, {} records damaged)",
-			s_shaders.size(), s_recipes.size(), MsSince(start) / 1000, std::min(threads, total), failed.load(), damaged));
+		Log(fmt::format("shader cache: prepared {} shaders ({} translated from the game's files) and {} pipelines in {:.1f} s on {} threads "
+			"({} failed, {} records damaged)", s_shaders.size(), translated, s_recipes.size(), MsSince(start) / 1000, std::min(threads, total),
+			failed.load(), damaged));
 	}
 
 	FirstSights TakeFirstSights()
@@ -1226,7 +1408,6 @@ namespace wwhd::gpu
 
 		// shaders: fetch shader, then vertex and pixel with the keys Cemu's shader cache would use
 		LatteShader_UpdatePSInputs(regs);
-		uint64 psInputs = LatteSHRC_GetPSInputTable()->key;
 		auto program = [&](uint32 startReg, const uint8*& code, uint32& size) {
 			uint32 addr = regs[startReg] << 8;
 			size = regs[startReg + 1] << 3;
@@ -1241,19 +1422,14 @@ namespace wwhd::gpu
 		uint64 fsHash = Fnv(fsCode, fsSize);
 		LatteFetchShader*& fetch = s_fetchShaders[fsHash];
 		if (!fetch)
-			fetch = LatteShaderRecompiler_createFetchShader(LatteFetchShader::CalculateCacheHash((void*)fsCode, fsSize), regs, (uint32*)fsCode, fsSize);
-		uint64 vsKey = Mix(Mix(Mix(Fnv(vsCode, vsSize), fetch->key), psInputs), regs[Latte::REGADDR::PA_CL_VTE_CNTL] ^ 0x43F);
-		vsKey = Mix(Mix(Mix(vsKey, (uint64)prim == (uint64)Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE::POINTS),
-			r.PA_CL_CLIP_CNTL.get_DX_CLIP_SPACE_DEF()), 1);
-		uint64 psKey = Mix(Mix(Mix(Fnv(psCode, psSize), psInputs), regs[mmCB_SHADER_MASK]), regs[Latte::REGADDR::SX_ALPHA_TEST_CONTROL] & 0xF);
-		for (uint32 u = 0; u < LATTE_NUM_MAX_TEX_UNITS; u++)
 		{
-			vsKey = Mix(vsKey, regs[Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_VS + u * 7 + 4] & 0x300);
-			psKey = Mix(Mix(psKey, regs[Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_PS + u * 7] & 7),
-				regs[Latte::REGADDR::SQ_TEX_RESOURCE_WORD0_N_PS + u * 7 + 4] & 0x300);
+			fetch = LatteShaderRecompiler_createFetchShader(LatteFetchShader::CalculateCacheHash((void*)fsCode, fsSize), regs, (uint32*)fsCode, fsSize);
+			if (shaderlist::Capturing())
+				shaderlist::Capture(fmt::format("fetch {:016x} {} {}", fsHash, shaderlist::Hex({ fsCode, fsSize }), shaderlist::Registers(regs)));
 		}
-		Shader* vs = GetShader(true, vsKey, vsCode, vsSize, fetch);
-		Shader* ps = GetShader(false, psKey | 1, psCode, psSize, nullptr);
+		uint64 vsKey = VertexKey(regs, Fnv(vsCode, vsSize), fetch), psKey = PixelKey(regs, Fnv(psCode, psSize));
+		Shader* vs = GetShader(true, vsKey, vsCode, vsSize, fetch, fsHash);
+		Shader* ps = GetShader(false, psKey, psCode, psSize, nullptr, 0);
 		if (!vs->module || !ps->module)
 			return skip("a shader that failed to translate");
 

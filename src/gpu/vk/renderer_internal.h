@@ -102,6 +102,29 @@ namespace wwhd::gpu
 		void Save();                                              // the driver's to disk, now
 		void SaveNowAndThen();                                    // at a swap: saves on another thread when due
 	}
+	// shader_list.cpp: the shader list (D20: a first start without hitches)
+	namespace shaderlist
+	{
+		struct List
+		{
+			struct Program { uint64 hash = 0; uint32 size = 0; std::string file; };
+			struct Fetch { uint64 hash = 0; std::vector<uint8> code; std::string registers; };
+			struct Shader { bool vertex = false; uint64 key = 0, program = 0, fetch = 0; std::string registers; };
+			std::unordered_map<uint64, Program> programs;
+			std::unordered_map<uint64, Fetch> fetches;
+			std::vector<Shader> shaders;
+			std::vector<std::vector<uint8>> pipelines;
+		};
+		std::string Registers(const uint32* regs);                // the registers translation reads, as text
+		bool SetRegisters(uint32* regs, size_t count, std::string_view text);   // and back; the rest become 0
+		std::string Hex(std::span<const uint8> bytes);
+		bool Capturing();                                         // WWHD_SHADER_SOURCES=path
+		void Capture(const std::string& line);
+		bool Read(List& list);                                    // the shipped list; false if there is none
+		// the programs among `wanted` that the list says where to find, read from the game's files
+		std::unordered_map<uint64, std::vector<uint8>> FindPrograms(const List& list, const std::set<uint64>& wanted);
+	}
+
 	// draw.cpp
 	void DrawInit();
 	void EndRendering();                                          // before anything outside a render pass

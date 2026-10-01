@@ -990,12 +990,42 @@ matters (some drivers crash on another device's data); the thread pool follows t
 records and the driver cache survive the app being killed. Layers 1 and 2 could be produced on the
 PC that builds the port, so a phone never runs the decompiler or glslang for known shaders.
 
-**Next**: (a) *the first start*: a list of recipes and shader keys gathered from playthroughs
-(hashes and register values, no game content) shipped with the port, from which the player's own
-build makes layers 1 and 2 out of their game files (the G1 extractor, D14, finds the programs), so
-even the first playthrough doesn't hitch; (b) fewer pipelines through dynamic state: measured and
-dropped (2026-10-01, below); (c) optionally, building a new pipeline off the GPU thread and skipping its draw until it is ready
+**Next**: (a) *the first start*: done (2026-10-01, "The shader list" below); (b) fewer pipelines
+through dynamic state: measured and dropped (2026-10-01, below); (c) optionally, building a new pipeline off the GPU thread and skipping its draw until it is ready
 (Cemu's asynchronous compile), a choice between a hitch and a missing object for a few frames.
+
+**The shader list: a first start without hitches** (2026-10-01). `config/US_v0/shader_list.txt`
+(`src/gpu/vk/shader_list.cpp` has the format) lists what playthroughs have met: for each shader its
+key, the hash and size of its program and the content file it is in, its fetch shader, and the
+registers translation read (nonzero values in the ranges Cemu's decompiler, its fetch-shader parser
+and the PS input table read: about 1.5 KB of text a shader); and every pipeline recipe. That is
+hashes, file names, register values and vertex layouts (a fetch shader is what GX2 builds at runtime
+from the layout the game describes, not a file), no game content, so it is committed and shipped.
+Before the game starts, everything in it that the cache doesn't have yet is made the way the
+capturing run made it: fetch shaders from their code and registers, each shader's program read from
+the player's own game files (Yaz0, SARC, SHARCFB, GFD, and shader files inside BFRES, as G1's
+extractor walks them; the list names the content file) and translated with its registers alone in
+the register file (it must give its listed key again), then its pipelines with the rest, under the
+same "Preparing shaders" screen. *Capturing*: `WWHD_SHADER_SOURCES=path` makes a run record
+everything it meets for the first time (it prepares nothing, so that is everything), and checks every
+shader before recording it: translated a second time from the listed registers alone, it must give
+the same key and the same record, byte for byte, or it is logged and left out (none was in the
+save route's check, which recorded all 631 it translated). `tools/shaders/shader_list.py`
+merges captures and finds each program's content file in G1's index. *Today's list*: the save route
+on lavapipe, the title route and the tour route on the desktop: 866 shaders, 605 programs in 34
+content files, 71 fetch shaders, 642 pipelines (1.9 MB of text, 140 KB compressed). *Checked*:
+`tools/reference/shader_list_check.sh` (save route, lavapipe, virtual clock, from an empty cache: a
+capturing run, then a first start from the list it made) gives 30 of 30 captures identical, and the
+first start's cache holds exactly the capturing run's records (631 shaders, 430 pipelines), all made
+before the game started (2.7 s) and none during play; the captures are also identical to those made
+before the change. *On the owner's desktop* (AMD GPU, RADV), empty caches (Mesa's off too), in
+real time: 866 shaders translated from the game files in 2.2 s and everything prepared in 2.3 s,
+then the whole title route met 1 shader and 1 pipeline (5 ms) in 6 minutes and the save route
+nothing, where a first start used to meet 633 shaders and 432 pipelines in its first minute (frames
+of 1 s and 347 ms). Real-time runs aren't the captured runs exactly, so a rare state the captures
+never saw is still translated when met; more captured playthroughs (sailing, dungeons, menus) close
+that. *For Android*: the extractor reads only the 34 listed files through the game's file system,
+and the list holds no machine-specific data.
 
 **Dynamic state doesn't pay** (measured 2026-10-01, `tools/shaders/recipes.py` on the recipes of
 both routes played in real time, 629 pipelines): nearly every pipeline is its own pair of shaders.

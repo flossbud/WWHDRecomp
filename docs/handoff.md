@@ -117,6 +117,8 @@ The scripts:
 - `timing.sh save|route OUT`: speed without the trace, with the profiler;
 - `survey.sh ROUTE OUT LAST [STEP] [FIRST]` for contact sheets; `compare_frames.py` for captures;
 - `shader_cache_check.sh OUT`: the shader cache changes nothing on screen (D20);
+- `shader_list_check.sh OUT`: a first start from the shader list prepares everything and changes
+  nothing on screen (D20);
 - `determinism.sh OUT FRAMES [ROUTE]`; `hle_trace.py summary|dump|diff` (about 65M calls in
   16 s, `--ignore-core`, `--mask-cemu-area`).
 
@@ -192,6 +194,8 @@ desktop. `REF_SAVE=dir` (run.sh) or `WWHD_SAVE=dir` (play.sh) installs it. It is
   store). The scheduler thread went from 100% busy to 8–25% on the save route.
 - **The renderer** (`src/gpu/vk`, D13; G2 done on the title route): Cemu's shader decompiler to
   GLSL, glslang to SPIR-V, Vulkan 1.3 with dynamic rendering.
+- **The shader list** (D20, `src/gpu/vk/shader_list.cpp`, `config/US_v0/shader_list.txt`): a first
+  start translates what playthroughs met from the player's game files before the title.
 - **The shader cache** (D20, `src/gpu/vk/shader_cache.cpp`), in `portable/shaderCache/wwhd`:
   - it keeps shaders (SPIR-V plus the decompiler facts the draws read), pipeline recipes and the
     driver's `VkPipelineCache`;
@@ -222,7 +226,7 @@ desktop. `REF_SAVE=dir` (run.sh) or `WWHD_SAVE=dir` (play.sh) installs it. It is
 | anything the guest can see (OS layer, scheduler, forks, runtime, generated code) | `stream_check.sh save NAME`, then `route NAME`: trace, command stream and sound identical |
 | generated code or its runtime helpers | the fuzzer for touched mnemonics; diff mode (below): MISMATCH 0 |
 | speed | `timing.sh save OUT` (and `route`), then `python3 tools/profile_report.py OUT/profile.txt` |
-| the renderer or the shader cache | `shader_cache_check.sh`; `survey.sh` + `compare_frames.py` against the reference captures (threshold 60 dB), or against your own "before" captures (byte-identical when nothing on screen should change) |
+| the renderer or the shader cache | `shader_cache_check.sh` (and `shader_list_check.sh` for the shader list or shader keys); `survey.sh` + `compare_frames.py` against the reference captures (threshold 60 dB), or against your own "before" captures (byte-identical when nothing on screen should change) |
 | real-time behaviour | headless on the desktop (above): the `wwhd real time:` lines, and a profile |
 
 Diff mode on the save route:
@@ -258,13 +262,19 @@ desktop): stencil reference and masks as dynamic state save 0, extended dynamic 
 (core 1.3) 5, extended dynamic state 3 24 more; 586 distinct shader pairs are the floor (D20).
 Pipelines come from shader variants, not state, so nothing was changed.
 
-### 3. Then, roughly in this order (ask the owner; they chose the first one next)
+### 3. The first playthrough without hitches: done (WW-3, the owner's choice)
 
-- **The first playthrough without hitches** (D20 "Next" a). Gather shader keys and pipeline
-  recipes from playthroughs and ship the list with the port: it holds hashes and register values,
-  no game content. The player's machine makes the shaders from its own game files (the G1
-  extractor, D14, finds the programs), so the progress screen appears on the first start instead
-  of hitches.
+- `config/US_v0/shader_list.txt` (D20 "The shader list"): 866 shaders, 642 pipelines from the save,
+  title and tour routes; no game content. `deploy.sh` ships it to `cemu/wwhd/`.
+- A first start translates the listed shaders from the player's own game files before the title
+  (2.2 s on the desktop, 2.7 s on the worker's CPU) and builds the pipelines; on the desktop the
+  title route then met 1 shader (5 ms), the save route none.
+- To grow it: capture runs with `WWHD_SHADER_SOURCES` (tools/shaders/README.md), merge with
+  `tools/shaders/shader_list.py`, commit. Check with `tools/reference/shader_list_check.sh`.
+- Ideas: fewer registers per line (the ranges are generous; the capture check would catch a range
+  cut too far), and capturing longer playthroughs (sailing, dungeons, menus) with the new routes.
+
+### 4. Then, roughly in this order (ask the owner)
 - **G3: render the whole route** (D13, D16.3).
   - Where it stands: G2 is done to f600 of the title route (within 60 dB of the reference, most
     within one level), and the save route's dock frames are at 55–61 dB.

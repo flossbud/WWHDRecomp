@@ -21,5 +21,8 @@ on "cat > $dir/portable/settings.xml" < "$ref/settings.xml"
 on "cat > $dir/portable/gameProfiles/0005000010143500.ini" < "$ref/0005000010143500.ini"
 on "cat > $dir/portable/controllerProfiles/controller0.xml" < "$ref/controller0.xml"
 tar -c -C "$ref/routes" . | on "tar -x -C $dir/routes"
+# the shader list (D20: what to prepare on a first start; no game content), where the game reads it
+list=$here/../../config/US_v0/shader_list.txt
+[ -f "$list" ] && on "mkdir -p $dir/cemu/wwhd && cat > $dir/cemu/wwhd/shader_list.txt" < "$list"
 on "cat > $dir/play.sh && chmod +x $dir/play.sh" < "$here/play.sh"
 echo "deployed to $host:$dir ($(on "du -sh $dir | cut -f1"))"

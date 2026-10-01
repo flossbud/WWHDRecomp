@@ -10,6 +10,7 @@ to `build/` or the worker's `/wwhd/data`, never into git.
 | `translate.cpp` | Cemu's shader decompiler plus glslang, as Cemu's Vulkan renderer runs them, but offline: GLSL and SPIR-V for every program |
 | `build.sh` | builds `build/shaders/translate` against the worker's Cemu (Cemu_release's link line with `--wrap=main`, like the M1 fuzzer) |
 | `recipes.py` | counts the pipelines in the renderer's recipe file (`pipelines.bin`, D20), and how many more dynamic state would save |
+| `shader_list.py` | merges what runs met for the first time (`WWHD_SHADER_SOURCES`) into the shader list, `config/US_v0/shader_list.txt` (D20), and adds which content file holds each program (from `corpus.py`'s index) |
 
 Programs are keyed by the FNV-1a hash of their microcode as the GPU reads it, the same hash the
 null GPU's G0 statistics use (`WWHD_GPU_STATS`).
@@ -43,3 +44,22 @@ microcode (texture dimensions, render-target number formats, the vertex fetch la
 Status (2026-09-29), see the design doc's G1 status: 30,011 distinct programs from 99,006 in the
 files, all translated, 0 invalid in `spirv-val`. Every program the scripted route uses (236 vertex,
 268 pixel) is among them, and its 287 variants translate with their runtime state.
+
+## The shader list (D20)
+
+A first start without hitches: `config/US_v0/shader_list.txt` holds, for every shader playthroughs
+have met, its key, its program's hash and the content file it is in, its fetch shader and the
+registers its translation read, and every pipeline recipe. No game content; the player's machine
+translates the shaders from its own game files before the game starts. To add to it, capture runs
+(an empty cache doesn't matter: a capturing run prepares nothing) and merge on the worker:
+
+```sh
+# a run anywhere (the worker, or headless on the desktop with play.sh): everything it meets is recorded
+WWHD_SHADER_SOURCES=/tmp/sources.txt WWHD_SHADER_LIST=none ...
+tools/worker/w python3 tools/shaders/shader_list.py config/US_v0/shader_list.txt \
+    --list config/US_v0/shader_list.txt /wwhd/data/shaderlist/*.txt
+tools/worker/sync.sh down config/US_v0/shader_list.txt
+```
+
+Every shader a capture records has been translated a second time from the registers its line keeps
+alone, and must give the same key and the same record; one that doesn't is logged and left out.
