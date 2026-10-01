@@ -5,7 +5,7 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 
 | Path | What |
 |---|---|
-| `frontend/window_system.cpp` | Cemu's `WindowSystem` interface: boot, one TV window, event loop. `wwhd`: Xlib. `wwhd-null`: headless, or an SDL3 window with `WWHD_WINDOW=1` |
+| `frontend/window_system.cpp` | Cemu's `WindowSystem` interface: boot, one TV window, event loop. `wwhd-null`: headless, or an SDL3 window with `WWHD_WINDOW=1` (the Xlib path was `wwhd`'s, which isn't built any more) |
 | `frontend/audio_sdl.cpp` | the TV's sound on SDL3, as Cemu's audio device (windowed `wwhd-null`) |
 | `frontend/overlay.cpp` | the system's keyboard, error dialogs and HOME sign, drawn over the game in the window |
 | `frontend/cemu_boot.cpp` | paths, config, default NAND files, title preparation (derived from Cemu's wx GUI, MPL-2.0) |
@@ -24,16 +24,36 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 | `runtime/profile.cpp` | a sampling profiler (`WWHD_PROFILE=path`): where host CPU time goes; `tools/profile_report.py` summarises it, `tools/reference/timing.sh` times a route without the trace (`WWHD_EXIT_FRAME=N` ends a run) |
 | `os/tcl/tcl_host.h` | host waits on TCL (forked): the GPU thread sleeps until the CPU submits, the CPU until a submission retires |
 | `runtime/diff.cpp` | diff mode (D8.2, M3): pure functions run natively, are rewound, and are compared (registers, stores, cycles) with the interpreter's run of the same call |
-| `build.sh` | builds `build/wwhd/wwhd` and `build/wwhd/wwhd-null` on the worker against its Cemu build |
-| `link_order.py` | orders `wwhd-null`'s archive members like `wwhd`'s link (see below) |
+| `CMakeLists.txt` (and `../CMakeLists.txt`) | the build: Cemu's libraries from its source tree as a subproject, without Latte and with our forks in place of their originals; our sources in CemuCafe's compile context; `wwhd-null` linked like Cemu's own executable |
+| `build.sh` | configures and builds `build/wwhd/wwhd-null` with CMake on the worker |
+| `link_order.py`, `link_order.txt` | the order `wwhd-null` links archive members in: the reference's (see below) |
 
     tools/worker/job start wwhd-build src/build.sh
     tools/worker/job start null-det env CEMU_BIN=/wwhd/WWHDRecomp/build/wwhd/wwhd-null \
         tools/reference/determinism.sh /wwhd/data/traces/null 600 tools/reference/routes/title-to-game.txt
 
+**The build** is CMake's (`../CMakeLists.txt`, `CMakeLists.txt`); `build.sh` runs it with the
+worker's settings. Cemu comes in as a subproject from `CEMU_SRC`, the same patched tree the reference
+is built from (patch 0015 lets its CMake files work as a subproject), configured as Cemu's own build
+is but without its wxWidgets GUI, its dependencies from vcpkg with Cemu's manifest (restored from
+vcpkg's binary cache). The first build compiles Cemu's libraries too, 11-12 minutes with 10 jobs on
+the worker; after that a change compiles what it touches and links twice (below), with ThinLTO's
+cache sparing most of the code generation: a one-file change takes about 10 s. Our sources compile as CemuCafe's own files do: its include
+directories, definitions and options and those of its directories, and the usage requirements of
+what it links, with Cemu's precompiled header, at -O2 and without LTO (the flags match what the old
+`build.sh` gave them, apart from wxWidgets' and GTK's, which only Cemu's GUI uses). To build by hand:
+
+    cmake -S . -B build/wwhd -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+    cmake --build build/wwhd -j 10
+
+Options: `CEMU_SRC`, `WWHD_SDL3` (SDL3 with video for the window), `WWHD_RECOMP_DIR`, `WWHD_FORKS`
+and `WWHD_LINK_ORDER` (on for Linux; elsewhere nothing compares with the reference's guest memory,
+so a plain link does). The executable built with CMake gives the same traces, command streams and
+sound as the one `build.sh` linked by hand before, on all six routes, and the same frames.
+
 **The runtime** (M3) is linked into `wwhd-null`, together with the recompiled program when
-`tools/recomp/build.sh` has built it (`RECOMP_DIR`, default `build/recomp`; `RECOMP_DIR=` for
-none). The frontend installs Cemu's execution seam (`g_ppcExecuteHook`, cemu-patches/0011) before
+`tools/recomp/build.sh` has generated it (`RECOMP_DIR`, default `build/recomp`; `RECOMP_DIR=` for
+none); the build compiles it. The frontend installs Cemu's execution seam (`g_ppcExecuteHook`, cemu-patches/0011) before
 launching the title. By default the hook runs Cemu's exact interpreter loop, so the trace stays
 the reference's. With `WWHD_NATIVE=diff`, sampled calls of pure functions also run natively and are
 checked against the interpreter (options in `runtime/diff.cpp`). **`WWHD_NATIVE=on` runs the
@@ -42,7 +62,7 @@ time. `WWHD_RT_LOG=path` collects the runtime's log (and, in diff mode, per-func
 `path.funcs.csv` at exit).
 
 **Overrides** (`overrides/`, D9) replace generated functions: `config/US_v0/overrides.txt` lists
-them, `tools/recomp/generate.py` emits their bodies as `orig_f_X`, and `build.sh` compiles
+them, `tools/recomp/generate.py` emits their bodies as `orig_f_X`, and the build compiles
 `overrides/*.cpp` like generated code and links them with it. The only one so far is the game's task
 loop (`f_0275FFCC`), a **real-time fast path** (D19): with the virtual clock, in diff mode or on
 Cemu's three host threads it runs the game's code (`orig_f_X`), so every check sees the game's own
@@ -69,12 +89,13 @@ interpreted), every import's relocated branch sites (all must lead to one trampo
 relocated data-import immediate, and, in diff mode, its store decoder against the generator's
 store census. Any disagreement stops the run.
 
-**`wwhd`** (M0b.1) is Cemu's libraries with Latte on Vulkan, and our frontend instead of the
-wxWidgets GUI. Cemu's `main.cpp` still parses `-g GAME` and calls `WindowSystem::Create()`, which
-is ours. Its frames on the route are byte-identical to Cemu_release's.
+**`wwhd`** (M0b.1) was Cemu's libraries with Latte on Vulkan and our frontend; its frames were
+byte-identical to Cemu_release's. Since WW-3's CMake build it isn't built: Cemu_release itself is the
+comparison. Cemu's `main.cpp` still parses `-g GAME` and calls `WindowSystem::Create()`, which is
+ours.
 
-**`wwhd-null`** (M0b.2) is headless and has no Latte: `libCemuCafe.a` is copied without the
-objects built from `src/Cafe/HW/Latte`, except the address library, which gx2 needs for surface
+**`wwhd-null`** (M0b.2) has no Latte: Cemu's CemuCafe target loses the sources in
+`src/Cafe/HW/Latte` at configure time, except the address library, which gx2 needs for surface
 layouts, and the pieces the renderer uses (below). Along the route its OS-call trace equals the reference's: 59,531,239 calls to f600, and
 all 1,124,796,468 calls over the whole route into gameplay, which takes 12 minutes, about 2x
 faster than the reference on the GPU.
@@ -82,8 +103,12 @@ faster than the reference on the GPU.
 Link order matters. Static constructors run in link order, and each of Cemu's `SysAllocator`s
 takes its slot in guest memory (0x0E000000 up) as it is constructed. Leaving Latte out changes
 the order in which the linker pulls archive members, and with it host-side addresses the game
-sees in registers. `build.sh` therefore links `wwhd-null` twice: once to learn which members it
-needs, then with those members as explicit objects in `wwhd`'s order.
+sees in registers. So the build links `wwhd-null` twice: `wwhd-null-unordered`, whose map says
+which members it needs, then `wwhd-null` with those members as explicit objects (a response file,
+`link_order.py link`) in the order the reference's link pulled them in. `link_order.txt` keeps that
+order (1,759 members, saved with `link_order.py save` from a link of Cemu's own line); make it again
+when the pinned Cemu or its vcpkg libraries change. Members it doesn't list go last: today our
+SDL3's video parts and glslang's limits.
 
 **Saves** live where Cemu keeps them: `portable/mlc01/usr/save/00050000/10143500/user/80000001/`
 (`cking.sav`, the Pictograph photos `cking_pic*.sav`, `cking_playlog.sav`). The game reads and
@@ -121,9 +146,9 @@ place of Cemu's object. `src/forks.txt` lists them (25 so far: snd_core; the sch
 coreinit's threads, scheduler, alarms, message and thread queues, spinlocks, synchronization and
 callbacks, and the Espresso timeslices and timer with the virtual clock; gx2's core; proc_ui; TCL;
 the HLE dispatcher and trace recorder; fibers, with our own context switch) and
-`tools/cemu_fork.py` creates missing ones. Every Cemu archive that loses objects (Latte's, or
-forked ones) is linked as a filtered copy, `lib<name>_wwhd.a`. They compile exactly as Cemu compiles them (its flags for
-that file, ThinLTO bitcode) and `link_order.py` puts them at Cemu's objects' positions, so static
+`tools/cemu_fork.py` creates missing ones. Each takes its original's place in the Cemu target
+that had it, so it compiles exactly as Cemu compiles that file (ThinLTO bitcode included) and lands
+in the same archive under the same name, where the ordered link puts Cemu's object: static
 constructors, and the guest-memory slots of their SysAllocators, keep their order and addresses. A
 fork is ours to change from then on (Cemu patches in `tools/reference/cemu-patches` no longer reach
 it); `WWHD_FORKS=0 src/build.sh build/wwhd-cemu` builds with Cemu's objects instead, to record

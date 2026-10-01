@@ -28,7 +28,8 @@
 #include <unistd.h>
 
 #if defined(__x86_64__) && !defined(_WIN32)
-extern "C" char wwhd_fiber_switch[], wwhd_fiber_switch_end[];   // src/runtime/fiber/FiberUnix.cpp
+// src/runtime/fiber/FiberUnix.cpp; weak: without our forks (WWHD_FORKS=OFF) both are 0, and no pc is in between
+extern "C" __attribute__((weak)) char wwhd_fiber_switch[], wwhd_fiber_switch_end[];
 #endif
 
 namespace wwhd::rt

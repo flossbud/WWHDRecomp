@@ -157,16 +157,15 @@ desktop. `REF_SAVE=dir` (run.sh) or `WWHD_SAVE=dir` (play.sh) installs it. It is
   a store census.
 - `build.sh`: compiles on the worker in about 11 min, longer than one tool call.
 
-**Runtime** (`src/`; `src/build.sh` builds on the worker in about 5 min):
+**Runtime** (`src/`; `src/build.sh` builds it with CMake on the worker: 11-12 min the first time, about 10 s for a one-file change):
 - **`build/wwhd/wwhd-null` is the product.** It holds the recompiled program
   (`WWHD_NATIVE=on`), our OS layer, the null GPU and, with `WWHD_RENDER=vk`, our renderer.
   - The null GPU (`src/gpu/null_gpu.cpp`) is a command processor that keeps the register file and
     does every guest-visible effect.
-  - `build/wwhd/wwhd` is Cemu's Latte with our frontend, kept for comparison.
-- **Link order matters.** Cemu's archives are linked in `wwhd`'s member order
-  (`src/link_order.py`), or Cemu's `SysAllocator` slots shift and guest addresses in 0x0E000000+
-  differ. Forks replace Cemu's objects at the same position. Archives that lose objects are
-  linked as `lib<name>_wwhd.a`.
+- **Link order matters.** Cemu's archive members are linked in the reference's order
+  (`src/link_order.txt`, `src/link_order.py`), or Cemu's `SysAllocator` slots shift and guest
+  addresses in 0x0E000000+ differ. Forks replace Cemu's files inside Cemu's targets, so their
+  objects keep the originals' names and positions.
 - **`WWHD_NATIVE=diff`** is diff mode (D8.2): pure calls and cycles checked against the
   interpreter. Latest on the save route: 1,118,003 checked calls, 0 mismatches.
 - **Our OS layer** (`src/os`, src/README):
@@ -320,9 +319,27 @@ Pipelines come from shader variants, not state, so nothing was changed.
   routes (it was asleep). A dungeon proper
   (enemies, puzzles): from Hyrule Castle (warp route's end, B gets out of the boat), or Dragon Roost.
 
-### 6. Then, roughly in this order (ask the owner)
-- **Our own CMake build** for `src/`. Today `src/build.sh` borrows Cemu's link line. It's needed
-  before Windows, macOS or Android.
+### 6. Our own CMake build: done (WW-3, the owner's choice)
+
+- `CMakeLists.txt` (root) and `src/CMakeLists.txt` build `wwhd-null` from source: Cemu is a
+  subproject from `CEMU_SRC` (the reference's patched tree; patch 0015 makes its CMake files work
+  as a subproject), configured as Cemu's own build without its wxWidgets GUI. At configure time
+  CemuCafe loses Latte and each fork replaces its original inside Cemu's target. `src/build.sh`
+  now just runs CMake, so the old commands still work (`src/build.sh`, `WWHD_FORKS=0 src/build.sh
+  build/wwhd-cemu`). `tools/recomp/build.sh` only generates; the CMake build compiles the shards.
+- Link order: a first link (`wwhd-null-unordered`) gives the member set, the second links them in
+  the reference's order (`src/link_order.txt`, 1,759 members). Linux only (`WWHD_LINK_ORDER`).
+- Checked: the CMake binary matches the reference on all six routes (traces, command streams,
+  sound; route 1,124,796,468 calls), diff mode on warp is clean, and its menus frames on lavapipe
+  are byte-identical to the old binary's. The `WWHD_FORKS=0` build reproduces the baselines.
+- First build 11-12 minutes on the worker (Cemu's libraries included); a one-file change about 10 s.
+- `wwhd` (Cemu's Latte with our frontend) isn't built any more; Cemu_release is the comparison.
+  `frontend/window_system.cpp` still has its Xlib path, unused.
+- Not done: other platforms. Only the ordered link is Linux-specific (`WWHD_LINK_ORDER`, off
+  elsewhere); the flags are clang's; our own code isn't portable yet (the fibers' x86-64 context
+  switch, D19's arm64 item). Untested anywhere but the worker.
+
+### 7. Then, roughly in this order (ask the owner)
 - **The rest of D18:**
   - the file system, with `nn_save`;
   - the loader and memory map, giving the guest OS objects in Cemu's memory (the SysAllocators)
@@ -396,6 +413,16 @@ Pipelines come from shader variants, not state, so nothing was changed.
   so the whole title route takes about 4 hours per side.
 - **Size and speed:** a full-route trace is about 665 MB compressed. `stream_check route` takes
   about 10 min, `save` about 2.
+- **The CMake build:**
+  - `src/CMakeLists.txt` lists our sources by name; a new file must be added there.
+  - Cemu's `find_package()` targets are global (`CMAKE_FIND_PACKAGE_TARGETS_GLOBAL`), but its
+    `pkg_check_modules()` ones aren't (libusb). Our object libraries only take what they can see.
+  - `CemuResource` (the system font coreinit hands the game) used to come in only through Cemu's
+    GUI, so the executable links it itself.
+  - Every Cemu patch changes the tree's git hash, which Cemu compiles into every file
+    (`EMULATOR_HASH`). So reconfiguring after a patch recompiles all of Cemu, in the reference's
+    build and in ours.
+  - A `WWHD_FORKS=0` build is a separate build directory and a full compile.
 
 ## Unfinished odds and ends
 

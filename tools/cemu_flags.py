@@ -3,7 +3,7 @@ LTO flags, so our own sources compile against Cemu's headers exactly as Cemu's d
 
 Usage: python3 tools/cemu_flags.py BUILD/compile_commands.json SOURCE_SUFFIX
 (e.g. Espresso/Interpreter/PPCInterpreterFPU.cpp). Used by tools/recomp/fuzz/build.sh and
-src/build.sh.
+tools/shaders/build.sh (src/CMakeLists.txt gives our sources CemuCafe's compile context instead).
 """
 import json
 import shlex

@@ -1,6 +1,6 @@
 # Forks of Cemu's sources (docs/recompiler-design.md D18): our copy of a Cemu source file, under
-# Cemu's names, that src/build.sh links into wwhd-null in place of Cemu's object and at its position,
-# compiled with Cemu's flags for it. tools/cemu_fork.py creates the missing ones.
+# Cemu's names, that the build (src/CMakeLists.txt) compiles into Cemu's target in place of Cemu's
+# file: with Cemu's flags for it, and at its object's position in wwhd-null's link. tools/cemu_fork.py creates the missing ones.
 # our file (under src/)                  Cemu's (under $CEMU_SRC/src/)                 what it is
 os/snd_core/ax_aux.cpp                   Cafe/OS/libs/snd_core/ax_aux.cpp               the auxiliary (effect) buses
 os/snd_core/ax_exports.cpp               Cafe/OS/libs/snd_core/ax_exports.cpp           the exports, AXInit and the module registration

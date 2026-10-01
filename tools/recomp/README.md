@@ -11,15 +11,16 @@ Python generator (docs/recompiler-design.md D1, D11) plus the C++ runtime header
 | `runtime/recomp_tables.h` | layout of the tables generated next to the code (functions with purity, code hash and callees; imports; import sites; store census), read by `src/runtime` |
 | `fuzz/` | M1 instruction fuzzer: emitted code vs `PPCInterpreterSlim_executeInstruction` |
 | `generate.py` | M2: every function as C++ (gotos, musttail calls, jump-table switches, imports, D7 helper entries) into shards |
-| `build.sh` | M2: generate and compile the whole program on the worker (`build/recomp`, never committed) |
+| `build.sh` | M2: generate the whole program on the worker (`build/recomp`, never committed); `src/build.sh` compiles it |
 
 ## Whole program (M2)
 
     tools/worker/job start recomp-build tools/recomp/build.sh
 
-Generates `build/recomp/shard_*.cpp`, `funcs.h`, `func_table.cpp` and `imports.cpp`, then compiles
-them with Cemu's flags plus `-ffp-contract=off -fno-strict-aliasing`, against a precompiled
-`runtime/ppc_ops.h`. The build is incremental: only shards whose text changed recompile. The
+Generates `build/recomp/shard_*.cpp`, `funcs.h`, `func_table.cpp` and `imports.cpp`. The CMake build
+(`src/build.sh`, `src/CMakeLists.txt`) compiles them with CemuCafe's flags plus `-ffp-contract=off
+-fno-strict-aliasing`, against a precompiled `runtime/ppc_ops.h`. It is incremental: the generator
+rewrites only shards whose text changed, and only those recompile. The
 runtime functions they call (`rt_import`, `rt_import_data`, `rt_call_ctr`, `rt_jump_ctr`,
 `rt_bad_branch`, ...) are in `src/runtime`, which links it all into `wwhd-null` (M3).
 

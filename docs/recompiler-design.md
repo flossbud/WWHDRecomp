@@ -363,7 +363,7 @@ generated code names `f_X`: direct calls, `musttail` tail calls, falling through
 function, and the function table (D5), from which the runtime's indirect-call table (`rt_direct`)
 and its Dispatch are built, so all of them reach the override. The linker enforces the list: a
 listed function without an override is an undefined `f_X`, an override of an unlisted one a
-duplicate. `src/build.sh` compiles `src/overrides/*.cpp` like generated code (`funcs.h`, `ppc_ops.h`,
+duplicate. The build (`src/CMakeLists.txt`) compiles `src/overrides/*.cpp` like generated code (`funcs.h`, `ppc_ops.h`,
 `-ffp-contract=off -fno-strict-aliasing`) and links them with the recompiled program; only the
 listed functions' shards change. An override reads like generated code (`GPR(n)`, `rd32`/`wr32`,
 `RT_CALL_CTR`) and includes `src/overrides/override.h`. Checked with the first one (the task loop,
@@ -723,7 +723,8 @@ development-only reference that traces, captures and texture dumps are checked a
   place of Cemu's object at its position in the link, so its guest-memory slots keep their
   addresses (added 2026-09-30, for snd_core).
 * **Order, least coupled first:** leaf functions (memory, cache operations) and service stubs;
-  the platform shell (own CMake build, SDL3 window, input and audio device, which is also M5); the
+  the platform shell (own CMake build, done 2026-10-01; SDL3 window, input and audio device, which is
+  also M5); the
   small libraries (input, save, keyboard and error screens); `gx2`'s front half; audio; `coreinit`
   with the scheduler; the loader and memory map.
 * **Verification: the scheduler has two modes.** Traces are only comparable while scheduling is
@@ -765,6 +766,18 @@ development-only reference that traces, captures and texture dumps are checked a
     `nn_boss` and `nn_olv` (objects with vtables in Cemu's memory, IPC to Cemu's IOSU), `nlibcurl`
     and `nsysnet` (setup the rest of the library checks), and `OSGetSystemInfo` (returns a
     structure in Cemu's memory).
+* **Our own build (2026-10-01).** `CMakeLists.txt` builds `wwhd-null` with Cemu as a subproject
+  from its patched source tree (patch 0015), configured as Cemu's own build is but without its
+  wxWidgets GUI; at configure time CemuCafe loses Latte (all but what gx2 and the renderer use) and
+  each fork takes its original's place in the Cemu target that had it. Our sources compile in
+  CemuCafe's compile context, and the executable links like Cemu's own, twice on Linux: the second
+  link puts every archive member where the reference's link had it (`src/link_order.txt`), so
+  Cemu's `SysAllocator` slots keep their guest addresses. It replaced `src/build.sh`'s hand-edited
+  copy of Cemu's link line, which needed a prebuilt Cemu tree; the result gives the same traces,
+  command streams, sound and frames on all six routes. A first build takes 11-12 minutes on the
+  worker, a one-file change about 10 s (ThinLTO's cache). Only the ordered link (and its ThinLTO cache) is Linux's; for Windows, macOS or Android
+  these files are where a port starts: a plain link, per-compiler flags (ours are clang's), and our
+  own code made portable first (the fibers' context switch, D19).
 
 ### Profile of the native build (2026-09-30)
 
@@ -1099,7 +1112,8 @@ and `tw` are runtime hooks. Two findings: a signed-overflow UB in a naive `neg` 
 exploited, and NaN payloads, which depend on x86 operand order (see open question 4).
 
 **M2 status (2026-09-29):** done. `tools/recomp/generate.py` emits all functions in 13 s, and
-`tools/recomp/build.sh` compiles them on the worker in about 4 minutes with 8 jobs. Totals:
+`tools/recomp/build.sh` compiled them on the worker in about 4 minutes with 8 jobs (since WW-3 the
+CMake build compiles them). Totals:
 39,720 functions (39,705 from `functions.csv`, the `.syscall` stub, and 14 synthesised GHS
 restore entries per D7), 426 imports, 156 shards of 256 functions. There are 0 generator errors
 (no unknown instructions, no unresolved branches), and clang builds it with 0 errors and 0
@@ -1258,7 +1272,8 @@ calls to f600), and `wwhd-null` is deterministic run to run. Over the whole rout
 (10,800 frames), `wwhd-null` matches the reference's 1,124,796,468 calls exactly, in 12 minutes
 of wall time (the reference takes about 25 on the GPU). It is the fast harness for the CPU track. One trap: dropping objects changes
 the order of static constructors, which moves Cemu's `SysAllocator` slots in guest memory. So
-`wwhd-null` is linked with its archive members in `wwhd`'s order (`src/link_order.py`).
+`wwhd-null` is linked with its archive members in `wwhd`'s order (`src/link_order.py`; since the
+CMake build, in the reference's order kept in `src/link_order.txt`, and `wwhd` isn't built).
 
 The reference also renders on the worker's Intel GPU now. Its full-route trace equals the
 llvmpipe one (1,124,796,468 calls).

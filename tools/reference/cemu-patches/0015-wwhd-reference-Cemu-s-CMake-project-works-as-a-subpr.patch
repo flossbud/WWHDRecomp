@@ -1,0 +1,79 @@
+From cbc4b1f5016f1c745ee8ef314474f7b487075c4c Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 08:24:49 +0000
+Subject: [PATCH] wwhd-reference: Cemu's CMake project works as a subproject
+
+Cemu's CMake files name files by the top-level source directory, which is Cemu's own only when Cemu
+is the top-level project. WWHD's build (CMakeLists.txt in WWHDRecomp) adds Cemu as a subproject, so
+they now name them by Cemu's directory (the precompiled header, vcpkg's shallow check, metal-cpp,
+the macOS bundle's resources). Nothing changes when Cemu is built on its own.
+---
+ CMakeLists.txt     | 6 +++---
+ src/CMakeLists.txt | 6 +++---
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 644032c..6173534 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -23,7 +23,7 @@ if (ENABLE_VCPKG)
+ 	# check if vcpkg is shallow and unshallow it if necessary
+ 	execute_process(
+ 	COMMAND git rev-parse --is-shallow-repository
+-	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/dependencies/vcpkg
++	WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/dependencies/vcpkg
+ 	OUTPUT_VARIABLE is_vcpkg_shallow
+ 	OUTPUT_STRIP_TRAILING_WHITESPACE
+     )
+@@ -32,7 +32,7 @@ if (ENABLE_VCPKG)
+ 		message(STATUS "vcpkg is shallow. Unshallowing it now...")
+ 		execute_process(
+ 			COMMAND git fetch --unshallow
+-			WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/dependencies/vcpkg"
++			WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/dependencies/vcpkg"
+ 			RESULT_VARIABLE result
+ 			OUTPUT_VARIABLE output
+ 		)
+@@ -210,7 +210,7 @@ if (ENABLE_OPENGL)
+ endif()
+ 
+ if (ENABLE_METAL)
+-    include_directories(${CMAKE_SOURCE_DIR}/dependencies/metal-cpp)
++    include_directories(${PROJECT_SOURCE_DIR}/dependencies/metal-cpp)
+ 
+     add_compile_definitions(ENABLE_METAL)
+ endif()
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index d8378c3..68a3762 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -49,7 +49,7 @@ function(cemu_use_precompiled_header target_name)
+ 	if(MSVC)
+ 		target_precompile_headers(${target_name} REUSE_FROM CemuCommon)
+ 	else()
+-		target_precompile_headers(${target_name} PRIVATE "${CMAKE_SOURCE_DIR}/src/Common/precompiled.h")
++		target_precompile_headers(${target_name} PRIVATE "${Cemu_SOURCE_DIR}/src/Common/precompiled.h")
+ 	endif()
+ endfunction()
+ 
+@@ -99,7 +99,7 @@ set(OUTPUT_NAME "Cemu_$<LOWER_CASE:$<CONFIG>>")
+ if (MACOS_BUNDLE)
+ 	set_property(TARGET CemuBin PROPERTY MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resource/MacOSXBundleInfo.plist.in")
+ 
+-	set(RESOURCE_FILES "${CMAKE_SOURCE_DIR}/src/resource/cemu.icns")
++	set(RESOURCE_FILES "${Cemu_SOURCE_DIR}/src/resource/cemu.icns")
+ 	target_sources(CemuBin PRIVATE "${RESOURCE_FILES}")
+ 
+ 	set(MACOSX_BUNDLE_ICON_FILE "cemu.icns")
+@@ -121,7 +121,7 @@ if (MACOS_BUNDLE)
+ 	set(FOLDERS gameProfiles resources)
+ 	foreach(folder ${FOLDERS})
+ 		add_custom_command (TARGET CemuBin POST_BUILD
+-			COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory "${CMAKE_SOURCE_DIR}/bin/${folder}" "$<TARGET_BUNDLE_DIR:CemuBin>/Contents/SharedSupport/${folder}")
++			COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory "${Cemu_SOURCE_DIR}/bin/${folder}" "$<TARGET_BUNDLE_DIR:CemuBin>/Contents/SharedSupport/${folder}")
+ 	endforeach(folder)
+ 
+ 	if (ENABLE_VULKAN)
+-- 
+2.47.3
+

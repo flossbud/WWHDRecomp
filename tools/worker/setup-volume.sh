@@ -7,7 +7,7 @@
 #           (after tools/reference/cemu-patches changed)
 #   sdl3:   SDL 3.4.10, the version Cemu's vcpkg build compiles against, static and with video
 #           (X11, Wayland), audio and Vulkan -> /wwhd/opt/sdl3. wwhd-null links it in place of
-#           vcpkg's, which Cemu builds for controllers only (src/build.sh)
+#           vcpkg's, which Cemu builds for controllers only (CMakeLists.txt, WWHD_SDL3)
 #   orig:   extract code/ and meta/ from the .wua in /wwhd/data/rom -> /wwhd/data/orig
 # Idempotent: finished steps are skipped.
 set -euo pipefail

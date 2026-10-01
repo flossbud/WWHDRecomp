@@ -5,7 +5,7 @@ Usage:
 
 A fork is a copy of one of Cemu's source files ($CEMU_SRC, default ~/opt/cemu-src: the pinned commit
 with tools/reference/cemu-patches) under Cemu's names, with a header saying where it comes from
-(MPL-2.0). src/build.sh links it into wwhd-null in place of Cemu's object. Existing forks are ours
+(MPL-2.0). The build (src/CMakeLists.txt) compiles it into Cemu's target in place of Cemu's file. Existing forks are ours
 and never overwritten.
 """
 import os

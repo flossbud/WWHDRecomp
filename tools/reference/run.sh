@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Start the reference Cemu on a virtual display (Xvfb), rendering on the host GPU.
 #   CEMU_BIN      executable (default: the worker's patched build /wwhd/opt/cemu-src/bin/Cemu_release,
-#                 else the extracted 2.6 AppImage; build/wwhd/wwhd is our own frontend, src/build.sh)
+#                 else the extracted 2.6 AppImage; build/wwhd/wwhd-null is ours, src/build.sh)
 #   CEMU_PORTABLE its portable data dir (default: next to the real binary, .../portable)
 #   WWHD_GAME     path to the game (.wua or extracted title dir)
 #   DISPLAY    default :99 (an Xvfb is started if none is running there)
