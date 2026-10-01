@@ -931,7 +931,12 @@ sleep.
 dungeon, Windfall) timed, to decide on three host threads; (5) fast paths (the task loop's, done
 2026-09-30, above; more where profiles show the game spinning).
 
-**Open**: one host thread or three (item 4 decides); real vsync needs the GPU machine (open question
+**Heavier routes** (2026-10-01, item 4): sailing (`sail`), the menus and the Pictograph Box
+(`menus`), and the Ballad of Gales' warp to the Tower of the Gods and down to Hyrule Castle (`warp`)
+run at 2.05x, 2.54x and 2.22x real time with the virtual clock on the worker's power-capped i5 and
+one host thread (the save route 2.24x): one host thread is enough so far.
+
+**Open**: one host thread or three (item 4 decides; so far one); real vsync needs the GPU machine (open question
 8); whether Cemu's three-thread mode has known behaviour differences for this game.
 
 ### D20. Shaders prepared before play, with a progress screen

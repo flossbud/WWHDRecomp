@@ -45,7 +45,7 @@ for f in draw texture latte_glue; do
     clang++ "${vkflags[@]}" -fno-lto -include "$cemu/src/Common/precompiled.h" -O2 \
         -I"$cemu/dependencies/Vulkan-Headers/include" -c "$root/src/gpu/vk/$f.cpp" -o "$out/vk_$f.o" & pids+=($!)
 done
-for f in dispatch imports diff profile; do compile "$root/src/runtime/$f.cpp" "rt_$f.o"; done
+for f in dispatch imports diff profile without_forks; do compile "$root/src/runtime/$f.cpp" "rt_$f.o"; done
 # overrides (D9): generated functions replaced by ours (config/US_v0/overrides.txt), compiled like the
 # generated code (its header, strict FP, no strict aliasing); only with the recompiled program
 override_objs=()
@@ -119,7 +119,7 @@ link() {  # link NAME OBJECTS...
 }
 link wwhd "$out/cemu_boot.o" "$out/window_system.o"
 null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/audio_sdl.o" "$out/overlay.o" "$out/null_gpu.o" "$out"/vk_{vk,renderer,present,shader_cache,shader_list,draw,texture,latte_glue}.o
-           "$out"/rt_{dispatch,imports,diff,profile}.o "${os_objs[@]}")
+           "$out"/rt_{dispatch,imports,diff,profile,without_forks}.o "${os_objs[@]}")
 limits=$(ls "$cemu"/build/vcpkg_installed/*/lib/libglslang-default-resource-limits.a | head -1)  # glslang's defaults (draw.cpp)
 if [ -n "$recomp" ]; then
     null_objs+=("$recomp"/shard_*.o "$recomp/func_table.o" "$recomp/imports.o" "${override_objs[@]}")

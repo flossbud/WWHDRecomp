@@ -1,0 +1,18 @@
+# Route: sailing from the Outset dock with the 100% save (REF_SAVE=/wwhd/data/saves/wwhd_100), for
+# renderer and timing checks on the open sea: continue-100.txt's inputs, then board the King of Red
+# Lions and sail west into open sea, 2940 frames. FRAME BUTTONS [FRAMES_HELD]; frames are
+# GX2SwapScanBuffers counts (cemu-patches/0007, 0008). Found by looking at captures (survey.sh).
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870, Link at its end facing the sea
+900 LDOWN 15   # back along the dock (the boat is moored on its left, nearer the shore)
+915 LLEFT 30   # off the dock: Link jumps over the boat into the water
+1000 LRIGHT 40 # swim back east to the boat
+1045 A 5       # "Climb": aboard the King of Red Lions by f1095 ("A Set Sail", "B Get Out")
+1110 A 5       # set sail: north, with Beedle's ship on the left and the island on the right
+1140 LUP 150   # past Beedle's ship
+1290 LLEFT 75  # turn west, away from the island
+1365 LUP 900   # open sea from ~f1350: sail, wake, waves, the horizon
+2265 LRIGHT 60 # a gentle turn
+2325 LUP 600

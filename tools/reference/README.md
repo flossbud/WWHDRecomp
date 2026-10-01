@@ -114,6 +114,17 @@ the virtual clock, twice each, from an empty shader cache (design D20): the cach
 first start from the shader list that a capture run made (`WWHD_SHADER_SOURCES`), must give the same
 captures, byte for byte, and meet nothing during play that wasn't prepared before it.
 
+**The routes** (`routes/`, named in `routes.sh`, which `stream_check.sh`, `timing.sh` and
+`baseline.sh` read): `route` (title-to-game.txt, a fresh boot into gameplay, 10800 frames); from the
+100% save, `save` (continue-100.txt, the Outset dock, 1800), `tour` (the dock and the pause menu,
+2190), `sail` (board the King of Red Lions and sail into open sea, 2940), `menus` (the item screen,
+the Pictograph Box, the sea chart, 1920) and `warp` (the Ballad of Gales, the cyclone to the Tower of
+the Gods, its courtyard and the ring of light down to Hyrule Castle, 3780). They were found by
+looking at captures of short runs (`survey.sh`, or `run.sh` with `CEMU_SHOT_FRAMES`); the route files
+say what each input does and what the game shows. `baseline.sh ROUTE` records a new route's
+baselines: the reference twice (its trace must not change between runs), Cemu's own libraries
+(`build/wwhd-cemu`: the command stream and sound), then `stream_check.sh` for wwhd-null.
+
 `hle_trace.py diff` normalizes Cemu's `PPCCallback<host pointer>` stub names, which change with
 ASLR. `--ignore-core` compares without the core index.
 

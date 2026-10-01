@@ -1,22 +1,21 @@
 #!/usr/bin/env bash
-# timing.sh save|route OUT_DIR  - how fast wwhd-null runs a scripted route natively, without the trace
+# timing.sh ROUTE OUT_DIR  - how fast wwhd-null runs a scripted route natively, without the trace
 # (which costs ~40%): the virtual clock keeps the work identical from run to run, WWHD_EXIT_FRAME
 # ends it, and the profiler (WWHD_PROFILE, src/runtime/profile.cpp) records where the CPU time went.
 # Prints wall time, speed against the game's 30 frames a second and CPU time per thread; the full
 # report: python3 tools/profile_report.py OUT_DIR/profile.txt. Extra environment passes through
 # (e.g. WWHD_RENDER=vk REF_GPU=llvmpipe). Run it on the worker: tools/worker/job start NAME ...
-#   save:  continue-100.txt from the 100% save, 1800 frames
-#   route: title-to-game.txt, 10800 frames
+# ROUTE is a name from routes.sh (save: continue-100.txt from the 100% save, 1800 frames; route:
+# title-to-game.txt, 10800 frames; tour; sail).
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-which=${1:?usage: timing.sh save|route OUT_DIR}
+which=${1:?usage: timing.sh ROUTE OUT_DIR}
 out=${2:?out dir}
 mkdir -p "$out"
-case "$which" in
-    save) frames=1800 route=$here/routes/continue-100.txt; export REF_SAVE=/wwhd/data/saves/wwhd_100 ;;
-    route) frames=10800 route=$here/routes/title-to-game.txt ;;
-    *) echo "save or route" >&2; exit 2 ;;
-esac
+. "$here/routes.sh"
+route_info "$which" || { echo "routes: $route_names" >&2; exit 2; }
+route=$here/routes/$route
+[ -n "$save" ] && export REF_SAVE=$save
 export CEMU_BIN=${CEMU_BIN:-$(cd "$here/../.." && pwd)/build/wwhd/wwhd-null} WWHD_NATIVE=${WWHD_NATIVE:-on}
 export REF_PIDFILE=$out/pid WWHD_PROFILE=$out/profile.txt WWHD_EXIT_FRAME=$frames
 start=$(date +%s.%N)

@@ -1,0 +1,24 @@
+# Route: menus and the Pictograph Box with the 100% save (REF_SAVE=/wwhd/data/saves/wwhd_100):
+# continue-100.txt's inputs, then the item screen, the Pictograph Box (its framed view and its "album
+# full" message) and the sea chart, 1920 frames. FRAME BUTTONS [FRAMES_HELD]; frames are
+# GX2SwapScanBuffers counts (cemu-patches/0007, 0008). Found by looking at captures.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+900 PLUS 5     # pause menu: the item screen
+960 DOWN 3     # the cursor starts on the ITEMS tab: to "Save"
+990 RIGHT 3    # to the Telescope
+1020 DOWN 3
+1050 DOWN 3    # to the Pictograph Box (12 shots)
+1080 R 3       # put it on R (in place of the Hero's Bow)
+1110 PLUS 5    # close the menu
+1170 R 5       # the Pictograph Box: a first-person view in a frame
+1230 LRIGHT 30 # look around
+1290 A 5       # the shutter: the album is full, "You can't record any more pictographs"
+1350 A 5       # dismiss it
+1410 B 5       # put the box away
+1530 PLUS 5    # the menu again (the cursor stays on the Pictograph Box, so R would assign it again)
+1590 L 5       # MAP: the sea chart
+1710 L 5       # back to ITEMS
+1830 PLUS 5    # close; back on the dock

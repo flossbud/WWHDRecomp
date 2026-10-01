@@ -296,11 +296,27 @@ Pipelines come from shader variants, not state, so nothing was changed.
   linear-special destinations, 3D textures and cube-map targets, depth-stencil textures loaded from
   memory. New routes would show them.
 
-### 5. Then, roughly in this order (ask the owner)
-- **Extend the routes**: sailing, a dungeon room, the menus and the Pictograph Box. Start from the
-  100% save and warp with the Ballad of Gales. Record new baselines with the reference, then run
-  native, G0 and timing on them. D19 step 4 uses heavier routes to decide between one host thread
-  and three.
+### 5. Extended routes: done on the worker (WW-3, the owner's choice)
+
+- Three new routes from the 100% save (`tools/reference/routes/`, named in `routes.sh`): `sail`
+  (board the King of Red Lions, sail into open sea, 2940 frames), `menus` (the item screen, the
+  Pictograph Box's view and "album full" message, the sea chart, 1920) and `warp` (the Ballad of
+  Gales, the cyclone to the Tower of the Gods, its courtyard, the ring of light down to Hyrule
+  Castle, 3780). The route files say what each input does; `warp-100.txt`'s header says how
+  conducting works in WWHD (right stick notes, left stick meter).
+- Baselines for them and for `tour` (`tools/reference/baseline.sh`): the reference is deterministic
+  on each, and wwhd-null's trace, command stream and sound are identical (sail 85,626,017 packets,
+  menus 35,664,037, warp 102,492,391, tour 53,853,702). Diff mode on `warp`: 2,427,705 checks, 0
+  mismatches. `WWHD_FORKS=0` builds again (weak stand-ins in `src/runtime/without_forks.cpp`).
+- G3 on them (every 60 frames, against reference patch 0014): sail 49/49 (worst 90.9 dB), menus
+  32/32 (89.3), warp 63/63 (72.2, the beam of light into Hyrule).
+- Timing (virtual clock, worker, one host thread): sail 2.05x real time, menus 2.54x, warp 2.22x,
+  save 2.24x. One host thread is enough so far (D19 step 4).
+- Still to do: real time on the desktop for the new routes (it was asleep), and capturing their
+  shaders into the shader list (`WWHD_SHADER_SOURCES`, tools/shaders/README.md). A dungeon proper
+  (enemies, puzzles): from Hyrule Castle (warp route's end, B gets out of the boat), or Dragon Roost.
+
+### 6. Then, roughly in this order (ask the owner)
 - **Our own CMake build** for `src/`. Today `src/build.sh` borrows Cemu's link line. It's needed
   before Windows, macOS or Android.
 - **The rest of D18:**

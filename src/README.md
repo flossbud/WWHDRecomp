@@ -127,7 +127,8 @@ that file, ThinLTO bitcode) and `link_order.py` puts them at Cemu's objects' pos
 constructors, and the guest-memory slots of their SysAllocators, keep their order and addresses. A
 fork is ours to change from then on (Cemu patches in `tools/reference/cemu-patches` no longer reach
 it); `WWHD_FORKS=0 src/build.sh build/wwhd-cemu` builds with Cemu's objects instead, to record
-baselines. Input comes from the input
+baselines (what the rest of wwhd-null takes from the forks has weak stand-ins there,
+`runtime/without_forks.cpp`; it reproduces the save route's command stream and sound exactly). Input comes from the input
 script when `CEMU_INPUT_SCRIPT` names one (the reference's format, so routes replay identically),
 otherwise from the window's keyboard and gamepad. The keyboard answers itself when
 `CEMU_SWKBD_AUTO` gives a name (as the reference's does; `tools/reference/run.sh` defaults to
