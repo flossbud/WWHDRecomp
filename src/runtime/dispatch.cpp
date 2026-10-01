@@ -397,7 +397,19 @@ namespace wwhd::rt
 			const char* e = getenv("WWHD_60FPS");
 			return e && atoi(e) == 1;
 		}();
-		return asked && s_fastPaths;
+		return asked && s_mode == Mode::Native;
+	}
+
+	uint32 SixtyFrom()
+	{
+		static const uint32 from = [] { const char* e = getenv("WWHD_60FPS_FROM"); return e ? (uint32)atoi(e) : 0u; }();
+		return SixtyFps() ? from : ~0u;
+	}
+
+	uint32 GameFrame(uint32 swap)
+	{
+		const uint32 from = SixtyFrom();
+		return swap < from ? swap : from + (swap - from) / 2;
 	}
 
 	uint64 QuietBegin(PPCInterpreter_t* ctx, uint32 low, uint32 high)

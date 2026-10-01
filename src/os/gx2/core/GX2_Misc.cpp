@@ -18,7 +18,7 @@
 
 #include "Cafe/HW/Latte/ISA/LatteReg.h"
 
-namespace wwhd::rt { bool SixtyFps(); }   // runtime/dispatch.cpp
+namespace wwhd::rt { uint32 SixtyFrom(); }   // runtime/dispatch.cpp
 
 void gx2Export_GX2SetSwapInterval(PPCInterpreter_t* hCPU)
 {
@@ -29,14 +29,21 @@ void gx2Export_GX2SetSwapInterval(PPCInterpreter_t* hCPU)
 	}
 	else
 	{
-		// wwhd: the 60 fps prototype (D21) presents every vsync; the game asks for every other one
-		// (30 fps) and ticks every frame, so the tick goes every other frame (src/overrides/tick.cpp)
+		// wwhd: 60 fps (D21) presents every vsync; the game asks for every other one (30 fps) and
+		// runs its frame once a swap (src/overrides/sixty.cpp has what then runs at which rate;
+		// with WWHD_60FPS_FROM it switches there, through wwhd_SetSwapInterval)
 		uint32 interval = hCPU->gpr[3];
-		if (interval == 2 && wwhd::rt::SixtyFps())
+		if (interval == 2 && wwhd::rt::SixtyFrom() == 0)
 			interval = 1;
 		LatteGPUState.sharedArea->swapInterval = interval;
 	}
 	osLib_returnFromFunction(hCPU, 0);
+}
+
+// wwhd: 60 fps from a given swap on (src/overrides/sixty.cpp)
+void wwhd_SetSwapInterval(uint32 interval)
+{
+	LatteGPUState.sharedArea->swapInterval = interval;
 }
 
 void gx2Export_GX2GetSwapInterval(PPCInterpreter_t* hCPU)

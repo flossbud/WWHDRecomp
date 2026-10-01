@@ -6,4 +6,6 @@
 # address   where                              what
 0275FFCC    src/overrides/task_loop.cpp        the task message loop: in real time, sleeps through idle ticks (D19)
 027D6BB0    src/overrides/gamepad_view.cpp     a view of a scene: the GamePad's screen is skipped in real time (nothing shows it)
-02746790    src/overrides/tick.cpp             the game's tick: every other frame in the 60 fps prototype (D21)
+025F172C    src/overrides/sixty.cpp            the game's frame body (m_Do_main): at 60 fps, the draw pass only between whole ticks (D21)
+025D475C    src/overrides/sixty.cpp            fopAc_Execute, every actor's execute: noted for the state probe (D21)
+0274C264    src/overrides/sixty.cpp            fw_procFrame, sead's whole frame: watched by the 60 fps store census (D21)

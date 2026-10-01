@@ -374,6 +374,13 @@ jobs draw each scene's views through `f_027D6BB0` (`gfx_RenderSceneView`), and a
 target is the GamePad's 854x480 rectangle is the ITEMS menu for a GamePad that isn't there (9% of
 the draws, about 1% of CPU). Forced with the virtual clock (`WWHD_SKIP_GAMEPAD=1`), exactly those
 draws go and the TV's frames stay byte-identical; unforced, every check runs the game's code.
+The 60 fps work (D21, WW-4) adds three, in `src/overrides/sixty.cpp`: m_Do_main's frame body
+(`f_025F172C`, held to whole ticks at 60 fps), `fopAc_Execute` (`f_025D475C`, noted for the state
+probe) and sead's `fw_procFrame` (`f_0274C264`, watched by the store census); the WW-3 prototype's
+override of the tick (`f_02746790`) is gone. With 60 fps and the probe off each calls its original.
+Adding or removing an override changes `funcs.h` (the `orig_f_X` declarations), which every shard
+includes: the next build compiles all generated code again (about 12 minutes on the worker), so
+batch them.
 
 ### D10. Cemu's boot-time code patches
 
@@ -395,8 +402,10 @@ with their original values and the evidence. The generator applies them before g
 generated code is the code Cemu runs, and the boot check finds 0 functions patched in memory. A
 patch Cemu applies that the csv lacks would show up there and keep its function interpreted.
 
-Cemu graphic-pack code patches (such as the FPS fix at `0x025AC25C`) are handled the same way:
-they become overrides only when wanted.
+Cemu graphic-pack code patches are handled the same way: they become overrides only when wanted.
+(The pack that patches `0x025AC25C` is Cemu's "FPS Slowdown" workaround: a `nop` that keeps the
+Miiverse thread `OliveOperationMgrThread` suspended. It doesn't touch the frame rate, and no pack has
+ever changed WWHD's frame rate or speed; D21.)
 
 ### D11. Build and toolchain
 
@@ -1109,53 +1118,156 @@ instead. `PipelineDesc` is unchanged.
 
 ### D21. 60 fps (M6): what the game does each frame
 
-*Started 2026-10-01; findings so far, no enhancement yet.* **Decision (the owner, 2026-10-01):
-native 60 fps, then uncapped.** The game's own logic is to run at 60 ticks a second (and in the end
-at any rate) and play exactly as at 30. Interpolation, the plan below and in D9, stays a fallback,
-not the goal. The handoff's "The next task" has suggestions for where to start.
+*Started 2026-10-01 (WW-3); research done 2026-10-01 (WW-4): findings, a probe and the options
+below; the owner's choice is recorded at the end.* **Decision (the owner, 2026-10-01): native
+60 fps, then uncapped.** The game's own logic is to run at 60 ticks a second (and in the end at any
+rate) and play exactly as at 30: the same speeds, jump arcs, timers, animations, cutscenes and sound
+sync. Not interpolation: no extra frames drawn between 30 Hz ticks.
 
-* **The frame loop** is sead's game framework on the main thread (core 1): main (`f_02005EA8`)
-  sets `GX2SetSwapInterval(2)` once, then the framework's loop (`f_027476D8` -> `f_0274BF78` ->
-  `f_0274C00C`) runs the per-frame function `f_0274C264` (sead's `procFrame_` by shape): virtual
-  calls at framework vtable slots 0xd4, 0xdc and 0x6c, then (unless paused) 0xec and
-  `f_0274C038`, then `gfx_EndFrame` through `f_020350C4` (draw done, the outputs' copies, flush,
-  `GX2SwapScanBuffers`); it waits for vsync itself (`GX2WaitForVsync` about twice a frame, from
-  `f_0274C874`) and records the frame's duration (+0x78) and start (+0x80). The game reads the
-  clock about 100 times a frame (`OSGetSystemTime`, through one wrapper at `f_02760DE8`).
-* **Frame-locked play, clock-driven scenery.** With `WWHD_VSYNC_HZ=120` (vsync twice as often,
-  so the game makes 60 frames a second; with the virtual clock, lavapipe captures), frame N of
-  the save route has Link, the camera, the boat and its bobbing and the HUD exactly where they are
-  at 30 fps, while the clouds, the waves, a fish's shadow and the rupee sparkle are elsewhere
-  (15-17 dB). Gameplay advances one tick per frame; the scenery follows the clock. Running the
-  game at 60 fps would double its speed under a sky that keeps real time, so M6 is tick
-  interpolation, as planned (D9): 30 ticks a second, and between two ticks one more frame drawn
-  from interpolated camera and actor transforms. (Link stands still at those frames; a route
-  where he moves would confirm it for him.)
-* **One frame, in order** (the framework's vtable at 0x10004E88, found with
-  `tools/ghidra/lookup.py find`; `fw_runLoop` calls slot 0xcc, `fw_procFrame`, forever): slot
-  0xd4 (sead), slot 0xdc `game_procFrameBody`, slot 0x6c (sead), slot 0xec `game_procPresent`
-  unless paused (`gfx_EndFrame`: draw done, the screens' copies, flush, swap; then ProcUI's HOME
-  menu and exit states), slot 0xe4 `fw_waitForVsync`. `game_procFrameBody` is the frame: first
-  `f_02746790(root)`, which runs `f_02747C6C(root + 0x40)` (the tick, by elimination: nothing else
-  in the frame updates the game), then `RenderDisplay_draw` and `RenderDisplay_calcGPU` (the game's
-  own profiler labels), each running its list of render jobs. `RenderDisplay_draw` copies the
-  camera's 3x4 matrix into `DAT_104b45f8` and builds the projection from the camera's field of
-  view and aspect before the jobs run.
-* **The prototype** (`WWHD_60FPS=1`, real time only, `wwhd::rt::SixtyFps`): our
-  `GX2SetSwapInterval` turns the game's 2 into 1 and an override of the tick (`f_02746790`, sead's
-  method-tree calc of the root task: `f_02747C6C(root + 0x40)`) lets every other call through.
-  `fw_waitForVsync` waits for flips, not a count, so the game then presents every vsync. Found:
-  ticking every frame (the game at double speed), it presents a steady 60.1 fps (median 16.7 ms,
-  99th 18.7 ms) on the worker; skipping the tick on alternate frames hangs at once, at boot or
-  after 2,000 ticks of play (`WWHD_60FPS_AFTER=n`): the main thread spins in the job system
-  waiting for a render job list. Drawing depends on per-frame work inside the tick, so "draw the
-  same state again" needs the tick split: the render preparation (whatever kicks the render jobs
-  and advances the render frame) every frame, the game's logic every other frame.
-* **The plan this gives M6:** (1) map the root task's method tree (sead's `TaskMgr` and
-  `MethodTreeMgr`: which child tasks' calc methods prepare rendering, which run the game) and
-  split the tick there; (2) the camera: on the frame between two ticks, draw with the camera
-  matrix halfway between theirs (`RenderDisplay_draw` copies it to `DAT_104b45f8`), the most
-  visible motion; (3) actors' and skeletons' matrices, where `zeldaret/tww` names help.
+**The time base: there is none.** One tick is 1/30 s and every per-tick quantity is in units per
+tick. Nothing in the game code takes a time step (the GameCube decomp has none; sead's framework
+measures each frame's duration, `+0x78` and `+0x80` below, and nothing scales by it), so a slow
+frame slows the game (Digital Foundry: "frame-rate is actually tied to its game speed"). Some HD
+scenery (clouds, waves, sparkle) follows the clock instead and is already right at any frame rate.
+
+**One frame, in order** (WW-3 mapped the framework, WW-4 the game inside it; names and evidence in
+`symbols.csv` where named):
+* sead's `GameFrameworkCafe` ("FrameworkCafe", created in main `f_02005EA8` with a vblank interval
+  of 2; main also calls `GX2SetSwapInterval(2)` once) runs `fw_runLoop` (`f_0274C00C`), which calls
+  `fw_procFrame` (`f_0274C264`, vtable 0x10004E88 slot 0xcc) forever: slot 0xd4, slot 0xdc
+  `game_procFrameBody`, slot 0x6c, slot 0xec `game_procPresent` unless paused (`gfx_EndFrame`: the
+  outputs' copies, flush, `GX2SwapScanBuffers`; ProcUI), the frame's duration (+0x78) and start
+  (+0x80), slot 0xe4 `fw_waitForVsync`.
+* `game_procFrameBody` (`f_02034FFC`): `f_02746790(root)` = sead's method tree calc
+  (`f_02747C6C(root + 0x40)`, recursing through `f_02747BDC`), then `RenderDisplay_draw` and
+  `RenderDisplay_calcGPU` (render job lists; the TV's view matrix is copied to `DAT_104b45f8`).
+* The tree's game node is `f_0203593C`, the game task's calc: some HD work every frame (frame
+  counters `f_020357CC`, the input manager `f_02617AF4(something_button_related)`, an environment
+  update `f_0255E854`, a double-buffer flip `f_0278FEBC`, and a few more), and in the middle
+  m_Do_main's frame body `f_025F172C`: a frame counter (`DAT_1048d0a8`, a heap check every n),
+  `f_025E15E0`, then **`fapGm_Execute`** (`f_025D42EC`).
+* `fapGm_Execute` = `fpcM_Management(NULL, fapGm_After)` (`f_025DF948`, "f_pc_manager.cpp") then
+  `cCt_Counter` (`f_0200E6EC`: `g_Counter` at 0x101FF558, mCounter0 every call). `fpcM_Management`:
+  MtxInit (`f_0200FAC4`), process deletion, priorities and creation, **the execute pass**
+  (`f_025DE788(fpcM_Execute)`: every process's execute; actors through **`fopAc_Execute`**
+  (`f_025D475C`, "f_op_actor.cpp": `old = current`, then the actor's own execute), **the draw
+  pass** (`f_025DE37C(0x025DF908, 0x025DF904)`: every process's draw), then `fapGm_After`
+  (`f_025D42C4`: the scene, overlap and camera managers) and an HD hook `f_02715310(some_gfx_ptr)`.
+* CPU (the tour route, virtual clock, `WWHD_PROFILE_DEPTH=64` and `tools/profile_tree.py`):
+  `game_procFrameBody` 38% of all samples; `fapGm_Execute` 24% (its execute pass 59%, draw pass
+  37%); `RenderDisplay_draw` 30% of the frame body; actors are 63% of the execute pass, Link's
+  execute (`f_0240CDD0`) 15% of that. The rest of the process runs on other cores: the job system's
+  render jobs, sound, the task threads.
+
+**Finding things in WWHD.** WWHD kept the GameCube code's assertions: a failed one calls
+`f_0273AA24(file, line, expression)`. `tools/ghidra/source_files.py` lists every reference to a
+source file name with the line argument: 2,429 references to 413 files, which ties WWHD functions
+to the decomp's files (translation units are laid out alphabetically by file name, so a function
+between two asserted ones usually belongs to one of their files). Actors: the 449 actor profiles
+are the `.data` words pointing at `g_fopAc_Method` (0x101F3088; profile = word − 0x1C: process name
+at +0x08, size at +0x10, the actor's own method table at +0x24). Process names are shifted from
+the GameCube's: Link is 168 here (169 there; size 0x8284, execute `f_0240EBB0` → `f_0240CDD0`), the
+boat 165. Actors keep the base layout: process name at +0x08, profile at +0x10, `old.pos` at +0x300,
+`current.pos` at +0x314. The c_lib helpers sit together in WWHD: `cLib_addCalc` 0x0200ECD4,
+`addCalc2` 0x0200ED84, `addCalc0` 0x0200EDC8, `addCalcPos` 0x0200EE00, `addCalcAngleS` 0x0200F378,
+`addCalcAngleS2` 0x0200F428, `chaseS` 0x0200F564, `chaseF` 0x0200F5C8, `chaseAngleS` 0x0200F8D0
+(caller lists from `tools/ghidra/decompile.py`: hundreds each). `cM_rnd` is `f_02019788`, its
+Wichmann-Hill state at 0x101FF9D4.
+
+**Where the per-tick steps are** (the GameCube decomp, counted by a study in WW-4; WWHD runs the
+same game code):
+* *Central, one place each:* the c_lib helpers (2,816 call sites, 2,602 in actors; exponential
+  approach, linear chase, timers); `J3DFrameCtrl::update` (`mFrame += mRate`) for all skeletal and
+  material animation, with crossing-safe `checkPass`; morph blends (`McaMorf::play`); actor
+  integration `fopAcM_calcSpeed`/`posMove(F)` (semi-implicit Euler, 120 call sites); JPA particles
+  (emitter and particle calc; their rates, lifetimes and forces are per-tick values in the
+  resource files); time of day (`mCurTime += mTimeAdv`); cutscenes (JStudio `forward(1)`, integer
+  frames, `mSecondPerFrame = 1/30`).
+* *Open-coded in actors:* about 378 integration lines (75 actor files), 624 countdowns (167 files)
+  plus 205 `cLib_calcTimer`, 151 per-tick random tests (`cM_rndF(1) < p`), 87 "every Nth tick"
+  masks, 185 exact animation-frame tests (`(int)getFrame() == 15`, which fire twice or never at half
+  steps). Link alone: 67 tuning tables (1,160 values) and about 60 countdowns. The camera
+  (`d_camera.cpp`) hand-rolls 47 smoothing lines and 5 tick counters.
+* *Per tick but not in execute:* the play scene's draw (`dScnPly_Draw`) runs collision resolution,
+  moving collision geometry, all particle simulation, vegetation and `g_Counter.mTimer++`; the
+  sea's and the sky's draws advance counters; sound runs frame-counted fades every frame. One
+  global random stream (1,378 call sites) serves everything.
+* *Exactness:* `v += a; p += v` is a parabola; two plain half steps make Link's full-speed jump
+  5.6% higher. For any step h (in 30 Hz ticks), `v += h·a; p += h·v + (1 − h)/2·Δv` reproduces the
+  30 Hz arc exactly at whole ticks; approach factors become `1 − (1 − k)^h`, damping `d^h`, caps
+  and minimum steps `× h` (BotW's `ksys::VFR` helpers have these forms). Integer angle steps need
+  their remainder carried; integer timers and cadences keep a 30 Hz phase.
+
+**Prior art.** Every other Wind Waker port interpolates (setsail and ZeldaWWHDRecomp for WWHD,
+DeepSea, Dusklight). The GameCube 60 fps codes change one tick rate, and the game runs at double
+speed (our swap interval prototype does the same). Meowmaritus' hack (2016-17) scaled floats and
+ran timers every other frame; it softlocked in places. The closest is the Wind Waker Recomp's
+experimental "60 Hz gameplay" (a static recompilation of the GameCube game, 2026-09-29): 53
+instruction sites with a half step and a "legacy" 30 Hz phase (movement and gravity, Link's
+integration with the arc correction, animation, the helpers, timers, particles; the frame counter
+and the sound pump on the 30 Hz phase only), switched off in cutscenes, events, menus and
+transitions. Its jump apex matches within 0.2%, running starts and ladders still differ by about
+10%, and with the mode off its 201 player-state records equal the original's. Engines that already
+have a time step (Perfect Dark, BotW with FPS++, Unleashed) still needed per-site fixes.
+
+**The probe (WW-4).** Built to answer whether the game's logic can be held to 30 ticks a second
+inside a 60 Hz frame, and to start the measuring tool (`src/overrides/sixty.cpp`, `tools/sixty/`):
+* `WWHD_60FPS=1` now works with the virtual clock too; `WWHD_60FPS_FROM=N` switches at swap N, so a
+  route reaches play at 30 first (menus and loading take game time: switched from boot, the route's
+  presses landed elsewhere and never reached play). From there a *whole tick* (even swaps) runs
+  m_Do_main's frame body as the game's; a *half tick* runs fpcM_Management's draw pass only
+  (`WWHD_60FPS_HALF=draw`, default) or nothing of it (`=none`). Input scripts count game frames
+  (`wwhd::rt::GameFrame`).
+* **It doesn't hang.** Both variants play the whole tour route at 60 frames a second (the WW-3
+  prototype skipped the whole tick, render preparation included, and hung).
+* **Equal game clocks.** With the virtual clock a guest instruction is a cycle and the three cores
+  share one clock, so a 60 fps frame with game logic took more than one vsync and the run fell
+  behind (93 s of game clock for the 30 run's 75). `WWHD_VIRTUAL_SPEED=3` (three instructions a
+  cycle, both runs) makes every frame fit: game clocks at matching ticks then agree within 1 ms.
+* **The state probe** (`WWHD_STATE_DUMP=dir`): after every whole tick a hash of every executed
+  actor's bytes, every 30 ticks their bytes, a few globals, and at chosen ticks all of .data/.bss;
+  `tools/sixty/run.sh ROUTE OUT` makes the 30 and 60 runs, `tools/sixty/compare.py` lines them up
+  by game frame. **The store census** (`WWHD_STATE_CENSUS=1`): during half-tick frames the store
+  journal (D8, D19) hands every store to a hook with the host address it came from, so
+  `tools/sixty/census.py` lists which recompiled functions write actors and game globals between
+  ticks (`WWHD_STATE_CENSUS_TRACE=addr` adds the guest call chain from the stack's back chain).
+* **What it found, with nothing of the game's frame on half ticks:** 13 actor types still diverge,
+  the boat from the first tick. Between ticks, outside the game's frame: `f_0255E854` (the
+  environment update the game task calls every frame) draws one `cM_rndF` a frame and smooths
+  globals with `cLib_addCalc`, `f_020357CC` advances three frame counters, and the sound threads'
+  state moves with timing. The random stream is the main channel: every random decision after it
+  differs. With the draw pass on half ticks, `g_Counter.mTimer`, more random draws and the draw
+  pass's simulation (as the decomp says) come on top. Of 9 million stores in half-tick frames,
+  nearly all go to render and sound scratch; one actor (process 68) is written by `f_025AA12C`.
+
+**What this means.** No single switch exists: per-tick steps are everywhere, but the common ones go
+through a few central functions, and the tick has a clean seam: the game's own frame
+(`fapGm_Execute`) inside a per-frame shell (HD work, render jobs, present). Exact equality at equal
+game times is possible only for what still runs at 30; converted motion matches within a tolerance
+(the arc correction makes the common case exact at whole ticks), random decisions diverge once
+anything draws at a different rate, and cutscenes need fractional JStudio frames.
+
+**Options** (put to the owner 2026-10-01):
+1. *Mixed rate, convert and verify one system at a time (recommended).* Every frame runs at 60; the
+   game's frame is split at its seams (process execute, the draw pass's simulation, the HD
+   per-frame work, sound, `g_Counter`), and everything not yet converted runs exactly as at 30 on
+   whole ticks, so its speed is always right. A converted system steps every tick with a time step
+   h: dt-aware overrides of the central functions above, plus small rules the generator applies at
+   exact instructions for open-coded steps (the census and the probe find them), each checked
+   against the 30-tick run (whole ticks within tolerance, half ticks between their neighbours).
+   Order by what shows: camera, Link, animation, the boat, particles, HUD, then actors route by
+   route. Uncapped is the same machinery with a variable h and a 30 Hz phase accumulator.
+2. *Convert everything at once* (the Wind Waker Recomp's model): tick everything at 60, halve the
+   steps at the central functions and in Link's code, keep integer timers and counters on a 30 Hz
+   phase, and fix what shows up. Quick to a first result, but every step not found yet (hundreds of
+   open-coded timers and moves) runs double speed until someone meets it, and nothing tells which
+   systems are done.
+3. *Rescale constants for a fixed 60* (no time step): halve speeds, quarter accelerations and
+   double durations in code and data. No runtime plumbing, but it can't go uncapped, constants are
+   shared between uses, and it is how the GameCube hacks got physics wrong.
+Considered and ruled out: running half steps speculatively from the last state and rolling them
+back through the store journal (exact at whole ticks for free, but it draws frames between 30 Hz
+ticks, which the owner ruled out); interpolation (the WW-3 plan).
 
 ## Milestones
 

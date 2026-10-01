@@ -18,6 +18,8 @@
 #include "Cafe/OS/libs/vpad/vpad.h"
 #include <fstream>
 
+namespace wwhd::rt { uint32 GameFrame(uint32 swap); }   // runtime/dispatch.cpp
+
 namespace wwhd::os::input
 {
 	namespace
@@ -107,8 +109,9 @@ namespace wwhd::os::input
 
 		Pad Current()
 		{
+			// at 60 fps (D21) the game's own frame runs on every other swap: scripts count game frames
 			if (TheScript().on)
-				return TheScript().At(SwapCount());
+				return TheScript().At(wwhd::rt::GameFrame(SwapCount()));
 			std::lock_guard lock(s_liveLock);
 			return s_live;
 		}

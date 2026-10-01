@@ -3,7 +3,8 @@
 //
 // A CPU-time timer (ITIMER_PROF, WWHD_PROFILE_HZ per CPU-second, default 997) interrupts whichever
 // thread is running; the handler records its thread id, the interrupted instruction and, unless
-// WWHD_PROFILE_STACKS=0, the return addresses above it: unwound by glibc when the thread was in our
+// WWHD_PROFILE_STACKS=0, the return addresses above it (WWHD_PROFILE_DEPTH addresses, default 10, up
+// to 64: deeper stacks show guest call chains whole): unwound by glibc when the thread was in our
 // program's own code (Cemu's code keeps no frame pointers). Elsewhere (libc, the vDSO, the middle of
 // a fiber switch) unwinding can fault, so it takes just the first address of our program's code
 // found near the stack pointer, read with process_vm_readv, which cannot fault: the likely caller. Samples go into a buffer allocated up front; at exit (normal or quick_exit, which the
@@ -11,6 +12,7 @@
 // time from /proc, every loaded object's executable segments, and the samples as hex addresses. tools/profile_report.py symbolizes and sums
 // them. Nothing here touches guest state: traces are the same with the profiler on.
 #include "runtime.h"
+#include <algorithm>
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
@@ -36,17 +38,22 @@ namespace wwhd::rt
 {
 	namespace
 	{
-		constexpr int kDepth = 10;                 // the interrupted instruction and 9 callers
-		constexpr uint64_t kCapacity = 1 << 20;    // samples (~96 MB)
+		constexpr int kMaxDepth = 64;
+		constexpr uint64_t kBufferWords = 12 << 20;   // ~96 MB: 1M samples of depth 10
 
+		// a sample is a record of 2 + s_depth words: thread id, depth, the interrupted instruction and
+		// its callers
 		struct Sample
 		{
-			uint32_t tid;
-			uint32_t depth;
-			uintptr_t pc[kDepth];
+			uintptr_t tid;
+			uintptr_t depth;
+			uintptr_t pc[];                        // s_depth of them
 		};
 
-		Sample* s_samples = nullptr;
+		int s_depth = 10;                          // the interrupted instruction and 9 callers
+		uint64_t s_capacity = 0;                   // samples
+		uintptr_t* s_buffer = nullptr;
+		Sample& At(uint64_t i) { return *(Sample*)(s_buffer + i * (2 + s_depth)); }
 		std::atomic<uint64_t> s_next{ 0 };
 		bool s_stacks = true;
 		const char* s_path = nullptr;
@@ -59,11 +66,11 @@ namespace wwhd::rt
 		void OnSample(int, siginfo_t*, void* context)
 		{
 			uint64_t i = s_next.fetch_add(1, std::memory_order_relaxed);
-			if (i >= kCapacity)
+			if (i >= s_capacity)
 				return;
-			Sample& s = s_samples[i];
+			Sample& s = At(i);
 			const greg_t* regs = ((ucontext_t*)context)->uc_mcontext.gregs;
-			s.tid = (uint32_t)syscall(SYS_gettid);
+			s.tid = (uintptr_t)syscall(SYS_gettid);
 			s.pc[0] = (uintptr_t)regs[REG_RIP];
 			s.depth = 1;
 			if (!s_stacks)
@@ -77,15 +84,15 @@ namespace wwhd::rt
 			if (InText(s.pc[0]) && !switching)
 			{
 				// [0] this handler, [1] the signal trampoline, [2] the interrupted function, [3..] its callers
-				void* frames[kDepth + 2];
-				int n = backtrace(frames, kDepth + 2);
-				for (int f = 3; f < n && s.depth < (uint32_t)kDepth; f++)
+				void* frames[kMaxDepth + 2];
+				int n = backtrace(frames, s_depth + 2);
+				for (int f = 3; f < n && s.depth < (uintptr_t)s_depth; f++)
 					s.pc[s.depth++] = (uintptr_t)frames[f];
 				return;
 			}
 			uintptr_t words[16];
 			iovec local{ words, sizeof(words) }, remote{ (void*)regs[REG_RSP], sizeof(words) };
-			if (process_vm_readv(getpid(), &local, 1, &remote, 1, 0) == (ssize_t)sizeof(words))
+			if (s_depth > 1 && process_vm_readv(getpid(), &local, 1, &remote, 1, 0) == (ssize_t)sizeof(words))
 				for (uintptr_t w : words)
 					if (InText(w))
 					{
@@ -113,7 +120,7 @@ namespace wwhd::rt
 			FILE* f = fopen(s_path, "w");
 			if (!f)
 				return;
-			uint64_t n = std::min<uint64_t>(s_next.load(), kCapacity);
+			uint64_t n = std::min<uint64_t>(s_next.load(), s_capacity);
 			char exe[4096] = {};
 			readlink("/proc/self/exe", exe, sizeof(exe) - 1);
 			fprintf(f, "wwhd-profile 1\nexe %s\nbase %lx\nhz %d\nsamples %lu\n", exe, (unsigned long)LoadAddress(), s_hz,
@@ -159,9 +166,9 @@ namespace wwhd::rt
 			}, f);
 			for (uint64_t i = 0; i < n; i++)
 			{
-				const Sample& s = s_samples[i];
-				fprintf(f, "s %u", s.tid);
-				for (uint32_t k = 0; k < s.depth; k++)
+				const Sample& s = At(i);
+				fprintf(f, "s %u", (unsigned)s.tid);
+				for (uintptr_t k = 0; k < s.depth; k++)
 					fprintf(f, " %lx", (unsigned long)s.pc[k]);
 				fputc('\n', f);
 			}
@@ -178,8 +185,11 @@ namespace wwhd::rt
 			s_hz = std::max(1, atoi(hz));
 		if (const char* stacks = getenv("WWHD_PROFILE_STACKS"))
 			s_stacks = strcmp(stacks, "0") != 0;
-		s_samples = (Sample*)calloc(kCapacity, sizeof(Sample));
-		if (!s_samples)
+		if (const char* depth = getenv("WWHD_PROFILE_DEPTH"))
+			s_depth = std::clamp(atoi(depth), 1, kMaxDepth);
+		s_capacity = kBufferWords / (2 + s_depth);
+		s_buffer = (uintptr_t*)calloc(kBufferWords, sizeof(uintptr_t));
+		if (!s_buffer)
 			return;
 		dl_iterate_phdr([](dl_phdr_info* info, size_t, void*) {
 			for (int i = 0; i < info->dlpi_phnum; i++)

@@ -44,6 +44,7 @@
 #include <unordered_set>
 
 bool g_rtJournalOn = false;
+void (*g_rtStoreCensus)(uint32 ea, uint32 size, void* from) = nullptr;
 
 namespace wwhd::rt
 {
@@ -58,6 +59,11 @@ namespace wwhd::rt
 void rt_journal_store(uint32 ea, uint32 size)
 {
 	using namespace wwhd::rt;
+	if (g_rtStoreCensus) [[unlikely]]                // the 60 fps store census (overrides/sixty.cpp)
+	{
+		g_rtStoreCensus(ea, size, __builtin_return_address(0));
+		return;
+	}
 	if (g_quiet.token) [[unlikely]]                  // the fast paths' quiet watch (dispatch.cpp), not a diff run
 	{
 		QuietStore(ea, size);

@@ -13,9 +13,15 @@ namespace wwhd::rt
 	// with WWHD_FAST_PATHS=0. An override that isn't the game's code step for step asks this first.
 	bool FastPaths();
 
-	// The 60 fps prototype (D21, M6): WWHD_60FPS=1, and only where the fast paths run (real time).
-	// The game then presents every vsync (swap interval 1) and ticks every other frame.
+	// 60 fps (D21, M6): WWHD_60FPS=1 with the recompiled program (WWHD_NATIVE=on), in real time or
+	// with the virtual clock. From swap WWHD_60FPS_FROM on (default 0) the game presents every vsync
+	// (swap interval 1) and its frame runs 60 times a second (src/overrides/sixty.cpp has what runs at
+	// which rate); before it, as at 30 fps. SixtyFrom is that swap (never, when 60 fps is off), and
+	// GameFrame(swap) the game's own frame a swap belongs to: the swap itself before SixtyFrom, then
+	// one game frame every two swaps. Input scripts and the state probe count game frames.
 	bool SixtyFps();
+	uint32 SixtyFrom();
+	uint32 GameFrame(uint32 swap);
 
 	// The quiet watch: whether one guest call by the calling thread changed anything another thread,
 	// or the caller's next call, could see. Begin it right before the call, with [low, high) the stack
@@ -29,3 +35,8 @@ namespace wwhd::rt
 	// for the real-time log: a thread slept through an idle round, woken by a message or not
 	void CountIdleWait(bool byMessage);
 }
+
+// The store census (src/overrides/sixty.cpp): while set, with g_rtJournalOn, every store generated
+// code makes is handed to it with the host address it was made from (src/runtime/diff.cpp)
+extern bool g_rtJournalOn;
+extern void (*g_rtStoreCensus)(uint32 ea, uint32 size, void* from);

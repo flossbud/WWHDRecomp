@@ -56,6 +56,15 @@ void PPCTimer_waitForInit()
 // host clock, so two runs with the same input see the same guest time.
 static const bool s_virtualClockEnabled = getenv("CEMU_VIRTUAL_CLOCK") != nullptr;
 static std::atomic<uint64> s_virtualCycles{0};
+// wwhd: WWHD_VIRTUAL_SPEED=n (default 1) runs n instructions per guest cycle: an emulated CPU n times
+// as fast. For the 60 fps measurements (D21, tools/sixty): at 60 frames a second each frame has to
+// fit in one vsync of guest time, as it does on a PC in real time; both runs of a comparison use the
+// same n. Every check uses 1.
+static const uint64 s_virtualSpeed = [] {
+	const char* e = getenv("WWHD_VIRTUAL_SPEED");
+	return e && atoi(e) > 1 ? (uint64)atoi(e) : 1ull;
+}();
+static uint64 s_virtualRemainder = 0;    // instructions not yet a whole cycle (the scheduler's thread)
 
 bool PPCTimer_isVirtualClock()
 {
@@ -64,6 +73,12 @@ bool PPCTimer_isVirtualClock()
 
 void PPCTimer_advanceVirtualClock(uint64 cycles)
 {
+	if (s_virtualSpeed > 1)
+	{
+		cycles += s_virtualRemainder;
+		s_virtualRemainder = cycles % s_virtualSpeed;
+		cycles /= s_virtualSpeed;
+	}
 	s_virtualCycles.fetch_add(cycles);
 }
 
