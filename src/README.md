@@ -26,7 +26,7 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 | `runtime/diff.cpp` | diff mode (D8.2, M3): pure functions run natively, are rewound, and are compared (registers, stores, cycles) with the interpreter's run of the same call |
 | `CMakeLists.txt` (and `../CMakeLists.txt`) | the build: Cemu's libraries from its source tree as a subproject, without Latte and with our forks in place of their originals; our sources in CemuCafe's compile context; `wwhd-null` linked like Cemu's own executable |
 | `build.sh` | configures and builds `build/wwhd/wwhd-null` with CMake on the worker |
-| `link_order.py`, `link_order.txt` | the order `wwhd-null` links archive members in: the reference's (see below) |
+| `os/common/SysAllocator.cpp`, `sysalloc_layout.h` | Cemu's OS objects in guest memory (its SysAllocators), each at the reference's address (see below) |
 
     tools/worker/job start wwhd-build src/build.sh
     tools/worker/job start null-det env CEMU_BIN=/wwhd/WWHDRecomp/build/wwhd/wwhd-null \
@@ -37,8 +37,8 @@ worker's settings. Cemu comes in as a subproject from `CEMU_SRC`, the same patch
 is built from (patch 0015 lets its CMake files work as a subproject), configured as Cemu's own build
 is but without its wxWidgets GUI, its dependencies from vcpkg with Cemu's manifest (restored from
 vcpkg's binary cache). The first build compiles Cemu's libraries too, 11-12 minutes with 10 jobs on
-the worker; after that a change compiles what it touches and links twice (below), with ThinLTO's
-cache sparing most of the code generation: a one-file change takes about 10 s. Our sources compile as CemuCafe's own files do: its include
+the worker; after that a change compiles what it touches and links once, with ThinLTO's cache
+sparing most of the code generation: a one-file change takes about 10 s. Our sources compile as CemuCafe's own files do: its include
 directories, definitions and options and those of its directories, and the usage requirements of
 what it links, with Cemu's precompiled header, at -O2 and without LTO (the flags match what the old
 `build.sh` gave them, apart from wxWidgets' and GTK's, which only Cemu's GUI uses). To build by hand:
@@ -46,9 +46,8 @@ what it links, with Cemu's precompiled header, at -O2 and without LTO (the flags
     cmake -S . -B build/wwhd -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
     cmake --build build/wwhd -j 10
 
-Options: `CEMU_SRC`, `WWHD_SDL3` (SDL3 with video for the window), `WWHD_RECOMP_DIR`, `WWHD_FORKS`
-and `WWHD_LINK_ORDER` (on for Linux; elsewhere nothing compares with the reference's guest memory,
-so a plain link does). The executable built with CMake gives the same traces, command streams and
+Options: `CEMU_SRC`, `WWHD_SDL3` (SDL3 with video for the window), `WWHD_RECOMP_DIR` and
+`WWHD_FORKS`. The executable built with CMake gives the same traces, command streams and
 sound as the one `build.sh` linked by hand before, on all six routes, and the same frames.
 
 **The runtime** (M3) is linked into `wwhd-null`, together with the recompiled program when
@@ -100,15 +99,22 @@ layouts, and the pieces the renderer uses (below). Along the route its OS-call t
 all 1,124,796,468 calls over the whole route into gameplay, which takes 12 minutes, about 2x
 faster than the reference on the GPU.
 
-Link order matters. Static constructors run in link order, and each of Cemu's `SysAllocator`s
-takes its slot in guest memory (0x0E000000 up) as it is constructed. Leaving Latte out changes
-the order in which the linker pulls archive members, and with it host-side addresses the game
-sees in registers. So the build links `wwhd-null` twice: `wwhd-null-unordered`, whose map says
-which members it needs, then `wwhd-null` with those members as explicit objects (a response file,
-`link_order.py link`) in the order the reference's link pulled them in. `link_order.txt` keeps that
-order (1,759 members, saved with `link_order.py save` from a link of Cemu's own line); make it again
-when the pinned Cemu or its vcpkg libraries change. Members it doesn't list go last: today our
-SDL3's video parts and glslang's limits.
+**Cemu's OS objects** (threads, queues, IPC buffers, the sound and GPU state the game sees) are
+its `SysAllocator`s: 170 slots in the Cemu area (0x0E000000 up). Cemu lays them out in the order
+their static constructors register them, which is the link's, so leaving Latte out (or any other
+change to the link) moved them, and with them addresses the game sees in registers and traces.
+Ours go where the reference has them: `os/common/SysAllocator.cpp` (a fork) places each slot at
+the offset `os/common/sysalloc_layout.h` gives it, by what the slot is (the file that declares it,
+with the line for a header, its size and alignment, and how many alike that file declared before
+it: cemu-patches/0016 has each slot record where it was declared), then lets the area's bump
+allocator carry on from where the reference's did. A slot the table doesn't know goes after the
+reference's, and the log says so. So the link order doesn't matter: one plain link gives guest
+memory exactly as the reference's (all six routes and diff mode identical). Make the table again
+when Cemu or a fork's slots change: `CEMU_SYSALLOC_LOG=path` (patch 0016) lists the slots as laid
+out by a run that matches the reference (the reference itself, rebuilt with patch 0016), and
+`tools/sysalloc_layout.py path > src/os/common/sysalloc_layout.h`. `WWHD_SYSALLOC_ORDER=link`
+falls back to Cemu's layout by registration order. Before the table, the build linked twice,
+the second time with every archive member in the reference's order.
 
 **The file system** (D18) is forked whole: the FS client (`os/coreinit/coreinit_FS.cpp`: clients,
 command blocks and their queue, the FS API), the IPC driver (`os/coreinit/coreinit_IPC.cpp`), the
@@ -163,9 +169,8 @@ callbacks, and the Espresso timeslices and timer with the virtual clock; gx2's c
 the HLE dispatcher and trace recorder; fibers, with our own context switch; the file system's
 client, the IPC driver and the FSA service; nn_save) and
 `tools/cemu_fork.py` creates missing ones. Each takes its original's place in the Cemu target
-that had it, so it compiles exactly as Cemu compiles that file (ThinLTO bitcode included) and lands
-in the same archive under the same name, where the ordered link puts Cemu's object: static
-constructors, and the guest-memory slots of their SysAllocators, keep their order and addresses. A
+that had it, so it compiles exactly as Cemu compiles that file (ThinLTO bitcode included); its
+SysAllocators keep the reference's addresses through the layout table (above). A
 fork is ours to change from then on (Cemu patches in `tools/reference/cemu-patches` no longer reach
 it); `WWHD_FORKS=0 src/build.sh build/wwhd-cemu` builds with Cemu's objects instead, to record
 baselines (what the rest of wwhd-null takes from the forks has weak stand-ins there,

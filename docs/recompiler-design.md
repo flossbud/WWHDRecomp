@@ -783,14 +783,25 @@ development-only reference that traces, captures and texture dumps are checked a
   from its patched source tree (patch 0015), configured as Cemu's own build is but without its
   wxWidgets GUI; at configure time CemuCafe loses Latte (all but what gx2 and the renderer use) and
   each fork takes its original's place in the Cemu target that had it. Our sources compile in
-  CemuCafe's compile context, and the executable links like Cemu's own, twice on Linux: the second
-  link puts every archive member where the reference's link had it (`src/link_order.txt`), so
-  Cemu's `SysAllocator` slots keep their guest addresses. It replaced `src/build.sh`'s hand-edited
+  CemuCafe's compile context, and the executable links like Cemu's own (at first twice, the
+  second time with every archive member where the reference's link had it, so that Cemu's
+  `SysAllocator` slots kept their guest addresses; the layout table below ended that). It replaced `src/build.sh`'s hand-edited
   copy of Cemu's link line, which needed a prebuilt Cemu tree; the result gives the same traces,
   command streams, sound and frames on all six routes. A first build takes 11-12 minutes on the
-  worker, a one-file change about 10 s (ThinLTO's cache). Only the ordered link (and its ThinLTO cache) is Linux's; for Windows, macOS or Android
-  these files are where a port starts: a plain link, per-compiler flags (ours are clang's), and our
-  own code made portable first (the fibers' context switch, D19).
+  worker, a one-file change about 10 s (ThinLTO's cache). For Windows, macOS or Android these files
+  are where a port starts: per-compiler flags (ours are clang's), and our own code made portable
+  first (the fibers' context switch, D19).
+* **The guest OS objects' own home (2026-10-01).** Cemu's OS objects (threads, message queues, IPC
+  buffers, the sound and GPU state the game sees) are 170 `SysAllocator` slots in the Cemu area
+  (0x0E000000 up, 5.2 MB), laid out in the order their static constructors registered them: the
+  link's. Ours take the reference's addresses from a table (`src/os/common/sysalloc_layout.h`, used
+  by our fork of `SysAllocator.cpp`), by what each slot is: the file that declares it (with the line,
+  for a header), its size and alignment, and how many alike that file declared before it (patch
+  0016 has each slot record its declaration; lines aren't in the key for forks, whose lines move).
+  Only three slots share a key, members of equal size in one header's class, so which takes which
+  moves nothing. The bump allocator then carries on from the reference's end. With it, a plain link
+  in any order gives guest memory as the reference's: all six routes and diff mode identical. That
+  also holds wherever the build is linked, so a port's traces can be compared with the reference's.
 
 ### Profile of the native build (2026-09-30)
 
@@ -1285,8 +1296,9 @@ calls to f600), and `wwhd-null` is deterministic run to run. Over the whole rout
 (10,800 frames), `wwhd-null` matches the reference's 1,124,796,468 calls exactly, in 12 minutes
 of wall time (the reference takes about 25 on the GPU). It is the fast harness for the CPU track. One trap: dropping objects changes
 the order of static constructors, which moves Cemu's `SysAllocator` slots in guest memory. So
-`wwhd-null` is linked with its archive members in `wwhd`'s order (`src/link_order.py`; since the
-CMake build, in the reference's order kept in `src/link_order.txt`, and `wwhd` isn't built).
+`wwhd-null` was linked with its archive members in `wwhd`'s order (`src/link_order.py`); since
+2026-10-01 its slots take the reference's addresses from a table instead (D18), and any link order
+does.
 
 The reference also renders on the worker's Intel GPU now. Its full-route trace equals the
 llvmpipe one (1,124,796,468 calls).

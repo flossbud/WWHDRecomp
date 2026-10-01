@@ -1,8 +1,8 @@
 // TCL.cpp (docs/recompiler-design.md D18): TCL: the ring the CPU submits command buffers to, and
-// their retirement. Cemu's src/Cafe/OS/libs/TCL/TCL.cpp (Mozilla Public License 2.0), forked: wwhd-
-// null links this in place of Cemu's object, at its position in the link (so its guest-memory slots
-// keep their addresses) and under Cemu's names (so Cemu's code that calls it reaches ours). Route
-// traces, GPU commands and sound must stay as Cemu's (tools/reference/stream_check.sh).
+// their retirement. Cemu's src/Cafe/OS/libs/TCL/TCL.cpp (Mozilla Public License 2.0), forked:
+// wwhd-null links this in place of Cemu's object, under Cemu's names (so Cemu's code that calls it
+// reaches ours). Route traces, GPU commands and sound must stay as Cemu's
+// (tools/reference/stream_check.sh).
 #include "Cafe/OS/common/OSCommon.h"
 #include "Cafe/OS/libs/TCL/TCL.h"
 

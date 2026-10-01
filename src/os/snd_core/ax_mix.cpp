@@ -1,9 +1,8 @@
 // snd_core (docs/recompiler-design.md D18): the voice mixer: ADPCM and PCM decoding, sample-rate
 // conversion, volume ramps. Cemu's src/Cafe/OS/libs/snd_core/ax_mix.cpp (Mozilla Public License
-// 2.0), forked: wwhd-null links this in place of Cemu's object, at its position in the link (so its
-// guest-memory slots keep their addresses) and under Cemu's names (so Cemu's code that calls it,
-// the scheduler driving AXOut_update, reaches ours). It must mix exactly what Cemu's did
-// (WWHD_AUDIO_HASH, tools/reference/stream_check.sh).
+// 2.0), forked: wwhd-null links this in place of Cemu's object, under Cemu's names (so Cemu's code
+// that calls it, the scheduler driving AXOut_update, reaches ours). It must mix exactly what Cemu's
+// did (WWHD_AUDIO_HASH, tools/reference/stream_check.sh).
 #include "Cafe/OS/libs/snd_core/ax.h"
 #include "Cafe/OS/libs/snd_core/ax_internal.h"
 #include "Cafe/HW/MMU/MMU.h"

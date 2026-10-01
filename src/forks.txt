@@ -1,6 +1,6 @@
 # Forks of Cemu's sources (docs/recompiler-design.md D18): our copy of a Cemu source file, under
 # Cemu's names, that the build (src/CMakeLists.txt) compiles into Cemu's target in place of Cemu's
-# file: with Cemu's flags for it, and at its object's position in wwhd-null's link. tools/cemu_fork.py creates the missing ones.
+# file, with Cemu's flags for it. tools/cemu_fork.py creates the missing ones.
 # our file (under src/)                  Cemu's (under $CEMU_SRC/src/)                 what it is
 os/snd_core/ax_aux.cpp                   Cafe/OS/libs/snd_core/ax_aux.cpp               the auxiliary (effect) buses
 os/snd_core/ax_exports.cpp               Cafe/OS/libs/snd_core/ax_exports.cpp           the exports, AXInit and the module registration
@@ -31,3 +31,4 @@ os/coreinit/coreinit_FS.cpp              Cafe/OS/libs/coreinit/coreinit_FS.cpp  
 os/coreinit/coreinit_IPC.cpp             Cafe/OS/libs/coreinit/coreinit_IPC.cpp         IPC to IOSU: the per-core drivers, their threads and the IOS_* calls
 os/iosu/iosu_fsa.cpp                     Cafe/IOSU/fsa/iosu_fsa.cpp                     the FSA service: file operations on the title's volumes (through fsc)
 os/nn_save/nn_save.cpp                   Cafe/OS/libs/nn_save/nn_save.cpp               nn_save: the save directories and their files
+os/common/SysAllocator.cpp               Common/SysAllocator.cpp                        SysAllocators: Cemu's OS objects in guest memory, laid out as in the reference

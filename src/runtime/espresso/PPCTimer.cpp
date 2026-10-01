@@ -1,8 +1,7 @@
-// PPCTimer.cpp (docs/recompiler-design.md D18, D19): the timer: host time, or the virtual clock. Cemu's
-// src/Cafe/HW/Espresso/PPCTimer.cpp (Mozilla Public License 2.0), forked: wwhd-null links this in
-// place of Cemu's object, at its position in the link (so its guest-memory slots keep their
-// addresses) and under Cemu's names (so Cemu's code that calls it reaches ours). Route traces, GPU
-// commands and sound must stay as Cemu's (tools/reference/stream_check.sh).
+// PPCTimer.cpp (docs/recompiler-design.md D18, D19): the timer: host time, or the virtual clock.
+// Cemu's src/Cafe/HW/Espresso/PPCTimer.cpp (Mozilla Public License 2.0), forked: wwhd-null links
+// this in place of Cemu's object, under Cemu's names (so Cemu's code that calls it reaches ours).
+// Route traces, GPU commands and sound must stay as Cemu's (tools/reference/stream_check.sh).
 #include "Cafe/HW/Espresso/Const.h"
 #include "config/ActiveSettings.h"
 #include <chrono>

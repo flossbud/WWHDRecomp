@@ -5,12 +5,6 @@
 option(WWHD_FORKS "Our forks of Cemu's sources (forks.txt) replace Cemu's; OFF keeps Cemu's, to record baselines" ON)
 set(WWHD_RECOMP_DIR "${PROJECT_SOURCE_DIR}/build/recomp" CACHE PATH
 	"The generated program (tools/recomp/generate.py writes it there); without it the runtime interprets")
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-	set(order_default ON)
-else()
-	set(order_default OFF)
-endif()
-option(WWHD_LINK_ORDER "Link archive members in the reference's order (link_order.txt), so guest memory is laid out as in the reference" ${order_default})
 
 # ---- Cemu's libraries, as wwhd-null links them -------------------------------------------------
 # Latte goes, except what our side still uses: the address library (gx2 computes surface layouts
@@ -18,21 +12,23 @@ option(WWHD_LINK_ORDER "Link archive members in the reference's order (link_orde
 # the texture loader (gpu/vk/latte_glue.cpp stands in for the rest of Latte). Each fork in forks.txt
 # takes its original's place in the Cemu target that had it: it compiles as Cemu compiles its own
 # files (ThinLTO bitcode included), with the original's directory on the include path for its
-# relative includes, and lands in the same archive under the same name, so the ordered link puts
-# it where Cemu's object was.
+# relative includes.
 set(latte_kept "/LatteAddrLib/" "/LegacyShaderDecompiler/" "/Core/FetchShader.cpp"
 	"/Core/LatteGSCopyShaderParser.cpp" "/Core/LatteTextureLoader.cpp")
+# With WWHD_FORKS=OFF only the forks that lay out guest memory stay (they change where Cemu's
+# objects are, to the reference's addresses, not what the OS does).
+set(layout_forks os/common/SysAllocator.cpp)
 set(fork_theirs)
 set(fork_ours)
-if(WWHD_FORKS)
-	file(STRINGS forks.txt lines)
-	foreach(line IN LISTS lines)
-		if(line MATCHES "^([^# \t][^ \t]*)[ \t]+([^ \t]+)")
+file(STRINGS forks.txt lines)
+foreach(line IN LISTS lines)
+	if(line MATCHES "^([^# \t][^ \t]*)[ \t]+([^ \t]+)")
+		if(WWHD_FORKS OR CMAKE_MATCH_1 IN_LIST layout_forks)
 			list(APPEND fork_theirs "${CEMU_SRC}/src/${CMAKE_MATCH_2}")
 			list(APPEND fork_ours "${CMAKE_CURRENT_SOURCE_DIR}/${CMAKE_MATCH_1}")
 		endif()
-	endforeach()
-endif()
+	endif()
+endforeach()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS forks.txt)
 set(forked 0)
 foreach(target CemuCafe CemuCommon CemuUtil CemuConfig CemuInput CemuAudio CemuComponents)
@@ -167,41 +163,18 @@ endif()
 # ---- the executable ----------------------------------------------------------------------------
 # Linked as Cemu links its own (its link options, SDL3 and its libraries in its order, ThinLTO),
 # plus its resources (the system font, which coreinit hands the game; Cemu's GUI links them) and
-# glslang's default limits for the renderer.
+# glslang's default limits for the renderer. Link order doesn't matter: Cemu's SysAllocators take
+# the guest addresses the reference gives them (os/common/SysAllocator.cpp, sysalloc_layout.h), not
+# their static constructors' order. Where the linker is GNU ld with LLVM's plugin or lld, a ThinLTO
+# cache spares a relink most of its code generation.
 get_target_property(bin_options CemuBin LINK_OPTIONS)
-function(wwhd_executable name)
-	add_executable(${name} ${objects})
-	set_target_properties(${name} PROPERTIES LINKER_LANGUAGE CXX INTERPROCEDURAL_OPTIMIZATION ON
-		RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
-	if(bin_options)
-		set_property(TARGET ${name} PROPERTY LINK_OPTIONS "${bin_options}")
-	endif()
-	target_link_libraries(${name} PRIVATE ${ARGN} ${bin_libs} CemuResource glslang::glslang-default-resource-limits)
-endfunction()
-
-if(WWHD_LINK_ORDER)
-	# Static constructors run in link order, and Cemu's SysAllocators take their slots in guest memory
-	# in constructor order. A first link finds the archive members wwhd-null needs (its map); the
-	# second links them explicitly, in the order the reference's link pulled them in (link_order.py).
-	# GNU ld's LLVM plugin keeps a ThinLTO cache, which spares the second link most of its code generation.
-	find_package(Python3 REQUIRED COMPONENTS Interpreter)
-	set(cache "-Wl,--plugin-opt,cache-dir=${CMAKE_BINARY_DIR}/thinlto-cache")
-	wwhd_executable(wwhd-null-unordered)
-	target_link_options(wwhd-null-unordered PRIVATE "${cache}")
-	target_link_options(wwhd-null-unordered PRIVATE "-Wl,-Map=$<TARGET_FILE:wwhd-null-unordered>.map")
-	set(rsp "${CMAKE_CURRENT_BINARY_DIR}/wwhd-null-members.rsp")
-	add_custom_command(OUTPUT "${rsp}"
-		COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/link_order.py" link
-			"${CMAKE_CURRENT_SOURCE_DIR}/link_order.txt" "$<TARGET_FILE:wwhd-null-unordered>.map" "${CMAKE_BINARY_DIR}"
-			"${CMAKE_CURRENT_BINARY_DIR}/members" "${CMAKE_AR}" "${rsp}"
-		DEPENDS wwhd-null-unordered link_order.py link_order.txt
-		COMMENT "wwhd-null: archive members in the reference's order"
-		VERBATIM)
-	add_custom_target(wwhd-null-members DEPENDS "${rsp}")
-	wwhd_executable(wwhd-null "-Wl,@${rsp}")
-	target_link_options(wwhd-null PRIVATE "${cache}")
-	add_dependencies(wwhd-null wwhd-null-members)
-	set_property(TARGET wwhd-null APPEND PROPERTY LINK_DEPENDS "${rsp}")
-else()
-	wwhd_executable(wwhd-null)
+add_executable(wwhd-null ${objects})
+set_target_properties(wwhd-null PROPERTIES LINKER_LANGUAGE CXX INTERPROCEDURAL_OPTIMIZATION ON
+	RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+if(bin_options)
+	set_property(TARGET wwhd-null PROPERTY LINK_OPTIONS "${bin_options}")
 endif()
+if(CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
+	target_link_options(wwhd-null PRIVATE "-Wl,--plugin-opt,cache-dir=${CMAKE_BINARY_DIR}/thinlto-cache")
+endif()
+target_link_libraries(wwhd-null PRIVATE ${bin_libs} CemuResource glslang::glslang-default-resource-limits)

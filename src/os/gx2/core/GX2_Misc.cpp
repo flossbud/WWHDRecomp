@@ -1,8 +1,7 @@
 // GX2_Misc.cpp (docs/recompiler-design.md D18): GX2Init and gx2's small functions. Cemu's
 // src/Cafe/OS/libs/gx2/GX2_Misc.cpp (Mozilla Public License 2.0), forked: wwhd-null links this in
-// place of Cemu's object, at its position in the link (so its guest-memory slots keep their
-// addresses) and under Cemu's names (so Cemu's code that calls it reaches ours). Route traces, GPU
-// commands and sound must stay as Cemu's (tools/reference/stream_check.sh).
+// place of Cemu's object, under Cemu's names (so Cemu's code that calls it reaches ours). Route
+// traces, GPU commands and sound must stay as Cemu's (tools/reference/stream_check.sh).
 #include "Cafe/HW/Latte/ISA/RegDefines.h"
 #include "Cafe/OS/common/OSCommon.h"
 #include "GX2.h"

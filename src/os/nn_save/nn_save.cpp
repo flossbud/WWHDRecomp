@@ -1,8 +1,7 @@
 // nn_save.cpp (docs/recompiler-design.md D18): nn_save: the save directories and their files.
 // Cemu's src/Cafe/OS/libs/nn_save/nn_save.cpp (Mozilla Public License 2.0), forked: wwhd-null links
-// this in place of Cemu's object, at its position in the link (so its guest-memory slots keep their
-// addresses) and under Cemu's names (so Cemu's code that calls it reaches ours). Route traces, GPU
-// commands and sound must stay as Cemu's (tools/reference/stream_check.sh).
+// this in place of Cemu's object, under Cemu's names (so Cemu's code that calls it reaches ours).
+// Route traces, GPU commands and sound must stay as Cemu's (tools/reference/stream_check.sh).
 #include "Cafe/OS/common/OSCommon.h"
 #include "nn_save.h"
 

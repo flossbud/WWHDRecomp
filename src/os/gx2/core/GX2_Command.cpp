@@ -1,8 +1,8 @@
 // GX2_Command.cpp (docs/recompiler-design.md D18): gx2's command pool, display lists and
 // submission. Cemu's src/Cafe/OS/libs/gx2/GX2_Command.cpp (Mozilla Public License 2.0), forked:
-// wwhd-null links this in place of Cemu's object, at its position in the link (so its guest-memory
-// slots keep their addresses) and under Cemu's names (so Cemu's code that calls it reaches ours).
-// Route traces, GPU commands and sound must stay as Cemu's (tools/reference/stream_check.sh).
+// wwhd-null links this in place of Cemu's object, under Cemu's names (so Cemu's code that calls it
+// reaches ours). Route traces, GPU commands and sound must stay as Cemu's
+// (tools/reference/stream_check.sh).
 #include "Cafe/HW/Espresso/PPCState.h" // wwhd-reference: virtual clock
 #include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/Core/LatteDraw.h"

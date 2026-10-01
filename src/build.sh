@@ -6,8 +6,7 @@
 #   our OS layer and frontend; the runtime (src/runtime) and, when it has been generated, the
 #   recompiled program with its overrides. Headless, or in a window with SDL3.
 # The first build compiles Cemu's libraries from CEMU_SRC too (11-12 minutes with 10 jobs); later ones
-# compile what changed and link twice (the second time in the reference's member order,
-# src/link_order.py), about 10 s for a one-file change thanks to ThinLTO's cache.
+# compile what changed and link, about 10 s for a one-file change thanks to ThinLTO's cache.
 # Env: CEMU_SRC (default /wwhd/opt/cemu-src: the pinned Cemu with tools/reference/cemu-patches);
 #   SDL3_DIR (default /wwhd/opt/sdl3: SDL3 with video, tools/worker/setup-volume.sh sdl3);
 #   RECOMP_DIR: the generated program (tools/recomp/build.sh; default build/recomp, RECOMP_DIR= for

@@ -1,9 +1,8 @@
 // snd_core (docs/recompiler-design.md D18): the AX interrupt service thread: frame callbacks,
 // mixing, final mix, upsampling. Cemu's src/Cafe/OS/libs/snd_core/ax_ist.cpp (Mozilla Public
-// License 2.0), forked: wwhd-null links this in place of Cemu's object, at its position in the link
-// (so its guest-memory slots keep their addresses) and under Cemu's names (so Cemu's code that
-// calls it, the scheduler driving AXOut_update, reaches ours). It must mix exactly what Cemu's did
-// (WWHD_AUDIO_HASH, tools/reference/stream_check.sh).
+// License 2.0), forked: wwhd-null links this in place of Cemu's object, under Cemu's names (so
+// Cemu's code that calls it, the scheduler driving AXOut_update, reaches ours). It must mix exactly
+// what Cemu's did (WWHD_AUDIO_HASH, tools/reference/stream_check.sh).
 #include "Cafe/OS/libs/snd_core/ax.h"
 #include "Cafe/OS/libs/snd_core/ax_internal.h"
 #include "Cafe/HW/Espresso/PPCState.h"

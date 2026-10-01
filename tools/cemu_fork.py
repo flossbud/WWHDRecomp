@@ -22,10 +22,9 @@ for line in open(os.path.join(root, 'src/forks.txt')):
         continue
     source = open(os.path.join(cemu, theirs), encoding='utf-8-sig').read()
     head = (f'{os.path.basename(ours)} (docs/recompiler-design.md D18): {what.strip()}. Cemu\'s src/{theirs} '
-            '(Mozilla Public License 2.0), forked: wwhd-null links this in place of Cemu\'s object, at its '
-            'position in the link (so its guest-memory slots keep their addresses) and under Cemu\'s names '
-            '(so Cemu\'s code that calls it reaches ours). Route traces, GPU commands and sound must stay '
-            'as Cemu\'s (tools/reference/stream_check.sh).')
+            '(Mozilla Public License 2.0), forked: wwhd-null links this in place of Cemu\'s object, under '
+            'Cemu\'s names (so Cemu\'s code that calls it reaches ours). Route traces, GPU commands and sound '
+            'must stay as Cemu\'s (tools/reference/stream_check.sh).')
     os.makedirs(os.path.dirname(path), exist_ok=True)
     open(path, 'w').write(''.join(f'// {l}\n' for l in textwrap.wrap(head, 97)) + source)
     print(f'forked src/{theirs} -> src/{ours}')

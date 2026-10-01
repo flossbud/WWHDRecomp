@@ -162,10 +162,11 @@ desktop. `REF_SAVE=dir` (run.sh) or `WWHD_SAVE=dir` (play.sh) installs it. It is
   (`WWHD_NATIVE=on`), our OS layer, the null GPU and, with `WWHD_RENDER=vk`, our renderer.
   - The null GPU (`src/gpu/null_gpu.cpp`) is a command processor that keeps the register file and
     does every guest-visible effect.
-- **Link order matters.** Cemu's archive members are linked in the reference's order
-  (`src/link_order.txt`, `src/link_order.py`), or Cemu's `SysAllocator` slots shift and guest
-  addresses in 0x0E000000+ differ. Forks replace Cemu's files inside Cemu's targets, so their
-  objects keep the originals' names and positions.
+- **Guest memory of Cemu's OS objects** (its 170 `SysAllocator` slots, 0x0E000000 up) comes from a
+  table (`src/os/common/sysalloc_layout.h`), by what each slot is, not by static-constructor (link)
+  order. A slot the table doesn't know goes after the reference's and is logged; when Cemu or a
+  fork's slots change, make the table again (`src/README.md`). Forks replace Cemu's files inside
+  Cemu's targets.
 - **`WWHD_NATIVE=diff`** is diff mode (D8.2): pure calls and cycles checked against the
   interpreter. Latest on the save route: 1,118,003 checked calls, 0 mismatches.
 - **Our OS layer** (`src/os`, src/README):
@@ -327,17 +328,16 @@ Pipelines come from shader variants, not state, so nothing was changed.
   CemuCafe loses Latte and each fork replaces its original inside Cemu's target. `src/build.sh`
   now just runs CMake, so the old commands still work (`src/build.sh`, `WWHD_FORKS=0 src/build.sh
   build/wwhd-cemu`). `tools/recomp/build.sh` only generates; the CMake build compiles the shards.
-- Link order: a first link (`wwhd-null-unordered`) gives the member set, the second links them in
-  the reference's order (`src/link_order.txt`, 1,759 members). Linux only (`WWHD_LINK_ORDER`).
+- Link order: first a second link with every member in the reference's order; since item 8's
+  layout table, one plain link.
 - Checked: the CMake binary matches the reference on all six routes (traces, command streams,
   sound; route 1,124,796,468 calls), diff mode on warp is clean, and its menus frames on lavapipe
   are byte-identical to the old binary's. The `WWHD_FORKS=0` build reproduces the baselines.
 - First build 11-12 minutes on the worker (Cemu's libraries included); a one-file change about 10 s.
 - `wwhd` (Cemu's Latte with our frontend) isn't built any more; Cemu_release is the comparison.
   `frontend/window_system.cpp` still has its Xlib path, unused.
-- Not done: other platforms. Only the ordered link is Linux-specific (`WWHD_LINK_ORDER`, off
-  elsewhere); the flags are clang's; our own code isn't portable yet (the fibers' x86-64 context
-  switch, D19's arm64 item). Untested anywhere but the worker.
+- Not done: other platforms. The flags are clang's; our own code isn't portable yet (the fibers'
+  x86-64 context switch, D19's arm64 item). Untested anywhere but the worker.
 
 ### 7. The file system and nn_save: done (WW-3, the owner's choice)
 
@@ -354,10 +354,26 @@ Pipelines come from shader variants, not state, so nothing was changed.
 - Gotcha: a SysAllocator in a fork stays even when unused (`iosu_fsa.cpp` keeps its old message
   buffer), or every later one moves in guest memory.
 
-### 8. Then, roughly in this order (ask the owner)
+### 8. Loader and memory map: started (WW-3, the owner's choice)
+
+- **Done: the guest OS objects' own home.** Cemu's 170 `SysAllocator` slots (its OS objects in
+  guest memory, 0x0E000000 up) take the reference's addresses from a table
+  (`src/os/common/sysalloc_layout.h`, used by our fork of `Common/SysAllocator.cpp`), by what each
+  slot is (declaring file, line for a header, size, alignment, ordinal; cemu-patches/0016 has each
+  slot record its declaration). Link order doesn't matter any more: the build links once, and
+  `src/link_order.py`/`.txt` are gone. Checked with a plain link: all six routes and diff mode
+  identical; the `WWHD_FORKS=0` build (which keeps this one fork) reproduces the baselines.
+- Make the table again when Cemu or a fork's slots change: `CEMU_SYSALLOC_LOG=path` from a run
+  that matches the reference, then `tools/sysalloc_layout.py` (`src/README.md`). The worker's
+  Cemu_release predates patches 0015 and 0016; `tools/worker/setup-volume.sh cemu-rebuild` (about
+  40 minutes) lets it write the list itself.
+- **Not started:** our own loader (placing `cking.rpx` as Cemu does: text at 0x02000000, data
+  from 0x10000000, import trampolines at 0x00E00000) and our own memory map (Cemu's MMU ranges).
+  Both have to reproduce Cemu's addresses exactly; traces will say where they don't.
+
+### 9. Then, roughly in this order (ask the owner)
 - **The rest of D18:**
-  - the loader and memory map, giving the guest OS objects in Cemu's memory (the SysAllocators)
-    their own home;
+  - the loader and memory map (the rest of item 8);
   - gx2's core rewritten;
   - proc_ui.
 - **Later:**

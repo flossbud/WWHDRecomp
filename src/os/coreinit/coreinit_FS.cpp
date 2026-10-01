@@ -1,9 +1,8 @@
 // coreinit_FS.cpp (docs/recompiler-design.md D18): the file system's client side: clients, command
 // blocks and their queue, the FS API. Cemu's src/Cafe/OS/libs/coreinit/coreinit_FS.cpp (Mozilla
-// Public License 2.0), forked: wwhd-null links this in place of Cemu's object, at its position in
-// the link (so its guest-memory slots keep their addresses) and under Cemu's names (so Cemu's code
-// that calls it reaches ours). Route traces, GPU commands and sound must stay as Cemu's
-// (tools/reference/stream_check.sh).
+// Public License 2.0), forked: wwhd-null links this in place of Cemu's object, under Cemu's names
+// (so Cemu's code that calls it reaches ours). Route traces, GPU commands and sound must stay as
+// Cemu's (tools/reference/stream_check.sh).
 // wwhd: requests go to the FSA service in place (../iosu/fsa_service.h) rather than through IOSU's
 // kernel; each asynchronous reply reaches the IPC thread as IOSU's did (IPCDriver_PostReply).
 #include <OS/RPL/rpl.h>

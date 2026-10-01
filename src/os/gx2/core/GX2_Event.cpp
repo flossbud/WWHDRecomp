@@ -1,8 +1,8 @@
 // GX2_Event.cpp (docs/recompiler-design.md D18): gx2's events: vsync, flips, timestamps,
 // GX2DrawDone. Cemu's src/Cafe/OS/libs/gx2/GX2_Event.cpp (Mozilla Public License 2.0), forked:
-// wwhd-null links this in place of Cemu's object, at its position in the link (so its guest-memory
-// slots keep their addresses) and under Cemu's names (so Cemu's code that calls it reaches ours).
-// Route traces, GPU commands and sound must stay as Cemu's (tools/reference/stream_check.sh).
+// wwhd-null links this in place of Cemu's object, under Cemu's names (so Cemu's code that calls it
+// reaches ours). Route traces, GPU commands and sound must stay as Cemu's
+// (tools/reference/stream_check.sh).
 #include "Cafe/OS/common/OSCommon.h"
 #include "GX2_Command.h"
 #include "GX2_Event.h"

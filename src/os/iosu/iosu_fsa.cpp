@@ -1,8 +1,7 @@
 // iosu_fsa.cpp (docs/recompiler-design.md D18): the FSA service: file operations on the title's
 // volumes (through fsc). Cemu's src/Cafe/IOSU/fsa/iosu_fsa.cpp (Mozilla Public License 2.0),
-// forked: wwhd-null links this in place of Cemu's object, at its position in the link (so its
-// guest-memory slots keep their addresses) and under Cemu's names (so Cemu's code that calls it
-// reaches ours). Route traces, GPU commands and sound must stay as Cemu's
+// forked: wwhd-null links this in place of Cemu's object, under Cemu's names (so Cemu's code that
+// calls it reaches ours). Route traces, GPU commands and sound must stay as Cemu's
 // (tools/reference/stream_check.sh).
 // wwhd: served in place (fsa_service.h). Cemu ran this service on an IOSU host thread that received
 // each request from IOSU's kernel and replied through it; the FS client now calls OpenClient,

@@ -1,0 +1,142 @@
+From af6a4b5cb740ff20316e36553bb35b4da964aa5b Mon Sep 17 00:00:00 2001
+From: flossbud <224492734+flossbud@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 12:09:49 +0000
+Subject: [PATCH] wwhd-reference: SysAllocators know where they were declared
+ and their size
+
+Each SysAllocator records its declaration's source location (std::source_location, from a
+default argument of its constructors) and the guest memory it takes (size and alignment), in
+SysAllocatorBase. Cemu still lays slots out in registration order, which is static-constructor
+order, which is the link's. CEMU_SYSALLOC_LOG=path lists the slots as laid out (declaring file
+and line, size, alignment, offset in the Cemu area): WWHD's own build lays its slots out from that
+list (src/os/common/SysAllocator.cpp), so its guest memory matches the reference's whatever the
+link order.
+---
+ src/Common/SysAllocator.cpp | 17 ++++++++++++++++-
+ src/Common/SysAllocator.h   | 31 +++++++++++++++++++++++++------
+ 2 files changed, 41 insertions(+), 7 deletions(-)
+
+diff --git a/src/Common/SysAllocator.cpp b/src/Common/SysAllocator.cpp
+index 7e296f3..537b3a1 100644
+--- a/src/Common/SysAllocator.cpp
++++ b/src/Common/SysAllocator.cpp
+@@ -1,10 +1,24 @@
+ #include "SysAllocator.h"
+ 
++extern MPTR sysAreaAllocatorOffset; // coreinit_MEM.cpp: the next free byte of the Cemu area
++
+ void SysAllocatorContainer::Initialize()
+ {
++	// wwhd-reference: CEMU_SYSALLOC_LOG=path lists the slots as laid out, one line each: the file and
++	// line that declared it, its size and alignment, and its offset in the Cemu area (0x0E000000)
++	FILE* log = getenv("CEMU_SYSALLOC_LOG") ? fopen(getenv("CEMU_SYSALLOC_LOG"), "w") : nullptr;
+ 	for (SysAllocatorBase* sysAlloc : m_sysAllocList)
+ 	{
++		uint32 align = std::max<uint32>(sysAlloc->SlotAlignment(), 1);
++		uint32 offset = (sysAreaAllocatorOffset + align - 1) / align * align;
+ 		sysAlloc->Initialize();
++		if (log)
++			fprintf(log, "%s\t%u\t%u\t%u\t%08x\n", sysAlloc->DeclaredFile(), sysAlloc->DeclaredLine(), sysAlloc->SlotSize(), sysAlloc->SlotAlignment(), offset);
++	}
++	if (log)
++	{
++		fprintf(log, "end\t0\t0\t0\t%08x\n", (uint32)sysAreaAllocatorOffset);
++		fclose(log);
+ 	}
+ }
+ 
+@@ -19,7 +33,8 @@ SysAllocatorContainer& SysAllocatorContainer::GetInstance()
+ 	return s_instance;
+ }
+ 
+-SysAllocatorBase::SysAllocatorBase()
++SysAllocatorBase::SysAllocatorBase(const std::source_location& where, uint32 slotSize, uint32 slotAlignment)
++	: m_declaredFile(where.file_name()), m_declaredLine(where.line()), m_slotSize(slotSize), m_slotAlignment(slotAlignment)
+ {
+ 	SysAllocatorContainer::GetInstance().PushSysAllocator(this);
+ }
+\ No newline at end of file
+diff --git a/src/Common/SysAllocator.h b/src/Common/SysAllocator.h
+index 4d59d7c..e53b371 100644
+--- a/src/Common/SysAllocator.h
++++ b/src/Common/SysAllocator.h
+@@ -3,6 +3,7 @@
+ #include <type_traits>
+ #include <cstddef>
+ #include <vector>
++#include <source_location>
+ 
+ uint32 coreinit_allocFromSysArea(uint32 size, uint32 alignment);
+ class SysAllocatorBase;
+@@ -26,23 +27,38 @@ class SysAllocatorBase
+ {
+ 	friend class SysAllocatorContainer;
+ public:
+-	SysAllocatorBase();
++	// wwhd-reference: each slot knows where it was declared and how much guest memory it takes, so that
++	// a host program can lay slots out by what they are instead of by the order static constructors
++	// ran in, which is the link's. Cemu's own layout is unchanged.
++	SysAllocatorBase(const std::source_location& where = std::source_location::current(), uint32 slotSize = 0, uint32 slotAlignment = 0);
+ 	virtual ~SysAllocatorBase() = default;
+ 
++	const char* DeclaredFile() const { return m_declaredFile; }
++	uint32 DeclaredLine() const { return m_declaredLine; }
++	uint32 SlotSize() const { return m_slotSize; }
++	uint32 SlotAlignment() const { return m_slotAlignment; }
++
+ private:
+ 	virtual void Initialize() = 0;
++
++	const char* m_declaredFile;
++	uint32 m_declaredLine;
++	uint32 m_slotSize;
++	uint32 m_slotAlignment;
+ };
+ 
+ template<typename T, size_t count = 1, size_t alignment = 32>
+ class SysAllocator : public SysAllocatorBase
+ {
+ public:
+-	SysAllocator()
++	SysAllocator(std::source_location where = std::source_location::current())
++		: SysAllocatorBase(where, sizeof(T) * count, alignment)
+ 	{
+ 		m_tempData.resize(count);
+ 	}
+ 
+-	SysAllocator(std::initializer_list<T> l)
++	SysAllocator(std::initializer_list<T> l, std::source_location where = std::source_location::current())
++		: SysAllocatorBase(where, sizeof(T) * count, alignment)
+ 	{
+ 		m_tempData.reserve(count);
+ 
+@@ -52,7 +68,8 @@ public:
+ 	}
+ 
+ 	template <size_t N>
+-	SysAllocator(const char(&str)[N])
++	SysAllocator(const char(&str)[N], std::source_location where = std::source_location::current())
++		: SysAllocatorBase(where, sizeof(T) * count, alignment)
+ 	{
+ 		m_tempData.reserve(count);
+ 		m_tempData.insert(m_tempData.begin(), str, str + N);
+@@ -162,12 +179,14 @@ template<typename T>
+ class SysAllocator<T, 1> : public SysAllocatorBase
+ {
+ public:
+-	SysAllocator()
++	SysAllocator(std::source_location where = std::source_location::current())
++		: SysAllocatorBase(where, sizeof(T), 32)
+ 	{
+ 		m_tempData = {};
+ 	}
+ 
+-	SysAllocator(const T& value)
++	SysAllocator(const T& value, std::source_location where = std::source_location::current())
++		: SysAllocatorBase(where, sizeof(T), 32)
+ 	{
+ 		m_tempData = value;
+ 	}
+-- 
+2.47.3
+
