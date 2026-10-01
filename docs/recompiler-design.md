@@ -355,6 +355,20 @@ A function is only "done" when layer 2 passes for it. This is the external oracl
   setsail does), the overrides are written against names from Phase 2.
 * **Mid-function hooks** (XenonRecomp's `[[midasm_hook]]`) are deferred until a real need appears.
 
+**As built (2026-09-30).** Not with weak symbols: a weak definition can't be inlined within its
+shard, and every function would pay for the few that are replaced. Instead `config/US_v0/overrides.txt`
+lists the replaced functions, and `tools/recomp/generate.py` emits each listed body as `orig_f_X`
+(declared in `funcs.h` with the rest) and leaves `f_X` to `src/overrides/`. Every reference in the
+generated code names `f_X`: direct calls, `musttail` tail calls, falling through into the next
+function, and the function table (D5), from which the runtime's indirect-call table (`rt_direct`)
+and its Dispatch are built, so all of them reach the override. The linker enforces the list: a
+listed function without an override is an undefined `f_X`, an override of an unlisted one a
+duplicate. `src/build.sh` compiles `src/overrides/*.cpp` like generated code (`funcs.h`, `ppc_ops.h`,
+`-ffp-contract=off -fno-strict-aliasing`) and links them with the recompiled program; only the
+listed functions' shards change. An override reads like generated code (`GPR(n)`, `rd32`/`wr32`,
+`RT_CALL_CTR`) and includes `src/overrides/override.h`. Checked with the first one (the task loop,
+D19) in place: both route traces, command streams and sound identical, diff mode clean.
+
 ### D10. Cemu's boot-time code patches
 
 `GamePatch_scan()` (`Cafe/GamePatch.cpp`) rewrites game code at boot with HLE opcodes, `blr`s and
@@ -849,7 +863,8 @@ Every check runs the virtual clock on one host thread, and so does play today.
 * **Hot OS patterns** get real-time-only fast paths through overrides (D9), each with an argument
   that the guest can't tell: first the switch-to-self (push to the own queue with no other waiter,
   then wait for that same message), 9% of the CPU thread. They change the OS-call sequence, so the
-  deterministic mode never uses them.
+  deterministic mode never uses them. (Built instead: the task loop sleeps through idle rounds,
+  below.)
 
 **Done so far** (2026-09-30): our own context switch (`src/runtime/fiber/FiberUnix.cpp`, a fork of
 Cemu's: callee-saved registers, MXCSR and the x87 control word on the fiber's stack, no system
@@ -873,15 +888,45 @@ it is the game's task switcher (`f_02760ACC` -> `f_0275FFCC`), which, with no ta
 switching to itself through its message queue (38% of the thread in `OSSendMessage` and
 `OSReceiveMessage`). The Wii U's core spins the same way. The host thread only goes idle with an
 override (D9) that recognises the empty round and waits for the next event (vsync, a message);
-that is the real-time fast path above, and now the next thing for CPU use (not for speed: 30 fps
-holds with room to spare).
+that is the real-time fast path above (built: *the task loop sleeps*, below).
+
+**The task loop sleeps** (2026-09-30, the first fast path). The spinning thread (1603f4a8) runs the
+game's task loop, `f_0275FFCC` (named `task_MessageLoop` in `symbols.csv`, with the rest of that
+small task library): a task is an object with a message queue at task+32 on a guest thread of its
+own; the loop receives messages until the task's stop message and passes each other one to the
+task's handler (vtable slot 124). One task ticks: its handler posts itself message 5 after every
+message, and a 5 does nothing while the object is idle, so the thread sends and receives its own
+message forever (frame 1500 of the save route: 34,938 pairs and nothing else on that thread). The
+override (`src/overrides/task_loop.cpp`, D9) is the game's loop in C++, plus, in real time only, a
+watch on each handler call: the runtime's *quiet watch* (`src/runtime/dispatch.cpp`) turns on the
+store journal that generated code already calls on every store (`RT_STORE`, diff mode's) and notes
+any store outside the dead stack below the loop's frame (and its LR save word), interpreted code, OS
+calls, and the thread leaving its core (its `wakeUpCount`). A call that stored nothing live, made one
+OS call, and left the queue one message longer with its own message at the end, only posted its
+message back; handling it again reads the same memory and does the same nothing. So when the loop
+takes that message again and the queue holds nothing else, the thread first waits among the queue's
+receivers (a sender wakes it, as `OSSendMessage` does) with a host alarm for 1 ms (the idle loop's
+own interval), and when no guest thread can run the host thread sleeps. To the game that is the
+thread being preempted: the same messages in the same order, the same writes, and anything only
+memory or the clock tells the handler is seen at most 1 ms later. Productive rounds (the other task
+threads decompress and mix audio) write memory and never wait. The fast paths run only with the
+recompiled program in real time on one host thread (`wwhd::rt::FastPaths`: not with the virtual
+clock, in diff mode or on three host threads; `WWHD_FAST_PATHS=0` turns them off).
+*Measured* on the owner's desktop, the save route headless, same binary with and without: the
+scheduler thread went from 100% busy to 8-25% (the rest is the game's work: audio mixing and
+decompression under other tasks, and the frame), the process from 69.5 s to 23.2 s of CPU in 61.5 s,
+30 fps and a 99th percentile of 34-35 ms either way; the loop sleeps about 800-930 times a second,
+none of them ended by a message during play. With the virtual clock both routes' traces, command
+streams and sound are identical, and diff mode is clean (the override is the game's loop there).
+The switch-to-self shortcut planned above is not needed: in play, the rounds that would use it now
+sleep.
 
 **Order**: (1) exact per-block cycle counting (D6's planned optimisation, held to the trace; done
 2026-09-30: 1.89x real time on the save route, traces identical);
 (2) real time on one host thread: host clock, sleeping idle, vsync from presentation (done
-2026-09-30 but vsync, still host-timed; the game's own spin keeps the thread busy, above); (3) our
-context switch (done); (4) heavier routes (sailing, a dungeon, Windfall) timed, to decide on three host
-threads; (5) fast paths.
+2026-09-30 but vsync, still host-timed); (3) our context switch (done); (4) heavier routes (sailing, a
+dungeon, Windfall) timed, to decide on three host threads; (5) fast paths (the task loop's, done
+2026-09-30, above; more where profiles show the game spinning).
 
 **Open**: one host thread or three (item 4 decides); real vsync needs the GPU machine (open question
 8); whether Cemu's three-thread mode has known behaviour differences for this game.

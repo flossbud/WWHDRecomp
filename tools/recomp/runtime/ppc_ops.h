@@ -12,8 +12,9 @@
 
 extern uint8* memory_base;
 
-// Store journal (diff mode, D8.2): while g_rtJournalOn is set, every store first hands the runtime
-// the range it is about to overwrite, so that a native run can be rewound. Off otherwise.
+// Store journal: while g_rtJournalOn is set, every store first hands the runtime the range it is
+// about to overwrite, so that a diff-mode native run can be rewound (D8.2), or so that a real-time
+// fast path can tell whether a call wrote anything (the quiet watch, D19). Off otherwise.
 extern bool g_rtJournalOn;
 void rt_journal_store(uint32 ea, uint32 size);
 #define RT_STORE(ea, n) do { if (g_rtJournalOn) [[unlikely]] rt_journal_store((ea), (n)); } while (0)

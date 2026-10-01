@@ -22,6 +22,7 @@ namespace wwhd::os
 	uint32 AllocSystemArea(uint32 size, uint32 alignment) { return coreinit_allocFromSysArea(size, alignment); }
 	void QueueGuestCallback(uint32 fn, uint32 r3, uint32 r4) { coreinitAsyncCallback_add(fn, 2, r3, r4); }
 	uint32 SwkbdChangeStringParam() { return _changeStringParam.GetMPTR(); }
+	uint32 CurrentThreadStackEnd() { return coreinit::OSGetCurrentThread()->stackEnd.GetMPTR(); }
 
 	std::vector<Export>& Exports()
 	{

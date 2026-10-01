@@ -166,6 +166,7 @@ void rt_import(PPCInterpreter_t* ctx, uint32 id)
 	ctx->instructionPointer = b.target;
 	if (--ctx->remainingCycles < 0)
 		Yield(ctx, b.target);
+	QuietOsCall();
 	PPCInterpreter_virtualHLE(ctx, b.opcode);
 	if (ctx->instructionPointer != ctx->spr.LR) [[unlikely]]
 		Dispatch(ctx, ctx->instructionPointer);   // D4: the handler tail-called guest code (MEM forwarding)

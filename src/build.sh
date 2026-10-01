@@ -46,6 +46,16 @@ for f in draw texture latte_glue; do
         -I"$cemu/dependencies/Vulkan-Headers/include" -c "$root/src/gpu/vk/$f.cpp" -o "$out/vk_$f.o" & pids+=($!)
 done
 for f in dispatch imports diff profile; do compile "$root/src/runtime/$f.cpp" "rt_$f.o"; done
+# overrides (D9): generated functions replaced by ours (config/US_v0/overrides.txt), compiled like the
+# generated code (its header, strict FP, no strict aliasing); only with the recompiled program
+override_objs=()
+if [ -n "$recomp" ]; then
+    for f in "$root"/src/overrides/*.cpp; do
+        n=override_$(basename "$f" .cpp).o
+        compile "$f" "$n" -I"$recomp" -ffp-contract=off -fno-strict-aliasing
+        override_objs+=("$out/$n")
+    done
+fi
 os_objs=()
 for f in "$root"/src/os/*.cpp; do n=os_$(basename "$f" .cpp).o; compile "$f" "$n"; os_objs+=("$out/$n"); done
 for f in "$root"/src/os/gx2/*.cpp; do n=os_gx2_$(basename "$f" .cpp).o; compile "$f" "$n"; os_objs+=("$out/$n"); done
@@ -112,8 +122,8 @@ null_objs=("$out/cemu_boot.o" "$out/window_system_null.o" "$out/audio_sdl.o" "$o
            "$out"/rt_{dispatch,imports,diff,profile}.o "${os_objs[@]}")
 limits=$(ls "$cemu"/build/vcpkg_installed/*/lib/libglslang-default-resource-limits.a | head -1)  # glslang's defaults (draw.cpp)
 if [ -n "$recomp" ]; then
-    null_objs+=("$recomp"/shard_*.o "$recomp/func_table.o" "$recomp/imports.o")
-    echo "wwhd: wwhd-null links the recompiled program from $recomp ($(ls "$recomp"/shard_*.o | wc -l) shards)"
+    null_objs+=("$recomp"/shard_*.o "$recomp/func_table.o" "$recomp/imports.o" "${override_objs[@]}")
+    echo "wwhd: wwhd-null links the recompiled program from $recomp ($(ls "$recomp"/shard_*.o | wc -l) shards, ${#override_objs[@]} override files)"
 else
     echo "wwhd: wwhd-null without recompiled code (the runtime interprets)"
 fi

@@ -19,14 +19,21 @@
 // guest memory against the RPX's (a mismatch means Cemu's GamePatch rewrote it, D10; such a
 // function never runs natively) and binds the imports (imports.cpp).
 //
+// Real time (no virtual clock) in native mode on one host thread turns on the fast paths (D19): overrides
+// (D9, src/overrides) that do what the game's code does with less host work, which traces could tell
+// apart, so checks never run them. They use the quiet watch below.
+//
 // Environment:
 //   WWHD_NATIVE=diff   diff mode for pure functions (see diff.cpp for its options)
 //   WWHD_NATIVE=on     run the recompiled program (M4)
+//   WWHD_FAST_PATHS=0  no real-time fast paths (to compare)
+//   WWHD_QUIET_DEBUG=n log why the first n calls the fast paths watched weren't quiet
 //   WWHD_RT_LOG=path   the runtime's log (appended); default stderr
 #include "runtime.h"
 #include "rt_internal.h"
 #include "../os/os.h"
 #include "Cafe/HW/Espresso/Interpreter/PPCInterpreterInternal.h"
+#include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
 #include <chrono>
 #include <cstdarg>
 #include <mutex>
@@ -55,6 +62,42 @@ namespace wwhd::rt
 	// per guest thread: how many callback loops (PPCCore_executeCallbackInternal) are running it
 	static std::unordered_map<PPCInterpreter_t*, sint32> s_callbackDepth;
 	static std::mutex s_callbackMutex;
+
+	static bool s_fastPaths = false;          // real time, native, one host thread (see the top)
+	static std::atomic<uint64> s_idleWaits{ 0 }, s_idleWaitsByMessage{ 0 };
+
+	// ---- the quiet watch (D19's fast paths) ---------------------------------------------------------
+	// Did one guest call change anything another thread, or the caller's next call, could see? While a
+	// watch is on, generated code hands every store to rt_journal_store (g_rtJournalOn, ppc_ops.h
+	// RT_STORE), which passes it to QuietStore: a store outside [low, high) (the dead stack below the
+	// caller's frame), or by another thread, makes the call visible, and so does running interpreted
+	// code (its stores go unseen) or the thread leaving its core (a timeslice ending, a wait: other
+	// threads ran meanwhile, and their stores stop the watch too). The call's OS calls are counted;
+	// the caller judges them. Only the fast paths watch, so there is one host thread and at most one
+	// watch: a thread that begins one ends any other's.
+	Quiet g_quiet;
+	static uint64 s_quietTokens = 0;
+
+	static sint32 s_quietDebug = 0;          // WWHD_QUIET_DEBUG=n: log why the first n watched calls weren't quiet
+
+	static void QuietVisible(const char* why, uint32 ea = 0)
+	{
+		if (s_quietDebug > 0 && !g_quiet.visible)
+		{
+			s_quietDebug--;
+			Log("quiet: not quiet (%s %08X; dead stack %08X-%08X, LR %08X)", why, ea, g_quiet.low, g_quiet.high, g_quiet.ctx->spr.LR);
+		}
+		g_quiet.visible = true;
+		g_rtJournalOn = false;                // nothing more to learn from this call's stores
+	}
+
+	void QuietStore(uint32 ea, uint32 size)
+	{
+		if (PPCInterpreter_getCurrentInstance() != g_quiet.ctx)
+			QuietVisible("another thread's store at", ea);
+		else if (ea < g_quiet.low || ea + size > g_quiet.high)
+			QuietVisible("store at", ea);
+	}
 
 	static void VLog(const char* prefix, const char* fmt, va_list ap)
 	{
@@ -163,6 +206,12 @@ namespace wwhd::rt
 		else if (mode && strcmp(mode, "on") == 0)
 		{
 			s_mode = Mode::Native;
+			const char* fast = getenv("WWHD_FAST_PATHS");
+			s_fastPaths = !PPCTimer_isVirtualClock() && !coreinit::__CemuIsMulticoreMode() && !(fast && strcmp(fast, "0") == 0);
+			if (s_fastPaths)
+				Log("native: real-time fast paths on (WWHD_FAST_PATHS=0 turns them off)");
+			if (const char* debug = getenv("WWHD_QUIET_DEBUG"))
+				s_quietDebug = atoi(debug);
 			s_lastReport = std::chrono::steady_clock::now();
 			at_quick_exit([] { NativeReport(true); });   // the trace's exit-at-frame (patch 0011)
 			atexit([] { NativeReport(true); });
@@ -284,6 +333,8 @@ namespace wwhd::rt
 	void Interpret(PPCInterpreter_t* ctx, uint32 target)
 	{
 		const uint32 ret = ctx->spr.LR & ~3u, sp = ctx->gpr[1];
+		if (g_quiet.token) [[unlikely]]
+			QuietVisible("interpreted", target);  // the interpreter's stores go unseen
 		if (s_interpretedCalls++ < 20)
 			Log("native code calls %08X (LR %08X, words %08X %08X): interpreted up to the next function entry", target,
 				ret, memory_readU32(target), memory_readU32(target + 4));
@@ -326,12 +377,56 @@ namespace wwhd::rt
 			ctx->instructionPointer = target;
 			if (--ctx->remainingCycles < 0)          // the trampoline is an instruction too
 				Yield(ctx, target);
+			QuietOsCall();
 			PPCInterpreter_virtualHLE(ctx, word);
 			if (ctx->instructionPointer != ctx->spr.LR)
 				Dispatch(ctx, ctx->instructionPointer);    // the handler tail-called guest code (D4)
 			return;
 		}
 		Interpret(ctx, target);
+	}
+
+	bool FastPaths()
+	{
+		return s_fastPaths;
+	}
+
+	uint64 QuietBegin(PPCInterpreter_t* ctx, uint32 low, uint32 high)
+	{
+		g_quiet = { ++s_quietTokens, ctx, low, high, coreinit::OSGetCurrentThread()->wakeUpCount, 0, false };
+		g_rtJournalOn = true;
+		return g_quiet.token;
+	}
+
+	sint32 QuietEnd(uint64 token)
+	{
+		if (g_quiet.token != token)               // another thread's watch began since: others ran
+			return -1;
+		g_rtJournalOn = false;
+		g_quiet.token = 0;
+		if (!g_quiet.visible && coreinit::OSGetCurrentThread()->wakeUpCount != g_quiet.wakeUps)
+			QuietVisible("left the core", 0);
+		if (g_quiet.visible)
+			return -1;
+		if (s_quietDebug > 0 && g_quiet.osCalls != 1)
+		{
+			s_quietDebug--;
+			Log("quiet: a quiet call made %u OS calls (LR %08X)", g_quiet.osCalls, g_quiet.ctx->spr.LR);
+		}
+		return (sint32)g_quiet.osCalls;
+	}
+
+	void CountIdleWait(bool byMessage)
+	{
+		s_idleWaits++;
+		if (byMessage)
+			s_idleWaitsByMessage++;
+	}
+
+	void TakeIdleWaits(uint64& waits, uint64& byMessage)
+	{
+		waits = s_idleWaits.exchange(0);
+		byMessage = s_idleWaitsByMessage.exchange(0);
 	}
 }
 
@@ -358,7 +453,7 @@ void rt_jump_ctr(PPCInterpreter_t* ctx)
 
 void rt_bad_branch(PPCInterpreter_t* ctx, uint32 ea, uint32 target)
 {
-	if (g_rtJournalOn)
+	if (DiffInNative())
 		DiffNativeFault(ea, target);    // inside a diff-mode native run: unwind it (diff.cpp)
 	Fatal("bad branch at %08X to %08X (LR %08X, r1 %08X, r3 %08X)", ea, target, ctx->spr.LR, ctx->gpr[1], ctx->gpr[3]);
 }
@@ -372,6 +467,6 @@ void rt_trap(PPCInterpreter_t*, uint32)
 // diff-mode native run: that run is rewound, and the interpreter repeats the call for real.
 void rt_dcache_flush(uint32 ea)
 {
-	if (!g_rtJournalOn)
+	if (!DiffInNative())
 		LatteBufferCache_notifyDCFlush(ea, 32);
 }

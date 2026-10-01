@@ -70,6 +70,17 @@ namespace wwhd::os
 	uint32 AllocSystemArea(uint32 size, uint32 alignment); // guest memory for the OS's own data (Cemu's system area)
 	// run the guest function `fn` with r3, r4 on the OS's callback thread (Cemu's async callbacks)
 	void QueueGuestCallback(uint32 fn, uint32 r3, uint32 r4);
+	uint32 CurrentThreadStackEnd();                 // the lowest address of the calling guest thread's stack
+
+	// For the game's task loop in real time (src/overrides/task_loop.cpp, D19), in the scheduler's
+	// message queues: the queue at guest address `queue` (an OSMessageQueue), read under the scheduler
+	// lock: how many messages it holds, the newest one's first word, and whether every first word is
+	// `word`
+	struct QueueView { uint32 used, last; bool allSame; };
+	QueueView ViewQueue(uint32 queue, uint32 word);
+	// the calling thread waits, taking no message, until the queue holds a number other than `used`
+	// (a message arrived) or timeoutNs has passed; true if the number changed
+	bool WaitQueueChange(uint32 queue, uint32 used, uint64 timeoutNs);
 }
 
 // Typed functions: WWHD_OS_EXPORT(gx2, GX2InitSampler, ns::GX2InitSampler) registers a plain C++

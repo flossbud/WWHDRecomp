@@ -18,7 +18,8 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 | `gpu/vk/vk.h`, `vk.cpp` | Vulkan loaded at runtime, so `wwhd-null` runs without a driver when rendering is off |
 | `os/` | our OS layer (D18): the game's imports, taking over Cemu's handlers one by one (`os.h`); `os/gx2/` is gx2, ported from Cemu's |
 | `os/snd_core/`, `os/coreinit/`, `os/gx2/core/`, `os/proc_ui/`, `os/tcl/`, `runtime/espresso/`, `runtime/fiber/` | forks of Cemu's sources (`forks.txt`): snd_core, the scheduler, gx2's core, proc_ui, TCL, the cores' timeslices, timer and HLE dispatch, fibers |
-| `runtime/dispatch.cpp` | the execution seam (Cemu patch 0011): the hook that replaces Cemu's interpreter loop, the function table (D5), the D10 code check, `rt_call_ctr`/`rt_jump_ctr`/`rt_bad_branch` |
+| `runtime/dispatch.cpp` | the execution seam (Cemu patch 0011): the hook that replaces Cemu's interpreter loop, the function table (D5), the D10 code check, `rt_call_ctr`/`rt_jump_ctr`/`rt_bad_branch`, the real-time fast paths' switch and quiet watch (D19) |
+| `overrides/` | overrides (D9): generated functions replaced by ours (`config/US_v0/overrides.txt`), the original still callable as `orig_f_X`; `task_loop.cpp`, the game's task loop, sleeps through idle rounds in real time |
 | `runtime/imports.cpp` | `rt_import`/`rt_import_data` (D4), bound from what Cemu's loader wrote into guest memory |
 | `runtime/profile.cpp` | a sampling profiler (`WWHD_PROFILE=path`): where host CPU time goes; `tools/profile_report.py` summarises it, `tools/reference/timing.sh` times a route without the trace (`WWHD_EXIT_FRAME=N` ends a run) |
 | `os/tcl/tcl_host.h` | host waits on TCL (forked): the GPU thread sleeps until the CPU submits, the CPU until a submission retires |
@@ -39,6 +40,16 @@ checked against the interpreter (options in `runtime/diff.cpp`). **`WWHD_NATIVE=
 recompiled program** (M4): its whole-route trace equals the reference's, in half the interpreter's
 time. `WWHD_RT_LOG=path` collects the runtime's log (and, in diff mode, per-function results in
 `path.funcs.csv` at exit).
+
+**Overrides** (`overrides/`, D9) replace generated functions: `config/US_v0/overrides.txt` lists
+them, `tools/recomp/generate.py` emits their bodies as `orig_f_X`, and `build.sh` compiles
+`overrides/*.cpp` like generated code and links them with it. The only one so far is the game's task
+loop (`f_0275FFCC`), a **real-time fast path** (D19): with the virtual clock, in diff mode or on
+Cemu's three host threads it runs the game's code (`orig_f_X`), so every check sees the game's own
+behaviour; in real time on one host thread it sleeps through the rounds where the game's ticking
+task only posts itself its tick again (the scheduler thread went from 100% busy to 8-25% on the save
+route). `WWHD_FAST_PATHS=0` turns the fast paths off, to compare; `WWHD_QUIET_DEBUG=n` logs why the
+first n watched calls didn't count as idle.
 
 The null GPU also collects the G0 draw statistics (design D15) with `WWHD_GPU_STATS=path`: the
 register state at every draw (programs by content, targets, depth, MSAA, geometry shaders,

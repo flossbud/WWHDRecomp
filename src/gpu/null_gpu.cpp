@@ -119,6 +119,10 @@ namespace coreinit
 {
 	uint64 __OSIdleNanoseconds();   // os/coreinit/coreinit_Thread.cpp
 }
+namespace wwhd::rt
+{
+	void TakeIdleWaits(uint64& waits, uint64& byMessage);   // runtime/dispatch.cpp: the task loop's (D19)
+}
 
 // Real time: every 10 s the log (portable/log.txt) gets the frame rate, frame times (from swap to
 // swap) and how much of the time the scheduler thread had work, to see how the game plays and how
@@ -150,9 +154,13 @@ namespace frametimes
 		uint64 idle = coreinit::__OSIdleNanoseconds();
 		double busy = 100.0 * (1.0 - (double)(idle - s_idleAtStart) / 1e9 / period);
 		wwhd::gpu::FirstSights f = wwhd::gpu::RendererOn() ? wwhd::gpu::TakeFirstSights() : wwhd::gpu::FirstSights{};
+		uint64 idleWaits, idleWaitsByMessage;
+		wwhd::rt::TakeIdleWaits(idleWaits, idleWaitsByMessage);
 		cemuLog_log(LogType::Force, "wwhd real time: {:.1f} fps over {:.0f} s, frame time median {:.1f} ms, 99th {:.1f} ms, "
-			"worst {:.1f} ms, {} over 50 ms; scheduler thread busy {:.0f}%; first sights {} shaders ({:.0f} ms), {} pipelines ({:.0f} ms)",
-			s_ms.size() / period, period, at(0.5), at(0.99), s_ms.back(), slow, busy, f.shaders, f.shaderMs, f.pipelines, f.pipelineMs);
+			"worst {:.1f} ms, {} over 50 ms; scheduler thread busy {:.0f}%, the task loop slept {} times ({} woken by a message); "
+			"first sights {} shaders ({:.0f} ms), {} pipelines ({:.0f} ms)",
+			s_ms.size() / period, period, at(0.5), at(0.99), s_ms.back(), slow, busy, idleWaits, idleWaitsByMessage,
+			f.shaders, f.shaderMs, f.pipelines, f.pipelineMs);
 		s_ms.clear();
 		s_periodStart = now;
 		s_idleAtStart = idle;

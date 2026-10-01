@@ -1,0 +1,7 @@
+# Generated functions replaced by our own code (docs/recompiler-design.md D9).
+# tools/recomp/generate.py emits each listed function's body as orig_f_X; src/overrides defines f_X,
+# which every reference reaches (calls, tail calls, the function table, indirect calls) and which
+# may call orig_f_X. The linker reports a listed function without an override, and an override of a
+# function not listed here, as a missing or duplicate symbol.
+# address   where                          what
+0275FFCC    src/overrides/task_loop.cpp    the task message loop: in real time, sleeps through idle ticks (D19)

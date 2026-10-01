@@ -36,6 +36,12 @@ instruction can fall through tail-calls the next function, which is also how the
 helpers (D7) chain from entry to entry. Branches to imports (REL24 relocations into .fimport_*)
 call the HLE import; immediates relocated against data imports (.dimport_*) are read from the
 runtime. Anything the generator cannot place is an error, listed at the end; exit status 1.
+
+Overrides (D9): a function listed in config/US_v0/overrides.txt is emitted as orig_f_X, and f_X is
+left to src/overrides, which defines it (and may call orig_f_X). Every reference (direct and tail
+calls, falling through, the function table, and with it the runtime's indirect calls) names f_X, so
+all of them reach the override; the linker reports a listed function without an override, and an
+override of a function that isn't listed, as a missing or duplicate symbol.
 """
 import bisect
 import collections
@@ -138,6 +144,15 @@ class Program:
                         self.names[int(r["address"], 16)] = r["name"]
                     except (KeyError, ValueError):
                         pass
+        # D9: functions replaced by src/overrides (their generated bodies become orig_f_X)
+        self.overrides = set()
+        with open(CONFIG / "overrides.txt") as f:
+            for line in f:
+                word = line.split("#", 1)[0].split()
+                if word:
+                    a = int(word[0], 16)
+                    assert a in self.entries, f"overrides.txt: {a:08X} is not a function entry"
+                    self.overrides.add(a)
         self.synthetic = self.helper_entries()
         if self.synthetic:
             self.funcs = sorted(self.funcs + self.synthetic)
@@ -379,7 +394,8 @@ def generate_function(prog, em, start, end, errors):
     # __restrict: guest memory (memory_base) never overlaps the register state, so the compiler may
     # keep registers in host registers across guest stores (the shards build with
     # -fno-strict-aliasing); calls still receive ctx, so it writes back and reloads around them
-    out = [f"void {fname(start)}(PPCInterpreter_t* __restrict ctx)", "{"]
+    name = ("orig_" if start in prog.overrides else "") + fname(start)    # D9: f_X is src/overrides'
+    out = [f"void {name}(PPCInterpreter_t* __restrict ctx)", "{"]
     out += emit_blocks(body, flow.labels)      # one cycle per instruction, charged per block (D6)
     if last is None or not is_terminator(last):
         if end in prog.entries:
@@ -445,6 +461,8 @@ def main():
              "void rt_jump_ctr(PPCInterpreter_t* ctx);                   // D5: bctr (tail)",
              "void rt_bad_branch(PPCInterpreter_t* ctx, uint32 ea, uint32 target);", ""]
     decls += [f"void {fname(a)}(PPCInterpreter_t* ctx);" for a, _, _ in prog.funcs]
+    decls += ["", "// D9: the generated bodies of the functions src/overrides replaces"]
+    decls += [f"void orig_{fname(a)}(PPCInterpreter_t* ctx);" for a in sorted(prog.overrides)]
     write_if_changed(out / "funcs.h", "\n".join(decls) + "\n")
     changed = 0
     flows = {}
@@ -503,8 +521,8 @@ def main():
     reasons = collections.Counter(r for f in flows.values() for r in set(f.impure))
     print(f"pure: {len(pure)} of {len(flows)} functions; impure by themselves: {dict(reasons)}; "
           f"import/weak sites: {len(sites)}; stores: {sum(stores.values())}")
-    print(f"{len(prog.funcs)} functions ({len(prog.synthetic)} synthesised GHS helper entries) in {len(shards)} shards ({changed} rewritten), "
-          f"{len(prog.imports)} imports, {len(errors)} errors -> {out}")
+    print(f"{len(prog.funcs)} functions ({len(prog.synthetic)} synthesised GHS helper entries, {len(prog.overrides)} overridden) "
+          f"in {len(shards)} shards ({changed} rewritten), {len(prog.imports)} imports, {len(errors)} errors -> {out}")
     kinds = collections.Counter(e.split(": ", 1)[1].split(" ")[0] for e in errors)
     for e in errors[:200]:
         print("  " + e)

@@ -1,10 +1,9 @@
-# Handoff: WWHD recomp, state as of 2026-09-30 (evening)
+# Handoff: WWHD recomp, state as of 2026-09-30 (night)
 
 Read this first, then `CLAUDE.md`, `docs/recompiler-design.md` (decisions D1–D20, milestones,
 status paragraphs) and the READMEs in `src/`, `tools/reference/`, `tools/recomp/`, `tools/worker/`.
-All work is on branch `ww02` (worktree `/srv/projects/WWHDRecomp/.worktrees/ww02`, based on
-`ww-2`), pushed to the `worker` remote. Latest work when this was written: `e1aae8b` (shader
-cache), then this handoff.
+Work is on branch `ww-3` (worktree `/srv/projects/WWHDRecomp/.worktrees/ww-3`, based on `ww02`),
+pushed to the `worker` remote. `ww02` holds the work before it.
 
 ## What the project is
 
@@ -47,7 +46,7 @@ startup time and CPU use matter (phones throttle when hot). Design D19 and D20 h
   replaces files by rename.
 - **Commits:** `git -c user.name="flossbud" -c user.email="224492734+flossbud@users.noreply.github.com" commit …`, with
   the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Push with
-  `git push worker ww02`. Commit when a step is done and its checks pass.
+  `git push worker ww-3`. Commit when a step is done and its checks pass.
 - **Every rename or retype needs evidence** (`config/US_v0/symbols.csv` has an evidence column).
   A function counts as "done" only once an external check passes (fixture or trace diff).
 - **Talking to the owner:** they often read on a phone. Put choices as a numbered list at the end
@@ -180,8 +179,17 @@ desktop. `REF_SAVE=dir` (run.sh) or `WWHD_SAVE=dir` (play.sh) installs it. It is
   - guest time is `steady_clock`;
   - the idle scheduler sleeps, and the null GPU sleeps until the host-timed vsync;
   - every 10 s `portable/log.txt` gets a line: fps, frame-time median, 99th percentile and worst,
-    how busy the scheduler thread was, and first sights of shaders and pipelines;
+    how busy the scheduler thread was, how often the task loop slept, and first sights of shaders
+    and pipelines;
   - the fiber context switch is our own (x86-64 assembly, ucontext elsewhere).
+- **Overrides** (D9 as built): `config/US_v0/overrides.txt` lists generated functions we replace;
+  `generate.py` emits their bodies as `orig_f_X`, `src/overrides/` defines `f_X`, and the linker
+  catches a missing or unlisted override. One so far: the game's task loop.
+- **Real-time fast paths** (D19): overrides that only run in real time on one host thread
+  (`wwhd::rt::FastPaths`; `WWHD_FAST_PATHS=0` turns them off). The task loop (`f_0275FFCC`,
+  `src/overrides/task_loop.cpp`) sleeps through the rounds where the game's ticking task only posts
+  itself its tick again, proven by the runtime's *quiet watch* (the store journal notes any live
+  store). The scheduler thread went from 100% busy to 8–25% on the save route.
 - **The renderer** (`src/gpu/vk`, D13; G2 done on the title route): Cemu's shader decompiler to
   GLSL, glslang to SPIR-V, Vulkan 1.3 with dynamic rendering.
 - **The shader cache** (D20, `src/gpu/vk/shader_cache.cpp`), in `portable/shaderCache/wwhd`:
@@ -202,8 +210,10 @@ desktop. `REF_SAVE=dir` (run.sh) or `WWHD_SAVE=dir` (play.sh) installs it. It is
 - **Profile of the CPU thread** (save route, virtual clock): guest code 81%, message queues 8%,
   helpers 3%, HLE dispatch 2.5%, gx2 1.5%, thread switches 0.9%.
 - **Ruled out:** keeping guest registers in host locals was measured and rejected (the D2 note).
-- **In real time on the desktop:** a steady 30 fps and a 99th-percentile frame time of about
-  35 ms once loaded. But the scheduler thread is busy 100% of the time (next step 1).
+- **In real time on the desktop** (save route, headless): a steady 30 fps and a 99th-percentile
+  frame time of 34–35 ms once loaded. The scheduler thread is busy 8–25% (100% before the task
+  loop's fast path), and the whole process uses 23 s of CPU per minute of play (69 s before). What
+  is left is the game's work: audio mixing and decompression in other task threads, and the frame.
 
 **Which checks for which change:**
 
@@ -223,68 +233,23 @@ tools/reference/route.sh /wwhd/data/traces/diff 1800 tools/reference/routes/cont
 
 ## Next steps, in order (the owner chose 1, then 2, then onwards)
 
-### 1. D9 overrides, then let the game's task switcher sleep in real time
+### 1. D9 overrides, then let the game's task switcher sleep in real time: done (WW-3)
 
-**The problem** (D19, "What real time showed"): in real time the scheduler thread never idles.
-- 85% of it is the game's task switcher, `f_02760ACC` → `f_0275FFCC`, a coroutine-style
-  scheduler built on OS message queues. A task pushes a message to its own thread's queue, then
-  waits for that message: `f_0275FFCC` pops until the expected value arrives. It is reached
-  through a function pointer after `OSSetThreadSpecific`.
-- When no task is ready, it keeps switching to itself. 38% of the thread is `OSSendMessage` and
-  `OSReceiveMessage` (20.8% and 14.9% self).
-- Other hot functions under it:
-  - `f_0275FCCC` (13.5% self);
-  - `f_0203DEEC` (41% inclusive, possibly real task work);
-  - `f_0203DDC0`, `f_0203E284`, `f_0275FEFC`, `f_02760374`, `f_02760338`, `f_0281B4EC`,
-    `f_0275EBC0`, `f_0281B970`.
-- From the virtual-clock traces (`sched.slice` records):
-  - core 1: thread 1603f4a8 holds 68% of the core in 1.1 million timeslices (it's the thread of
-    the 69 million message-queue pairs); 0e074ec0 holds 30%;
-  - core 2: 0e005f40 holds 72%;
-  - core 0: 104b7818 holds 62%.
-- The Wii U's core spins the same way. On a PC it costs a core; on a phone it costs battery and
-  heat, and heat throttles. 30 fps holds either way.
-
-**Step A: overrides.** D9 is designed but not built.
-- The design: a generated function can be replaced by a strong definition in `src/overrides/`,
-  and the original stays callable as `orig_f_X`.
-- None of it exists yet: `generate.py` emits plain definitions, and there's no `src/overrides/`.
-- Two ways to build it:
-  - emit every function `weak`, with an `orig_f_X` body (XenonRecomp's way);
-  - or keep a list (e.g. `config/US_v0/overrides.txt`) and rename only the listed functions'
-    bodies to `orig_f_X`, leaving `f_X` to `src/overrides/`.
-- Weak symbols block inlining within a shard. If you go that way, measure `timing.sh save`
-  against 29.6 s.
-- Every reference must reach the override: direct calls between shards, tail calls, the function
-  table (D5) and `rt_direct` (indirect calls, `src/runtime/dispatch.cpp`).
-- Regenerating means `tools/recomp/build.sh` (about 11 min), then `src/build.sh`.
-- Check: with an override that just calls `orig_f_X`, both routes stay identical.
-
-**Step B: the idle round.**
-- Read the switcher, either as the generated C++ in `build/recomp` on the worker (read-only) or
-  in Ghidra. Find out:
-  - what a task waits on;
-  - what makes one ready (vsync callbacks, alarms, messages from other threads);
-  - how the switcher decides there's nothing to do.
-- Then write an override that, **in real time only** (`PPCTimer_isVirtualClock()` false):
-  - recognises a round with no task ready;
-  - blocks the thread until something can change: the next vsync or alarm, or a message
-    another thread sends;
-  - does it in a way the game can't tell apart from a spin that found nothing.
-- A cheaper first step is D19's switch-to-self shortcut: push to the own queue with no other
-  waiter, then wait for that same message, all without the two OS calls. But only blocking lets
-  the host thread sleep.
-- The deterministic mode must never take the new path: its traces stay identical.
-- Record what you learn about these functions in `config/US_v0/symbols.csv`, with evidence.
-
-**Done when:**
-- in real time on the desktop, the `wwhd real time:` line shows the scheduler thread well under
-  100% busy;
-- the frame rate and frame times stay as they are (30 fps, 99th ≈ 35 ms);
-- the sound doesn't break up. Ask the owner to listen, and launch the window only when they're
-  ready;
-- both routes' `stream_check` are identical, and diff mode is clean;
-- D19 and this handoff are updated.
+- **Overrides** exist (D9 "As built"): `config/US_v0/overrides.txt`, `orig_f_X`, `src/overrides/`.
+- **The spin** was the game's task loop, `f_0275FFCC` (`task_MessageLoop`; the task library's names
+  and evidence are in `symbols.csv`). One task (thread 1603f4a8) posts itself message 5 after every
+  message, and a 5 does nothing while it's idle: 34,938 send/receive pairs in frame 1500, nothing
+  else. Its handler's likely path is `f_0203DEEC` (a switch on messages 1–5, each reposting 5) and
+  `f_0203DDC0` (state at +56; state 1 looks at a time stamp at +120), not yet named or checked.
+- **The fast path** (D19 "The task loop sleeps"): in real time, a handler call that stored nothing
+  live, made one OS call and only reposted its message makes the next round of that message wait
+  (a sender wakes it, else 1 ms), so the host thread sleeps. The virtual clock runs `orig_f_0275FFCC`.
+- **Checked:** both routes' `stream_check` identical, diff mode clean (see D19); on the desktop,
+  scheduler thread 8–25% busy (was 100%), 30 fps, 99th 34–35 ms, CPU 23 s/min (was 69).
+- **Still open:** the owner listens to the sound in a window (below, "Launching the window").
+- **Ideas, not needed now:** a longer wait than 1 ms (the next vsync) would cut the ~900 wake-ups a
+  second, at the cost of noticing memory-only changes later; D19's three-host-thread mode would need
+  the quiet watch per host thread.
 
 ### 2. Fewer pipelines: more dynamic state (D20 "Next" b)
 

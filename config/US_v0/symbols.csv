@@ -109,3 +109,9 @@ address,name,evidence
 101F3088,g_fopAc_Method,twwhd-randomizer@f28d289 asm/linker.ld
 101EB850,shopItems_setData_FoodAll,twwhd-randomizer@f28d289 asm/linker.ld
 47D4B717,current_file_idx,twwhd-randomizer@f28d289 asm/linker.ld
+02760ACC,task_ThreadEntry,"WW-3 disasm: OSSetThreadSpecific(slot at *(0x101F8B94)+36, argv=task), task_MessageLoop(task), task+128 = 3, return 0; no direct caller (a thread entry)"
+0275FFCC,task_MessageLoop,"WW-3 disasm: task_ReceiveMessage(task+28, task+116) until it returns task+120 (stop), each other message to task->vtable(+12)[124](task, msg); only caller task_ThreadEntry"
+02760374,task_ReceiveMessage,"WW-3 disasm: OSReceiveMessage(q+4, &m, r4 == 0 ? BLOCK : 0), returns m.message or 0; save-det trace f1500: OSReceiveMessage lr 02760394, flags 1"
+02760338,task_SendMessage,"WW-3 disasm: OSSendMessage(q+4, {r4}, r5 == 0 ? BLOCK : 0), returns 1 if sent; save-det trace f1500: OSSendMessage lr 0276035C, flags 0"
+0275FEFC,task_Post,"WW-3 disasm: task_SendMessage(task+28, msg, r5) unless msg is 0 or task+120 (stop) or task+128 is 3 or 4"
+0275FF34,task_RequestStop,"WW-3 disasm: returns if task+128 is 3 or 4; 1 becomes 2; sends task+120 (stop) to task+28, via task_SendMessage (blocking) when r4 == 0, else f_027603B0"

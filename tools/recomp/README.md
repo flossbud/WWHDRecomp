@@ -7,7 +7,7 @@ Python generator (docs/recompiler-design.md D1, D11) plus the C++ runtime header
 | `ppc.py` | Espresso decoder: `decode(word) -> Insn` with base mnemonics and fields |
 | `census.py` | decodes every instruction in `config/US_v0/functions.csv`; mnemonic counts, `--csv` |
 | `emit.py` | C++ for one instruction, semantics mirroring Cemu's interpreter; control flow via a `flow` policy |
-| `runtime/ppc_ops.h` | memory, CR and FP helpers the emitted code uses (includes Cemu's headers); stores go through the diff-mode journal hook |
+| `runtime/ppc_ops.h` | memory, CR and FP helpers the emitted code uses (includes Cemu's headers); stores go through the journal hook (diff mode, the fast paths' quiet watch) |
 | `runtime/recomp_tables.h` | layout of the tables generated next to the code (functions with purity, code hash and callees; imports; import sites; store census), read by `src/runtime` |
 | `fuzz/` | M1 instruction fuzzer: emitted code vs `PPCInterpreterSlim_executeInstruction` |
 | `generate.py` | M2: every function as C++ (gotos, musttail calls, jump-table switches, imports, D7 helper entries) into shards |
@@ -45,6 +45,12 @@ What the generator knows beyond single instructions:
   the switch cases on the slot addresses (table + 4k); each slot's `b` then jumps on. The shape is
   read from the code, not from `jump_tables.csv`'s `bound` column (which says how the bound was
   found). Until M3 the switches cased on the final targets and could never match.
+* **Overrides (D9).** A function listed in `config/US_v0/overrides.txt` is emitted as `orig_f_X`
+  (declared in `funcs.h` too), and `src/overrides` defines `f_X`. Every reference names `f_X` (calls,
+  tail calls, falling through, the function table and with it indirect calls), so all reach the
+  override; the linker reports a listed function without an override, or an override of an unlisted
+  one. Only the listed functions' shards change, and nothing is emitted weak, so inlining within a
+  shard is untouched.
 * **Imports.** 408 (the RPX's import-section symbols are not imports). Relocations are keyed by
   symbol: `_iob+0x10` (stdout) lands on `environ`'s stub address but is `_iob` plus an addend.
 

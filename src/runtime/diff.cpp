@@ -58,6 +58,11 @@ namespace wwhd::rt
 void rt_journal_store(uint32 ea, uint32 size)
 {
 	using namespace wwhd::rt;
+	if (g_quiet.token) [[unlikely]]                  // the fast paths' quiet watch (dispatch.cpp), not a diff run
+	{
+		QuietStore(ea, size);
+		return;
+	}
 	s_journal.push_back({ ea, size, (uint32)s_journalBytes.size() });
 	s_journalBytes.insert(s_journalBytes.end(), memory_base + ea, memory_base + ea + size);
 }
@@ -356,6 +361,11 @@ namespace wwhd::rt
 			Log("diff mode: %zu pure functions (%zu that reach patched code are skipped), first %llu calls each, then every %llu-th",
 				eligible, patchedPure, (unsigned long long)s_first, (unsigned long long)s_every);
 		return true;
+	}
+
+	bool DiffInNative()
+	{
+		return s_nativeSince.load(std::memory_order_relaxed) != 0;
 	}
 
 	void DiffNativeFault(uint32 ea, uint32 target)
