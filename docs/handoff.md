@@ -424,7 +424,6 @@ Pipelines come from shader variants, not state, so nothing was changed.
   - M5, playable on a GPU machine (the desktop is one now);
   - M6, 60 fps, via overrides written against Phase 2 names;
   - an arm64 context switch for Android (D19);
-  - the GamePad view skipped with an override.
 
 ## Known facts and gotchas worth not rediscovering
 
