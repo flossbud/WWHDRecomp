@@ -316,8 +316,16 @@ Pipelines come from shader variants, not state, so nothing was changed.
   32/32 (89.3), warp 63/63 (72.2, the beam of light into Hyrule).
 - Timing (virtual clock, worker, one host thread): sail 2.05x real time, menus 2.54x, warp 2.22x,
   save 2.24x. One host thread is enough so far (D19 step 4).
-- Their shaders are in the shader list (item 3). Still to do: real time on the desktop for the new
-  routes (it was asleep). A dungeon proper
+- Their shaders are in the shader list (item 3). On the desktop (2026-10-01, headless, after items
+  6-10): a first start prepared the list's 1,382 shaders and 1,000 pipelines from the game's files in
+  3.3 s; save, sail and warp then ran at 30.1 fps with a 99th percentile of 34.2-34.8 ms and the
+  scheduler thread 7-9% busy, meeting no shader or pipeline during play. The first real-time menus
+  run met 2 shaders and 1 pipeline the list lacks (real time renders frames the lavapipe capture
+  didn't): capture it on the desktop (`WWHD_SHADER_SOURCES`, tools/shaders/README.md) and merge.
+  The last 10 s of warp (the beam into Hyrule) and the first of menus dip to 29.5 fps with an
+  87-89 ms 99th percentile, most likely the game loading the next area (not checked).
+  (Per-thread numbers there: the process is `wwhd` once the frontend names its main thread, so look
+  it up by that name.) A dungeon proper
   (enemies, puzzles): from Hyrule Castle (warp route's end, B gets out of the boat), or Dragon Roost.
 
 ### 6. Our own CMake build: done (WW-3, the owner's choice)
