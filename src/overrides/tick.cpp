@@ -2,9 +2,11 @@
 // first thing in game_procFrameBody, before RenderDisplay_draw.
 //
 // The 60 fps prototype (M6; WWHD_60FPS=1, real time only): the game presents every vsync (our
-// GX2SetSwapInterval turns its 2 into 1) and this runs every other frame, so the game still ticks 30
-// times a second and the frames between draw the same state again. Next: interpolate the camera and
-// the actors on those frames. Everywhere else (and in every check) the game's code runs.
+// GX2SetSwapInterval turns its 2 into 1) and this lets every other call through, meant to keep 30
+// ticks a second with a frame drawn between. As it stands that hangs: drawing waits on render jobs
+// that only the tick sets going (D21), so the tick has to be split, not skipped. WWHD_60FPS_AFTER=n
+// ticks every frame for the first n (the game at double speed, 60 fps). Everywhere else, and in
+// every check, the game's code runs.
 #include "override.h"
 
 void f_02746790(PPCInterpreter_t* __restrict ctx)
