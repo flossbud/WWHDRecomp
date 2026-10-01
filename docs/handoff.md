@@ -267,16 +267,20 @@ Pipelines come from shader variants, not state, so nothing was changed.
 
 ### 3. The first playthrough without hitches: done (WW-3, the owner's choice)
 
-- `config/US_v0/shader_list.txt` (D20 "The shader list"): 866 shaders, 642 pipelines from the save,
-  title and tour routes; no game content. `deploy.sh` ships it to `cemu/wwhd/`.
+- `config/US_v0/shader_list.txt` (D20 "The shader list"): 1382 shaders, 1000 pipelines from the
+  save, title, tour, sail, menus and warp routes (the new-game route added nothing); no game content.
+  `deploy.sh` ships it to `cemu/wwhd/`.
 - A first start translates the listed shaders from the player's own game files before the title
   (2.2 s on the desktop, 2.7 s on the worker's CPU) and builds the pipelines; on the desktop the
   title route then met 1 shader (5 ms), the save route none.
 - To grow it: capture runs with `WWHD_SHADER_SOURCES` (tools/shaders/README.md), merge with
   `tools/shaders/shader_list.py`, commit. Check with `tools/reference/shader_list_check.sh`.
+- With the sail, menus and warp captures merged, a first start of the warp route and of the
+  new-game route (lavapipe, empty cache) prepares everything in 6.4-6.8 s and meets nothing during
+  play. Not yet measured on the desktop (it was asleep).
 - Ideas: fewer registers per line (the ranges are generous; the capture check would catch a range
-  cut too far), and capturing longer playthroughs (sailing, dungeons, menus) with the new routes.
-  For phones: a first start reads 222 MB from the 34 files (the largest, 47 MB, whole in memory
+  cut too far), and capturing a dungeon proper when a route reaches one.
+  For phones: a first start reads 258 MB from the 49 files (the largest, 47 MB, whole in memory
   while it's walked); reading SARC members with seeks would keep that small.
 
 ### 4. G3: the scripted routes render within tolerance: done (WW-3, the owner's choice)
@@ -312,8 +316,8 @@ Pipelines come from shader variants, not state, so nothing was changed.
   32/32 (89.3), warp 63/63 (72.2, the beam of light into Hyrule).
 - Timing (virtual clock, worker, one host thread): sail 2.05x real time, menus 2.54x, warp 2.22x,
   save 2.24x. One host thread is enough so far (D19 step 4).
-- Still to do: real time on the desktop for the new routes (it was asleep), and capturing their
-  shaders into the shader list (`WWHD_SHADER_SOURCES`, tools/shaders/README.md). A dungeon proper
+- Their shaders are in the shader list (item 3). Still to do: real time on the desktop for the new
+  routes (it was asleep). A dungeon proper
   (enemies, puzzles): from Hyrule Castle (warp route's end, B gets out of the boat), or Dragon Roost.
 
 ### 6. Then, roughly in this order (ask the owner)

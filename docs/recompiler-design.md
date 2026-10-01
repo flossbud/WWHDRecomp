@@ -1020,8 +1020,10 @@ shader before recording it: translated a second time from the listed registers a
 the same key and the same record, byte for byte, or it is logged and left out (none was in the
 save route's check, which recorded all 631 it translated). `tools/shaders/shader_list.py`
 merges captures and finds each program's content file in G1's index. *Today's list*: the save route
-on lavapipe, the title route and the tour route on the desktop: 866 shaders, 605 programs in 34
-content files, 71 fetch shaders, 642 pipelines (1.9 MB of text, 140 KB compressed). *Checked*:
+on lavapipe, the title route and the tour route on the desktop, then the sail, menus and warp routes
+and the new-game route on lavapipe (2026-10-01; the new-game route added nothing): 1382 shaders,
+1028 programs in 49 content files, 76 fetch shaders, 1000 pipelines (3.1 MB of text, 210 KB
+compressed). The first list was 866 shaders and 642 pipelines. *Checked*:
 `tools/reference/shader_list_check.sh` (save route, lavapipe, virtual clock, from an empty cache: a
 capturing run, then a first start from the list it made) gives 30 of 30 captures identical, and the
 first start's cache holds exactly the capturing run's records (631 shaders, 430 pipelines), all made
@@ -1031,9 +1033,11 @@ real time: 866 shaders translated from the game files in 2.2 s and everything pr
 then the whole title route met 1 shader and 1 pipeline (5 ms) in 6 minutes and the save route
 nothing, where a first start used to meet 633 shaders and 432 pipelines in its first minute (frames
 of 1 s and 347 ms). Real-time runs aren't the captured runs exactly, so a rare state the captures
-never saw is still translated when met; more captured playthroughs (sailing, dungeons, menus) close
-that. *For Android*: the extractor reads only the 34 listed files through the game's file system,
-and the list holds no machine-specific data.
+never saw is still translated when met; more captured playthroughs close that. With today's list,
+first starts of the warp route and the new-game route (lavapipe, virtual clock, empty caches) prepare
+1382 shaders and 1000 pipelines in 6.4-6.8 s and add no record during play. *For Android*: the
+extractor reads only the 49 listed files (258 MB) through the game's file system, and the list holds
+no machine-specific data.
 
 **Dynamic state doesn't pay** (measured 2026-10-01, `tools/shaders/recipes.py` on the recipes of
 both routes played in real time, 629 pipelines): nearly every pipeline is its own pair of shaders.
