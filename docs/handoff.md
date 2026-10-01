@@ -365,8 +365,8 @@ Pipelines come from shader variants, not state, so nothing was changed.
   identical; the `WWHD_FORKS=0` build (which keeps this one fork) reproduces the baselines.
 - Make the table again when Cemu or a fork's slots change: `CEMU_SYSALLOC_LOG=path` from a run
   that matches the reference, then `tools/sysalloc_layout.py` (`src/README.md`). The worker's
-  Cemu_release predates patches 0015 and 0016; `tools/worker/setup-volume.sh cemu-rebuild` (about
-  40 minutes) lets it write the list itself.
+  Cemu_release is rebuilt with all 16 patches: its save-route trace is unchanged (172,954,163
+  calls) and the slot list it writes itself equals the table.
 - **Not started:** our own loader (placing `cking.rpx` as Cemu does: text at 0x02000000, data
   from 0x10000000, import trampolines at 0x00E00000) and our own memory map (Cemu's MMU ranges).
   Both have to reproduce Cemu's addresses exactly; traces will say where they don't.

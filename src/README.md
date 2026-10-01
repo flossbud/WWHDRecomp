@@ -111,7 +111,7 @@ allocator carry on from where the reference's did. A slot the table doesn't know
 reference's, and the log says so. So the link order doesn't matter: one plain link gives guest
 memory exactly as the reference's (all six routes and diff mode identical). Make the table again
 when Cemu or a fork's slots change: `CEMU_SYSALLOC_LOG=path` (patch 0016) lists the slots as laid
-out by a run that matches the reference (the reference itself, rebuilt with patch 0016), and
+out by a run that matches the reference (the reference itself writes one equal to the table), and
 `tools/sysalloc_layout.py path > src/os/common/sysalloc_layout.h`. `WWHD_SYSALLOC_ORDER=link`
 falls back to Cemu's layout by registration order. Before the table, the build linked twice,
 the second time with every archive member in the reference's order.
