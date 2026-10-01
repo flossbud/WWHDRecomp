@@ -958,6 +958,20 @@ decompression under other tasks, and the frame), the process from 69.5 s to 23.2
 30 fps and a 99th percentile of 34-35 ms either way; the loop sleeps about 800-930 times a second,
 none of them ended by a message during play. With the virtual clock both routes' traces, command
 streams and sound are identical, and diff mode is clean (the override is the game's loop there).
+
+**Idle threads and clocks** (2026-10-01, real time, the worker, save route, per thread from
+`/proc` over 30 s of play). Besides the scheduler thread (52% of a core) and the GPU thread (3%),
+Cemu's input manager and audio backend ran four threads that do nothing for this program: its
+input update thread (a 1 ms loop), the Wiimote and SDL controller providers' threads, and cubeb's
+PulseAudio thread: 5.4% of a core and 2,870 of the process's 4,500 wakeups a second. The frontend
+now stops them at start-up (the game's input calls are ours; snd_core opens no Cemu device unless
+asked): 55% of a core and 1,640 wakeups a second. gx2, which D18 meant to rewrite next for
+"submission and synchronisation", is 1.2% of the scheduler thread's samples in real time; guest
+code is 83%. And clocks matter more than any of it: the worker's governor (`powersave`, 0.8 to
+4.5 GHz) keeps a half-busy thread that sleeps a thousand times a second at low clocks, where the
+save route runs at 27-28 fps with a 99th percentile of 64 ms; with a busy core beside it, 30.1 fps
+at 34.7 ms and the scheduler thread 33% busy. Phones scale harder still, so real-time play there
+will want the platform's performance hints (Android's ADPF) or fewer, longer sleeps.
 The switch-to-self shortcut planned above is not needed: in play, the rounds that would use it now
 sleep.
 

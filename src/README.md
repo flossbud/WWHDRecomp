@@ -214,10 +214,15 @@ the traces are unchanged. The window's keyboard and first gamepad are the Pro Co
 the reference's `controller0.xml` (A=X B=Z X=S Y=A L=Q R=W ZL=1 ZR=2 +=Return -=Backspace, D-pad
 on the arrows, left stick I/J/K/L, right stick T/F/G/H), gamepad face buttons by their printed
 label, triggers as ZL/ZR, and rumble. While the keyboard or an error dialog is up the game gets no
-input: typing goes to the keyboard (Enter or Start for OK), A and B answer a dialog. Cemu's SDL
-controller provider is dropped when the window opens: its thread would otherwise take events off
-SDL's queue. The TV's sound plays through SDL3 too (`frontend/audio_sdl.cpp`,
-fed by Cemu's AX mixer until `snd_core` is ours; `WWHD_AUDIO=cemu` keeps Cemu's Cubeb device). On
+input: typing goes to the keyboard (Enter or Start for OK), A and B answer a dialog. The TV's
+sound plays through SDL3 too (`frontend/audio_sdl.cpp`, fed by the AX mixer); `WWHD_AUDIO_HASH`
+hashes it instead, and headless runs without either are silent. `WWHD_AUDIO=cemu` uses Cemu's
+cubeb device instead (so does the window when SDL's audio fails). **Cemu's idle threads are
+stopped at start-up:** its input manager (an update thread waking every millisecond, and the
+Wiimote and SDL controller providers' threads; all of the game's input calls are ours) and, unless
+its device is wanted, its audio backend (cubeb's PulseAudio thread). On the worker in real time
+that took the process from 62% of a core and 4,500 wakeups a second to 55% and 1,600, leaving
+the scheduler thread and the GPU thread (with traces, command streams and sound unchanged). On
 the worker, with lavapipe under Xvfb, the save route runs windowed at about 5 frames a second, and
 its trace stays the reference's with the window, input and sound on (`SDL_AUDIO_DRIVER=disk` writes
 the sound to a file):

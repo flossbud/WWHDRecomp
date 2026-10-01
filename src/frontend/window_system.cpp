@@ -20,6 +20,8 @@
 #include "../os/swkbd.h"
 #include "../os/erreula.h"
 #include "input/InputManager.h"
+#include "audio/CubebAPI.h"
+#include "audio/CubebInputAPI.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #else
@@ -209,14 +211,28 @@ static void Rumble(bool on)
 		SDL_RumbleGamepad(s_gamepad, on ? 0xC000 : 0, on ? 0xC000 : 0, on ? 10000 : 0);   // until stopped (10 s at most)
 }
 
-// Cemu's input goes unused (src/os/input.cpp), but its SDL controller provider runs a thread that
-// waits on SDL's event queue: it would take our keys, text and window events, and pump the window's
-// events off the main thread, which SDL doesn't allow. Dropping the provider stops that thread.
-static void DropCemuSdlInput()
+namespace snd_core { void AXOut_UseCemuDevices(bool use); }   // os/snd_core/ax_out.cpp
+
+// Cemu's input goes unused: the game's input calls are ours (src/os/input.cpp). Its input manager
+// still ran an update thread waking every millisecond and controller providers with threads of
+// their own (Wiimote, SDL), about 5% of a core and 2,700 wakeups a second for nothing; the SDL one
+// would also take our window's keys and events and pump them off the main thread, which SDL doesn't
+// allow. Shutting it down stops them all (the game profile names no controllers, so launching the
+// title doesn't bring any back).
+static void QuietCemuInput()
 {
-	auto& providers = const_cast<std::remove_cvref_t<decltype(InputManager::instance().get_api_providers())>&>(
-		InputManager::instance().get_api_providers());
-	providers[InputAPI::SDLController].clear();
+	InputManager::instance().Shutdown();
+}
+
+// Cemu's audio backend (cubeb) keeps a PulseAudio thread running from start-up. Unless its device is
+// wanted (WWHD_AUDIO=cemu, or the window's own failed), snd_core never opens one and cubeb goes.
+static void QuietCemuAudio(bool cemuDevice)
+{
+	snd_core::AXOut_UseCemuDevices(cemuDevice);
+	if (cemuDevice)
+		return;
+	CubebAPI::Destroy();
+	CubebInputAPI::Destroy();
 }
 
 // WWHD_WINDOW=1: the TV window, handed to the renderer; nullptr otherwise
@@ -225,7 +241,6 @@ static SDL_Window* OpenWindow()
 	const char* on = getenv("WWHD_WINDOW");
 	if (!on || strcmp(on, "1") != 0)
 		return nullptr;
-	DropCemuSdlInput();
 	if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
 		wwhd::Fatal(fmt::format("SDL video: {}", SDL_GetError()));
 	if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
@@ -366,10 +381,14 @@ void WindowSystem::Create()
 	g_windowInfo.app_active = true;
 
 #ifdef WWHD_NULL_GPU
+	QuietCemuInput();
 	SDL_Window* window = OpenWindow();
 	const char* audio = getenv("WWHD_AUDIO");
-	if (!wwhd::OpenAudioHash() && window && !(audio && strcmp(audio, "cemu") == 0))
-		wwhd::OpenAudio();    // otherwise, or if it fails, snd_core opens Cemu's device
+	const bool cemuAudio = audio && strcmp(audio, "cemu") == 0;
+	bool sound = wwhd::OpenAudioHash();
+	if (!sound && window && !cemuAudio)
+		sound = wwhd::OpenAudio();
+	QuietCemuAudio(!sound && (cemuAudio || window));    // else silent: headless, or the hash
 	wwhd::PrepareTitle(*game);
 	wwhd::rt::Install();    // the execution seam: interprets, or runs diff mode (src/runtime)
 	PrepareShaders(window);

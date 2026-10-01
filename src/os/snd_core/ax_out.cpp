@@ -400,13 +400,24 @@ namespace snd_core
 
 	uint32 numQueuedFramesSndGeneric = 0;
 
+	// wwhd: whether Cemu's own devices (cubeb, from its settings) may be opened. The frontend decides
+	// (src/frontend/window_system.cpp): only when WWHD_AUDIO=cemu asks for them or the window's own
+	// device failed. Otherwise the TV's sound goes to the window's device or the hash (both set
+	// g_tvAudio before this runs) or nowhere (headless), and the GamePad is absent (D17).
+	static bool s_cemuDevices = true;
+
+	void AXOut_UseCemuDevices(bool use)
+	{
+		s_cemuDevices = use;
+	}
+
 	void AXOut_init()
 	{
 
 		numQueuedFramesSndGeneric = 0;
 
 		std::unique_lock lock(g_audioMutex);
-		if (!g_tvAudio)
+		if (!g_tvAudio && s_cemuDevices)
 		{
 			try
 			{
@@ -419,7 +430,7 @@ namespace snd_core
 		}
 
 		g_padVolume = GetConfig().pad_volume;
-		if (!g_padAudio)
+		if (!g_padAudio && s_cemuDevices)
 		{
 			try
 			{

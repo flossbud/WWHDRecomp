@@ -116,7 +116,7 @@ set_property(TARGET wwhd_main PROPERTY COMPILE_OPTIONS "${options}")
 
 add_library(wwhd_frontend OBJECT frontend/cemu_boot.cpp frontend/window_system.cpp frontend/audio_sdl.cpp frontend/overlay.cpp)
 wwhd_like_cemu(wwhd_frontend)
-target_link_libraries(wwhd_frontend PRIVATE SDL3::SDL3)
+target_link_libraries(wwhd_frontend PRIVATE SDL3::SDL3 CemuAudio)   # SDL3 for the window, sound and gamepad; CemuAudio: cubeb, to close it
 set_source_files_properties(frontend/window_system.cpp PROPERTIES COMPILE_DEFINITIONS WWHD_NULL_GPU)
 
 add_library(wwhd_gpu OBJECT gpu/null_gpu.cpp gpu/vk/vk.cpp gpu/vk/renderer.cpp gpu/vk/present.cpp

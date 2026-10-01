@@ -371,10 +371,24 @@ Pipelines come from shader variants, not state, so nothing was changed.
   from 0x10000000, import trampolines at 0x00E00000) and our own memory map (Cemu's MMU ranges).
   Both have to reproduce Cemu's addresses exactly; traces will say where they don't.
 
-### 9. Then, roughly in this order (ask the owner)
+### 9. Cemu's idle threads stopped: done (WW-3, the owner's choice)
+
+- Measured first: in real time gx2 is 1.2% of the scheduler thread (guest code 83%), so gx2's core
+  rewrite isn't a speed lever. Cemu's input manager and audio backend were: four threads (input
+  update every 1 ms, Wiimote reader, SDL events, cubeb's PulseAudio) doing nothing for us, 5.4% of a
+  core and 2,870 wakeups a second.
+- The frontend stops them at start-up (`QuietCemuInput`, `QuietCemuAudio` in
+  `src/frontend/window_system.cpp`); snd_core opens no Cemu audio device unless `WWHD_AUDIO=cemu`
+  asks or the window's own fails (`AXOut_UseCemuDevices`). Headless runs without the hash are now
+  silent rather than playing into PulseAudio.
+- Worker, real time, same clocks: 62% of a core and 4,500 wakeups/s before, 55% and 1,640 after;
+  only the scheduler and GPU threads are left. Routes identical (save, new-game, warp checked), and
+  a windowed run under Xvfb keeps the reference's trace.
+
+### 10. Then, roughly in this order (ask the owner)
 - **The rest of D18:**
   - the loader and memory map (the rest of item 8);
-  - gx2's core rewritten;
+  - gx2's core rewritten (no speed in it: 1.2% of the CPU thread, item 9);
   - proc_ui.
 - **Later:**
   - M5, playable on a GPU machine (the desktop is one now);
@@ -434,6 +448,11 @@ Pipelines come from shader variants, not state, so nothing was changed.
 - **Real time vs the virtual clock:** in real time the game is bound to 30 fps and the host has
   headroom; the virtual clock runs flat out (2–3x). The frame-time hitches on a warm start (about
   1 s at boot, about 100 ms loading Outset) are the game's own loading, not shaders.
+- **Real time on the worker needs a busy core beside it.** Its governor (`powersave`) keeps our
+  half-busy, often-sleeping thread at low clocks: 27-28 fps and a 64 ms 99th percentile. With
+  `timeout 120 sh -c 'while :; do :; done' &` running alongside: 30.1 fps, 34.7 ms. Measure frame
+  pacing on the desktop; per-thread CPU and wakeups on the worker come from `/proc` (D19, "Idle
+  threads and clocks").
 - **Session scratchpads are temporary.** Put any tool worth keeping in `tools/`.
 - **One `wwhd-null` at a time per directory.** Our frontend keeps its portable folder (NAND, saves,
   log, shader cache) next to the binary and ignores `CEMU_PORTABLE`, so a second run of
