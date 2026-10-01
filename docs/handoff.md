@@ -1,9 +1,14 @@
-# Handoff: WWHD recomp, state as of 2026-09-30 (night)
+# Handoff: WWHD recomp, state as of 2026-10-01 (end of WW-3)
 
-Read this first, then `CLAUDE.md`, `docs/recompiler-design.md` (decisions D1–D20, milestones,
+Read this first, then `CLAUDE.md`, `docs/recompiler-design.md` (decisions D1–D21, milestones,
 status paragraphs) and the READMEs in `src/`, `tools/reference/`, `tools/recomp/`, `tools/worker/`.
-Work is on branch `ww-3` (worktree `/srv/projects/WWHDRecomp/.worktrees/ww-3`, based on `ww02`),
-pushed to the `worker` remote. `ww02` holds the work before it.
+WW-3's work is on branch `ww-3` (worktree `/srv/projects/WWHDRecomp/.worktrees/ww-3`, based on
+`ww02`), pushed to the `worker` remote. The next task starts a branch of its own from it.
+
+**The next task (the owner's decision, 2026-10-01): native 60 fps, then an uncapped frame rate.**
+Not interpolation: the game's own logic has to run at 60 ticks a second and come out right, and
+in the end at any rate. "Next task" below has what is known and where to start; design D21 has the
+findings so far.
 
 ## What the project is
 
@@ -75,14 +80,21 @@ startup time and CPU use matter (phones throttle when hot). Design D19 and D20 h
   - the editing machine `~/opt/cemu-src`, branch `wwhd-reference`, for **editing only**; never build it
     on the editing machine.
   - The worker builds `/wwhd/opt/cemu-src` at pinned commit `c717fcab` plus
-    `tools/reference/cemu-patches/0001–0014` (0011 is the execution seam; 0013 and 0014 are
-    rendering fixes, see D16).
+    `tools/reference/cemu-patches/0001–0016` (0011 is the execution seam; 0013 and 0014 are
+    rendering fixes, see D16; 0015 lets our CMake build use Cemu as a subproject; 0016 has each
+    SysAllocator record its declaration). The same tree is the source of our build's Cemu
+    libraries, so a patch there reaches both.
   - To change a patch: commit on the editing machine branch, run
     `git format-patch -1 --start-number N -o tools/reference/cemu-patches/`, sync, then
     `tools/worker/job start cemu-rebuild tools/worker/setup-volume.sh cemu-rebuild` (incremental,
     about 5–10 min). Our forks (`src/forks.txt`) are no longer reached by cemu-patches.
   - Ghidra and its project (`ghidra/projects/`, disposable) are on the worker:
-    `tools/ghidra/headless.sh`, `rebuild.sh`.
+    `tools/ghidra/headless.sh`, `rebuild.sh` (6.4 minutes; set
+    `GHIDRA_INSTALL_DIR=/wwhd/opt/ghidra_12.0.4_PUBLIC` in jobs). `tools/ghidra/decompile.py ADDR...
+    --out DIR` prints functions as C with callers and callees; `tools/ghidra/lookup.py refs|words|find`
+    finds references, dumps words with function names, and finds where a value is stored (vtables
+    aren't marked as pointers, so `find` a method's address). Their output is the game's code in
+    another form: keep it on the worker (`/wwhd/data/ghidra-out`).
 - **The owner's desktop, `desktop`** (on the tailnet): Fedora 44, desktop CPU (24 threads),
   AMD GPU on RADV, GNOME on Wayland, three monitors, speakers.
   - SSH: `ssh owner@DESKTOP_ADDR` (the default key works with `BatchMode=yes`). Use the IP: the
@@ -128,7 +140,11 @@ real time):
 - `title-to-game.txt`: fresh boot → save dialog → title → controller select → file select → name
   entry → the legend intro → Aryll → gameplay on Outset at about f10450;
 - `continue-100.txt`: from the owner's 100% save, gameplay on the Outset dock at f870;
-- `tour-100.txt`: continue-100, then walk the dock and open the pause menu.
+- `tour-100.txt`: continue-100, then walk the dock and open the pause menu;
+- `sail-100.txt`, `menus-100.txt`, `warp-100.txt` (WW-3, item 5): sailing, the item screen and
+  Pictograph Box and sea chart, the Ballad of Gales' warp down to Hyrule Castle.
+- `routes.sh` names them all (route, frames, save, baseline trace) for `stream_check.sh`,
+  `timing.sh` and `baseline.sh`.
 
 **Baselines** on the worker:
 
@@ -138,8 +154,10 @@ real time):
 | `/wwhd/data/traces/save-det/{a,b}.zst` | save route to f1800, **172,954,163 calls** |
 | `/wwhd/data/gx2/{save,route}-cemu.txt` | GPU command streams: 45,955,744 and 143,098,119 packets |
 | `/wwhd/data/gx2/{save,route}-audio-cemu.txt` | sound: 5,180 and 30,219 blocks |
+| `/wwhd/data/traces/{tour,sail,menus,warp}-det/a.zst`, `/wwhd/data/gx2/{tour,sail,menus,warp}-cemu.txt` and `-audio-cemu.txt` | the newer routes' traces, command streams and sound (item 5) |
 | `/wwhd/data/g3/route-ref14`, `save-ref14`, `tour-ref14` | reference captures every 60 frames (title route to f10800, save route to f1800, tour route to f2160), with cemu-patches/0014: the G3 baselines |
 | `/wwhd/data/g3/route-vk`, `save-vk`, `tour-vk2` | the renderer's captures of the same frames (G3: all within 60 dB) |
+| `/wwhd/data/g3/{sail,menus,warp}-ref14`, `-vk` | the newer routes' G3 captures (item 5) |
 | `/wwhd/data/g2/ref`, `/wwhd/data/g3/save-ref` | older reference captures (title route f30–f600 every 30; save route every 60), before 0014 |
 
 **The 100% save** (three quest logs; log 1: full Triforce, 3 pearls, 20 hearts, Normal Mode, saved
@@ -155,7 +173,7 @@ desktop. `REF_SAVE=dir` (run.sh) or `WWHD_SAVE=dir` (play.sh) installs it. It is
 - `generate.py`: 39,720 functions, 0 errors, with exact per-basic-block cycle counting (D6 as
   built). It also emits purity (12,968 pure functions), code hashes, call edges, import sites and
   a store census.
-- `build.sh`: compiles on the worker in about 11 min, longer than one tool call.
+- `build.sh`: generates the program into `build/recomp` (seconds); the CMake build compiles it.
 
 **Runtime** (`src/`; `src/build.sh` builds it with CMake on the worker: 11-12 min the first time, about 10 s for a one-file change):
 - **`build/wwhd/wwhd-null` is the product.** It holds the recompiled program
@@ -172,9 +190,10 @@ desktop. `REF_SAVE=dir` (run.sh) or `WWHD_SAVE=dir` (play.sh) installs it. It is
 - **Our OS layer** (`src/os`, src/README):
   - 255 imports are ours: coreinit 31, gx2 179, nn_ac 2, nn_act 2, padscore 6, vpad 4,
     erreula 15, swkbd 16.
-  - **25 Cemu source files are forked** (`src/forks.txt`): snd_core; the scheduler and its
+  - **30 Cemu source files are forked** (`src/forks.txt`): snd_core; the scheduler and its
     threads, queues, alarms and sync; gx2's core; TCL; proc_ui; the HLE dispatch; the timer;
-    fibers.
+    fibers; the file system (FS client, IPC driver, FSA service served in place) and nn_save;
+    SysAllocator (the layout table).
   - Forks started as Cemu's code and differ where the design doc says.
   - `WWHD_OS=cemu` turns our imports off.
 - **The platform shell** (`WWHD_WINDOW=1`): an SDL3 window presented by our renderer, keyboard and
@@ -189,7 +208,8 @@ desktop. `REF_SAVE=dir` (run.sh) or `WWHD_SAVE=dir` (play.sh) installs it. It is
   - the fiber context switch is our own (x86-64 assembly, ucontext elsewhere).
 - **Overrides** (D9 as built): `config/US_v0/overrides.txt` lists generated functions we replace;
   `generate.py` emits their bodies as `orig_f_X`, `src/overrides/` defines `f_X`, and the linker
-  catches a missing or unlisted override. One so far: the game's task loop.
+  catches a missing or unlisted override. Three: the game's task loop (D19), the GamePad's screen
+  (skipped in real time), and the tick (the 60 fps prototype, D21).
 - **Real-time fast paths** (D19): overrides that only run in real time on one host thread
   (`wwhd::rt::FastPaths`; `WWHD_FAST_PATHS=0` turns them off). The task loop (`f_0275FFCC`,
   `src/overrides/task_loop.cpp`) sleeps through the rounds where the game's ticking task only posts
@@ -207,20 +227,20 @@ desktop. `REF_SAVE=dir` (run.sh) or `WWHD_SAVE=dir` (play.sh) installs it. It is
   - `WWHD_SHADER_THREADS=n` sets how many threads build pipelines.
 - **Playing on a desktop:** `tools/play/deploy.sh` and `tools/play/play.sh` (above).
 
-**Speed** (`timing.sh`, virtual clock, no trace, from launch):
+**Speed** (`timing.sh`, virtual clock, no trace, from launch; the worker's capped i5):
 
-| | Save route (1800 frames) | Whole route (10800) |
+| | Save route (1800 frames) | Other routes |
 |---|---|---|
 | Before the quick wins | 44 s | — |
-| Now | 29.6 s, 2.03x real time | 117.7 s, 3.06x |
+| 2026-10-01 | 26.0-26.4 s, 2.27-2.31x real time | sail 2.05x, menus 2.54x, warp 2.22x |
 
 - **Profile of the CPU thread** (save route, virtual clock): guest code 81%, message queues 8%,
   helpers 3%, HLE dispatch 2.5%, gx2 1.5%, thread switches 0.9%.
 - **Ruled out:** keeping guest registers in host locals was measured and rejected (the D2 note).
-- **In real time on the desktop** (save route, headless): a steady 30 fps and a 99th-percentile
-  frame time of 34–35 ms once loaded. The scheduler thread is busy 8–25% (100% before the task
-  loop's fast path), and the whole process uses 23 s of CPU per minute of play (69 s before). What
-  is left is the game's work: audio mixing and decompression in other task threads, and the frame.
+- **In real time on the desktop** (headless, 2026-10-01): save, sail and warp at a steady
+  30.1 fps, 99th percentile 34.2-34.8 ms, scheduler thread 7-9% busy (100% before the task loop's
+  fast path). On the worker, at the same clocks, the process went from 62% of a core and 4,500
+  wakeups a second to 55% and 800 (item 9), leaving the scheduler and GPU threads.
 
 **Which checks for which change:**
 
@@ -238,7 +258,7 @@ WWHD_RT_LOG=/wwhd/data/traces/diff/rt.log REF_SAVE=/wwhd/data/saves/wwhd_100
 tools/reference/route.sh /wwhd/data/traces/diff 1800 tools/reference/routes/continue-100.txt
 /wwhd/data/traces/save-det/a.zst`, then `grep "diff (final)" /wwhd/data/traces/diff/rt.log`.
 
-## Next steps, in order (the owner chose 1, then 2, then onwards)
+## Done in WW-3 (the record; the owner chose each item in turn)
 
 ### 1. D9 overrides, then let the game's task switcher sleep in real time: done (WW-3)
 
@@ -423,37 +443,85 @@ Pipelines come from shader variants, not state, so nothing was changed.
   run the game's code: save, menus and warp identical, diff mode clean.
 - Tools left: `WWHD_BACKTRACE`, `WWHD_SHOT_DRC` (`src/README.md`), `tools/ghidra/decompile.py`.
 
-### 11. 60 fps (M6): started (WW-3, the owner's choice)
+### 11. 60 fps (M6): research started (WW-3); the next task carries it on
 
-- Design D21 has the findings: the frame loop (sead's framework on the main thread; per-frame
-  function `f_0274C264`; swap interval 2 set once at boot), and the experiment that shows play is
-  frame-locked while scenery follows the clock (`WWHD_VSYNC_HZ=120`: Link, camera and boat as at
-  30 fps at frame N, clouds and waves not). So M6 is tick interpolation, not a faster tick.
-- Mapped (D21): one frame is `game_procFrameBody` = the tick (`f_02746790`) then
-  `RenderDisplay_draw` (camera matrix to `DAT_104b45f8`, projection, render jobs) then
-  `RenderDisplay_calcGPU`; then `game_procPresent` (swap) and `fw_waitForVsync`. Named in
-  `symbols.csv` from the game's profiler labels and the framework's vtable (0x10004E88).
-- Prototype (D21; `WWHD_60FPS=1`, real time only; `src/overrides/tick.cpp`, swap interval in
-  `os/gx2/core/GX2_Misc.cpp`): presenting every vsync works (60.1 fps, 16.7 ms, ticking every
-  frame, so the game runs at double speed); skipping the tick on alternate frames hangs (the main
-  thread waits on a render job list), at boot and after `WWHD_60FPS_AFTER=2000` ticks alike.
-  Drawing needs per-frame work done inside the tick.
-- Next: map the root task's method tree (sead `TaskMgr`/`MethodTreeMgr`) to split the tick into
-  render preparation (every frame) and logic (every other frame); then camera interpolation;
-  then actors. The owner judges smoothness on the desktop, windowed.
-- Tools: `tools/ghidra/decompile.py` (C with callers and callees) and `tools/ghidra/lookup.py`
-  (references, words with function names, `find` a value: vtables). Their output stays on the
-  worker (`/wwhd/data/ghidra-out`).
-- `WWHD_VSYNC_HZ` (default 60) sets the vsync rate with the virtual clock and in real time.
+See "The next task" below and design D21.
 
-### 12. Then, roughly in this order (ask the owner)
-- **The rest of D18:**
-  - the loader and memory map (the rest of item 8);
-  - gx2's core rewritten (no speed in it: 1.2% of the CPU thread, item 9);
-  - proc_ui.
-- **Later:**
-  - M5, playable on a GPU machine (the desktop is one now);
-  - an arm64 context switch for Android (D19);
+## The next task: native 60 fps, then an uncapped frame rate
+
+**The goal** (the owner, 2026-10-01): the game's own logic runs natively at 60 ticks a second and
+plays exactly as it does at 30 (the same speeds, jump arcs, timers, animations, cutscenes and sound
+sync), and in the end at any frame rate: uncapped, with a variable time step. **Not
+interpolation**, which was the design's earlier plan (D9, D21) and is what other ports do. The
+owner wants a solution of our own, and a recompilation can do things an emulator patch can't (see
+"Where to start", 3).
+
+**What is known** (D21 has the details):
+- **The frame loop** is sead's framework on the main thread (core 1). Main sets
+  `GX2SetSwapInterval(2)` once. `fw_runLoop` calls `fw_procFrame` forever: `game_procFrameBody`
+  (the tick `f_02746790`, sead's method-tree calc of the root task, then `RenderDisplay_draw` and
+  `RenderDisplay_calcGPU`), `game_procPresent` (swap, ProcUI) and `fw_waitForVsync` (waits until
+  every swap has flipped). The framework's vtable is at 0x10004E88; names and evidence are in
+  `symbols.csv`.
+- **Play is frame-locked, scenery follows the clock.** With `WWHD_VSYNC_HZ=120` and the virtual
+  clock (60 game frames a second), frame N of the save route has Link, the camera, the boat and the
+  HUD exactly as at 30 fps, and the clouds, waves and a fish's shadow elsewhere. Link stood still in
+  those frames: check it with movement too.
+- **The prototype** (`WWHD_60FPS=1`, real time only, `wwhd::rt::SixtyFps`): our
+  `GX2SetSwapInterval` turns the 2 into 1, and the game then presents every vsync, a steady 60.1 fps
+  with 16.7 ms frames on the worker, at double game speed. Skipping the tick on alternate frames
+  (`src/overrides/tick.cpp`) hangs: drawing waits on render jobs that only the tick starts.
+- **Prior art:** the GameCube version's 60 fps hacks unlock the frame limit and change one global
+  (CPU ticks per second divided by 30, which the engine's frame wait reads) to slow the game down,
+  and physics comes out wrong (Dolphin forum threads). In a frame-locked engine the per-tick steps
+  are everywhere: movement, gravity (per tick squared, so halving a velocity isn't enough), timers
+  counted in ticks, animation frame steps (J3D's frame controls), particles (JPA), the camera,
+  collision, events and cutscenes, and sound cues timed to them.
+
+**Where to start** (suggestions, not a spec):
+1. **Research.** Find WWHD's time base: sead's framework frame rate, any global step or time scale
+   the game's code reads, and how the HD port's actor code (TWW's `fopAc`, `dCamera`, J3D, JPA)
+   advances per tick. `zeldaret/tww` (the GameCube decomp) has names and structures; the Ghidra
+   project and `WWHD_BACKTRACE` connect them to WWHD's addresses. Write findings into D21 as you go.
+2. **Measure before fixing.** The harness can run the game deterministically at 30 and at 60 ticks
+   a second (virtual clock, `WWHD_VSYNC_HZ=120` or swap interval 1) and compare game state at equal
+   game times: tick 2N at 60 against tick N at 30, in guest memory (actors, the camera, timers), in
+   captures, and in OS calls. A field that diverges is a per-tick quantity to handle; one that
+   matches needs nothing. Route inputs are keyed by frame, so map them (frame F at 30 is 2F at 60).
+   This turns "what breaks" into a list you can work down.
+3. **Fix what diverges, in a way of our own.** Overrides (D9) of the update functions are the
+   obvious tool. The recompiler is the unusual one: it sees every float constant, every load and
+   store of an actor's fields and every call site, so a per-tick step can be scaled where the
+   generated code uses it, systematically, rather than patched address by address.
+4. **Acceptance.** At 60 ticks, the state, captures and positions at equal game times match the
+   30-tick run (clock-driven scenery aside); the owner judges the feel on the desktop, windowed;
+   with 60 fps off, every existing check stays identical (`stream_check`, diff mode, G3).
+5. **Then uncapped:** a variable time step through the same mechanism, presentation without vsync
+   (mailbox), and frame pacing in our frontend.
+
+**Keep in mind:** keep it behind a switch (`WWHD_60FPS` today) and out of the deterministic checks
+until it has checks of its own. Android: 60 ticks doubles the game's CPU (the scheduler thread is
+7-9% busy at 30 on the desktop, far more on a phone), and phones throttle.
+
+**Tools for it:** `WWHD_VSYNC_HZ` (vsync rate, virtual clock and real time), `WWHD_60FPS` and
+`WWHD_60FPS_AFTER=n` (the prototype), `WWHD_BACKTRACE=lib.Function[:rN=value]` (guest call
+chains), `WWHD_SHOT_DRC` (the GamePad's image), `tools/ghidra/decompile.py` and `lookup.py`,
+`CEMU_SHOT_FRAMES` with `compare_frames.py`, the profiler (`WWHD_PROFILE`).
+
+## Waiting on the owner
+
+- **The sound check** of the task loop's fast path (item 1): they listen in a window when they have
+  time ("Launching the window" above).
+- **The menus route's 2 shaders and 1 pipeline** missing from the shader list (item 5): a
+  real-time menus run on the desktop with `WWHD_SHADER_SOURCES`, when the desktop is free.
+
+## After that, roughly in this order (ask the owner)
+
+- **The rest of D18:** the loader and memory map (the rest of item 8); gx2's core rewritten (no
+  speed in it: 1.2% of the CPU thread, item 9); proc_ui.
+- A dungeon route (from Hyrule Castle at the end of the warp route, or Dragon Roost).
+- Longer task-loop naps (item 1's idea): fewer wakeups, with care.
+- M5, playable on a GPU machine (the desktop is one); an arm64 context switch for Android (D19).
 
 ## Known facts and gotchas worth not rediscovering
 
@@ -535,7 +603,7 @@ Pipelines come from shader variants, not state, so nothing was changed.
 ## Unfinished odds and ends
 
 - An upstream report of nWiiURecomp's missing `fdivs` validator (`xo5==18`) was never posted.
-- `symbols.csv` has only 110 names (from the TWW randomizer's linker map). Phase 2 naming is
-  needed for M6.
+- `symbols.csv` has 131 names: the TWW randomizer's linker map, the task library, the render path
+  and the frame loop (WW-3). Phase 2 naming (zeldaret/tww) is what the 60 fps work will lean on.
 - A segfault inside lavapipe's JIT code was seen once early in a G2 run and not reproduced. The
   handle-key collision fixed in e1aae8b is a candidate cause.

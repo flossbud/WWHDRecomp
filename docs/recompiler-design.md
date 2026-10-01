@@ -351,8 +351,9 @@ A function is only "done" when layer 2 passes for it. This is the external oracl
 * The generated original stays callable as `orig_f_X`, so an override can wrap it.
 * An override for a pure function is checked by the same diff harness (D8.2), with the
   interpreter running the original.
-* **Enhancements are overrides.** For 60 fps (interpolating camera and actor transforms, as
-  setsail does), the overrides are written against names from Phase 2.
+* **Enhancements are overrides.** The plan for 60 fps was to interpolate camera and actor
+  transforms (as setsail does); on 2026-10-01 the owner chose native 60 fps instead, and then an
+  uncapped frame rate (D21).
 * **Mid-function hooks** (XenonRecomp's `[[midasm_hook]]`) are deferred until a real need appears.
 
 **As built (2026-09-30).** Not with weak symbols: a weak definition can't be inlined within its
@@ -1108,7 +1109,10 @@ instead. `PipelineDesc` is unchanged.
 
 ### D21. 60 fps (M6): what the game does each frame
 
-*Started 2026-10-01; findings so far, no enhancement yet.*
+*Started 2026-10-01; findings so far, no enhancement yet.* **Decision (the owner, 2026-10-01):
+native 60 fps, then uncapped.** The game's own logic is to run at 60 ticks a second (and in the end
+at any rate) and play exactly as at 30. Interpolation, the plan below and in D9, stays a fallback,
+not the goal. The handoff's "The next task" has suggestions for where to start.
 
 * **The frame loop** is sead's game framework on the main thread (core 1): main (`f_02005EA8`)
   sets `GX2SetSwapInterval(2)` once, then the framework's loop (`f_027476D8` -> `f_0274BF78` ->
@@ -1187,7 +1191,7 @@ There are two tracks. They meet at M4.
 | # | Milestone | Done when |
 |---|---|---|
 | M5 | Playable | The native CPU plus the native GX2 on a GPU machine play through the scripted route and beyond at full speed. |
-| M6 | First enhancement | 60 fps interpolation as overrides (needs Phase 2 names). |
+| M6 | First enhancement | Native 60 fps (the owner's choice, 2026-10-01; not interpolation), then an uncapped frame rate: D21. |
 
 **M0a status (2026-09-29):** done. The patched reference is deterministic along a scripted route:
 two fresh boots playing `tools/reference/routes/title-to-game.txt` (title, file select, name
