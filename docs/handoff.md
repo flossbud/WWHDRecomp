@@ -273,6 +273,8 @@ Pipelines come from shader variants, not state, so nothing was changed.
   `tools/shaders/shader_list.py`, commit. Check with `tools/reference/shader_list_check.sh`.
 - Ideas: fewer registers per line (the ranges are generous; the capture check would catch a range
   cut too far), and capturing longer playthroughs (sailing, dungeons, menus) with the new routes.
+  For phones: a first start reads 222 MB from the 34 files (the largest, 47 MB, whole in memory
+  while it's walked); reading SARC members with seeks would keep that small.
 
 ### 4. Then, roughly in this order (ask the owner)
 - **G3: render the whole route** (D13, D16.3).
