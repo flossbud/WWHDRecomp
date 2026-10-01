@@ -1127,9 +1127,21 @@ instead. `PipelineDesc` is unchanged.
   interpolation, as planned (D9): 30 ticks a second, and between two ticks one more frame drawn
   from interpolated camera and actor transforms. (Link stands still at those frames; a route
   where he moves would confirm it for him.)
-* **Next:** which of the per-frame calls tick the game and which draw it (the framework's vtable
-  slots), whether drawing can run again without a tick, and where the camera and the actors'
-  matrices come from at draw time (D9 overrides, Phase 2 names from zeldaret/tww).
+* **One frame, in order** (the framework's vtable at 0x10004E88, found with
+  `tools/ghidra/lookup.py find`; `fw_runLoop` calls slot 0xcc, `fw_procFrame`, forever): slot
+  0xd4 (sead), slot 0xdc `game_procFrameBody`, slot 0x6c (sead), slot 0xec `game_procPresent`
+  unless paused (`gfx_EndFrame`: draw done, the screens' copies, flush, swap; then ProcUI's HOME
+  menu and exit states), slot 0xe4 `fw_waitForVsync`. `game_procFrameBody` is the frame: first
+  `f_02746790(root)`, which runs `f_02747C6C(root + 0x40)` (the tick, by elimination: nothing else
+  in the frame updates the game), then `RenderDisplay_draw` and `RenderDisplay_calcGPU` (the game's
+  own profiler labels), each running its list of render jobs. `RenderDisplay_draw` copies the
+  camera's 3x4 matrix into `DAT_104b45f8` and builds the projection from the camera's field of
+  view and aspect before the jobs run.
+* **The plan this gives M6:** (1) a prototype in real time behind a switch: present at 60 Hz
+  (swap interval 1), and every other frame skip the tick (`f_02746790`) and draw the same state
+  again, to see what else moves per frame (sead's measured frame time, input, timers); (2) the
+  camera: on the frame between two ticks, draw with the camera matrix halfway between theirs (the
+  most visible motion); (3) actors' and skeletons' matrices, where `zeldaret/tww` names help.
 
 ## Milestones
 

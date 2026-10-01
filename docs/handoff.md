@@ -429,8 +429,16 @@ Pipelines come from shader variants, not state, so nothing was changed.
   function `f_0274C264`; swap interval 2 set once at boot), and the experiment that shows play is
   frame-locked while scenery follows the clock (`WWHD_VSYNC_HZ=120`: Link, camera and boat as at
   30 fps at frame N, clouds and waves not). So M6 is tick interpolation, not a faster tick.
-- Next: tell the framework's tick calls from its draw calls, see whether a draw can run without a
-  tick, find the camera's and actors' matrices at draw time.
+- Mapped (D21): one frame is `game_procFrameBody` = the tick (`f_02746790`) then
+  `RenderDisplay_draw` (camera matrix to `DAT_104b45f8`, projection, render jobs) then
+  `RenderDisplay_calcGPU`; then `game_procPresent` (swap) and `fw_waitForVsync`. Named in
+  `symbols.csv` from the game's profiler labels and the framework's vtable (0x10004E88).
+- Next (D21's plan): a real-time prototype behind a switch, 60 Hz presentation with the tick
+  skipped every other frame; then camera interpolation; then actors. The owner judges smoothness
+  on the desktop, windowed.
+- Tools: `tools/ghidra/decompile.py` (C with callers and callees) and `tools/ghidra/lookup.py`
+  (references, words with function names, `find` a value: vtables). Their output stays on the
+  worker (`/wwhd/data/ghidra-out`).
 - `WWHD_VSYNC_HZ` (default 60) sets the vsync rate with the virtual clock and in real time.
 
 ### 12. Then, roughly in this order (ask the owner)
