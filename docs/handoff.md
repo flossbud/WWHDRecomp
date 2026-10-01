@@ -339,9 +339,23 @@ Pipelines come from shader variants, not state, so nothing was changed.
   elsewhere); the flags are clang's; our own code isn't portable yet (the fibers' x86-64 context
   switch, D19's arm64 item). Untested anywhere but the worker.
 
-### 7. Then, roughly in this order (ask the owner)
+### 7. The file system and nn_save: done (WW-3, the owner's choice)
+
+- Forked: the FS client, the IPC driver, the FSA service, `nn_save` (`src/forks.txt`, now 29).
+- The FSA service is served in place (`src/os/iosu/fsa_service.h`): no IOSU host thread, no trip
+  through IOSU's kernel. The FS client serves a request on the calling guest thread and hands the
+  reply to its core's IPC thread exactly as IOSU did (a host-style send that readies the IPC thread
+  without switching to it, `__OSSendMessageAsHost`); synchronous requests are plain calls.
+- Checked: all six routes identical (traces, command streams, sound); the new-game route's 41 save
+  files byte-identical to what Cemu's own FS writes (`build/wwhd-cemu`); a real-time run on the
+  worker at 30 fps. Not yet on the desktop (offline).
+- Left as Cemu's: `fsc` underneath (portable), the client's console-shaped structures, and
+  `SAVEInit`'s account lookup through IOSU's legacy act ioctls (with `nn_act`).
+- Gotcha: a SysAllocator in a fork stays even when unused (`iosu_fsa.cpp` keeps its old message
+  buffer), or every later one moves in guest memory.
+
+### 8. Then, roughly in this order (ask the owner)
 - **The rest of D18:**
-  - the file system, with `nn_save`;
   - the loader and memory map, giving the guest OS objects in Cemu's memory (the SysAllocators)
     their own home;
   - gx2's core rewritten;

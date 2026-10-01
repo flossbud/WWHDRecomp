@@ -760,12 +760,25 @@ development-only reference that traces, captures and texture dumps are checked a
   Held back until what they stand on is ours:
   - with the scheduler: `proc_ui` (threads, events and rendezvous of its own, the system message
     queue);
-  - with the file system: `nn_save` (every call an asynchronous FS request waited on through the
-    scheduler);
+  - ~~with the file system: `nn_save`~~: forked with the file system (2026-10-01, below);
   - with their whole library: `nn_act.Initialize` (loads accounts for the rest of nn_act),
     `nn_boss` and `nn_olv` (objects with vtables in Cemu's memory, IPC to Cemu's IOSU), `nlibcurl`
     and `nsysnet` (setup the rest of the library checks), and `OSGetSystemInfo` (returns a
     structure in Cemu's memory).
+* **The file system (2026-10-01).** Forked whole: the FS client (`coreinit_FS.cpp`), the IPC
+  driver (`coreinit_IPC.cpp`), the FSA service (`iosu_fsa.cpp`) and `nn_save`. The FSA service no
+  longer runs on an IOSU host thread behind IOSU's kernel: the FS client serves each request in
+  place, on the guest thread that made it, and delivers the reply to its core's IPC thread as
+  IOSU's kernel did, with a message sent as a host thread sends one (it readies the IPC thread
+  without switching to it). With the virtual clock, patch 0003 had already made IOSU deliver the
+  reply before `IOS_IoctlAsync` returned, so the guest sees the same steps (the caller blocks on
+  its command block's queue, the IPC thread runs the FS callback, the caller wakes); synchronous
+  requests never blocked and are calls now. Along the routes the game calls 12 FS functions
+  (about 1,000 reads a route, `FSGetVolumeState` once a frame) and 4 of nn_save's. All six routes
+  stay identical, and the 41 save files the new-game route writes are byte-identical to what
+  Cemu's FS writes. Still Cemu's: `fsc` underneath (portable: WUA archives through ZArchive, host
+  folders), the console-shaped client structures, and `SAVEInit`'s account lookup through IOSU's
+  legacy ioctls (patch 0006), which waits for `nn_act`.
 * **Our own build (2026-10-01).** `CMakeLists.txt` builds `wwhd-null` with Cemu as a subproject
   from its patched source tree (patch 0015), configured as Cemu's own build is but without its
   wxWidgets GUI; at configure time CemuCafe loses Latte (all but what gx2 and the renderer use) and

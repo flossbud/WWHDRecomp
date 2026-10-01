@@ -17,7 +17,7 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 | `gpu/vk/latte_glue.cpp` | the pieces of Latte the decompiler calls, and a no-op `Renderer` (derived from Cemu, MPL-2.0) |
 | `gpu/vk/vk.h`, `vk.cpp` | Vulkan loaded at runtime, so `wwhd-null` runs without a driver when rendering is off |
 | `os/` | our OS layer (D18): the game's imports, taking over Cemu's handlers one by one (`os.h`); `os/gx2/` is gx2, ported from Cemu's |
-| `os/snd_core/`, `os/coreinit/`, `os/gx2/core/`, `os/proc_ui/`, `os/tcl/`, `runtime/espresso/`, `runtime/fiber/` | forks of Cemu's sources (`forks.txt`): snd_core, the scheduler, gx2's core, proc_ui, TCL, the cores' timeslices, timer and HLE dispatch, fibers |
+| `os/snd_core/`, `os/coreinit/`, `os/gx2/core/`, `os/proc_ui/`, `os/tcl/`, `os/iosu/`, `os/nn_save/`, `runtime/espresso/`, `runtime/fiber/` | forks of Cemu's sources (`forks.txt`): snd_core, the scheduler, gx2's core, proc_ui, TCL, the file system (its client, the IPC driver, the FSA service served in place) and nn_save, the cores' timeslices, timer and HLE dispatch, fibers |
 | `runtime/dispatch.cpp` | the execution seam (Cemu patch 0011): the hook that replaces Cemu's interpreter loop, the function table (D5), the D10 code check, `rt_call_ctr`/`rt_jump_ctr`/`rt_bad_branch`, the real-time fast paths' switch and quiet watch (D19) |
 | `overrides/` | overrides (D9): generated functions replaced by ours (`config/US_v0/overrides.txt`), the original still callable as `orig_f_X`; `task_loop.cpp`, the game's task loop, sleeps through idle rounds in real time |
 | `runtime/imports.cpp` | `rt_import`/`rt_import_data` (D4), bound from what Cemu's loader wrote into guest memory |
@@ -110,6 +110,21 @@ order (1,759 members, saved with `link_order.py save` from a link of Cemu's own 
 when the pinned Cemu or its vcpkg libraries change. Members it doesn't list go last: today our
 SDL3's video parts and glslang's limits.
 
+**The file system** (D18) is forked whole: the FS client (`os/coreinit/coreinit_FS.cpp`: clients,
+command blocks and their queue, the FS API), the IPC driver (`os/coreinit/coreinit_IPC.cpp`), the
+FSA service (`os/iosu/iosu_fsa.cpp`) and `os/nn_save/nn_save.cpp`. Cemu ran the FSA service on an
+IOSU host thread behind IOSU's kernel; ours is served in place (`os/iosu/fsa_service.h`): the client
+serves each request on the guest thread that made it, then hands the reply to its core's IPC thread
+as IOSU's kernel did, with a message sent the way a host thread sends one (it readies the IPC
+thread, never switches to it: `__OSSendMessageAsHost`). With the virtual clock Cemu delivered the
+reply before `IOS_IoctlAsync` returned (cemu-patches/0003), so the guest sees the same steps: the
+caller blocks on its command block's queue, the IPC thread runs the FS callback, the caller wakes.
+Synchronous requests (`IOS_Open`, `IOS_Ioctl`) never blocked and are plain calls now. The service's
+handles are its own (a client's index plus one). Files are still Cemu's `fsc` (title content from
+a WUA archive or a folder, the save folder on the host). Checked: all six routes as the reference's,
+the 41 save files the new-game route writes byte-identical to those Cemu's FS writes, and a
+real-time run at 30 fps.
+
 **Saves** live where Cemu keeps them: `portable/mlc01/usr/save/00050000/10143500/user/80000001/`
 (`cking.sav`, the Pictograph photos `cking_pic*.sav`, `cking_playlog.sav`). The game reads and
 writes them through Cemu's `nn_save` and FS, so saving and loading work as on the console. To start
@@ -141,11 +156,12 @@ route, 30,219 on the whole route).
 
 **Forks.** Libraries that Cemu's own code calls into can't be taken over at the HLE table (the
 scheduler calls snd_core's `AXOut_update` directly; CafeSystem and coreinit call gx2's core). Those
-are forked instead: our copy of Cemu's source file, under Cemu's names, which `build.sh` links in
-place of Cemu's object. `src/forks.txt` lists them (25 so far: snd_core; the scheduler, i.e.
+are forked instead: our copy of Cemu's source file, under Cemu's names, which the build links in
+place of Cemu's object. `src/forks.txt` lists them (29 so far: snd_core; the scheduler, i.e.
 coreinit's threads, scheduler, alarms, message and thread queues, spinlocks, synchronization and
 callbacks, and the Espresso timeslices and timer with the virtual clock; gx2's core; proc_ui; TCL;
-the HLE dispatcher and trace recorder; fibers, with our own context switch) and
+the HLE dispatcher and trace recorder; fibers, with our own context switch; the file system's
+client, the IPC driver and the FSA service; nn_save) and
 `tools/cemu_fork.py` creates missing ones. Each takes its original's place in the Cemu target
 that had it, so it compiles exactly as Cemu compiles that file (ThinLTO bitcode included) and lands
 in the same archive under the same name, where the ordered link puts Cemu's object: static

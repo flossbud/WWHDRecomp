@@ -131,6 +131,27 @@ namespace coreinit
 		return 1;
 	}
 
+	// wwhd: OSSendMessage as Cemu's IOSU host threads made it, never blocking and never switching to the
+	// thread it wakes: called off the guest cores, PPCInterpreter_getCurrentInstance() is null and the
+	// wakeup only readies the thread. The FS client delivers replies with it (coreinit_IPC.cpp's
+	// IPCDriver_PostReply), on the guest thread that asked, and the guest must see what IOSU did.
+	sint32 __OSSendMessageAsHost(OSMessageQueue* msgQueue, OSMessage* msg)
+	{
+		__OSLockScheduler();
+		if (msgQueue->usedCount >= msgQueue->msgCount)
+		{
+			__OSUnlockScheduler();
+			return 0;
+		}
+		sint32 messageIndex = RingIndex((uint32)(msgQueue->firstIndex + msgQueue->usedCount), (uint32)msgQueue->msgCount);
+		msgQueue->usedCount = (uint32)msgQueue->usedCount + 1;
+		memcpy(&msgQueue->msgArray[messageIndex], msg, sizeof(OSMessage));
+		if (!msgQueue->threadQueueReceive.isEmpty())
+			msgQueue->threadQueueReceive.wakeupSingleThreadWaitQueue(false);
+		__OSUnlockScheduler();
+		return 1;
+	}
+
 	OSMessageQueue* OSGetSystemMessageQueue()
 	{
 		return g_systemMessageQueue.GetPtr();

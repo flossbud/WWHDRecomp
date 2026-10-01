@@ -27,3 +27,7 @@ os/proc_ui/proc_ui.cpp                   Cafe/OS/libs/proc_ui/proc_ui.cpp       
 os/tcl/TCL.cpp                           Cafe/OS/libs/TCL/TCL.cpp                       TCL: the ring the CPU submits command buffers to, and their retirement
 runtime/espresso/PPCInterpreterHLE.cpp   Cafe/HW/Espresso/Interpreter/PPCInterpreterHLE.cpp the HLE table and dispatch, and the reference's call tracer
 runtime/fiber/FiberUnix.cpp              util/Fiber/FiberUnix.cpp                       fibers: each guest thread's stack, and switching between them
+os/coreinit/coreinit_FS.cpp              Cafe/OS/libs/coreinit/coreinit_FS.cpp          the file system's client side: clients, command blocks and their queue, the FS API
+os/coreinit/coreinit_IPC.cpp             Cafe/OS/libs/coreinit/coreinit_IPC.cpp         IPC to IOSU: the per-core drivers, their threads and the IOS_* calls
+os/iosu/iosu_fsa.cpp                     Cafe/IOSU/fsa/iosu_fsa.cpp                     the FSA service: file operations on the title's volumes (through fsc)
+os/nn_save/nn_save.cpp                   Cafe/OS/libs/nn_save/nn_save.cpp               nn_save: the save directories and their files
