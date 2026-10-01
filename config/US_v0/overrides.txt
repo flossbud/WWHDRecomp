@@ -3,5 +3,6 @@
 # which every reference reaches (calls, tail calls, the function table, indirect calls) and which
 # may call orig_f_X. The linker reports a listed function without an override, and an override of a
 # function not listed here, as a missing or duplicate symbol.
-# address   where                          what
-0275FFCC    src/overrides/task_loop.cpp    the task message loop: in real time, sleeps through idle ticks (D19)
+# address   where                              what
+0275FFCC    src/overrides/task_loop.cpp        the task message loop: in real time, sleeps through idle ticks (D19)
+027D6BB0    src/overrides/gamepad_view.cpp     a view of a scene: the GamePad's screen is skipped in real time (nothing shows it)

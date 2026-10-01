@@ -367,7 +367,12 @@ duplicate. The build (`src/CMakeLists.txt`) compiles `src/overrides/*.cpp` like 
 `-ffp-contract=off -fno-strict-aliasing`) and links them with the recompiled program; only the
 listed functions' shards change. An override reads like generated code (`GPR(n)`, `rd32`/`wr32`,
 `RT_CALL_CTR`) and includes `src/overrides/override.h`. Checked with the first one (the task loop,
-D19) in place: both route traces, command streams and sound identical, diff mode clean.
+D19) in place: both route traces, command streams and sound identical, diff mode clean. The second
+(2026-10-01, `src/overrides/gamepad_view.cpp`) skips the GamePad's screen in real time: the render
+jobs draw each scene's views through `f_027D6BB0` (`gfx_RenderSceneView`), and a view whose render
+target is the GamePad's 854x480 rectangle is the ITEMS menu for a GamePad that isn't there (9% of
+the draws, about 1% of CPU). Forced with the virtual clock (`WWHD_SKIP_GAMEPAD=1`), exactly those
+draws go and the TV's frames stay byte-identical; unforced, every check runs the game's code.
 
 ### D10. Cemu's boot-time code patches
 

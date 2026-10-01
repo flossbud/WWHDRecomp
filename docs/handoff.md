@@ -388,7 +388,7 @@ Pipelines come from shader variants, not state, so nothing was changed.
   for a submission or the host-timed vsync: 967 wakeups/s to 137, the process 797 (82% fewer than
   at the start), 30.1 fps and a 34.5 ms 99th percentile at full clocks. Save route identical.
 
-### 10. The GamePad view: measured, parked (WW-3, the owner's choice)
+### 10. The GamePad view: skipped in real time (WW-3, the owner's choice)
 
 - The game draws the GamePad's screen every frame though no GamePad is attached: the **ITEMS
   menu** (3D item icons, tabs, buttons) into an 854x480 colour buffer (864x480 with depth), copied
@@ -398,17 +398,27 @@ Pipelines come from shader variants, not state, so nothing was changed.
   thread (core 2, `task_MessageLoop` → handler `f_0276AA34` → `f_027588DC` → `f_027D74AC` →
   `f_027C424C`) and on the main render thread (core 1). Those functions are among the hottest
   (8-12% of CPU samples inclusive each), but the GamePad's share of them is only known by draws.
-  No GamePad-only function is on the path: skipping it means finding where the engine picks the
-  GamePad's screen or layer (its data structures), which needs a Ghidra project again
-  (`tools/ghidra/rebuild.sh`, an hour or more). Expected gain: about 9% of the draw work (GPU on a
-  phone) and a few percent of CPU; risk: UI state updated while drawing.
-- Tools left for it: `WWHD_BACKTRACE` and `WWHD_SHOT_DRC` (`src/README.md`).
+  No GamePad-only function is on the path; the data says which screen a view is for.
+- With the Ghidra project rebuilt (`tools/ghidra/rebuild.sh`: 6.4 minutes on the worker; it
+  reproduced `functions.csv` and `jump_tables.csv` but for the names `symbols.csv` had gained) and
+  `tools/ghidra/decompile.py` (prints functions as C with callers and callees; its output stays on
+  the worker, `/wwhd/data/ghidra-out`): the render jobs draw each scene's views through
+  `f_027D6BB0` (now `gfx_RenderSceneView`), which passes the scene's render target, a float
+  rectangle, to `gfx_RenderView`. There are two targets: the TV's (0,0-1920,1080) and the GamePad's
+  (0,0-854,480). Eight engine functions are named in `symbols.csv` with that evidence.
+- The override `src/overrides/gamepad_view.cpp` (D9) returns without drawing for the GamePad's
+  target in real time only; `WWHD_SKIP_GAMEPAD=1` forces it with the virtual clock, `=0` turns it
+  off. Forced: the save route's draws 2,136,689 to 1,941,934 (exactly the 864x480 ones gone, the
+  TV's counts unchanged to the draw), and the menus route's 32 TV frames byte-identical to the
+  unskipped render. Gain: 9% of the draws (a whole 854x480 pass with depth: GPU on a phone) and
+  about 1% of CPU (virtual clock 26.3 s to 26.0 s on the save route). Without forcing, the checks
+  run the game's code: save, menus and warp identical, diff mode clean.
+- Tools left: `WWHD_BACKTRACE`, `WWHD_SHOT_DRC` (`src/README.md`), `tools/ghidra/decompile.py`.
 
 ### 11. Then, roughly in this order (ask the owner)
 - **The rest of D18:**
   - the loader and memory map (the rest of item 8);
   - gx2's core rewritten (no speed in it: 1.2% of the CPU thread, item 9);
-  - the GamePad view skipped (item 10: needs the engine's render-pass structure first);
   - proc_ui.
 - **Later:**
   - M5, playable on a GPU machine (the desktop is one now);

@@ -62,7 +62,10 @@ time. `WWHD_RT_LOG=path` collects the runtime's log (and, in diff mode, per-func
 
 **Overrides** (`overrides/`, D9) replace generated functions: `config/US_v0/overrides.txt` lists
 them, `tools/recomp/generate.py` emits their bodies as `orig_f_X`, and the build compiles
-`overrides/*.cpp` like generated code and links them with it. The only one so far is the game's task
+`overrides/*.cpp` like generated code and links them with it. Two so far, both real-time only. The GamePad's screen (`gamepad_view.cpp`, `f_027D6BB0`): the
+game draws its ITEMS menu for the absent GamePad every frame, 9% of the draws; in real time a view
+whose render target is the GamePad's 854x480 screen isn't drawn (`WWHD_SKIP_GAMEPAD=1` forces it,
+`=0` never). And the game's task
 loop (`f_0275FFCC`), a **real-time fast path** (D19): with the virtual clock, in diff mode or on
 Cemu's three host threads it runs the game's code (`orig_f_X`), so every check sees the game's own
 behaviour; in real time on one host thread it sleeps through the rounds where the game's ticking
