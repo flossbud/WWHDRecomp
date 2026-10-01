@@ -965,7 +965,10 @@ Cemu's input manager and audio backend ran four threads that do nothing for this
 input update thread (a 1 ms loop), the Wiimote and SDL controller providers' threads, and cubeb's
 PulseAudio thread: 5.4% of a core and 2,870 of the process's 4,500 wakeups a second. The frontend
 now stops them at start-up (the game's input calls are ours; snd_core opens no Cemu device unless
-asked): 55% of a core and 1,640 wakeups a second. gx2, which D18 meant to rewrite next for
+asked): 55% of a core and 1,640 wakeups a second. The GPU thread waited for commands or the next
+vsync but woke at least every millisecond (967 wakeups a second); it now sleeps until a submission
+or the vsync (137 a second, 1.8% of a core instead of 3.1%): 797 wakeups a second for the process,
+82% fewer than before, with 30.1 fps and a 34.5 ms 99th percentile at full clocks. gx2, which D18 meant to rewrite next for
 "submission and synchronisation", is 1.2% of the scheduler thread's samples in real time; guest
 code is 83%. And clocks matter more than any of it: the worker's governor (`powersave`, 0.8 to
 4.5 GHz) keeps a half-busy thread that sleeps a thousand times a second at low clocks, where the

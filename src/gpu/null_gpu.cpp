@@ -104,15 +104,17 @@ static void handleTimedVsync()
 	LatteGPUState.timer_nextVSync += period * (missed >= 2 ? missed + 1 : 1);
 }
 
-// Real time: how long until the next host-timed vsync, at most 1 ms, so the GPU thread sleeps that
-// long when it waits (for a flip, or for commands) instead of spinning or sleeping past it.
+// Real time: how long until the next host-timed vsync, so the GPU thread sleeps that long when it
+// waits (for a flip, or for commands: a submission wakes it sooner) instead of spinning or sleeping
+// past it. It used to wake at least every millisecond, about 940 times a second for nothing; now
+// about 60 (and per submission), and shutdown is seen within a vsync period.
 static std::chrono::microseconds untilTimedVsync()
 {
 	uint64 now = HighResolutionTimer::now().getTick();
 	uint64 next = LatteGPUState.timer_nextVSync;
 	if (next <= now)
 		return std::chrono::microseconds(0);
-	return std::chrono::microseconds(std::min<uint64>(HighResolutionTimer::ticksToMicroseconds(next - now), 1000));
+	return std::chrono::microseconds(HighResolutionTimer::ticksToMicroseconds(next - now));
 }
 
 namespace coreinit
@@ -663,8 +665,9 @@ namespace
 	}
 
 	// The next word of the ring: after a few quick looks (a submission usually follows closely), the
-	// thread sleeps until the CPU submits (os/tcl) instead of spinning, waking every millisecond for
-	// shutdown, and in real time at the host-timed vsync.
+	// thread sleeps until the CPU submits (os/tcl) instead of spinning: in real time until the
+	// host-timed vsync at the latest, with the virtual clock (whose vsync the CPU raises) for 1 ms at
+	// a time, to see shutdown.
 	uint32 ringWord()
 	{
 		uint32 w;

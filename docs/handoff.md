@@ -384,6 +384,9 @@ Pipelines come from shader variants, not state, so nothing was changed.
 - Worker, real time, same clocks: 62% of a core and 4,500 wakeups/s before, 55% and 1,640 after;
   only the scheduler and GPU threads are left. Routes identical (save, new-game, warp checked), and
   a windowed run under Xvfb keeps the reference's trace.
+- Then the GPU thread (the owner's choice): it no longer wakes every millisecond while waiting, only
+  for a submission or the host-timed vsync: 967 wakeups/s to 137, the process 797 (82% fewer than
+  at the start), 30.1 fps and a 34.5 ms 99th percentile at full clocks. Save route identical.
 
 ### 10. Then, roughly in this order (ask the owner)
 - **The rest of D18:**

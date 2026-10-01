@@ -220,9 +220,11 @@ hashes it instead, and headless runs without either are silent. `WWHD_AUDIO=cemu
 cubeb device instead (so does the window when SDL's audio fails). **Cemu's idle threads are
 stopped at start-up:** its input manager (an update thread waking every millisecond, and the
 Wiimote and SDL controller providers' threads; all of the game's input calls are ours) and, unless
-its device is wanted, its audio backend (cubeb's PulseAudio thread). On the worker in real time
-that took the process from 62% of a core and 4,500 wakeups a second to 55% and 1,600, leaving
-the scheduler thread and the GPU thread (with traces, command streams and sound unchanged). On
+its device is wanted, its audio backend (cubeb's PulseAudio thread). In real time the GPU thread
+sleeps until a submission or the host-timed vsync (`untilTimedVsync`), no longer waking every
+millisecond. On the worker that took the process from 62% of a core and 4,500 wakeups a second to
+55% and 800, leaving the scheduler thread and the GPU thread (traces, command streams and sound
+unchanged). On
 the worker, with lavapipe under Xvfb, the save route runs windowed at about 5 frames a second, and
 its trace stays the reference's with the window, input and sound on (`SDL_AUDIO_DRIVER=disk` writes
 the sound to a file):
