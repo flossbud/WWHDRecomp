@@ -17,6 +17,67 @@
 #include "Cafe/OS/common/OSCommon.h"
 #include <map>
 
+namespace
+{
+	// WWHD_BACKTRACE=lib.Function[:rN=value] (e.g. gx2.GX2CopyColorBufferToScanBuffer:r4=4): for the
+	// first WWHD_BACKTRACE_COUNT (default 4) calls of that import (whose rN, if given, holds value),
+	// the guest's return addresses into the log, innermost first, from LR and the stack's back chain
+	// (each frame's first word points to its caller's frame, whose second word is the saved LR). For
+	// finding which game function a call belongs to; it reads guest memory and changes nothing.
+	struct Backtrace
+	{
+		uint32 id = ~0u, reg = 0, value = 0, left = 0;
+		bool filter = false;
+	};
+
+	Backtrace& BacktraceSetup()
+	{
+		static Backtrace bt = [] {
+			Backtrace t;
+			const char* spec = getenv("WWHD_BACKTRACE");
+			if (!spec || !*spec)
+				return t;
+			std::string_view v{spec};
+			std::string_view name = v.substr(0, v.find(':'));
+			if (size_t colon = v.find(":r"); colon != std::string_view::npos)
+			{
+				t.filter = true;
+				t.reg = (uint32)strtoul(v.data() + colon + 2, nullptr, 10);
+				if (const char* eq = strchr(spec + colon, '='))
+					t.value = (uint32)strtoul(eq + 1, nullptr, 0);
+			}
+			for (uint32 i = 0; i < g_importCount; i++)
+				if (fmt::format("{}.{}", g_imports[i].lib, g_imports[i].name) == name)
+					t.id = i;
+			const char* count = getenv("WWHD_BACKTRACE_COUNT");
+			t.left = count ? (uint32)atoi(count) : 4;
+			cemuLog_log(LogType::Force, "wwhd: backtraces of {} ({})", name, t.id == ~0u ? "not an import" : "an import");
+			return t;
+		}();
+		return bt;
+	}
+
+	void LogBacktrace(PPCInterpreter_t* ctx, uint32 id)
+	{
+		Backtrace& bt = BacktraceSetup();
+		if (id != bt.id || bt.left == 0 || (bt.filter && ctx->gpr[bt.reg] != bt.value))
+			return;
+		bt.left--;
+		std::string chain = fmt::format("{:08x}", ctx->spr.LR);
+		uint32 frame = ctx->gpr[1];
+		for (int depth = 0; depth < 40; depth++)
+		{
+			uint32 next = memory_readU32(frame);
+			if (next == 0 || next <= frame || next - frame > 0x100000)
+				break;
+			chain += fmt::format(" {:08x}", memory_readU32(next + 4));
+			frame = next;
+		}
+		cemuLog_log(LogType::Force, "wwhd: backtrace thread {:08x} core {}: {}", MEMPTR<void>(coreinit::OSGetCurrentThread()).GetMPTR(),
+			ctx->spr.UPIR, chain);
+	}
+}
+
 namespace wwhd::rt
 {
 	struct BoundImport
@@ -41,6 +102,8 @@ namespace wwhd::rt
 		std::string s(lib);
 		return s.substr(0, s.find('.'));
 	}
+
+	uint32 s_backtraceId = ~0u;     // the import WWHD_BACKTRACE names (below), else none
 
 	void BindImports()
 	{
@@ -148,6 +211,7 @@ namespace wwhd::rt
 		Log("imports: %zu functions bound from %zu branch sites (%zu HLE), %zu data imports from %zu immediates, "
 			"%zu weak call sites, %zu call sites patched away; %zu cross-check differences", funcs, branches, hle, data,
 			immediates, weak, patchedSites, crossFail);
+		s_backtraceId = BacktraceSetup().id;
 	}
 }
 
@@ -156,6 +220,8 @@ using namespace wwhd::rt;
 void rt_import(PPCInterpreter_t* ctx, uint32 id)
 {
 	const BoundImport& b = s_func[id];
+	if (id == s_backtraceId) [[unlikely]]
+		LogBacktrace(ctx, id);
 	if (!b.opcode)
 	{
 		Interpret(ctx, b.target);

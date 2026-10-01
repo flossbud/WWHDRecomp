@@ -388,10 +388,27 @@ Pipelines come from shader variants, not state, so nothing was changed.
   for a submission or the host-timed vsync: 967 wakeups/s to 137, the process 797 (82% fewer than
   at the start), 30.1 fps and a 34.5 ms 99th percentile at full clocks. Save route identical.
 
-### 10. Then, roughly in this order (ask the owner)
+### 10. The GamePad view: measured, parked (WW-3, the owner's choice)
+
+- The game draws the GamePad's screen every frame though no GamePad is attached: the **ITEMS
+  menu** (3D item icons, tabs, buttons) into an 854x480 colour buffer (864x480 with depth), copied
+  to the GamePad's scan buffer (`GX2CopyColorBufferToScanBuffer` r4=4). Save route: 194,754 of
+  2,136,689 draws (9%, about 108 a frame). The TV's pause menu is a separate 1920x1080 render.
+- The draws come from the engine's generic UI/layer renderer, shared with the TV's HUD: on a task
+  thread (core 2, `task_MessageLoop` → handler `f_0276AA34` → `f_027588DC` → `f_027D74AC` →
+  `f_027C424C`) and on the main render thread (core 1). Those functions are among the hottest
+  (8-12% of CPU samples inclusive each), but the GamePad's share of them is only known by draws.
+  No GamePad-only function is on the path: skipping it means finding where the engine picks the
+  GamePad's screen or layer (its data structures), which needs a Ghidra project again
+  (`tools/ghidra/rebuild.sh`, an hour or more). Expected gain: about 9% of the draw work (GPU on a
+  phone) and a few percent of CPU; risk: UI state updated while drawing.
+- Tools left for it: `WWHD_BACKTRACE` and `WWHD_SHOT_DRC` (`src/README.md`).
+
+### 11. Then, roughly in this order (ask the owner)
 - **The rest of D18:**
   - the loader and memory map (the rest of item 8);
   - gx2's core rewritten (no speed in it: 1.2% of the CPU thread, item 9);
+  - the GamePad view skipped (item 10: needs the engine's render-pass structure first);
   - proc_ui.
 - **Later:**
   - M5, playable on a GPU machine (the desktop is one now);

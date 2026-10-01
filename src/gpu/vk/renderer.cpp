@@ -558,7 +558,8 @@ namespace wwhd::gpu
 	}
 
 	// ---- frame capture (as the reference's screenshots: an RGBA8 copy of the TV image) --------
-	static void WritePPM(const Image& tv, uint32 frame)
+	// WWHD_SHOT_DRC=1 writes the GamePad's image too (fNNNNNN.drc.ppm), though nothing shows it
+	static void WritePPM(const Image& tv, uint32 frame, const char* screen = "tv")
 	{
 		VkDeviceSize size = (VkDeviceSize)tv.width * tv.height * 4;
 		VkBufferCreateInfo bci{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
@@ -583,7 +584,7 @@ namespace wwhd::gpu
 		SubmitAndWait();
 		uint8* px;
 		vkMapMemory(s.device, mem, 0, size, 0, (void**)&px);
-		std::string path = fmt::format("{}/f{:06}.tv.ppm", s.shotDir, frame);
+		std::string path = fmt::format("{}/f{:06}.{}.ppm", s.shotDir, frame, screen);
 		if (FILE* f = fopen((path + ".part").c_str(), "wb"))
 		{
 			fprintf(f, "P6\n%u %u\n255\n", tv.width, tv.height);
@@ -700,6 +701,9 @@ namespace wwhd::gpu
 			DumpSurfaces(s.frame);
 		if (s.frame > 1 && s.shotFrames.count(s.frame - 1) && s.scan[0].image)
 			WritePPM(s.scan[0], s.frame - 1);
+		static const bool shotDrc = getenv("WWHD_SHOT_DRC") && atoi(getenv("WWHD_SHOT_DRC")) != 0;
+		if (shotDrc && s.frame > 1 && s.shotFrames.count(s.frame - 1) && s.scan[1].image)
+			WritePPM(s.scan[1], s.frame - 1, "drc");
 		ResetOverwrittenSurfaces();
 		PresentRecord(s.scan[0]);
 		SubmitAndWait();

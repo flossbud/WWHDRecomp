@@ -131,6 +131,12 @@ a WUA archive or a folder, the save folder on the host). Checked: all six routes
 the 41 save files the new-game route writes byte-identical to those Cemu's FS writes, and a
 real-time run at 30 fps.
 
+**Finding which game function a call belongs to:** `WWHD_BACKTRACE=lib.Function[:rN=value]` logs,
+for the first `WWHD_BACKTRACE_COUNT` (default 4) calls of that import (whose rN holds value, if
+given), the guest's return addresses from LR and the stack's back chain
+(`runtime/imports.cpp`; e.g. `gx2.GX2CopyColorBufferToScanBuffer:r4=4`, the GamePad's copy).
+`WWHD_SHOT_DRC=1` also writes the GamePad's image at each capture (`fNNNNNN.drc.ppm`).
+
 **Saves** live where Cemu keeps them: `portable/mlc01/usr/save/00050000/10143500/user/80000001/`
 (`cking.sav`, the Pictograph photos `cking_pic*.sav`, `cking_playlog.sav`). The game reads and
 writes them through Cemu's `nn_save` and FS, so saving and loading work as on the console. To start
