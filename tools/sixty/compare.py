@@ -12,6 +12,9 @@ are game frames (src/overrides/sixty.cpp). It prints:
   - per (process name, offset), from the full dumps (state.bin, every WWHD_STATE_DUMP_EVERY ticks),
     the 32-bit words that differ: in how many dumps, the first tick, and the values at that tick as
     float and as integer: the list of per-tick quantities to look at, longest-standing first.
+With --track, only the processes WWHD_STATE_TRACK dumped every tick (track.bin): converted ones
+within a tolerance (their position error at whole ticks, the floats that differ most, and at half
+ticks how far they are from the midpoint of the 30-tick run's two ticks around them).
 --names maps process names to readable names (a TSV: number, name).
 """
 import argparse
@@ -66,6 +69,73 @@ def show(w):
     return f'{i:08x} ({fs})'
 
 
+def load_track(path):
+    """{(name, addr): {tick2: bytes}} from track.bin (WWHD_STATE_TRACK)."""
+    out = collections.defaultdict(dict)
+    try:
+        f = open(path, 'rb')
+    except FileNotFoundError:
+        return out
+    with f:
+        while True:
+            head = f.read(16)
+            if len(head) < 16:
+                break
+            tick2, name, addr, size = struct.unpack('<4I', head)
+            out[(name, f'{addr:08x}')][tick2] = f.read(size)
+    return out
+
+
+def f32(b, off):
+    return struct.unpack('>f', b[off:off + 4])[0]
+
+
+def track_report(a_dir, b_dir, names, first):
+    """Converted processes within a tolerance: at whole ticks the position (+0x314) error and the
+    float fields that differ most; at half ticks (B only) how far the position is from the midpoint
+    of A's two whole ticks around it, against the distance moved in that tick."""
+    ta, tb = load_track(f'{a_dir}/track.bin'), load_track(f'{b_dir}/track.bin')
+    if not tb:
+        print('\nno track.bin in B (WWHD_STATE_TRACK)')
+        return
+    print('\ntracked processes (positions at +0x314; units: the game\'s):')
+    for key in sorted(set(ta) & set(tb)):
+        a, b = ta[key], tb[key]
+        whole = sorted(t for t in a if t in b and t % 2 == 0 and t // 2 >= first)
+        if not whole:
+            continue
+        worst, worst_t = 0.0, None
+        fields = collections.defaultdict(float)
+        for t in whole:
+            x, y = a[t], b[t]
+            d = sum((f32(x, 0x314 + 4 * i) - f32(y, 0x314 + 4 * i)) ** 2 for i in range(3)) ** 0.5
+            if d > worst:
+                worst, worst_t = d, t // 2
+            for off in range(0, min(len(x), len(y)) - 3, 4):
+                if x[off:off + 4] != y[off:off + 4]:
+                    fx, fy = f32(x, off), f32(y, off)
+                    if abs(fx) < 1e7 and abs(fy) < 1e7 and (fx != 0 or fy != 0):
+                        fields[off] = max(fields[off], abs(fx - fy))
+        mids, moved = [], []
+        for t in sorted(t for t in b if t % 2 == 1 and t // 2 >= first):
+            n = t // 2
+            if 2 * n in a and 2 * (n + 1) in a:
+                p0 = [f32(a[2 * n], 0x314 + 4 * i) for i in range(3)]
+                p1 = [f32(a[2 * (n + 1)], 0x314 + 4 * i) for i in range(3)]
+                ph = [f32(b[t], 0x314 + 4 * i) for i in range(3)]
+                mids.append(sum((ph[i] - (p0[i] + p1[i]) / 2) ** 2 for i in range(3)) ** 0.5)
+                moved.append(sum((p1[i] - p0[i]) ** 2 for i in range(3)) ** 0.5)
+        name = key[0]
+        print(f'  {name} at {key[1]}: {len(whole)} whole ticks, position error max {worst:.3f} (tick {worst_t})')
+        if mids:
+            big = max(range(len(mids)), key=lambda i: mids[i])
+            print(f'    half ticks: {len(mids)}, distance from the midpoint max {mids[big]:.3f} '
+                  f'(moved {moved[big]:.3f} that tick), mean {sum(mids) / len(mids):.3f}')
+        top = sorted(fields.items(), key=lambda kv: -kv[1])[:8]
+        if top:
+            print('    floats that differ most: ' + ', '.join(f'+{o:#x} {d:.4g}' for o, d in top))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('a')
@@ -74,7 +144,11 @@ def main():
     ap.add_argument('--fields', type=int, default=60)
     ap.add_argument('--names')
     ap.add_argument('--globals-only', action='store_true', help='only the globals in the full dumps')
+    ap.add_argument('--track', action='store_true', help='only the tracked processes (track.bin), within a tolerance')
     args = ap.parse_args()
+    if args.track:
+        track_report(args.a, args.b, args.names, args.first)
+        return
     names = {}
     if args.names:
         for line in open(args.names):

@@ -27,10 +27,12 @@
 // The dumps are game memory: they stay on the worker.
 #include "override.h"
 #include <algorithm>
+#include <bit>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <dlfcn.h>
 #include <set>
+#include <tuple>
 #include <unordered_map>
 #include <string>
 #include <vector>
@@ -46,6 +48,55 @@ namespace
 	}
 
 	std::vector<uint32> s_actors;                  // the actors that executed this whole tick, in order
+
+	// ---- converted processes (WWHD_60FPS_CONVERT=n,m,...: process names) ---------------------------
+	// A converted process runs its logic every frame at 60 fps, with g_rtStep the part of a 30 Hz
+	// tick a frame is (0.5; the helpers in sixty_step.cpp read it), and its writes stand; every other
+	// process runs on whole ticks with a step of 1 (D21 step 3).
+	bool Converted(uint16 name)
+	{
+		static const std::vector<uint16> names = [] {
+			std::vector<uint16> v;
+			if (const char* e = getenv("WWHD_60FPS_CONVERT"))
+				for (const char* p = e; *p;)
+				{
+					char* end;
+					const unsigned long n = strtoul(p, &end, 10);
+					if (end == p)
+						break;
+					v.push_back((uint16)n);
+					for (p = end; *p == ','; p++)
+						;
+				}
+			return v;
+		}();
+		return !names.empty() && std::find(names.begin(), names.end(), name) != names.end();
+	}
+	int s_converting = 0;                           // a converted process's execute is running
+
+	// WWHD_STATE_TRACK=n,m,...: with the probe, these processes' bytes after every whole tick and, at
+	// 60 fps, every half tick (dir/track.bin: tick x2 (+1 on a half tick), name, address, size, bytes;
+	// up to 0x4000 bytes of each), for tools/sixty/compare.py --track
+	bool Tracked(uint16 name)
+	{
+		static const std::vector<uint16> names = [] {
+			std::vector<uint16> v;
+			if (const char* e = getenv("WWHD_STATE_TRACK"))
+				for (const char* p = e; *p;)
+				{
+					char* end;
+					const unsigned long n = strtoul(p, &end, 10);
+					if (end == p)
+						break;
+					v.push_back((uint16)n);
+					for (p = end; *p == ','; p++)
+						;
+				}
+			return v;
+		}();
+		return !names.empty() && std::find(names.begin(), names.end(), name) != names.end();
+	}
+	std::vector<uint32> s_tracked;                  // tracked processes that executed this frame
 	std::vector<uint32> s_processes;               // every process that executed this whole tick
 	constexpr uint32 kGlobal = 0x474C4F42u;         // state.bin record tags: "GLOB", "ACTR"
 	constexpr uint32 kActor = 0x41435452u;
@@ -53,23 +104,23 @@ namespace
 
 	// ---- the store census (WWHD_STATE_CENSUS=1 with the probe, at 60 fps) ----------------------------
 	// During every half-tick frame (fw_procFrame, f_0274C264), every store generated code makes into an
-	// actor that executed in the last whole tick, or into the game's .data/.bss, is counted by the host
-	// address it was made from (a place in a recompiled function f_X) and what it hit: an actor's
-	// process name and offset, or a global's address. dir/census.txt lists them at exit; tools/sixty/
-	// census.py names the host addresses. That is what the frame changes outside the game's tick.
+	// actor that executed in the last whole tick, or into the game's .data/.bss, is counted by the
+	// guest instruction that made it and what it hit: an actor's process name and offset, or a
+	// global's address. dir/census.txt lists them at exit; tools/sixty/census.py names the functions.
+	// That is what the frame changes outside the game's tick.
 	struct ActorRange { uint32 low, high; uint16 name; };
 	std::vector<ActorRange> s_ranges;               // the last whole tick's actors, by address
 	PPCInterpreter_t* s_frameThread = nullptr;      // the main thread: the one running fw_procFrame
 	struct CensusKey
 	{
-		uintptr_t from;
+		uint32 pc;                                  // the storing instruction (0: hand-written code)
 		uint32 name;                                // process name + 1, or 0 for a global
 		uint32 where;                               // offset in the actor, or the global's address
 		bool operator==(const CensusKey&) const = default;
 	};
 	struct CensusHash
 	{
-		size_t operator()(const CensusKey& k) const { return k.from * 0x9E3779B97F4A7C15ull ^ ((uint64)k.name << 32 | k.where); }
+		size_t operator()(const CensusKey& k) const { return k.pc * 0x9E3779B97F4A7C15ull ^ ((uint64)k.name << 32 | k.where); }
 	};
 	std::unordered_map<CensusKey, uint64, CensusHash> s_census;
 
@@ -127,10 +178,10 @@ namespace
 		s_chains[who + GuestChain(4)]++;
 	}
 
-	void CensusStore(uint32 ea, uint32 size, void* from)
+	void CensusStore(uint32 ea, uint32 size, uint32 pc)
 	{
 		CensusTrace(ea);
-		CensusKey k{ (uintptr_t)from, 0, ea };
+		CensusKey k{ pc, 0, ea };
 		if (ea >= kGlobalsLow && ea < kGlobalsHigh)
 			;
 		else
@@ -163,11 +214,8 @@ namespace
 		FILE* f = fopen((dir + "/census.txt").c_str(), "w");
 		if (!f)
 			return;
-		Dl_info info{};
-		dladdr((void*)&CensusWrite, &info);
-		fprintf(f, "base %lx\n", (unsigned long)(uintptr_t)info.dli_fbase);
 		for (const auto& [k, n] : s_census)
-			fprintf(f, "%lx %u %x %llu\n", (unsigned long)k.from, k.name, k.where, (unsigned long long)n);
+			fprintf(f, "%08x %u %x %llu\n", k.pc, k.name, k.where, (unsigned long long)n);
 		fclose(f);
 		for (const auto& [name, map] : { std::pair{ "/census_traces.txt", &s_traces }, std::pair{ "/census_chains.txt", &s_chains } })
 			if (!map->empty())
@@ -210,7 +258,7 @@ namespace
 
 	void RollbackStore(uint32 ea, uint32 size)
 	{
-		if (PPCInterpreter_getCurrentInstance() != s_frameThread || size > 32)
+		if (s_converting || PPCInterpreter_getCurrentInstance() != s_frameThread || size > 32)
 			return;
 		// level 2: all of the game's .data and .bss, not only g_dComIfG_gameInfo (the environment's draw
 		// blends its light transitions in g_env_light, the HUD's draw and dMenu's helpers keep state in
@@ -239,7 +287,7 @@ namespace
 		s_saved.clear();
 	}
 
-	void HalfTickStore(uint32 ea, uint32 size, void* from);
+	void HalfTickStore(uint32 ea, uint32 size, uint32 pc);
 
 	bool Census()
 	{
@@ -247,12 +295,283 @@ namespace
 		return on;
 	}
 
-	void HalfTickStore(uint32 ea, uint32 size, void* from)
+	void HalfTickStore(uint32 ea, uint32 size, uint32 pc)
 	{
 		if (Census())
-			CensusStore(ea, size, from);
+			CensusStore(ea, size, pc);
 		if (Rollback())
 			RollbackStore(ea, size);
+	}
+
+	// ---- the step-doubling trial (WWHD_60FPS_TRIAL=n,m,... with the probe, at 30 fps) -------------
+	// Finds the per-tick steps of a process that its conversion hasn't reached yet, one tick at a
+	// time and without the run drifting. At every tick each listed process's execute runs as two half
+	// steps (g_rtStep 0.5, the second as a half tick, as at 60 fps) with every store the main thread
+	// makes journaled; the values they leave are noted and the stores put back; then the execute runs
+	// once as the game's, and the run goes on from that. Every store (outside the stack) whose bytes
+	// after the two half steps differ from theirs after the game's step is counted by the instruction
+	// that made it last in the half steps (or, if only the game's step made it, by that one), with
+	// the value before, after the half steps and after the game's step: dir/trial.txt at exit, which
+	// tools/sixty/trial.py reports. Those are the open-coded steps, and the helpers' inexact cases, to
+	// give rules or overrides (D21).
+	bool Trial(uint16 name)
+	{
+		static const std::vector<uint16> names = [] {
+			std::vector<uint16> v;
+			if (const char* e = getenv("WWHD_60FPS_TRIAL"))
+				for (const char* p = e; *p;)
+				{
+					char* end;
+					const unsigned long n = strtoul(p, &end, 10);
+					if (end == p)
+						break;
+					v.push_back((uint16)n);
+					for (p = end; *p == ','; p++)
+						;
+				}
+			return v;
+		}();
+		return !names.empty() && std::find(names.begin(), names.end(), name) != names.end();
+	}
+
+	struct StoreUnit { uint32 pc, ea, size; };      // a store: its instruction, address and size
+	int s_trialPhase = 0;                           // 1: the two half steps, 2: the game's step
+	uint32 s_trialSp = 0;                           // the stack pointer under the execute
+	std::vector<Saved> s_trialSaved;                // the half steps' stores' old bytes, to put back
+	std::unordered_map<uint32, StoreUnit> s_halfLast, s_refLast;   // byte -> the last store to it
+	std::unordered_map<uint32, uint8> s_initial, s_halfValue;      // byte -> before; after the half steps
+
+	void TrialStore(uint32 ea, uint32 size, uint32 pc)
+	{
+		if (PPCInterpreter_getCurrentInstance() != s_frameThread || size > 32)
+			return;
+		if (ea + 0x10000 > s_trialSp && ea < s_trialSp + 0x100)   // the execute's stack frames
+			return;
+		if (s_trialPhase == 1)
+		{
+			Saved& e = s_trialSaved.emplace_back();
+			e.ea = ea;
+			e.size = size;
+			memcpy(e.bytes, memory_base + ea, size);
+		}
+		auto& last = s_trialPhase == 1 ? s_halfLast : s_refLast;
+		for (uint32 b = ea; b < ea + size; b++)
+		{
+			s_initial.try_emplace(b, rd8(b));
+			last[b] = { pc, ea, size };
+		}
+	}
+
+	struct TrialKey
+	{
+		uint32 pc;
+		uint32 refOnly;                             // 1: only the game's step made this store
+		uint32 name;                                // process name + 1; 0 a global; ~0 the heap
+		uint32 where;                               // offset in the process, the global's address, 0
+		bool operator==(const TrialKey&) const = default;
+	};
+	struct TrialHash
+	{
+		size_t operator()(const TrialKey& k) const { return (k.pc * 0x9E3779B97F4A7C15ull) ^ ((uint64)k.name << 32 | k.where) ^ k.refOnly; }
+	};
+	struct TrialStat
+	{
+		uint64 ticks = 0;                           // ticks it differed
+		uint32 size = 0;
+		char kind = 'i';                            // f a single, d a double, i an integer
+		double worst = -1;                          // the largest difference, at:
+		uint32 tick = 0;
+		uint64 initial = 0, half = 0, ref = 0;
+	};
+	std::unordered_map<TrialKey, TrialStat, TrialHash> s_trial;
+	uint64 s_trialTicks = 0;
+
+	// What an instruction stores: f a single (stfs, stfsu, stfsx, stfsux, psq_st of 4 bytes),
+	// d a double (stfd...), i an integer
+	char StoreKind(uint32 pc, uint32 size)
+	{
+		if (pc == 0)
+			return 'i';
+		const uint32 insn = rd32(pc), op = insn >> 26, xo = (insn >> 1) & 0x3FF;
+		if (op == 52 || op == 53 || (op == 31 && (xo == 663 || xo == 695)))
+			return 'f';
+		if (op == 54 || op == 55 || (op == 31 && (xo == 727 || xo == 759)))
+			return 'd';
+		if ((op == 60 || op == 61 || (op == 4 && ((xo & 0x3F) == 7 || (xo & 0x3F) == 39))) && size == 4)
+			return 'f';
+		return 'i';
+	}
+
+	void TrialWrite()
+	{
+		static const std::string dir = getenv("WWHD_STATE_DUMP");
+		FILE* f = fopen((dir + "/trial.txt").c_str(), "w");
+		if (!f)
+			return;
+		fprintf(f, "# ticks %llu\n", (unsigned long long)s_trialTicks);
+		fprintf(f, "# pc refOnly name where size kind ticks worst tick initial half ref\n");
+		for (const auto& [k, t] : s_trial)
+			fprintf(f, "%08x %u %d %x %u %c %llu %.9g %u %llx %llx %llx\n", k.pc, k.refOnly, (int)k.name - 1, k.where, t.size, t.kind,
+				(unsigned long long)t.ticks, t.worst, t.tick, (unsigned long long)t.initial, (unsigned long long)t.half, (unsigned long long)t.ref);
+		fclose(f);
+	}
+
+	// The two half steps' result against the game's step: each store that left different bytes
+	void TrialCompare(uint32 tick)
+	{
+		std::set<std::pair<uint32, uint32>> units;   // (byte address of the store, 1 if the game's step only)
+		std::vector<std::tuple<StoreUnit, uint32>> differing;
+		auto valueAfterHalf = [](uint32 b) {
+			auto it = s_halfValue.find(b);
+			return it != s_halfValue.end() ? it->second : s_initial.at(b);
+		};
+		auto consider = [&](uint32 b) {
+			if (valueAfterHalf(b) == rd8(b))
+				return;
+			auto h = s_halfLast.find(b);
+			const bool refOnly = h == s_halfLast.end();
+			const StoreUnit u = refOnly ? s_refLast.at(b) : h->second;
+			if (units.insert({ u.ea, refOnly }).second)
+				differing.push_back({ u, refOnly });
+		};
+		for (const auto& [b, u] : s_halfLast)
+			consider(b);
+		for (const auto& [b, u] : s_refLast)
+			if (!s_halfLast.count(b))
+				consider(b);
+		for (const auto& [u, refOnly] : differing)
+		{
+			const uint32 size = std::min(u.size, 8u);
+			uint64 initial = 0, half = 0, ref = 0;
+			for (uint32 i = 0; i < size; i++)
+			{
+				const uint32 b = u.ea + i;
+				const auto init = s_initial.find(b);
+				const uint8 i0 = init != s_initial.end() ? init->second : rd8(b);
+				initial = initial << 8 | i0;
+				const auto hv = s_halfValue.find(b);
+				half = half << 8 | (hv != s_halfValue.end() ? hv->second : i0);
+				ref = ref << 8 | rd8(b);
+			}
+			const char kind = StoreKind(u.pc, u.size);
+			double diff;
+			if (kind == 'f')
+				diff = std::fabs((double)std::bit_cast<float>((uint32)half) - (double)std::bit_cast<float>((uint32)ref));
+			else if (kind == 'd')
+				diff = std::fabs(std::bit_cast<double>(half) - std::bit_cast<double>(ref));
+			else
+			{
+				const int shift = 64 - 8 * (int)size;
+				diff = std::fabs((double)((sint64)(half << shift) >> shift) - (double)((sint64)(ref << shift) >> shift));
+			}
+			if (!(diff == diff))
+				diff = 1e30;                                  // a NaN on one side
+			TrialKey k{ u.pc, refOnly ? 1u : 0u, 0, u.ea };
+			if (!(u.ea >= kGlobalsLow && u.ea < kGlobalsHigh))
+			{
+				auto it = std::upper_bound(s_ranges.begin(), s_ranges.end(), u.ea, [](uint32 v, const ActorRange& r) { return v < r.low; });
+				if (it != s_ranges.begin() && u.ea < (--it)->high)
+				{
+					k.name = it->name + 1u;
+					k.where = u.ea - it->low;
+				}
+				else
+				{
+					k.name = ~0u;                             // the heap: by instruction only
+					k.where = 0;
+				}
+			}
+			TrialStat& t = s_trial[k];
+			t.ticks++;
+			t.size = u.size;
+			t.kind = kind;
+			if (diff > t.worst)
+			{
+				t.worst = diff;
+				t.tick = tick;
+				t.initial = initial;
+				t.half = half;
+				t.ref = ref;
+			}
+		}
+	}
+
+	struct Registers
+	{
+		uint32 gpr[32];
+		FPR_t fpr[32];
+		uint32 fpscr;
+		uint8 cr[32];
+		uint8 xer_ca, xer_so, xer_ov;
+		uint32 LR, CTR, XER, UGQR[8];
+		uint32 resAddr, resValue;
+
+		void Save(const PPCInterpreter_t* c)
+		{
+			memcpy(gpr, c->gpr, sizeof(gpr));
+			memcpy(fpr, c->fpr, sizeof(fpr));
+			fpscr = c->fpscr;
+			memcpy(cr, c->cr, sizeof(cr));
+			xer_ca = c->xer_ca; xer_so = c->xer_so; xer_ov = c->xer_ov;
+			LR = c->spr.LR; CTR = c->spr.CTR; XER = c->spr.XER;
+			memcpy(UGQR, c->spr.UGQR, sizeof(UGQR));
+			resAddr = c->reservedMemAddr; resValue = c->reservedMemValue;
+		}
+
+		void Restore(PPCInterpreter_t* c) const
+		{
+			memcpy(c->gpr, gpr, sizeof(gpr));
+			memcpy(c->fpr, fpr, sizeof(fpr));
+			c->fpscr = fpscr;
+			memcpy(c->cr, cr, sizeof(cr));
+			c->xer_ca = xer_ca; c->xer_so = xer_so; c->xer_ov = xer_ov;
+			c->spr.LR = LR; c->spr.CTR = CTR; c->spr.XER = XER;
+			memcpy(c->spr.UGQR, UGQR, sizeof(UGQR));
+			c->reservedMemAddr = resAddr; c->reservedMemValue = resValue;
+		}
+	};
+
+	// One process's execute as a trial (see above); the game's step stands
+	void TrialExecute(PPCInterpreter_t* ctx)
+	{
+		static bool once = [] { atexit(TrialWrite); at_quick_exit(TrialWrite); return true; }();
+		(void)once;
+		const uint32 tick = wwhd::rt::GameFrame(wwhd::os::SwapCount());
+		Registers regs;
+		regs.Save(ctx);
+		s_frameThread = PPCInterpreter_getCurrentInstance();
+		s_trialSp = ctx->gpr[1];
+		s_trialSaved.clear();
+		s_halfLast.clear();
+		s_refLast.clear();
+		s_initial.clear();
+		s_halfValue.clear();
+		g_rtStoreCensus = TrialStore;
+		g_rtJournalOn = true;
+
+		s_trialPhase = 1;                               // two half steps, as at 60 fps
+		g_rtStep = 0.5f;
+		s_converting++;
+		orig_f_025DE58C(ctx);
+		regs.Restore(ctx);
+		g_rtHalfTick = true;
+		orig_f_025DE58C(ctx);
+		g_rtHalfTick = false;
+		s_converting--;
+		g_rtStep = 1.0f;
+		for (const auto& [b, u] : s_halfLast)
+			s_halfValue[b] = rd8(b);
+		for (auto it = s_trialSaved.rbegin(); it != s_trialSaved.rend(); ++it)
+			memcpy(memory_base + it->ea, it->bytes, it->size);
+
+		regs.Restore(ctx);
+		s_trialPhase = 2;                               // the game's step: the run goes on from it
+		orig_f_025DE58C(ctx);
+		g_rtJournalOn = false;
+		g_rtStoreCensus = nullptr;
+		s_trialPhase = 0;
+		TrialCompare(tick);
+		s_trialTicks++;
 	}
 
 	uint64 Hash(uint32 ea, uint32 size)
@@ -261,6 +580,28 @@ namespace
 		for (uint32 i = 0; i < size; i++)
 			h = (h ^ rd8(ea + i)) * 0x100000001b3ull;
 		return h;
+	}
+
+	void DumpTracked(uint32 tick2)
+	{
+		static const std::string dir = getenv("WWHD_STATE_DUMP");
+		static FILE* f = fopen((dir + "/track.bin").c_str(), "wb");
+		if (f)
+		{
+			for (uint32 proc : s_tracked)
+			{
+				const uint32 profile = rd32(proc + 0x10);
+				uint32 size = profile ? rd32(profile + 0x10) : 0;
+				if (size == 0 || size > 0x40000)
+					continue;
+				size = std::min(size, 0x4000u);
+				const uint32 head[4] = { tick2, rd16(proc + 0x08), proc, size };
+				fwrite(head, 4, 4, f);
+				fwrite(memory_base + proc, 1, size, f);
+			}
+			fflush(f);
+		}
+		s_tracked.clear();
 	}
 
 	void Dump(uint32 tick)
@@ -340,22 +681,35 @@ void f_025F172C(PPCInterpreter_t* __restrict ctx)
 		static const bool skip = [] { const char* e = getenv("WWHD_60FPS_HALF"); return e && strcmp(e, "none") == 0; }();
 		if (skip)
 			return;
-		[[clang::musttail]] return orig_f_025F172C(ctx);   // the tick rules hold its logic to whole ticks
+		if (!Probe())
+			[[clang::musttail]] return orig_f_025F172C(ctx);   // the tick rules hold its logic to whole ticks
+		const uint32 swap = wwhd::os::SwapCount();
+		s_tracked.clear();
+		orig_f_025F172C(ctx);
+		DumpTracked(wwhd::rt::GameFrame(swap) * 2 + 1);
+		return;
 	}
 	if (!Probe() && wwhd::rt::SixtyFrom() == ~0u)
 		[[clang::musttail]] return orig_f_025F172C(ctx);
 	const uint32 swap = wwhd::os::SwapCount();
 	s_actors.clear();
 	s_processes.clear();
+	s_tracked.clear();
 	orig_f_025F172C(ctx);
 	if (Probe())
+	{
 		Dump(wwhd::rt::GameFrame(swap));
+		DumpTracked(wwhd::rt::GameFrame(swap) * 2);
+	}
 	if (Census() || Rollback())
 	{
 		s_ranges.clear();
 		for (uint32 proc : s_processes)
 			if (const uint32 profile = rd32(proc + 0x10); profile && rd32(profile + 0x10) <= 0x40000)
 				s_ranges.push_back({ proc, proc + rd32(profile + 0x10), rd16(proc + 0x08) });
+		// a converted process's draws are part of its frame, at 60 as its execute is: they stand
+		if (wwhd::rt::SixtyFrom() != ~0u)
+			std::erase_if(s_ranges, [](const ActorRange& r) { return Converted(r.name); });
 		std::sort(s_ranges.begin(), s_ranges.end(), [](const ActorRange& a, const ActorRange& b) { return a.low < b.low; });
 	}
 }
@@ -375,7 +729,6 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		cemuLog_log(LogType::Force, "wwhd sixty: 60 fps from swap {}", swap);
 	}
 	g_rtHalfTick = swap >= from && (swap - from) % 2 != 0;
-	g_rtStep = swap >= from ? 0.5f : 1.0f;
 	// WWHD_STATE_CENSUS=2 watches whole ticks' frames too (from the switch on), for the trace
 	static const bool censusAll = [] { const char* e = getenv("WWHD_STATE_CENSUS"); return Probe() && e && atoi(e) == 2; }();
 	if (!g_rtHalfTick && censusAll && swap >= from)
@@ -424,9 +777,34 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 // actors, the camera, the environment, the HUD and menus, scenes. Noted for the half ticks' rollback.
 void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 {
-	if (wwhd::rt::SixtyFrom() != ~0u || Census())
-		s_processes.push_back(GPR(3));
-	[[clang::musttail]] return orig_f_025DE58C(ctx);
+	const uint32 from = wwhd::rt::SixtyFrom();      // ~0 when 60 fps is off
+	if (from == ~0u && !Probe())
+		[[clang::musttail]] return orig_f_025DE58C(ctx);
+	const uint32 proc = GPR(3);
+	if (from == ~0u && s_trialPhase == 0 && Trial(rd16(proc + 0x08)))
+	{
+		s_processes.push_back(proc);
+		TrialExecute(ctx);
+		return;
+	}
+	const bool converted = from != ~0u && wwhd::os::SwapCount() >= from && Converted(rd16(proc + 0x08));
+	if (Probe() && Tracked(rd16(proc + 0x08)) && (!g_rtHalfTick || converted))
+		s_tracked.push_back(proc);
+	if (!g_rtHalfTick)
+		s_processes.push_back(proc);
+	else if (!converted)
+	{
+		GPR(3) = 1;                                   // a half tick: only converted processes run
+		return;
+	}
+	if (!converted)
+		[[clang::musttail]] return orig_f_025DE58C(ctx);
+	const float step = g_rtStep;
+	g_rtStep = 0.5f;
+	s_converting++;
+	orig_f_025DE58C(ctx);
+	s_converting--;
+	g_rtStep = step;
 }
 
 // sead's method tree runs other nodes beside the game's every frame (f_02747BDC; their share of the
@@ -507,7 +885,7 @@ void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
 // fopAc_Execute: every actor's execute goes through it (from fpcM_Management's execute pass)
 void f_025D475C(PPCInterpreter_t* __restrict ctx)
 {
-	if (Probe() || wwhd::rt::SixtyFrom() != ~0u)
+	if ((Probe() || wwhd::rt::SixtyFrom() != ~0u) && !g_rtHalfTick && s_trialPhase != 1)
 		s_actors.push_back(GPR(3));
 	[[clang::musttail]] return orig_f_025D475C(ctx);
 }

@@ -380,8 +380,13 @@ frame body (`f_025F172C`: the state probe after whole ticks), `fpcM_Execute` (`f
 `fopAc_Execute` (`f_025D475C`), which note the processes and actors that executed, `fpcM_Draw`
 (`f_025DE2CC`: which process is drawing, for the census, and a probe that skips draws), and three
 nodes of sead's tree held to whole ticks (`f_0260C74C`, `f_027618B8`, `f_0273CBD0`); the WW-3
-prototype's override of the tick (`f_02746790`) is gone. With 60 fps and the probe off each calls
-its original. Adding or removing an override changes `funcs.h` (the `orig_f_X` declarations), which
+prototype's override of the tick (`f_02746790`) is gone. `fpcM_Execute` also decides, per process,
+what runs on a half tick (only converted processes) and with which time step. The conversion (D21,
+2026-10-02) adds eighteen in `src/overrides/sixty_step.cpp`: the game's per-tick helpers with a time step for
+converted processes (the c_lib approaches and chases `f_0200ECD4` to `f_0200F8D0`,
+`fopAcM_calcSpeed` `f_025D67A8`, `fopAcM_posMove` `f_025D6800`, `J3DFrameCtrl::update`
+`f_027F2FC4`), each the game's function unchanged while the step is 1. With 60 fps and the probe
+off each calls its original. Adding or removing an override changes `funcs.h` (the `orig_f_X` declarations), which
 every shard includes: the next build compiles all generated code again (about 12 minutes on the
 worker), so batch them.
 
@@ -390,7 +395,13 @@ lists calls and stores, by address, that run only on the game's whole ticks at 6
 wraps each in `if (RT_WHOLE_TICK())` (`g_rtHalfTick`, set by the runtime per frame, never at 30 fps)
 and checks that the instruction at the address is the one the rule names. They change only the
 shards that contain them, so they rebuild in seconds, and they are how the generator's view of
-every call site reaches the 60 fps work.
+every call site reaches the 60 fps work. *Step rules* (the conversion) are the same for converted code:
+`keep:SRC` (a counter that counts whole ticks), and `OP:REG` / `OP@REG` (after the instruction, or
+for that instruction only) with OP `*h`, `/h`, `k` (an approach's factor, `1 - (1 - k)^h`), `d`
+(a damping factor, `d^h`) or `split` (an integer step split between the two half ticks); each is a
+no-op while `g_rtStep` is 1 (`RT_STEPPED()`). Every generated store also names its instruction to
+the store journal (`rt_journal_store(ea, size, pc)`, only on the journaling path), so the 60 fps
+tools report guest addresses.
 
 ### D10. Cemu's boot-time code patches
 
@@ -1363,6 +1374,51 @@ baseline is "nothing converted": the 60-tick run must equal the 30-tick run at e
   `WWHD_STATE_CENSUS_TRACE=addr` (guest call chains from the stack's back chain),
   `WWHD_STATE_DUMP_GLOBALS=ticks` (all of .data/.bss and every actor at those ticks),
   `WWHD_STATE_CENSUS=2` (whole ticks too).
+
+**Step 2: conversion, the machinery (WW-4, 2026-10-02; the owner chose the camera and Link first).**
+* **Converted processes** (`WWHD_60FPS_CONVERT=n,m,...`, process names: the camera 476, Link 168)
+  run their execute every frame at 60 fps with `g_rtStep` 0.5 (the part of a 30 Hz tick a frame
+  is); every other process runs on whole ticks with a step of 1. The execute pass now runs every
+  frame (its tick rule is gone) and `fpcM_Execute`'s override returns at once for an unconverted
+  process on a half tick; a converted process's stores stand (they are not journaled), and its draws
+  are out of the half ticks' rollback, being part of its frame.
+* **The helpers with a time step** (`src/overrides/sixty_step.cpp`, the game's own function while
+  the step is 1): the c_lib approaches (`cLib_addCalc` and its six relatives: factor
+  `1 - (1 - k)^h`, maximum and minimum steps `× h`), the angle approaches (integer divisor and steps
+  converted and rounded: not exact), the chases (step `× h`), `fopAcM_calcSpeed` (gravity `× h`, and
+  what it added is noted), `fopAcM_posMove` (`p += h·v + (1 − h)/2·Δv_g`, Δv_g what gravity added in
+  that step, so a jump's impulse isn't spread and two half steps land on the 30 Hz arc; the
+  collision's push-out `× h`) and `J3DFrameCtrl::update` (`mFrame += mRate·h`; a mode that stops or
+  turns the animation keeps that). Still to come: `checkPass` (it looks one rate ahead, so it
+  would fire on both half steps), morphs, `cLib_calcTimer`.
+* **The step-doubling trial** (`WWHD_60FPS_TRIAL=n,m,...` with the probe, at 30 fps): at every
+  tick each listed process's execute runs as two half steps (the second as a half tick, as at 60),
+  every store the main thread makes journaled; what they leave is noted and put back, and the
+  execute runs once as the game's, which the run goes on from. Each store whose bytes differ is
+  counted by the instruction that made it (`trial.txt`, `tools/sixty/trial.py`): with the value
+  before the tick, after the half steps and after the game's step, and what that suggests ("twice":
+  an unconverted per-tick step; `x(2 − k)`: an unconverted approach). It finds per-tick code one
+  tick at a time, without the run drifting (a 60 fps run diverges for good at the first one).
+  `tools/sixty/rmw.py` lists a function's read-modify-write stores with the instructions that
+  compute them (from `tools/ghidra/disasm.py`'s output), the candidates to read with the decomp.
+* **Store addresses:** every generated store names its guest instruction to the store journal
+  (`rt_journal_store(ea, size, pc)`, only on the journaling path; the census and the trial report
+  guest addresses, `tools/sixty/functions.py` names their functions).
+* **Step rules** (D9): `keep:SRC`, `OP:REG` and `OP@REG` with `*h`, `/h`, `k`, `d`, `split`, at exact
+  instructions, checked by the generator like tick rules.
+* **Tracking** (`WWHD_STATE_TRACK=n,m,...` with the probe): those processes' bytes after every whole
+  and half tick (`track.bin`); `compare.py --track` reports converted ones within a tolerance:
+  position error at whole ticks, the floats that differ most, and at half ticks the distance from
+  the midpoint of the 30-tick run's two ticks around them.
+* **First measurements** (tour route): with nothing converted the 60-tick run still equals the
+  30-tick run at every tick. With the camera and Link converted and only the helpers, Link ends up
+  4,233 units off: their per-tick code is mostly their own. The trial lists 1,534 differing
+  stores. The camera's: its five tick counters (`m07C`, `m080`, `m108`, `m118`, `m11C`), the
+  monitor's per-tick move (`updateMonitor`), and about 50 approaches in `followCamera` (factors
+  constant or computed, scalar, vector through `cXyz` scaling, and angle through `cSAngle`
+  multiplication), its turn and charge counters and the `m384/m380` ramp. Link's: the move speed
+  he takes from his feet's animation (`posMoveFromFootPos`), his animation and its frame tests, his
+  own gravity and integration, timers.
 
 ## Milestones
 

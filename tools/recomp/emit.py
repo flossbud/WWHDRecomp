@@ -69,7 +69,7 @@ class Emitter:
 
     def emit(self, i, ea):
         if i.op in self.LOADSTORE:
-            out = self._loadstore(i, *self.LOADSTORE[i.op])
+            out = self._loadstore(i, ea, *self.LOADSTORE[i.op])
         else:
             fn = getattr(self, "op_" + i.op.replace(".", "_"), None)
             if fn is None:
@@ -241,26 +241,27 @@ class Emitter:
         return f"{ra0(i)} + GPR({i.rB})"
 
     LOADS = {"lwz": "rd32(ea)", "lbz": "rd8(ea)", "lhz": "rd16(ea)", "lha": "(uint32)(sint32)(sint16)rd16(ea)"}
-    STORES = {"stw": "wr32(ea, GPR({}))", "stb": "wr8(ea, (uint8)GPR({}))", "sth": "wr16(ea, (uint16)GPR({}))"}
+    # a store names its instruction for the store journal (RT_STORE: the census and the 60 fps tools)
+    STORES = {"stw": "wr32(ea, GPR({0}), {1})", "stb": "wr8(ea, (uint8)GPR({0}), {1})", "sth": "wr16(ea, (uint16)GPR({0}), {1})"}
     LOADSTORE = {}          # mnemonic -> (template, indexed, update)
     for _base, _t in list(LOADS.items()) + list(STORES.items()):
         for _sfx, _x, _u in (("", False, False), ("u", False, True), ("x", True, False), ("ux", True, True)):
             LOADSTORE[_base + _sfx] = (_t, _x, _u)
     LOADSTORE.update({"lwbrx": ("__builtin_bswap32(rd32(ea))", True, False),
                       "lhbrx": ("(uint32)__builtin_bswap16(rd16(ea))", True, False),
-                      "stwbrx": ("wr32(ea, __builtin_bswap32(GPR({})))", True, False),
-                      "sthbrx": ("wr16(ea, __builtin_bswap16((uint16)GPR({})))", True, False)})
+                      "stwbrx": ("wr32(ea, __builtin_bswap32(GPR({0})), {1})", True, False),
+                      "sthbrx": ("wr16(ea, __builtin_bswap16((uint16)GPR({0})), {1})", True, False)})
 
-    def _loadstore(self, i, template, indexed, update):
+    def _loadstore(self, i, pc, template, indexed, update):
         ea = self._ea_x(i) if indexed else self._ea_d(i)
-        access = template.format(i.rT) if template.startswith("wr") else f"GPR({i.rT}) = {template}"
+        access = template.format(i.rT, hx(pc)) if template.startswith("wr") else f"GPR({i.rT}) = {template}"
         return [f"{{ uint32 ea = {ea}; {access};" + (f" GPR({i.rA}) = ea;" if update else "") + " }"]
 
     def op_lmw(self, i, ea):
         return [f"{{ uint32 ea = {self._ea_d(i)}; for (int r = {i.rT}; r < 32; r++, ea += 4) GPR(r) = rd32(ea); }}"]
 
     def op_stmw(self, i, ea):
-        return [f"{{ uint32 ea = {self._ea_d(i)}; for (int r = {i.rT}; r < 32; r++, ea += 4) wr32(ea, GPR(r)); }}"]
+        return [f"{{ uint32 ea = {self._ea_d(i)}; for (int r = {i.rT}; r < 32; r++, ea += 4) wr32(ea, GPR(r), {hx(ea)}); }}"]
 
     def op_lswi(self, i, ea):
         nb = i.nb or 32
@@ -279,7 +280,7 @@ class Emitter:
         r = i.rT
         for k in range(0, nb, 4):
             for j in range(min(4, nb - k)):
-                out.append(f"\twr8(ea + {k + j}, (uint8)(GPR({r}) >> {24 - 8 * j}));")
+                out.append(f"\twr8(ea + {k + j}, (uint8)(GPR({r}) >> {24 - 8 * j}), {hx(ea)});")
             r = (r + 1) % 32
         return out + ["}"]
 
@@ -292,7 +293,7 @@ class Emitter:
         # value (compare-and-swap); either way CR0 = 00 EQ SO, and a matching attempt clears it.
         return [f"{{ uint32 ea = {self._ea_x(i)}; bool ok = false;",
                 "\tif (ctx->reservedMemAddr == ea) {",
-                "\t\tif (g_rtJournalOn && rd32(ea) == ctx->reservedMemValue) rt_journal_store(ea, 4);   // it will store",
+                f"\t\tif (g_rtJournalOn && rd32(ea) == ctx->reservedMemValue) rt_journal_store(ea, 4, {hx(ea)});   // it will store",
                 "\t\tstd::atomic_ref<uint32> w(*(uint32*)(memory_base + ea));",
                 "\t\tuint32 expect = __builtin_bswap32(ctx->reservedMemValue);",
                 f"\t\tok = w.compare_exchange_strong(expect, __builtin_bswap32(GPR({i.rT})));",
@@ -302,7 +303,7 @@ class Emitter:
                 "\tctx->cr[CR_BIT_LT] = 0; ctx->cr[CR_BIT_GT] = 0; ctx->cr[CR_BIT_EQ] = ok; }"]
 
     def op_dcbz(self, i, ea):
-        return [f"zero_line({self._ea_x(i)});"]
+        return [f"zero_line({self._ea_x(i)}, {hx(ea)});"]
 
     def op_dcbf(self, i, ea):
         return [f"rt_dcache_flush({self._ea_x(i)});"]
@@ -322,49 +323,50 @@ class Emitter:
         return [f"{{ uint32 ea = {ea_expr}; uint64 v = ConvertToDoubleNoFTZ(rd32(ea)); "
                 f"FPR({i.rT}).fp0int = v; FPR({i.rT}).fp1int = v;" + (f" GPR({i.rA}) = ea;" if update else "") + " }"]
 
-    def _stfs(self, i, ea_expr, update):
-        return [f"{{ uint32 ea = {ea_expr}; wr32(ea, ConvertToSingleNoFTZ(FPR({i.rT}).fp0int));"
+    def _stfs(self, i, ea_expr, update, pc):
+        return [f"{{ uint32 ea = {ea_expr}; wr32(ea, ConvertToSingleNoFTZ(FPR({i.rT}).fp0int), {hx(pc)});"
                 + (f" GPR({i.rA}) = ea;" if update else "") + " }"]
 
     def _lfd(self, i, ea_expr, update):
         return [f"{{ uint32 ea = {ea_expr}; FPR({i.rT}).fp0int = rd64(ea);" + (f" GPR({i.rA}) = ea;" if update else "") + " }"]
 
-    def _stfd(self, i, ea_expr, update):
-        return [f"{{ uint32 ea = {ea_expr}; wr64(ea, FPR({i.rT}).fp0int);" + (f" GPR({i.rA}) = ea;" if update else "") + " }"]
+    def _stfd(self, i, ea_expr, update, pc):
+        return [f"{{ uint32 ea = {ea_expr}; wr64(ea, FPR({i.rT}).fp0int, {hx(pc)});" + (f" GPR({i.rA}) = ea;" if update else "") + " }"]
 
     def op_lfs(self, i, ea): return self._lfs(i, self._ea_d(i), False)
     def op_lfsu(self, i, ea): return self._lfs(i, self._ea_d(i), True)
     def op_lfsx(self, i, ea): return self._lfs(i, self._ea_x(i), False)
     def op_lfsux(self, i, ea): return self._lfs(i, self._ea_x(i), True)
-    def op_stfs(self, i, ea): return self._stfs(i, self._ea_d(i), False)
-    def op_stfsu(self, i, ea): return self._stfs(i, self._ea_d(i), True)
-    def op_stfsx(self, i, ea): return self._stfs(i, self._ea_x(i), False)
-    def op_stfsux(self, i, ea): return self._stfs(i, self._ea_x(i), True)
+    def op_stfs(self, i, ea): return self._stfs(i, self._ea_d(i), False, ea)
+    def op_stfsu(self, i, ea): return self._stfs(i, self._ea_d(i), True, ea)
+    def op_stfsx(self, i, ea): return self._stfs(i, self._ea_x(i), False, ea)
+    def op_stfsux(self, i, ea): return self._stfs(i, self._ea_x(i), True, ea)
     def op_lfd(self, i, ea): return self._lfd(i, self._ea_d(i), False)
     def op_lfdu(self, i, ea): return self._lfd(i, self._ea_d(i), True)
     def op_lfdx(self, i, ea): return self._lfd(i, self._ea_x(i), False)
     def op_lfdux(self, i, ea): return self._lfd(i, self._ea_x(i), True)
-    def op_stfd(self, i, ea): return self._stfd(i, self._ea_d(i), False)
-    def op_stfdu(self, i, ea): return self._stfd(i, self._ea_d(i), True)
-    def op_stfdx(self, i, ea): return self._stfd(i, self._ea_x(i), False)
-    def op_stfdux(self, i, ea): return self._stfd(i, self._ea_x(i), True)
+    def op_stfd(self, i, ea): return self._stfd(i, self._ea_d(i), False, ea)
+    def op_stfdu(self, i, ea): return self._stfd(i, self._ea_d(i), True, ea)
+    def op_stfdx(self, i, ea): return self._stfd(i, self._ea_x(i), False, ea)
+    def op_stfdux(self, i, ea): return self._stfd(i, self._ea_x(i), True, ea)
 
     def op_stfiwx(self, i, ea):
-        return [f"wr32({self._ea_x(i)}, (uint32)FPR({i.rT}).fp0int);"]
+        return [f"wr32({self._ea_x(i)}, (uint32)FPR({i.rT}).fp0int, {hx(ea)});"]
 
-    def _psq(self, i, load, ea_expr, update):
+    def _psq(self, i, load, ea_expr, update, pc=None):
         fn = "psq_load" if load else "psq_store"
-        return [f"{{ uint32 ea = {ea_expr}; {fn}(ctx, {i.frT}, ea, {i.I}, {'true' if i.W else 'false'});"
+        tail = f", {hx(pc)}" if not load else ""
+        return [f"{{ uint32 ea = {ea_expr}; {fn}(ctx, {i.frT}, ea, {i.I}, {'true' if i.W else 'false'}{tail});"
                 + (f" GPR({i.rA}) = ea;" if update and i.rA else "") + " }"]
 
     def op_psq_l(self, i, ea): return self._psq(i, True, f"{ra0(i)} + {hx(i.d)}", False)
     def op_psq_lu(self, i, ea): return self._psq(i, True, f"{ra0(i)} + {hx(i.d)}", True)
-    def op_psq_st(self, i, ea): return self._psq(i, False, f"{ra0(i)} + {hx(i.d)}", False)
-    def op_psq_stu(self, i, ea): return self._psq(i, False, f"{ra0(i)} + {hx(i.d)}", True)
+    def op_psq_st(self, i, ea): return self._psq(i, False, f"{ra0(i)} + {hx(i.d)}", False, ea)
+    def op_psq_stu(self, i, ea): return self._psq(i, False, f"{ra0(i)} + {hx(i.d)}", True, ea)
     def op_psq_lx(self, i, ea): return self._psq(i, True, self._ea_x(i), False)
-    def op_psq_stx(self, i, ea): return self._psq(i, False, self._ea_x(i), False)
+    def op_psq_stx(self, i, ea): return self._psq(i, False, self._ea_x(i), False, ea)
     def op_psq_lux(self, i, ea): return self._psq(i, True, self._ea_x(i), True)
-    def op_psq_stux(self, i, ea): return self._psq(i, False, self._ea_x(i), True)
+    def op_psq_stux(self, i, ea): return self._psq(i, False, self._ea_x(i), True, ea)
 
     # scalar floating point (PPCInterpreterFPU.cpp; PSE is always on, so singles copy to ps1) --
     @staticmethod

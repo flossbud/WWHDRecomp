@@ -16,13 +16,13 @@
 025F1770    whole       bl 025e15e0     f_025E15E0, before fapGm_Execute
 # fapGm_Execute (f_025D42EC): cCt_Counter after the process manager
 025D430C    whole       bl 0200e6ec     cCt_Counter: g_Counter.mCounter0/1
-# fpcM_Management (f_025DF948): deletion, priorities, creation, the execute pass and fapGm_After;
-# MtxInit, f_025F2B08 and the draw pass run every frame
+# fpcM_Management (f_025DF948): deletion, priorities, creation and fapGm_After; MtxInit, f_025F2B08,
+# the draw pass and the execute pass run every frame (on a half tick fpcM_Execute, overridden in
+# src/overrides/sixty.cpp, runs only converted processes)
 025DF9C4    whole       bl 025de024     fpcDt_Handler: process deletion
 025DF9C8    whole:r3=1  bl 025e0ee4     fpcPi_Handler: priority changes (asserted nonzero)
 025DF9EC    whole:r3=1  bl 025ddcec     fpcCt_Handler: process creation (asserted nonzero)
 025DFA14    whole       bctrl           fpcM_Management's pre-function (none from fapGm_Execute)
-025DFA20    whole       bl 025de788     fpcEx_Handler(fpcM_Execute): every process's execute
 025DFA44    whole       bctrl           fapGm_After: scene, overlap and camera managers
 025DFA58    whole       bl 02715310     the HD game manager's per-frame update (some_gfx_ptr; beside the menu controller f_027152B4)
 # dScnPly_Draw (f_025AF8A0), the play scene's draw: its simulation, as in the GameCube's

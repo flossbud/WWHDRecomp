@@ -471,6 +471,23 @@ converting; D21 "Step 1"):**
 - Left: the two warp fields; per-effect sound timing (a hook on the game's sound calls); the title
   route (boot and menus at 60 aren't measured: runs switch at swap 900, in play).
 
+**Step 3, conversion (the owner: the camera and Link first, measured at each stage, then they try
+it in a window; D21 "Step 2"):**
+- Stage 1, the machinery (done): converted processes (`WWHD_60FPS_CONVERT=476,168`) run every
+  frame with a time step (`g_rtStep` 0.5), the rest on whole ticks; 18 helpers with a time step
+  (`src/overrides/sixty_step.cpp`); step rules in the generator (`keep`, `*h`, `/h`, `k`, `d`,
+  `split`, after an instruction or `@` for it only); the step-doubling trial
+  (`WWHD_60FPS_TRIAL=476,168`, `tools/sixty/trial.py`), which finds a process's unconverted
+  per-tick code one tick at a time; `tools/sixty/rmw.py`; per-tick tracking
+  (`WWHD_STATE_TRACK`, `compare.py --track`); stores name their guest instruction to the journal.
+  Checked with the switch off: the fuzzer on every store mnemonic, both routes' traces, command
+  streams and sound, diff mode.
+- Stage 2, the camera (in progress): rules for `updateMonitor`, `Run`'s counters, the bank's
+  damping, the forward cushion and `followCamera` (about 90). Next: measure with the trial, then
+  `bumpCheck`, the shake and the other engines it reaches.
+- Stage 3, Link: the trial lists his per-tick code (speed from the feet's animation, his own
+  gravity and integration, animation frame tests, timers); `checkPass` needs an override.
+
 **How to measure** (all on the worker; dumps are game memory, keep them there):
 - `tools/sixty/run.sh tour /wwhd/data/m6/NAME` runs 30 and 60 (`WWHD_60FPS_FROM=900`,
   `WWHD_VIRTUAL_SPEED=3`) with the state probe; `python3 tools/sixty/compare.py OUT/30 OUT/60
@@ -487,7 +504,14 @@ converting; D21 "Step 1"):**
 - Finding code: `tools/ghidra/source_files.py` (functions by assert file), `tools/ghidra/disasm.py`,
   `decompile.py`, `tools/profile_tree.py` with `WWHD_PROFILE_DEPTH=64` (whole call chains),
   `/wwhd/data/ghidra-out/actor_profiles.tsv` (the 449 actor profiles).
-- Adding an override rebuilds all generated code (12 min); a tick rule rebuilds one shard.
+- Converting: `WWHD_60FPS_TRIAL=476 tools/sixty/run.sh tour /wwhd/data/m6/NAME 30`, then
+  `python3 tools/sixty/trial.py /wwhd/data/m6/NAME/30 --target 476` (what's left, by instruction);
+  `tools/ghidra/disasm.py ADDR... --out /wwhd/data/ghidra-out/asm` and `python3
+  tools/sixty/rmw.py ASM.s` (a function's read-modify-write stores); then rules in
+  `tick_rules.txt` with the decomp's line as evidence. At 60: `WWHD_60FPS_CONVERT=476
+  WWHD_STATE_TRACK=476 tools/sixty/run.sh tour OUT`, then `compare.py OUT/30 OUT/60 --track`.
+- Adding an override rebuilds all generated code (12 min); a tick or step rule rebuilds one shard;
+  `tools/recomp/runtime/ppc_ops.h` rebuilds everything.
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,

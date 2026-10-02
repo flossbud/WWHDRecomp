@@ -13,11 +13,12 @@
 extern uint8* memory_base;
 
 // Store journal: while g_rtJournalOn is set, every store first hands the runtime the range it is
-// about to overwrite, so that a diff-mode native run can be rewound (D8.2), or so that a real-time
-// fast path can tell whether a call wrote anything (the quiet watch, D19). Off otherwise.
+// about to overwrite and the guest instruction making it (0 from hand-written code), so that a
+// diff-mode native run can be rewound (D8.2), so that a real-time fast path can tell whether a call
+// wrote anything (the quiet watch, D19), or for the 60 fps tools (D21). Off otherwise.
 extern bool g_rtJournalOn;
-void rt_journal_store(uint32 ea, uint32 size);
-#define RT_STORE(ea, n) do { if (g_rtJournalOn) [[unlikely]] rt_journal_store((ea), (n)); } while (0)
+void rt_journal_store(uint32 ea, uint32 size, uint32 pc);
+#define RT_STORE(ea, n, pc) do { if (g_rtJournalOn) [[unlikely]] rt_journal_store((ea), (n), (pc)); } while (0)
 
 // 60 fps (D21): instructions listed in config/US_v0/tick_rules.txt run only on the game's whole
 // ticks. g_rtHalfTick is set for a frame that falls between two of them (60 fps only; never at 30
@@ -26,6 +27,13 @@ void rt_journal_store(uint32 ea, uint32 size);
 extern bool g_rtHalfTick;
 extern float g_rtStep;
 #define RT_WHOLE_TICK() (!g_rtHalfTick)
+// Step rules (config/US_v0/tick_rules.txt, tools/recomp/generate.py) for code run with a time step
+#define RT_STEPPED() (g_rtStep != 1.0f)
+static inline double rt_step_mul(double x) { return (double)(float)(x * g_rtStep); }
+static inline double rt_step_div(double x) { return (double)(float)(x / g_rtStep); }
+static inline double rt_step_approach(double k) { return k >= 0.0 && k <= 1.0 ? (double)(float)(1.0 - __builtin_pow(1.0 - k, (double)g_rtStep)) : k; }
+static inline double rt_step_damp(double d) { return d > 0.0 ? (double)(float)__builtin_pow(d, (double)g_rtStep) : d; }
+static inline uint32 rt_step_split(uint32 v) { const sint32 s = (sint32)v; return (uint32)(g_rtHalfTick ? s / 2 : s - s / 2); }
 
 // Guest time (design D6, revised for M4): every instruction costs one cycle of the thread's
 // timeslice, exactly as in Cemu's `while ((--remainingCycles) >= 0)` loop. When the slice is used
@@ -81,11 +89,11 @@ static inline uint8 rd8(uint32 ea) { return memory_base[ea]; }
 static inline uint16 rd16(uint32 ea) { uint16 v; memcpy(&v, memory_base + ea, 2); return __builtin_bswap16(v); }
 static inline uint32 rd32(uint32 ea) { uint32 v; memcpy(&v, memory_base + ea, 4); return __builtin_bswap32(v); }
 static inline uint64 rd64(uint32 ea) { uint64 v; memcpy(&v, memory_base + ea, 8); return __builtin_bswap64(v); }
-static inline void wr8(uint32 ea, uint8 v) { RT_STORE(ea, 1); memory_base[ea] = v; }
-static inline void wr16(uint32 ea, uint16 v) { RT_STORE(ea, 2); v = __builtin_bswap16(v); memcpy(memory_base + ea, &v, 2); }
-static inline void wr32(uint32 ea, uint32 v) { RT_STORE(ea, 4); v = __builtin_bswap32(v); memcpy(memory_base + ea, &v, 4); }
-static inline void wr64(uint32 ea, uint64 v) { RT_STORE(ea, 8); v = __builtin_bswap64(v); memcpy(memory_base + ea, &v, 8); }
-static inline void zero_line(uint32 ea) { ea &= ~31u; RT_STORE(ea, 32); memset(memory_base + ea, 0, 32); }   // dcbz
+static inline void wr8(uint32 ea, uint8 v, uint32 pc = 0) { RT_STORE(ea, 1, pc); memory_base[ea] = v; }
+static inline void wr16(uint32 ea, uint16 v, uint32 pc = 0) { RT_STORE(ea, 2, pc); v = __builtin_bswap16(v); memcpy(memory_base + ea, &v, 2); }
+static inline void wr32(uint32 ea, uint32 v, uint32 pc = 0) { RT_STORE(ea, 4, pc); v = __builtin_bswap32(v); memcpy(memory_base + ea, &v, 4); }
+static inline void wr64(uint32 ea, uint64 v, uint32 pc = 0) { RT_STORE(ea, 8, pc); v = __builtin_bswap64(v); memcpy(memory_base + ea, &v, 8); }
+static inline void zero_line(uint32 ea, uint32 pc = 0) { ea &= ~31u; RT_STORE(ea, 32, pc); memset(memory_base + ea, 0, 32); }   // dcbz
 
 // ---- condition register ------------------------------------------------------------------------
 static inline void cr_record(PPCInterpreter_t* ctx, uint32 r)       // Rc=1: CR0 from a result
@@ -155,13 +163,13 @@ static inline uint32 psq_read(uint32 ea, sint32 type)
 	return d;
 }
 
-static inline void psq_write(uint32 ea, sint32 type, uint32 v)
+static inline void psq_write(uint32 ea, sint32 type, uint32 v, uint32 pc)
 {
 	switch (psq_size(type))
 	{
-	case 1: wr8(ea, (uint8)v); break;
-	case 2: wr16(ea, (uint16)v); break;
-	default: wr32(ea, v); break;
+	case 1: wr8(ea, (uint8)v, pc); break;
+	case 2: wr16(ea, (uint16)v, pc); break;
+	default: wr32(ea, v, pc); break;
 	}
 }
 
@@ -181,13 +189,13 @@ static inline void psq_load(PPCInterpreter_t* ctx, int frD, uint32 ea, int gqr, 
 	ctx->fpr[frD].fp1 = (double)dequantize(d1, type, scale);
 }
 
-static inline void psq_store(PPCInterpreter_t* ctx, int frS, uint32 ea, int gqr, bool single)
+static inline void psq_store(PPCInterpreter_t* ctx, int frS, uint32 ea, int gqr, bool single, uint32 pc = 0)
 {
 	sint32 type = ctx->spr.UGQR[gqr] & 7;
 	uint8 scale = (ctx->spr.UGQR[gqr] >> 8) & 0x3F;
-	psq_write(ea, type, quantize((float)ctx->fpr[frS].fp0, type, scale));
+	psq_write(ea, type, quantize((float)ctx->fpr[frS].fp0, type, scale), pc);
 	if (!single)
-		psq_write(ea + psq_size(type), type, quantize((float)ctx->fpr[frS].fp1, type, scale));
+		psq_write(ea + psq_size(type), type, quantize((float)ctx->fpr[frS].fp1, type, scale), pc);
 }
 
 // ---- things the runtime provides (not the generated code) --------------------------------------

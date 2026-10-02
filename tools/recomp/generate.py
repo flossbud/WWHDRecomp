@@ -48,7 +48,19 @@ whole ticks when it runs 60 frames a second: its code is wrapped in `if (RT_WHOL
 is always true at 30 fps, so nothing changes there. A rule names the instruction it expects (a call:
 `bl TARGET` or `bctrl`; a store without update: its mnemonic), and a different instruction at that
 address is an error. `whole:r3=N` also sets r3 to N when a call is skipped, for callers that test
-its result.
+its result. Step rules, for the code of processes that run every frame with a time step h
+(g_rtStep, src/overrides/sixty.cpp; nothing changes while it is 1, at 30 fps always):
+  keep:SRC     on a half tick the instruction's destination gets SRC instead (a counter that
+               counts whole ticks: `addi r0, r3, 1` with keep:r3)
+  *h:REG /h:REG  after the instruction, REG times or divided by h (a per-tick amount; a distance
+               per step that should read per tick)
+  k:REG        after it, REG = 1 - (1 - REG)^h (an exponential approach's factor)
+  d:REG        after it, REG = REG^h (a damping factor)
+  split:REG    after it, an integer per-tick amount split between the whole tick and the half tick
+               (REG - REG/2, then REG/2: the two add up to the 30 Hz step exactly)
+  OP@REG       the same, for this instruction only: REG has its value back afterwards (unless the
+               instruction writes it), as in `x += (t - x) * k` with k@f2 on its fmadds
+REG is a register (r3, f1). These name any instruction by its mnemonic (`bl TARGET` for a call).
 """
 import bisect
 import collections
@@ -167,8 +179,12 @@ class Program:
             self.funcs = sorted(self.funcs + self.synthetic)
             self.entries |= {a for a, _, _ in self.synthetic}
 
+    STEP_OPS = {"*h": "rt_step_mul", "/h": "rt_step_div", "k": "rt_step_approach", "d": "rt_step_damp"}
+
     def load_tick_rules(self, path):
-        """address -> (r3 value or None, expected instruction text, what): see the docstring."""
+        """address -> (rule, argument, expected instruction text, what): see the docstring. rule is
+        whole (argument: r3's value or None), keep (argument: the source register), split or one
+        of STEP_OPS (argument: the register)."""
         rules = {}
         if not path.exists():
             return rules
@@ -182,21 +198,41 @@ class Program:
                 n_insn = 2 if words[2] == "bl" else 1
                 ea, rule, expect = int(words[0], 16), words[1], " ".join(words[2:2 + n_insn])
                 what = " ".join(words[2 + n_insn:])
-                kind, _, arg = rule.partition(":")
-                assert kind == "whole", f"tick_rules.txt:{n}: unknown rule {rule}"
-                r3 = None
-                if arg:
-                    key, _, value = arg.partition("=")
-                    assert key == "r3", f"tick_rules.txt:{n}: unknown rule argument {arg}"
-                    r3 = int(value, 0)
+                kind, sep, arg = rule.partition(":")
+                if "@" in rule:
+                    kind, sep, arg = rule.partition("@")
+                    assert kind in ("split",) or kind in self.STEP_OPS, f"tick_rules.txt:{n}: {rule}: @ takes a step operation"
+                    kind += "@"
+                if kind == "whole":
+                    value = None
+                    if arg:
+                        key, _, v = arg.partition("=")
+                        assert key == "r3", f"tick_rules.txt:{n}: unknown rule argument {arg}"
+                        value = int(v, 0)
+                else:
+                    assert kind.rstrip("@") in ("keep", "split") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert re.fullmatch(r"[rf]([12]?[0-9]|3[01])", arg), f"tick_rules.txt:{n}: {rule}: a register expected"
+                    assert kind.rstrip("@") != "split" or arg[0] == "r", f"tick_rules.txt:{n}: split takes an integer register"
+                    value = arg
                 assert self.function_containing(ea) is not None, f"tick_rules.txt:{n}: {ea:08X} is in no function"
                 assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
-                rules[ea] = (r3, expect, what)
+                rules[ea] = (kind, value, expect, what)
         return rules
 
     def check_tick_rule(self, ea, i):
         """The instruction a tick rule expects at ea, or an error message."""
-        r3, expect, _ = self.tick_rules[ea]
+        kind, r3, expect, _ = self.tick_rules[ea]
+        if kind != "whole":
+            have = i.op
+            if i.op == "b" and i.lk:
+                have = f"bl {self.rel24.get(ea, (ea + i.li) & 0xFFFFFFFF):08x}"
+            elif i.op in ("b", "bc", "bclr", "bcctr"):
+                return f"{ea:08X}: step rules don't apply to branches ({i.op})"
+            if have != expect.lower():
+                return f"{ea:08X}: step rule expects `{expect}`, the code has `{have}`"
+            if kind == "keep" and i.op not in KEEP_OPS:
+                return f"{ea:08X}: keep applies to {', '.join(sorted(KEEP_OPS))}, not {i.op}"
+            return None
         if i.op == "b" and i.lk:
             target = self.rel24.get(ea, (ea + i.li) & 0xFFFFFFFF)
             have = f"bl {target:08x}"
@@ -418,6 +454,45 @@ def emit_blocks(body, labels):
     return out
 
 
+KEEP_OPS = {"addi", "addic", "add", "fadds", "fsubs", "fadd", "fsub"}
+
+
+def reg_expr(reg):
+    return f"GPR({reg[1:]})" if reg[0] == "r" else f"FPR({reg[1:]})"
+
+
+def apply_tick_rule(rule, i, lines):
+    """An instruction's generated lines with its tick or step rule (see the docstring)."""
+    kind, arg, _, what = rule
+    if kind == "whole":
+        out = [f"if (RT_WHOLE_TICK()) {{   // tick rule: {what}"] + ["\t" + l for l in lines] + ["}"]
+        if arg is not None:
+            out += ["else", f"\tGPR(3) = {emit.hx(arg)};"]
+        return out
+    if kind == "keep":
+        dest = f"GPR({i.rD})" if i.op in ("addi", "addic", "add") else f"FPR({i.frD})"
+        return ([f"if (RT_WHOLE_TICK()) {{   // step rule: {what}"] + ["\t" + l for l in lines]
+                + ["} else {", f"\t{dest} = {reg_expr(arg)};", "}"])
+    reg = reg_expr(arg)
+    op = kind.rstrip("@")
+    if op == "split":
+        change = f"if (RT_STEPPED()) {reg} = rt_step_split({reg});"
+    elif arg[0] == "f":
+        fn = Program.STEP_OPS[op]
+        change = f"if (RT_STEPPED()) {{ {reg}.fp0 = {fn}({reg}.fp0); {reg}.fp1 = {reg}.fp0; }}"
+    else:
+        fn = Program.STEP_OPS[op]
+        change = f"if (RT_STEPPED()) {reg} = (uint32)(sint32){fn}((double)(sint32){reg});"
+    if not kind.endswith("@"):
+        return lines + [f"{change}   // step rule: {what}"]
+    # for this instruction only: the register gets its value back unless the instruction wrote it
+    assign = re.compile(re.escape(reg) + r"(\.fp[01](int)?)?\s*=(?!=)")
+    call = (i.op == "b" or i.op == "bcctr") and i.lk           # a call: the argument registers are the callee's
+    writes = call or any(assign.search(l) for l in lines)     # (or the instruction's own code assigns it)
+    out = [f"{{ const auto saved_ = {reg}; {change}   // step rule: {what}"] + ["\t" + l for l in lines]
+    return out + (["}"] if writes else [f"\t{reg} = saved_;", "}"])
+
+
 def generate_function(prog, em, start, end, errors):
     flow = FunctionFlow(prog, start, end, errors)
     em.flow = flow
@@ -443,14 +518,12 @@ def generate_function(prog, em, start, end, errors):
             errors.append(f"{ea:08X}: {e}")
             flow.impure.append("error")
             lines = [f"rt_bad_branch(ctx, {emit.hx(ea)}, 0u); return;"]
-        if ea in prog.tick_rules:                  # D21: only on whole ticks at 60 fps
+        if ea in prog.tick_rules:                  # D21: only on whole ticks at 60 fps, or with a time step
             problem = prog.check_tick_rule(ea, i)
             if problem:
                 errors.append(problem)
-            r3, _, what = prog.tick_rules[ea]
-            lines = [f"if (RT_WHOLE_TICK()) {{   // tick rule: {what}"] + ["\t" + l for l in lines] + ["}"]
-            if r3 is not None:
-                lines += ["else", f"\tGPR(3) = {emit.hx(r3)};"]
+            else:
+                lines = apply_tick_rule(prog.tick_rules[ea], i, lines)
         body.append((ea, i.op, lines))
         last = i
     # __restrict: guest memory (memory_base) never overlaps the register state, so the compiler may

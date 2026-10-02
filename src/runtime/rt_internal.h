@@ -17,7 +17,7 @@ void rt_bad_branch(PPCInterpreter_t* ctx, uint32 ea, uint32 target);
 void rt_trap(PPCInterpreter_t* ctx, uint32 ea);
 void rt_dcache_flush(uint32 ea);
 extern bool g_rtJournalOn;
-void rt_journal_store(uint32 ea, uint32 size);
+void rt_journal_store(uint32 ea, uint32 size, uint32 pc);
 void rt_yield(PPCInterpreter_t* ctx, uint32 pc);
 
 namespace wwhd::rt

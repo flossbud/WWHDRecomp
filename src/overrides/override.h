@@ -36,7 +36,8 @@ namespace wwhd::rt
 	void CountIdleWait(bool byMessage);
 }
 
-// The store census (src/overrides/sixty.cpp): while set, with g_rtJournalOn, every store generated
-// code makes is handed to it with the host address it was made from (src/runtime/diff.cpp)
+// The 60 fps tools (src/overrides/sixty.cpp): while set, with g_rtJournalOn, every store generated
+// code makes is handed to it before it is made, with the guest instruction making it (0 from
+// hand-written code; src/runtime/diff.cpp)
 extern bool g_rtJournalOn;
-extern void (*g_rtStoreCensus)(uint32 ea, uint32 size, void* from);
+extern void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc);

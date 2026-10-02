@@ -44,7 +44,7 @@
 #include <unordered_set>
 
 bool g_rtJournalOn = false;
-void (*g_rtStoreCensus)(uint32 ea, uint32 size, void* from) = nullptr;
+void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc) = nullptr;
 
 namespace wwhd::rt
 {
@@ -56,12 +56,12 @@ namespace wwhd::rt
 	static std::vector<uint8> s_journalBytes;          // the bytes each store overwrote
 }
 
-void rt_journal_store(uint32 ea, uint32 size)
+void rt_journal_store(uint32 ea, uint32 size, uint32 pc)
 {
 	using namespace wwhd::rt;
-	if (g_rtStoreCensus) [[unlikely]]                // the 60 fps store census (overrides/sixty.cpp)
+	if (g_rtStoreCensus) [[unlikely]]                // the 60 fps tools (overrides/sixty.cpp)
 	{
-		g_rtStoreCensus(ea, size, __builtin_return_address(0));
+		g_rtStoreCensus(ea, size, pc);
 		return;
 	}
 	if (g_quiet.token) [[unlikely]]                  // the fast paths' quiet watch (dispatch.cpp), not a diff run
