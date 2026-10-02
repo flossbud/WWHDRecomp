@@ -19,6 +19,14 @@ extern bool g_rtJournalOn;
 void rt_journal_store(uint32 ea, uint32 size);
 #define RT_STORE(ea, n) do { if (g_rtJournalOn) [[unlikely]] rt_journal_store((ea), (n)); } while (0)
 
+// 60 fps (D21): instructions listed in config/US_v0/tick_rules.txt run only on the game's whole
+// ticks. g_rtHalfTick is set for a frame that falls between two of them (60 fps only; never at 30
+// fps, so there every instruction runs). g_rtStep is the time step of a converted step, in 30 Hz
+// ticks (1 whenever 60 fps is off). The runtime owns both (src/runtime/dispatch.cpp).
+extern bool g_rtHalfTick;
+extern float g_rtStep;
+#define RT_WHOLE_TICK() (!g_rtHalfTick)
+
 // Guest time (design D6, revised for M4): every instruction costs one cycle of the thread's
 // timeslice, exactly as in Cemu's `while ((--remainingCycles) >= 0)` loop. When the slice is used
 // up, the thread yields right here, before the instruction at pc, and runs it once scheduled again

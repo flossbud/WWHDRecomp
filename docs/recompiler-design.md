@@ -374,13 +374,21 @@ jobs draw each scene's views through `f_027D6BB0` (`gfx_RenderSceneView`), and a
 target is the GamePad's 854x480 rectangle is the ITEMS menu for a GamePad that isn't there (9% of
 the draws, about 1% of CPU). Forced with the virtual clock (`WWHD_SKIP_GAMEPAD=1`), exactly those
 draws go and the TV's frames stay byte-identical; unforced, every check runs the game's code.
-The 60 fps work (D21, WW-4) adds three, in `src/overrides/sixty.cpp`: m_Do_main's frame body
-(`f_025F172C`, held to whole ticks at 60 fps), `fopAc_Execute` (`f_025D475C`, noted for the state
-probe) and sead's `fw_procFrame` (`f_0274C264`, watched by the store census); the WW-3 prototype's
-override of the tick (`f_02746790`) is gone. With 60 fps and the probe off each calls its original.
-Adding or removing an override changes `funcs.h` (the `orig_f_X` declarations), which every shard
-includes: the next build compiles all generated code again (about 12 minutes on the worker), so
-batch them.
+The 60 fps work (D21, WW-4) adds four, in `src/overrides/sixty.cpp`: sead's `fw_procFrame`
+(`f_0274C264`: whole or half tick, the random stream, the rollback, the store census), m_Do_main's
+frame body (`f_025F172C`: the state probe after whole ticks), `fpcM_Execute` (`f_025DE58C`) and
+`fopAc_Execute` (`f_025D475C`), which note the processes and actors that executed; the WW-3
+prototype's override of the tick (`f_02746790`) is gone. With 60 fps and the probe off each calls
+its original. Adding or removing an override changes `funcs.h` (the `orig_f_X` declarations), which
+every shard includes: the next build compiles all generated code again (about 12 minutes on the
+worker), so batch them.
+
+**Tick rules** (D21, 2026-10-02) are the per-instruction counterpart: `config/US_v0/tick_rules.txt`
+lists calls and stores, by address, that run only on the game's whole ticks at 60 fps; the generator
+wraps each in `if (RT_WHOLE_TICK())` (`g_rtHalfTick`, set by the runtime per frame, never at 30 fps)
+and checks that the instruction at the address is the one the rule names. They change only the
+shards that contain them, so they rebuild in seconds, and they are how the generator's view of
+every call site reaches the 60 fps work.
 
 ### D10. Cemu's boot-time code patches
 
@@ -1119,7 +1127,7 @@ instead. `PipelineDesc` is unchanged.
 ### D21. 60 fps (M6): what the game does each frame
 
 *Started 2026-10-01 (WW-3); research done 2026-10-01 (WW-4): findings, a probe and the options
-below; the owner's choice is recorded at the end.* **Decision (the owner, 2026-10-01): native
+below.* **The owner chose option 1, mixed rate with verified conversion (2026-10-02).** **Decision (the owner, 2026-10-01): native
 60 fps, then uncapped.** The game's own logic is to run at 60 ticks a second (and in the end at any
 rate) and play exactly as at 30: the same speeds, jump arcs, timers, animations, cutscenes and sound
 sync. Not interpolation: no extra frames drawn between 30 Hz ticks.
@@ -1247,8 +1255,8 @@ game times is possible only for what still runs at 30; converted motion matches 
 (the arc correction makes the common case exact at whole ticks), random decisions diverge once
 anything draws at a different rate, and cutscenes need fractional JStudio frames.
 
-**Options** (put to the owner 2026-10-01):
-1. *Mixed rate, convert and verify one system at a time (recommended).* Every frame runs at 60; the
+**Options** (put to the owner 2026-10-01; **chosen 2026-10-02: 1**):
+1. *Mixed rate, convert and verify one system at a time (recommended, chosen).* Every frame runs at 60; the
    game's frame is split at its seams (process execute, the draw pass's simulation, the HD
    per-frame work, sound, `g_Counter`), and everything not yet converted runs exactly as at 30 on
    whole ticks, so its speed is always right. A converted system steps every tick with a time step
@@ -1268,6 +1276,76 @@ anything draws at a different rate, and cutscenes need fractional JStudio frames
 Considered and ruled out: running half steps speculatively from the last state and rolling them
 back through the store journal (exact at whole ticks for free, but it draws frames between 30 Hz
 ticks, which the owner ruled out); interpolation (the WW-3 plan).
+
+**The steps from here** (the owner checks each):
+1. *The measuring tool, with an exact baseline.* With nothing converted, the 60-tick run equals the
+   30-tick run at every whole tick: the leaks the census found (the HD environment update and its
+   random draw, the HD frame counters, the play scene's draw simulation, `g_Counter`) run on whole
+   ticks only. Then captures at equal game times and the frames between, sound starts by game
+   time, and reports with actor names.
+2. *Conversion, one system at a time*, each against the baseline (D21's formulas, dt-aware central
+   functions, generator rules for open-coded steps): camera, Link, animation, the boat, particles,
+   HUD, actors route by route; the owner judges the feel on the desktop, windowed.
+3. *Uncapped:* a variable step with a 30 Hz phase accumulator, presentation without vsync, frame
+   pacing.
+
+**Step 1: the measuring tool and the baseline (WW-4, in progress).** At 60 fps every frame is
+either a *whole tick* (the game's 30 Hz logic, exactly as at 30) or a *half tick* between two; the
+baseline is "nothing converted": the 60-tick run must equal the 30-tick run at every whole tick.
+* **Tick rules** (`config/US_v0/tick_rules.txt`, applied by `tools/recomp/generate.py`): 37
+  instructions, each a call or a store at an exact address, that run only on whole ticks
+  (`if (RT_WHOLE_TICK())` around their generated code; always true at 30 fps, so every check is
+  unchanged). Each names the instruction it expects, so a wrong address is a generator error. They
+  hold to whole ticks: m_Do_main's frame counter and calls, `cCt_Counter`, `fpcM_Management`'s
+  deletion, priorities, creation, execute pass and `fapGm_After` (its draw pass runs every frame);
+  in the play scene's draw (`dScnPly_Draw`, `f_025AF8A0`, matched call by call with the GameCube's)
+  collision resolution and `ClrMoveFlag`, the next-stage requests (through `dComIfG_resetToOpening`,
+  r3=1), vibration, magma, `PrepareMass`, grass, trees, wood, flowers, poison light, moving
+  collision, snap, particle calc 3D/2D/menu, the `g_Counter.mTimer` store, `MassClear` and
+  `Ccsp()->Draw()` (which rewrites the mass manager in WWHD); and in the game task's calc the HD
+  frame counters, the input manager, `f_0270870C` and the environment update. `fw_procFrame`'s
+  override decides per frame (`g_rtHalfTick`).
+* **The random stream** (`cM_rnd`'s state at 0x101FF9D4) is saved before a half tick's frame and
+  put back after: the lighting that every actor's draw calls (`f_025615B8`, through a
+  `settingTevStruct`-like function) takes random numbers (flicker), so drawing at 60 moved the one
+  stream all decisions use.
+* **Draws leave no trace** (`WWHD_60FPS_ROLLBACK`, default on): during a half tick's frame every
+  store the main thread makes into a process that executed in the last whole tick (actors, the
+  camera, the environment, the HUD and menus, scenes) or into `g_dComIfG_gameInfo` (0x1046F0B0,
+  `f_025200D4`'s singleton) is journaled through the store hook and put back when the frame ends
+  (by then `gfx_EndFrame`'s `GX2DrawDone` has let the GPU finish with it). The census found why:
+  draws write their lighting blend state (`tevStr`), culling flags and display-list pointers into
+  their process, some advance animations or counters there, and some run logic (the raft's light
+  flicker, `f_02363374`, picks random targets from its draw; the HUD's draw moves counters in the
+  game info).
+* **Where the tour route stands** (the dock from the 100% save, 60 fps from swap 900; walking,
+  camera swings, the pause menu and its pages): with the rules alone the first actors diverged one
+  tick after the switch; with the random stream and the rollback, all 134 actors equal the 30-tick
+  run at every whole tick through the walk, the camera swing and the whole pause menu, until the menu
+  closes. Left: (a) the menu's open and close sounds start 1.5 ticks early (voice starts at game
+  frames 1562.5 and 1981.5 instead of 1564 and 1983) and the actors resume a tick early: the HD menu
+  (and HUD) animate their layouts every frame, in heap objects outside the processes, which the
+  rollback doesn't reach; (b) Link's list of effect or sound handles (+0x64F4 to +0x651C) holds other
+  pointers, allocation order, nothing in his state; (c) a few render globals (the sea's draw counter
+  at 0x1046DAFC, render pointers) and the sound threads' state, which move with timing.
+* **Pictures.** With nothing of the game's frame on half ticks (`WWHD_60FPS_HALF=none`) the whole
+  ticks' captures equal the 30-tick run's pixel for pixel, and a half tick repeats the frame before
+  it exactly: the HD renderer keeps its draw lists and renders them again when the game's frame
+  doesn't run. So the draw pass has to run on half ticks only for what is converted.
+* **Sound.** At the OS level both runs make the same calls (14 voice starts, 956 volume changes on
+  the tour route); WWHD mixes its effects inside its own sound engine, so per-effect timing needs a
+  hook on the game's sound calls (`mDoAud_seStart` and friends), still to come.
+* **Measuring needs** (`tools/sixty/run.sh`): the switch at a frame in play (`WWHD_60FPS_FROM`, menus
+  and loading take game time) and `WWHD_VIRTUAL_SPEED=3` (with the virtual clock all three cores
+  share one clock; at 60 fps a frame with game logic took more than one vsync until the emulated CPU
+  was made faster; both runs use the same speed, and their game clocks then agree within 1 ms).
+* **Tools:** `tools/sixty/run.sh ROUTE OUT` (both rates, the state probe, `SIXTY_TRACE` for an OS-call
+  trace), `compare.py` (by game frame: actors' hashes, fields, globals; `--names`), `census.py` (what
+  half ticks write, by recompiled function), `actor_names.py` (WWHD's process numbers to the
+  decomp's names: 319 of 449, by assert files and order), `WWHD_STATE_CENSUS_CHAINS=1` and
+  `WWHD_STATE_CENSUS_TRACE=addr` (guest call chains from the stack's back chain),
+  `WWHD_STATE_DUMP_GLOBALS=ticks` (all of .data/.bss and every actor at those ticks),
+  `WWHD_STATE_CENSUS=2` (whole ticks too).
 
 ## Milestones
 

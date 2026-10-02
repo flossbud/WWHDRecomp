@@ -1,0 +1,54 @@
+# Instructions that run only on the game's whole ticks at 60 fps (docs/recompiler-design.md D21).
+# At 60 fps the game's frame runs every vsync; a frame between two of its 30 Hz ticks (a half tick)
+# draws, but the game's own logic must not advance. tools/recomp/generate.py wraps each listed
+# instruction in `if (RT_WHOLE_TICK())`, which is always true at 30 fps, so nothing changes there.
+# A rule names the instruction it expects: a call (`bl TARGET`, `bctrl`) or a plain store (its
+# mnemonic); `whole:r3=N` also sets r3 when a skipped call's caller tests the result. Evidence: the
+# GameCube decomp's functions (zeldaret/tww) matched call by call, and the 60 fps state probe and
+# store census (src/overrides/sixty.cpp, tools/sixty).
+#
+# address   rule        instruction     what
+#
+# m_Do_main's frame body (f_025F172C): the frame counter, the heap check, f_025E15E0
+025F1750    whole       stw             m_Do_main frame counter (DAT_1048d0a8) +1
+025F1768    whole       bl 025f1654     heap check every n frames
+025F176C    whole       bl 025f2d74     mDoCPd read (empty in WWHD)
+025F1770    whole       bl 025e15e0     f_025E15E0, before fapGm_Execute
+# fapGm_Execute (f_025D42EC): cCt_Counter after the process manager
+025D430C    whole       bl 0200e6ec     cCt_Counter: g_Counter.mCounter0/1
+# fpcM_Management (f_025DF948): deletion, priorities, creation, the execute pass and fapGm_After;
+# MtxInit, f_025F2B08, the draw pass and the HD hook run every frame
+025DF9C4    whole       bl 025de024     fpcDt_Handler: process deletion
+025DF9C8    whole:r3=1  bl 025e0ee4     fpcPi_Handler: priority changes (asserted nonzero)
+025DF9EC    whole:r3=1  bl 025ddcec     fpcCt_Handler: process creation (asserted nonzero)
+025DFA14    whole       bctrl           fpcM_Management's pre-function (none from fapGm_Execute)
+025DFA20    whole       bl 025de788     fpcEx_Handler(fpcM_Execute): every process's execute
+025DFA44    whole       bctrl           fapGm_After: scene, overlap and camera managers
+# dScnPly_Draw (f_025AF8A0), the play scene's draw: its simulation, as in the GameCube's
+025AF938    whole       bl 02518798     dComIfG_Ccsp()->Move(): collision resolution
+025AF944    whole       bl 024ee9c8     dComIfG_Bgsp()->ClrMoveFlag()
+025AF95C    whole:r3=1  bl 025202f8     dComIfG_resetToOpening (1: skips the next-stage requests)
+025B00C0    whole       bl 025cbb90     vibration Run()
+025B00CC    whole       bl 02524ca0     executeMagma
+025B0124    whole       bl 02516e1c     dComIfG_Ccsp()->PrepareMass()
+025B0130    whole       bl 02524da0     executeGrass
+025B013C    whole       bl 02524ea0     executeTree
+025B0148    whole       bl 02524fa0     executeWood
+025B0154    whole       bl 025250a0     executeFlower
+025B0158    whole       bl 0256c8fc     dKyr_poison_light_colision
+025B0170    whole       bctrl           dComIfG_Bgsp()->Move(): moving collision
+025B0174    whole       bl 025be8dc     dSnap_Execute
+025B019C    whole       bl 025a81a0     particle calc3D
+025B01A8    whole       bl 025a8148     particle calc2D
+025B01B8    whole       stw             cCt_execCounter: g_Counter.mTimer +1
+025B01C4    whole       bl 025187d0     dComIfG_Ccsp()->MassClear()
+025B01D0    whole       bl 025a81f8     particle calcMenu
+025B01EC    whole       bl 025cb6d4     vibration Pause() (menu or hit-stop)
+025B01F8    whole       bl 025187d0     dComIfG_Ccsp()->MassClear() (menu or hit-stop)
+025B0204    whole       bl 025a81f8     particle calcMenu (menu or hit-stop)
+025B02B8    whole       bl 0251879c     dComIfG_Ccsp()->Draw(): rewrites the mass manager (gameInfo +0x4ef8)
+# the game task's calc (f_0203593C): the HD per-frame logic around m_Do_main's frame body
+0203596C    whole       bl 020357cc     HD frame counters (DAT_1018f338...)
+02035998    whole       bl 02617af4     the input manager (something_button_related)
+020359D8    whole       bl 0270870c     f_0270870C: f_025E1988(0x7070)
+020359DC    whole       bl 0255e854     the environment update: cLib_addCalc smoothing, a cM_rndF a frame

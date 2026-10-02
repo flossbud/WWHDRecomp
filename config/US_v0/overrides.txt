@@ -9,3 +9,4 @@
 025F172C    src/overrides/sixty.cpp            the game's frame body (m_Do_main): at 60 fps, the draw pass only between whole ticks (D21)
 025D475C    src/overrides/sixty.cpp            fopAc_Execute, every actor's execute: noted for the state probe (D21)
 0274C264    src/overrides/sixty.cpp            fw_procFrame, sead's whole frame: watched by the 60 fps store census (D21)
+025DE58C    src/overrides/sixty.cpp            fpcM_Execute, every process's execute: noted for the 60 fps half ticks' rollback (D21)

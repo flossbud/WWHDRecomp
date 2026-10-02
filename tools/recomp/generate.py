@@ -42,6 +42,13 @@ left to src/overrides, which defines it (and may call orig_f_X). Every reference
 calls, falling through, the function table, and with it the runtime's indirect calls) names f_X, so
 all of them reach the override; the linker reports a listed function without an override, and an
 override of a function that isn't listed, as a missing or duplicate symbol.
+
+Tick rules (D21): an instruction listed in config/US_v0/tick_rules.txt runs only on the game's
+whole ticks when it runs 60 frames a second: its code is wrapped in `if (RT_WHOLE_TICK())`, which
+is always true at 30 fps, so nothing changes there. A rule names the instruction it expects (a call:
+`bl TARGET` or `bctrl`; a store without update: its mnemonic), and a different instruction at that
+address is an error. `whole:r3=N` also sets r3 to N when a call is skipped, for callers that test
+its result.
 """
 import bisect
 import collections
@@ -153,10 +160,57 @@ class Program:
                     a = int(word[0], 16)
                     assert a in self.entries, f"overrides.txt: {a:08X} is not a function entry"
                     self.overrides.add(a)
+        # D21: instructions that run only on whole ticks at 60 fps
+        self.tick_rules = self.load_tick_rules(CONFIG / "tick_rules.txt")
         self.synthetic = self.helper_entries()
         if self.synthetic:
             self.funcs = sorted(self.funcs + self.synthetic)
             self.entries |= {a for a, _, _ in self.synthetic}
+
+    def load_tick_rules(self, path):
+        """address -> (r3 value or None, expected instruction text, what): see the docstring."""
+        rules = {}
+        if not path.exists():
+            return rules
+        with open(path) as f:
+            for n, line in enumerate(f, 1):
+                words = line.split("#", 1)[0].split()
+                if not words:
+                    continue
+                assert len(words) >= 3, f"tick_rules.txt:{n}: address, rule and instruction expected"
+                # the instruction is `bl TARGET`, `bctrl` or a store's mnemonic; what follows says what it is
+                n_insn = 2 if words[2] == "bl" else 1
+                ea, rule, expect = int(words[0], 16), words[1], " ".join(words[2:2 + n_insn])
+                what = " ".join(words[2 + n_insn:])
+                kind, _, arg = rule.partition(":")
+                assert kind == "whole", f"tick_rules.txt:{n}: unknown rule {rule}"
+                r3 = None
+                if arg:
+                    key, _, value = arg.partition("=")
+                    assert key == "r3", f"tick_rules.txt:{n}: unknown rule argument {arg}"
+                    r3 = int(value, 0)
+                assert self.function_containing(ea) is not None, f"tick_rules.txt:{n}: {ea:08X} is in no function"
+                assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
+                rules[ea] = (r3, expect, what)
+        return rules
+
+    def check_tick_rule(self, ea, i):
+        """The instruction a tick rule expects at ea, or an error message."""
+        r3, expect, _ = self.tick_rules[ea]
+        if i.op == "b" and i.lk:
+            target = self.rel24.get(ea, (ea + i.li) & 0xFFFFFFFF)
+            have = f"bl {target:08x}"
+        elif i.op == "bcctr" and i.lk and (i.bo & 0x14) == 0x14:
+            have = "bctrl"
+        elif i.op in STORES and not i.op.endswith(("u", "ux")) and i.op not in ("stwcx.", "stmw", "stswi"):
+            have = i.op
+        else:
+            return f"{ea:08X}: tick rules apply to calls and plain stores, not {i.op}"
+        if have != expect.lower():
+            return f"{ea:08X}: tick rule expects `{expect}`, the code has `{have}`"
+        if r3 is not None and not have.startswith(("bl", "bctrl")):
+            return f"{ea:08X}: r3= only applies to calls"
+        return None
 
     def helper_entries(self):
         """D7: epilogues branch into the middle of the GHS save/restore runs. Each such target
@@ -389,6 +443,14 @@ def generate_function(prog, em, start, end, errors):
             errors.append(f"{ea:08X}: {e}")
             flow.impure.append("error")
             lines = [f"rt_bad_branch(ctx, {emit.hx(ea)}, 0u); return;"]
+        if ea in prog.tick_rules:                  # D21: only on whole ticks at 60 fps
+            problem = prog.check_tick_rule(ea, i)
+            if problem:
+                errors.append(problem)
+            r3, _, what = prog.tick_rules[ea]
+            lines = [f"if (RT_WHOLE_TICK()) {{   // tick rule: {what}"] + ["\t" + l for l in lines] + ["}"]
+            if r3 is not None:
+                lines += ["else", f"\tGPR(3) = {emit.hx(r3)};"]
         body.append((ea, i.op, lines))
         last = i
     # __restrict: guest memory (memory_base) never overlaps the register state, so the compiler may
@@ -521,7 +583,8 @@ def main():
     reasons = collections.Counter(r for f in flows.values() for r in set(f.impure))
     print(f"pure: {len(pure)} of {len(flows)} functions; impure by themselves: {dict(reasons)}; "
           f"import/weak sites: {len(sites)}; stores: {sum(stores.values())}")
-    print(f"{len(prog.funcs)} functions ({len(prog.synthetic)} synthesised GHS helper entries, {len(prog.overrides)} overridden) "
+    print(f"{len(prog.funcs)} functions ({len(prog.synthetic)} synthesised GHS helper entries, {len(prog.overrides)} overridden, "
+          f"{len(prog.tick_rules)} tick rules) "
           f"in {len(shards)} shards ({changed} rewritten), {len(prog.imports)} imports, {len(errors)} errors -> {out}")
     kinds = collections.Counter(e.split(": ", 1)[1].split(" ")[0] for e in errors)
     for e in errors[:200]:

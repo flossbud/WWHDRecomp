@@ -1,6 +1,5 @@
-// 60 fps (docs/recompiler-design.md D21, M6), the first step: the game's own frame held to 30 ticks a
-// second while the rest of the frame runs 60 times a second, and a state probe that compares a
-// 60-tick run with a 30-tick run at equal game times.
+// 60 fps (docs/recompiler-design.md D21, M6): which frames are the game's ticks, and a state probe
+// that compares a 60-tick run with a 30-tick run at equal game times.
 //
 // f_025F172C is m_Do_main's frame body as the HD port has it: sead's calc of the game's task
 // (f_0203593C) calls it once a frame. It counts frames (a heap check every n), calls f_025E15E0, then
@@ -10,11 +9,14 @@
 //
 // WWHD_60FPS=1: the game presents every vsync (GX2SetSwapInterval's 2 becomes 1), so its frame runs
 // 60 times a second; with WWHD_60FPS_FROM=N, from swap N on (the route reaches play at 30 fps first:
-// loading and menus take game time, so a route's inputs would land elsewhere). On a whole tick (an
-// even number of swaps from there) the body runs as the game's; on the half tick between, only
-// fpcM_Management's draw pass: MtxInit, f_025F2B08, fpcDw_Handler (every
-// process's draw) and the HD renderer's hook. The game's logic then runs 30 times a second, as at
-// 30 fps, and each of its states is drawn twice; subsystems move to 60 from here (D21).
+// loading and menus take game time, so a route's inputs would land elsewhere). A frame an even
+// number of swaps from there is a whole tick; one between is a half tick (g_rtHalfTick, set here
+// for the whole frame by sead's fw_procFrame, f_0274C264). On a half tick the game's frame runs, and
+// the instructions listed in config/US_v0/tick_rules.txt (the process manager's create, delete and
+// execute passes, the play scene's simulation, the counters, the HD per-frame logic) don't: the
+// game's logic runs 30 times a second, as at 30 fps, and each of its states is drawn twice. Systems
+// move to 60 from there, one at a time (D21). WWHD_60FPS_HALF=none skips the frame body on half
+// ticks instead, nothing of the game's frame at all, to compare.
 //
 // The state probe (WWHD_STATE_DUMP=dir, at 30 or 60 fps): after each whole tick, dir/ticks.txt gets
 // the tick, the swap count and the guest clock, every actor that executed (fopAc_Execute, f_025D475C,
@@ -43,6 +45,7 @@ namespace
 	}
 
 	std::vector<uint32> s_actors;                  // the actors that executed this whole tick, in order
+	std::vector<uint32> s_processes;               // every process that executed this whole tick
 	constexpr uint32 kGlobal = 0x474C4F42u;         // state.bin record tags: "GLOB", "ACTR"
 	constexpr uint32 kActor = 0x41435452u;
 	constexpr uint32 kGlobalsLow = 0x1018C0C0u, kGlobalsHigh = 0x104DA1C8u;   // .data and .bss
@@ -68,22 +71,17 @@ namespace
 	};
 	std::unordered_map<CensusKey, uint64, CensusHash> s_census;
 
-	// WWHD_STATE_CENSUS_TRACE=addr: for stores to that address, the guest call chain too (the back
-	// chain of the storing thread's stack: each frame's saved return address), up to 8 callers
-	std::unordered_map<std::string, uint64> s_traces;
-
-	void CensusTrace(uint32 ea)
+	// The guest call chain of the storing thread: each frame's saved return address along the stack's
+	// back chain, up to `depth` callers, as text
+	std::string GuestChain(int depth)
 	{
-		static const uint32 watched = [] { const char* e = getenv("WWHD_STATE_CENSUS_TRACE"); return e ? (uint32)strtoul(e, nullptr, 16) : 0u; }();
-		if (ea != watched || watched == 0)
-			return;
 		PPCInterpreter_t* cpu = PPCInterpreter_getCurrentInstance();
 		if (!cpu)
-			return;
-		char chain[160];
+			return "";
+		char chain[16 * 9 + 1];
 		int n = 0;
 		uint32 frame = cpu->gpr[1];
-		for (int depth = 0; depth < 8 && frame && frame < 0xF0000000u; depth++)
+		for (int d = 0; d < depth && frame && frame < 0xF0000000u; d++)
 		{
 			const uint32 caller = rd32(frame);         // the caller's frame (the back chain)
 			if (!caller || caller <= frame)
@@ -91,7 +89,21 @@ namespace
 			n += snprintf(chain + n, sizeof(chain) - n, " %08x", rd32(caller + 4));
 			frame = caller;
 		}
-		s_traces[chain]++;
+		return std::string(chain, n);
+	}
+
+	// WWHD_STATE_CENSUS_TRACE=addr: for stores to that address, the guest call chain (8 callers);
+	// WWHD_STATE_CENSUS_CHAINS=1: for every store into an actor or g_dComIfG_gameInfo, the target
+	// and the first 4 callers (dir/census_chains.txt), to find the call sites to put rules on
+	std::unordered_map<std::string, uint64> s_traces, s_chains;
+	constexpr uint32 kGameInfo = 0x1046F0B0u, kGameInfoSize = 0x6000u;   // f_025200D4's singleton
+
+	void CensusTrace(uint32 ea)
+	{
+		static const uint32 watched = [] { const char* e = getenv("WWHD_STATE_CENSUS_TRACE"); return e ? (uint32)strtoul(e, nullptr, 16) : 0u; }();
+		if (ea != watched || watched == 0)
+			return;
+		s_traces[GuestChain(8)]++;
 	}
 
 	void CensusStore(uint32 ea, uint32 size, void* from)
@@ -109,6 +121,16 @@ namespace
 			k.where = ea - it->low;
 		}
 		s_census[k]++;
+		static const bool chains = [] { const char* e = getenv("WWHD_STATE_CENSUS_CHAINS"); return e && atoi(e) == 1; }();
+		if (chains && (k.name || (ea >= kGameInfo && ea < kGameInfo + kGameInfoSize)))
+		{
+			char target[48];
+			if (k.name)
+				snprintf(target, sizeof(target), "actor %u +%x", k.name - 1, k.where & ~3u);
+			else
+				snprintf(target, sizeof(target), "gameInfo +%x", (ea - kGameInfo) & ~3u);
+			s_chains[std::string(target) + GuestChain(4)]++;
+		}
 	}
 
 	void CensusWrite()
@@ -123,19 +145,71 @@ namespace
 		for (const auto& [k, n] : s_census)
 			fprintf(f, "%lx %u %x %llu\n", (unsigned long)k.from, k.name, k.where, (unsigned long long)n);
 		fclose(f);
-		if (!s_traces.empty())
-			if (FILE* t = fopen((dir + "/census_traces.txt").c_str(), "w"))
-			{
-				for (const auto& [chain, n] : s_traces)
-					fprintf(t, "%llu%s\n", (unsigned long long)n, chain.c_str());
-				fclose(t);
-			}
+		for (const auto& [name, map] : { std::pair{ "/census_traces.txt", &s_traces }, std::pair{ "/census_chains.txt", &s_chains } })
+			if (!map->empty())
+				if (FILE* t = fopen((dir + name).c_str(), "w"))
+				{
+					for (const auto& [chain, n] : *map)
+						fprintf(t, "%llu %s\n", (unsigned long long)n, chain.c_str());
+					fclose(t);
+				}
 	}
+
+	// ---- half-tick draws leave no trace in actors (WWHD_60FPS_ROLLBACK, default on) -----------------
+	// A half tick runs every process's draw. Draws change their process too: the lighting's blend
+	// state (settingTevStruct), culling flags, display-list pointers, and for some logic (the raft's
+	// light flicker, f_02363374, picks new random targets from its draw; the HUD's draw moves
+	// counters in g_dComIfG_gameInfo). A process whose logic runs at 30 must reach its next tick as it
+	// left the last one, so every store the main thread makes into a process that executed in the last
+	// whole tick, or into g_dComIfG_gameInfo, is journaled (its old bytes) and put back when the half
+	// tick's frame ends: the draw shows its frame and leaves nothing behind.
+	bool Rollback()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ROLLBACK"); return !e || atoi(e) != 0; }();
+		return on;
+	}
+
+	struct Saved { uint32 ea, size; uint8 bytes[32]; };
+	std::vector<Saved> s_saved;
+	PPCInterpreter_t* s_frameThread = nullptr;      // the main thread: the one running fw_procFrame
+
+	void RollbackStore(uint32 ea, uint32 size)
+	{
+		if (PPCInterpreter_getCurrentInstance() != s_frameThread || size > 32)
+			return;
+		if (ea < kGameInfo || ea >= kGameInfo + kGameInfoSize)
+		{
+			auto it = std::upper_bound(s_ranges.begin(), s_ranges.end(), ea, [](uint32 v, const ActorRange& r) { return v < r.low; });
+			if (it == s_ranges.begin() || ea >= (--it)->high)
+				return;
+		}
+		Saved& e = s_saved.emplace_back();
+		e.ea = ea;
+		e.size = size;
+		memcpy(e.bytes, memory_base + ea, size);
+	}
+
+	void RollbackRestore()
+	{
+		for (auto it = s_saved.rbegin(); it != s_saved.rend(); ++it)
+			memcpy(memory_base + it->ea, it->bytes, it->size);
+		s_saved.clear();
+	}
+
+	void HalfTickStore(uint32 ea, uint32 size, void* from);
 
 	bool Census()
 	{
 		static const bool on = [] { const char* e = getenv("WWHD_STATE_CENSUS"); return Probe() && e && atoi(e) == 1; }();
 		return on;
+	}
+
+	void HalfTickStore(uint32 ea, uint32 size, void* from)
+	{
+		if (Census())
+			CensusStore(ea, size, from);
+		if (Rollback())
+			RollbackStore(ea, size);
 	}
 
 	uint64 Hash(uint32 ea, uint32 size)
@@ -157,13 +231,14 @@ namespace
 		if (!hashes || !state || !ticks)
 			return;
 		fprintf(ticks, "%u %u %llu\n", tick, wwhd::os::SwapCount(), (unsigned long long)wwhd::os::Timebase());
-		const bool full = tick % every == 0;
+
 		auto put32 = [](FILE* f, uint32 v) { fwrite(&v, 4, 1, f); };
 		auto putBytes = [&](uint32 tag, uint32 a, uint32 b, uint32 ea, uint32 size) {
 			put32(state, tag); put32(state, tick); put32(state, a); put32(state, b); put32(state, ea); put32(state, size);
 			fwrite(memory_base + ea, 1, size, state);
 		};
-		// WWHD_STATE_DUMP_GLOBALS=t1,t2,...: all of .data and .bss at these ticks (3.3 MB each)
+		// WWHD_STATE_DUMP_GLOBALS=t1,t2,...: all of .data and .bss (3.3 MB), and every actor's bytes, at
+		// these ticks
 		static const std::vector<uint32> globalTicks = [] {
 			std::vector<uint32> v;
 			if (const char* e = getenv("WWHD_STATE_DUMP_GLOBALS"))
@@ -175,8 +250,10 @@ namespace
 				}
 			return v;
 		}();
-		if (std::find(globalTicks.begin(), globalTicks.end(), tick) != globalTicks.end())
+		const bool chosen = std::find(globalTicks.begin(), globalTicks.end(), tick) != globalTicks.end();
+		if (chosen)
 			putBytes(kGlobal, 100, 0, kGlobalsLow, kGlobalsHigh - kGlobalsLow);
+		const bool full = tick % every == 0 || chosen;   // the chosen ticks get the actors' bytes too
 		if (full)
 		{
 			putBytes(kGlobal, 0, 0, 0x101FF558u, 12);      // g_Counter: mCounter0, mCounter1, mTimer
@@ -206,94 +283,109 @@ namespace
 		if (full)
 			fflush(state);
 	}
-
-	// the draw pass of fpcM_Management (f_025DF948), as it calls it: MtxInit, f_025F2B08,
-	// fpcDw_Handler(fpcM_DrawIterater, fpcM_Draw), and f_02715310(some_gfx_ptr) when that is set
-	void DrawPass(PPCInterpreter_t* __restrict ctx)
-	{
-		ctx->spr.LR = 0x025DF970u;
-		f_0200FAC4(ctx);
-		ctx->spr.LR = 0x025DF974u;
-		f_025F2B08(ctx);
-		GPR(3) = 0x025DF908u;
-		GPR(4) = 0x025DF904u;
-		ctx->spr.LR = 0x025DFA38u;
-		f_025DE37C(ctx);
-		GPR(3) = rd32(0x101F8344u);                    // some_gfx_ptr, the hook's argument
-		if (GPR(3) != 0)
-		{
-			ctx->spr.LR = 0x025DFA5Cu;
-			f_02715310(ctx);
-		}
-	}
 }
 
 // m_Do_main's frame body (see the top)
 void f_025F172C(PPCInterpreter_t* __restrict ctx)
 {
-	const uint32 from = wwhd::rt::SixtyFrom();      // ~0 when 60 fps is off
-	if (from == ~0u && !Probe())
+	if (g_rtHalfTick)
+	{
+		static const bool skip = [] { const char* e = getenv("WWHD_60FPS_HALF"); return e && strcmp(e, "none") == 0; }();
+		if (skip)
+			return;
+		[[clang::musttail]] return orig_f_025F172C(ctx);   // the tick rules hold its logic to whole ticks
+	}
+	if (!Probe() && wwhd::rt::SixtyFrom() == ~0u)
 		[[clang::musttail]] return orig_f_025F172C(ctx);
 	const uint32 swap = wwhd::os::SwapCount();
-	const uint32 lr = ctx->spr.LR;
-	static uint32 lastSwap = ~0u;
-	if (swap == lastSwap)
-	{
-		static bool warned = false;
-		if (!warned)
-			cemuLog_log(LogType::Force, "wwhd sixty: the frame body ran twice at swap {}: whole and half ticks are out of step", swap);
-		warned = true;
-	}
-	lastSwap = swap;
-	if (swap == from && from != 0)
-	{
-		wwhd_SetSwapInterval(1);                       // from here on the game presents every vsync
-		cemuLog_log(LogType::Force, "wwhd sixty: 60 fps from swap {}", swap);
-	}
-	if (swap >= from && (swap - from) % 2 != 0)
-	{
-		// a half tick: WWHD_60FPS_HALF=draw (default) runs the draw pass, =none nothing of this frame
-		static const bool draw = [] { const char* e = getenv("WWHD_60FPS_HALF"); return !e || strcmp(e, "none") != 0; }();
-		if (draw)
-			DrawPass(ctx);
-		ctx->spr.LR = lr;
-		return;
-	}
 	s_actors.clear();
+	s_processes.clear();
 	orig_f_025F172C(ctx);
 	if (Probe())
 		Dump(wwhd::rt::GameFrame(swap));
-	if (Census())
+	if (Census() || Rollback())
 	{
 		s_ranges.clear();
-		for (uint32 actor : s_actors)
-			if (const uint32 profile = rd32(actor + 0x10); profile && rd32(profile + 0x10) <= 0x40000)
-				s_ranges.push_back({ actor, actor + rd32(profile + 0x10), rd16(actor + 0x08) });
+		for (uint32 proc : s_processes)
+			if (const uint32 profile = rd32(proc + 0x10); profile && rd32(profile + 0x10) <= 0x40000)
+				s_ranges.push_back({ proc, proc + rd32(profile + 0x10), rd16(proc + 0x08) });
 		std::sort(s_ranges.begin(), s_ranges.end(), [](const ActorRange& a, const ActorRange& b) { return a.low < b.low; });
 	}
 }
 
 // fw_procFrame, sead's procFrame_: one whole frame (the tick, the draw, the present, the vsync wait).
-// With the store census on, a half tick's frame is watched from end to end.
+// At 60 fps it decides whether the frame is a whole or a half tick (see the top); with the store
+// census on, a half tick's frame is watched from end to end.
 void f_0274C264(PPCInterpreter_t* __restrict ctx)
 {
-	const uint32 from = wwhd::rt::SixtyFrom();
-	const uint32 swap = wwhd::os::SwapCount();
-	if (!Census() || swap < from || (swap - from) % 2 == 0)
+	const uint32 from = wwhd::rt::SixtyFrom();      // ~0 when 60 fps is off
+	if (from == ~0u)
 		[[clang::musttail]] return orig_f_0274C264(ctx);
-	static bool once = [] { atexit(CensusWrite); at_quick_exit(CensusWrite); return true; }();
-	(void)once;
-	g_rtStoreCensus = CensusStore;
-	g_rtJournalOn = true;
+	const uint32 swap = wwhd::os::SwapCount();
+	if (swap == from && from != 0)
+	{
+		wwhd_SetSwapInterval(1);                       // from here on the game presents every vsync
+		cemuLog_log(LogType::Force, "wwhd sixty: 60 fps from swap {}", swap);
+	}
+	g_rtHalfTick = swap >= from && (swap - from) % 2 != 0;
+	g_rtStep = swap >= from ? 0.5f : 1.0f;
+	// WWHD_STATE_CENSUS=2 watches whole ticks' frames too (from the switch on), for the trace
+	static const bool censusAll = [] { const char* e = getenv("WWHD_STATE_CENSUS"); return Probe() && e && atoi(e) == 2; }();
+	if (!g_rtHalfTick && censusAll && swap >= from)
+	{
+		static bool once = [] { atexit(CensusWrite); at_quick_exit(CensusWrite); return true; }();
+		(void)once;
+		g_rtStoreCensus = CensusStore;
+		g_rtJournalOn = true;
+		orig_f_0274C264(ctx);
+		g_rtJournalOn = false;
+		g_rtStoreCensus = nullptr;
+		return;
+	}
+	if (!g_rtHalfTick)
+		[[clang::musttail]] return orig_f_0274C264(ctx);
+	// The game's random stream (cM_rnd, f_02019788: Wichmann-Hill state at 101FF9D4) belongs to its
+	// ticks: actors' draws take numbers from it too (the lighting's flicker, f_025615B8, through
+	// settingTevStruct), so a half tick's frame would move it on. Drawing it gets the numbers the next
+	// whole tick's draws will get, and the stream is put back.
+	uint32 rng[3] = { rd32(0x101FF9D4u), rd32(0x101FF9D8u), rd32(0x101FF9DCu) };
+	const bool watch = Census() || Rollback();
+	if (Census())
+	{
+		static bool once = [] { atexit(CensusWrite); at_quick_exit(CensusWrite); return true; }();
+		(void)once;
+	}
+	if (watch)
+	{
+		s_frameThread = PPCInterpreter_getCurrentInstance();
+		g_rtStoreCensus = HalfTickStore;
+		g_rtJournalOn = true;
+	}
 	orig_f_0274C264(ctx);
-	g_rtJournalOn = false;
-	g_rtStoreCensus = nullptr;
+	if (watch)
+	{
+		g_rtJournalOn = false;
+		g_rtStoreCensus = nullptr;
+		RollbackRestore();
+	}
+	wr32(0x101FF9D4u, rng[0]);
+	wr32(0x101FF9D8u, rng[1]);
+	wr32(0x101FF9DCu, rng[2]);
+}
+
+// fpcM_Execute: every process's execute goes through it (fpcM_Management's execute pass, f_025DE788):
+// actors, the camera, the environment, the HUD and menus, scenes. Noted for the half ticks' rollback.
+void f_025DE58C(PPCInterpreter_t* __restrict ctx)
+{
+	if (wwhd::rt::SixtyFrom() != ~0u || Census())
+		s_processes.push_back(GPR(3));
+	[[clang::musttail]] return orig_f_025DE58C(ctx);
 }
 
 // fopAc_Execute: every actor's execute goes through it (from fpcM_Management's execute pass)
 void f_025D475C(PPCInterpreter_t* __restrict ctx)
 {
-	if (Probe())
+	if (Probe() || wwhd::rt::SixtyFrom() != ~0u)
 		s_actors.push_back(GPR(3));
 	[[clang::musttail]] return orig_f_025D475C(ctx);
 }

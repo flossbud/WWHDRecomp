@@ -1,14 +1,15 @@
-# Handoff: WWHD recomp, state as of 2026-10-01 (end of WW-3)
+# Handoff: WWHD recomp, state as of 2026-10-02 (WW-4 in progress)
 
 Read this first, then `CLAUDE.md`, `docs/recompiler-design.md` (decisions D1–D21, milestones,
 status paragraphs) and the READMEs in `src/`, `tools/reference/`, `tools/recomp/`, `tools/worker/`.
-WW-3's work is on branch `ww-3` (worktree `/srv/projects/WWHDRecomp/.worktrees/ww-3`, based on
-`ww02`), pushed to the `worker` remote. The next task starts a branch of its own from it.
+WW-4's work is on branch `ww-4` (worktree `/srv/projects/WWHDRecomp/.worktrees/ww-4`, based on
+`ww-3`), pushed to the `worker` remote.
 
-**The next task (the owner's decision, 2026-10-01): native 60 fps, then an uncapped frame rate.**
-Not interpolation: the game's own logic has to run at 60 ticks a second and come out right, and
-in the end at any rate. "Next task" below has what is known and where to start; design D21 has the
-findings so far.
+**The task (the owner's decision, 2026-10-01): native 60 fps, then an uncapped frame rate.**
+Not interpolation: the game's own logic runs at 60 ticks a second and comes out right, and in the
+end at any rate. **The approach (the owner, 2026-10-02): mixed rate, verified** (D21's option 1):
+frames run at 60, everything not yet converted runs exactly as at 30 on whole ticks, and systems
+are converted one at a time against a measured baseline. "WW-4: 60 fps" below has where it stands.
 
 ## What the project is
 
@@ -51,7 +52,7 @@ startup time and CPU use matter (phones throttle when hot). Design D19 and D20 h
   replaces files by rename.
 - **Commits:** `git -c user.name="flossbud" -c user.email="224492734+flossbud@users.noreply.github.com" commit …`, with
   the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Push with
-  `git push worker ww-3`. Commit when a step is done and its checks pass.
+  `git push worker ww-4` (the current branch). Commit when a step is done and its checks pass.
 - **Every rename or retype needs evidence** (`config/US_v0/symbols.csv` has an evidence column).
   A function counts as "done" only once an external check passes (fixture or trace diff).
 - **Talking to the owner:** they often read on a phone. Put choices as a numbered list at the end
@@ -443,70 +444,47 @@ Pipelines come from shader variants, not state, so nothing was changed.
   run the game's code: save, menus and warp identical, diff mode clean.
 - Tools left: `WWHD_BACKTRACE`, `WWHD_SHOT_DRC` (`src/README.md`), `tools/ghidra/decompile.py`.
 
-### 11. 60 fps (M6): research started (WW-3); the next task carries it on
+### 11. 60 fps (M6): research started (WW-3); WW-4 carries it on
 
-See "The next task" below and design D21.
+See "WW-4: 60 fps" below and design D21.
 
-## The next task: native 60 fps, then an uncapped frame rate
+## WW-4: 60 fps (in progress)
 
-**The goal** (the owner, 2026-10-01): the game's own logic runs natively at 60 ticks a second and
-plays exactly as it does at 30 (the same speeds, jump arcs, timers, animations, cutscenes and sound
-sync), and in the end at any frame rate: uncapped, with a variable time step. **Not
-interpolation**, which was the design's earlier plan (D9, D21) and is what other ports do. The
-owner wants a solution of our own, and a recompilation can do things an emulator patch can't (see
-"Where to start", 3).
+**Done (step 1 of the owner's plan, research; committed b14d39f):** WWHD's frame mapped down to
+every process's execute and draw; where the per-tick steps are (a study of the GameCube decomp);
+prior art (the Wind Waker Recomp's experimental 60 Hz mode is the closest); the probe that showed
+the game runs at 60 frames a second with its logic held to whole ticks; the options. D21 has it all.
 
-**What is known** (D21 has the details):
-- **The frame loop** is sead's framework on the main thread (core 1). Main sets
-  `GX2SetSwapInterval(2)` once. `fw_runLoop` calls `fw_procFrame` forever: `game_procFrameBody`
-  (the tick `f_02746790`, sead's method-tree calc of the root task, then `RenderDisplay_draw` and
-  `RenderDisplay_calcGPU`), `game_procPresent` (swap, ProcUI) and `fw_waitForVsync` (waits until
-  every swap has flipped). The framework's vtable is at 0x10004E88; names and evidence are in
-  `symbols.csv`.
-- **Play is frame-locked, scenery follows the clock.** With `WWHD_VSYNC_HZ=120` and the virtual
-  clock (60 game frames a second), frame N of the save route has Link, the camera, the boat and the
-  HUD exactly as at 30 fps, and the clouds, waves and a fish's shadow elsewhere. Link stood still in
-  those frames: check it with movement too.
-- **The prototype** (`WWHD_60FPS=1`, real time only, `wwhd::rt::SixtyFps`): our
-  `GX2SetSwapInterval` turns the 2 into 1, and the game then presents every vsync, a steady 60.1 fps
-  with 16.7 ms frames on the worker, at double game speed. Skipping the tick on alternate frames
-  (`src/overrides/tick.cpp`) hangs: drawing waits on render jobs that only the tick starts.
-- **Prior art:** the GameCube version's 60 fps hacks unlock the frame limit and change one global
-  (CPU ticks per second divided by 30, which the engine's frame wait reads) to slow the game down,
-  and physics comes out wrong (Dolphin forum threads). In a frame-locked engine the per-tick steps
-  are everywhere: movement, gravity (per tick squared, so halving a velocity isn't enough), timers
-  counted in ticks, animation frame steps (J3D's frame controls), particles (JPA), the camera,
-  collision, events and cutscenes, and sound cues timed to them.
+**In progress (step 2, the measuring tool and an exact baseline):** D21 "Step 1" has the details.
+- Tick rules (`config/US_v0/tick_rules.txt`, 37) hold the game's logic to whole ticks; the random
+  stream is saved and put back around half ticks; the rollback undoes what draws write into
+  processes and the game info on half ticks.
+- On the tour route all 134 actors equal the 30-tick run at every whole tick until the pause menu
+  closes; the HD menu's layout animations still run every frame (menu sounds 1.5 ticks early,
+  actors resume a tick early). Next: find those layout calls (heap objects outside processes) and
+  hold them to whole ticks; then captures in this mode, a hook on the game's sound calls, the
+  other routes (sail first: wind, sea, the boat).
+- Then report to the owner and start step 3 (conversion: camera, Link, animation, ...).
 
-**Where to start** (suggestions, not a spec):
-1. **Research.** Find WWHD's time base: sead's framework frame rate, any global step or time scale
-   the game's code reads, and how the HD port's actor code (TWW's `fopAc`, `dCamera`, J3D, JPA)
-   advances per tick. `zeldaret/tww` (the GameCube decomp) has names and structures; the Ghidra
-   project and `WWHD_BACKTRACE` connect them to WWHD's addresses. Write findings into D21 as you go.
-2. **Measure before fixing.** The harness can run the game deterministically at 30 and at 60 ticks
-   a second (virtual clock, `WWHD_VSYNC_HZ=120` or swap interval 1) and compare game state at equal
-   game times: tick 2N at 60 against tick N at 30, in guest memory (actors, the camera, timers), in
-   captures, and in OS calls. A field that diverges is a per-tick quantity to handle; one that
-   matches needs nothing. Route inputs are keyed by frame, so map them (frame F at 30 is 2F at 60).
-   This turns "what breaks" into a list you can work down.
-3. **Fix what diverges, in a way of our own.** Overrides (D9) of the update functions are the
-   obvious tool. The recompiler is the unusual one: it sees every float constant, every load and
-   store of an actor's fields and every call site, so a per-tick step can be scaled where the
-   generated code uses it, systematically, rather than patched address by address.
-4. **Acceptance.** At 60 ticks, the state, captures and positions at equal game times match the
-   30-tick run (clock-driven scenery aside); the owner judges the feel on the desktop, windowed;
-   with 60 fps off, every existing check stays identical (`stream_check`, diff mode, G3).
-5. **Then uncapped:** a variable time step through the same mechanism, presentation without vsync
-   (mailbox), and frame pacing in our frontend.
+**How to measure** (all on the worker; dumps are game memory, keep them there):
+- `tools/sixty/run.sh tour /wwhd/data/m6/NAME` runs 30 and 60 (`WWHD_60FPS_FROM=900`,
+  `WWHD_VIRTUAL_SPEED=3`) with the state probe; `python3 tools/sixty/compare.py OUT/30 OUT/60
+  --from 880 --names /wwhd/data/ghidra-out/actor_names.tsv` lines them up by game frame.
+- `WWHD_STATE_DUMP_GLOBALS=t1,t2,...` dumps every actor and all of .data/.bss at those ticks;
+  `WWHD_STATE_CENSUS=1` (half ticks) or `2` (every frame) with `WWHD_STATE_CENSUS_CHAINS=1` or
+  `WWHD_STATE_CENSUS_TRACE=addr` finds who writes what (`tools/sixty/census.py`).
+- `WWHD_60FPS_HALF=none` skips the game's frame on half ticks (the exact reference: whole ticks'
+  pictures equal the 30-tick run's; half ticks repeat the frame before). `WWHD_60FPS_ROLLBACK=0`
+  turns the rollback off.
+- `SIXTY_TRACE=snd_core.` records each run's OS calls of that prefix (`hle_trace.py dump`).
+- Finding code: `tools/ghidra/source_files.py` (functions by assert file), `tools/ghidra/disasm.py`,
+  `decompile.py`, `tools/profile_tree.py` with `WWHD_PROFILE_DEPTH=64` (whole call chains),
+  `/wwhd/data/ghidra-out/actor_profiles.tsv` (the 449 actor profiles).
+- Adding an override rebuilds all generated code (12 min); a tick rule rebuilds one shard.
 
-**Keep in mind:** keep it behind a switch (`WWHD_60FPS` today) and out of the deterministic checks
-until it has checks of its own. Android: 60 ticks doubles the game's CPU (the scheduler thread is
-7-9% busy at 30 on the desktop, far more on a phone), and phones throttle.
-
-**Tools for it:** `WWHD_VSYNC_HZ` (vsync rate, virtual clock and real time), `WWHD_60FPS` and
-`WWHD_60FPS_AFTER=n` (the prototype), `WWHD_BACKTRACE=lib.Function[:rN=value]` (guest call
-chains), `WWHD_SHOT_DRC` (the GamePad's image), `tools/ghidra/decompile.py` and `lookup.py`,
-`CEMU_SHOT_FRAMES` with `compare_frames.py`, the profiler (`WWHD_PROFILE`).
+**Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
+routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
+phones throttle; converted systems only cost what they convert.
 
 ## Waiting on the owner
 
