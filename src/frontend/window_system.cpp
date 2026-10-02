@@ -243,6 +243,10 @@ static SDL_Window* OpenWindow()
 		return nullptr;
 	if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
 		wwhd::Fatal(fmt::format("SDL video: {}", SDL_GetError()));
+	// The gamepad plays without the window having the focus: SDL drops a controller's events when
+	// no window of ours is focused, and a window started from a service (a remote session's
+	// systemd-run) or behind another on Wayland isn't, so the game got no input at all
+	SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 	if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
 		cemuLog_log(LogType::Force, "wwhd: no gamepads: {}", SDL_GetError());   // the keyboard still works
 	wwhd::os::input::SetRumble(Rumble);
@@ -325,8 +329,8 @@ static void PrepareShaders(SDL_Window* window)
 			wwhd::gpu::SaveShaderCache();
 			_exit(0);   // like Cemu's own exit path mid-game: skip global destructors
 		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: StorePixelSize(window); break;
-		case SDL_EVENT_WINDOW_FOCUS_GAINED: g_windowInfo.app_active = true; break;
-		case SDL_EVENT_WINDOW_FOCUS_LOST: g_windowInfo.app_active = false; PublishInput(); break;
+		case SDL_EVENT_WINDOW_FOCUS_GAINED: g_windowInfo.app_active = true; cemuLog_log(LogType::Force, "wwhd: window focused"); break;
+		case SDL_EVENT_WINDOW_FOCUS_LOST: g_windowInfo.app_active = false; cemuLog_log(LogType::Force, "wwhd: window lost the focus"); PublishInput(); break;
 		case SDL_EVENT_KEY_DOWN:
 			if (!ev.key.repeat && (ev.key.key == SDLK_F11 || (ev.key.key == SDLK_RETURN && (ev.key.mod & SDL_KMOD_ALT))))
 				SDL_SetWindowFullscreen(window, !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN));

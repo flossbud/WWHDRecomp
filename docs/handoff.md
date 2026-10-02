@@ -525,6 +525,13 @@ it in a window; D21 "Step 2"):**
     reads the float back at 60 (`g_rtSixty`, drawing too). Now the wake changes every frame alike.
     The sea's CPU waves are flat in WWHD (the GPU makes them), so the sea isn't converted; its
     ripple texture's scroll counted every draw (twice as fast at 60) and now counts whole ticks.
+- The owner's second try (2026-10-02): A did nothing. The window, started from a remote session
+  with `systemd-run`, had no focus on Wayland, and SDL drops a controller's events then; the
+  gamepad now plays without focus (`SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS`), and the log notes
+  focus changes. Scripted input was never affected (the game reads the controller on whole ticks
+  only, so no press is lost to a half tick: checked with a probe). Booting at 60 logs six sead
+  asserts (J3DDrawBuffer entries, from Link's title-screen draw, and one more), this morning's
+  build too and with nothing converted; not at 30: open.
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
   CPU, vsyncs missed; `tools/sixty/frames.py` summarises), `WWHD_PROFILE` (`tools/profile_report.py`
   on the worker with the same build). On the desktop, `~/wwhd-test` is ours to deploy to and run
