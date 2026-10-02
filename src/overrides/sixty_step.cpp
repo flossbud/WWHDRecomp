@@ -489,3 +489,30 @@ void f_024F9A48(PPCInterpreter_t* __restrict ctx)
 	history.haveBefore = true;
 	history.lastStep = step;
 }
+
+// ---- particles (JParticle, d_particle.cpp) ----------------------------------------------------------
+
+// JPABaseEmitter::calcCreatePtcls (emitter r3): emission. With the particle calc converted
+// (WWHD_60FPS_PARTICLES) an emitter emits on whole ticks' cadence (its rate step's timer counts
+// ticks: tick_rules.txt), except the two strips drawn through their particles: the boat's wake
+// (dPa_trackEcallBack, callback vtable 0x10052268: execute f_025A9E6C chases the alpha by 5 and 10
+// and lays the particles on the water, draw f_025AA12C a triangle strip through each 3) and its bow
+// waves (dPa_waveEcallBack, vtable 0x100521A8: executeAfter f_025A92F4, draw f_025A9508 a strip
+// through each one). A strip's newest particles are its end at the boat; at a tick's cadence that
+// end lagged the boat by half a tick on half ticks and the wake flickered. They emit every frame at
+// a frame's count (twice the particles: the same strip through twice the points; their draws spread
+// the texture over however many there are, and the wake's room, 150 segments, holds the 80 that 40
+// ticks of life make).
+void f_0281F878(PPCInterpreter_t* __restrict ctx)
+{
+	if (!Stepped())
+		[[clang::musttail]] return orig_f_0281F878(ctx);
+	const uint32 cb = rd32(GPR(3) + 0x1E4);
+	const uint32 vtable = cb ? rd32(cb) : 0;
+	if (vtable != 0x10052268u && vtable != 0x100521A8u)
+		[[clang::musttail]] return orig_f_0281F878(ctx);
+	const float step = g_rtStep;
+	g_rtStep = 1.0f;
+	orig_f_0281F878(ctx);
+	g_rtStep = step;
+}

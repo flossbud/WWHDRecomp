@@ -46,6 +46,21 @@ namespace wwhd::gpu
 	{
 		uint64 Mix(uint64 h, uint64 v) { return (h ^ v) * 0x100000001B3ull + 0x9E3779B97F4A7C15ull; }
 
+		uint64 HashBytes(const uint8* p, size_t n)
+		{
+			uint64 h = 0xCBF29CE484222325ull;
+			size_t i = 0;
+			for (; i + 8 <= n; i += 8)
+			{
+				uint64 w;
+				memcpy(&w, p + i, 8);
+				h = (h ^ w) * 0x100000001B3ull;
+			}
+			for (; i < n; i++)
+				h = (h ^ p[i]) * 0x100000001B3ull;
+			return h;
+		}
+
 		uint64 Fnv(const uint8* p, size_t n)
 		{
 			uint64 h = 0xCBF29CE484222325ull;
@@ -1148,6 +1163,63 @@ namespace wwhd::gpu
 					w[0] & 7, (w[4] >> 16) & 0xFFF, tu.word4.get_BASE_LEVEL(), tu.word5.get_LAST_LEVEL(), surface ? "surface" : "memory",
 					ps->dec->textureUsesDepthCompare[unit] ? " cmp" : "");
 			}
+			// the data the draw reads: its vertex shader's constants (registers and uniform blocks) and
+			// its vertex buffers, hashed (whether a draw sees new data from frame to frame)
+			{
+				uint64 hu = 0xCBF29CE484222325ull, hv = hu;
+				auto mix = [](uint64& h, const uint8* p, size_t n) { h ^= HashBytes(p, n) + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2); };
+				if (r.SQ_CONFIG.get_DX9_CONSTS())
+					mix(hu, (const uint8*)(regs + mmSQ_ALU_CONSTANT0_0 + 0x400), 256 * 16);
+				for (uint32 i = 0; i < 16; i++)
+				{
+					const MPTR ub = regs[mmSQ_VTX_UNIFORM_BLOCK_START + i * 7];
+					if (ub)
+						mix(hu, memory_getPointerFromPhysicalOffset(ub), std::min<uint32>(regs[mmSQ_VTX_UNIFORM_BLOCK_START + i * 7 + 1] + 1, 65536));
+					const MPTR vb = regs[mmSQ_VTX_ATTRIBUTE_BLOCK_START + i * 7];
+					if (vb)
+						mix(hv, memory_getPointerFromPhysicalOffset(vb), std::min<uint32>(regs[mmSQ_VTX_ATTRIBUTE_BLOCK_START + i * 7 + 1] + 1, 1u << 20));
+				}
+				// what the vertex shader itself reads: its uniform registers, remapped entries and blocks
+				uint64 hs = 0xCBF29CE484222325ull;
+				auto take = [&](const uint8* p, size_t n) { mix(hs, p, n); };
+				const uint32 aluConst = 0x400;
+				if (vs->uniforms.offset_uniformRegister >= 0)
+					take((const uint8*)(regs + mmSQ_ALU_CONSTANT0_0 + aluConst), vs->uniforms.count_uniformRegister * 16);
+				if (vs->uniforms.offset_remapped >= 0)
+				{
+					if (r.SQ_CONFIG.get_DX9_CONSTS())
+						for (auto& e : vs->dec->list_remappedUniformEntries_register)
+							take((const uint8*)(regs + mmSQ_ALU_CONSTANT0_0 + aluConst + e.indexOffset / 4), 16);
+					else
+						for (auto& g : vs->dec->list_remappedUniformEntries_bufferGroups)
+						{
+							const MPTR phys = regs[mmSQ_VTX_UNIFORM_BLOCK_START + g.kcacheBankIdOffset / 4];
+							for (auto& e : g.entries)
+								if (phys)
+									take(memory_base + phys + e.indexOffset, 16);
+						}
+				}
+				for (uint8 index : vs->uniformBuffers)
+				{
+					const MPTR phys = regs[mmSQ_VTX_UNIFORM_BLOCK_START + index * 7];
+					uint32 size = regs[mmSQ_VTX_UNIFORM_BLOCK_START + index * 7 + 1] + 1;
+					for (auto& q : vs->dec->list_quickBufferList)
+						if (q.index == index)
+							size = std::min<uint32>(size, q.size);
+					if (phys)
+						take(memory_getPointerFromPhysicalOffset(phys), std::min<uint32>(size, 65536));
+				}
+				// the vertex buffers the fetch shader reads, each over the first 256 bytes
+				std::string vb;
+				for (uint32 i = 0; i < 16; i++)
+				{
+					const MPTR a = regs[mmSQ_VTX_ATTRIBUTE_BLOCK_START + i * 7];
+					const uint32 n = regs[mmSQ_VTX_ATTRIBUTE_BLOCK_START + i * 7 + 1] + 1;
+					if (a && n > 1)
+						vb += fmt::format(" b{} {:08x}:{:08x}", i, a, (uint32)HashBytes(memory_getPointerFromPhysicalOffset(a), std::min<uint32>(n, 256)));
+				}
+				line += fmt::format(" | data u {:08x} v {:08x} vbufs{} vs-reads {:08x}", (uint32)hu, (uint32)hv, vb, (uint32)hs);
+			}
 			if (frame)
 				Log(line);
 			// with :X,Y, the pixel after the draw, when it changed
@@ -1454,6 +1526,9 @@ namespace wwhd::gpu
 				shaderlist::Capture(fmt::format("fetch {:016x} {} {}", fsHash, shaderlist::Hex({ fsCode, fsSize }), shaderlist::Registers(regs)));
 		}
 		uint64 vsKey = VertexKey(regs, ProgramHash(vsCode, vsSize), fetch), psKey = PixelKey(regs, ProgramHash(psCode, psSize));
+		static const uint64 skipVs = [] { const char* e = getenv("WWHD_RENDER_SKIP_VS"); return e ? strtoull(e, nullptr, 16) : 0ull; }();
+		if (skipVs && vsKey == skipVs)
+			return skip("WWHD_RENDER_SKIP_VS (a probe)");
 		Shader* vs = GetShader(true, vsKey, vsCode, vsSize, fetch, fsHash);
 		Shader* ps = GetShader(false, psKey, psCode, psSize, nullptr, 0);
 		if (!vs->module || !ps->module)

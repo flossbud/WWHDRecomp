@@ -15,6 +15,7 @@
 027618B8    src/overrides/sixty.cpp            a sead tree node (a manager calling its objects): whole ticks only at 60 fps (D21, probe)
 0273CBD0    src/overrides/sixty.cpp            a sead tree node (a manager calling its objects): whole ticks only at 60 fps (D21, probe)
 025DE2CC    src/overrides/sixty.cpp            fpcM_Draw, every process's draw: the census's attribution, and a probe (WWHD_60FPS_SKIPDRAW) (D21)
+025A81A0    src/overrides/sixty.cpp            dPa_control_c::calc3D, the 3D particles' calc: whole ticks only at 60 fps, or every frame converted (D21)
 0200ECD4    src/overrides/sixty_step.cpp       cLib_addCalc: with a time step for converted processes at 60 fps (D21)
 0200ED84    src/overrides/sixty_step.cpp       cLib_addCalc2 (D21)
 0200EDC8    src/overrides/sixty_step.cpp       cLib_addCalc0 (D21)
@@ -41,3 +42,4 @@
 025E3EC8    src/overrides/sixty_step.cpp       mDoExt_MtxCalcOldFrame::decOldFrameMorfCounter: the old pose's blend, with a time step (D21)
 023FCB9C    src/overrides/sixty_step.cpp       daPy_lk_c::posMoveFromFootPos: the feet's move measured over a whole tick (D21)
 024F9A48    src/overrides/sixty_step.cpp       dCamera_c::updateMonitor: the player's move measured over a whole tick (D21)
+0281F878    src/overrides/sixty_step.cpp       JPABaseEmitter::calcCreatePtcls: strips (the wake, bow waves) emit every frame when converted (D21)

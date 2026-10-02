@@ -673,6 +673,9 @@ namespace wwhd::gpu
 			return;
 		EndRendering();
 		uint32 addr = p[0], w = p[1], h = p[2], pitch = p[3], gx2 = p[7], target = p[8];
+		static const bool trace = getenv("WWHD_RENDER_TRACE") != nullptr;
+		if (trace)
+			Log(fmt::format("copy to scan buffer {} in frame {}: {:08x} {}x{} fmt {:x}", target, s.frame + 1, addr, w, h, gx2));
 		Image& src = Surface(addr, gx2, false, std::max(w, pitch), h);
 		Image& dst = s.scan[target == 1 ? 0 : 1];
 		// the reference's screenshot is an RGBA8 blit of this buffer, sRGB if the scan buffer is

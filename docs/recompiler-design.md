@@ -393,7 +393,10 @@ request list `f_02516C14`), and two moves measured over a whole tick (Link's `po
 while the step is 1. With 60 fps and the probe
 off each calls its original. Frame pacing (D21, the owner's feel test) adds sead's `fw_waitForVsync`
 (`f_0274C874`, `src/overrides/pacing.cpp`): in real time at 60 fps a tick's two frames share their two
-vsyncs, and `WWHD_FRAME_LOG` times every frame; otherwise it calls its original. Adding or removing an override changes `funcs.h` (the `orig_f_X` declarations), which
+vsyncs, and `WWHD_FRAME_LOG` times every frame; otherwise it calls its original. Particles add two:
+`dPa_control_c::calc3D` (`f_025A81A0`, sixty.cpp: whole ticks only at 60, or every frame converted;
+it replaces a tick rule) and `JPABaseEmitter::calcCreatePtcls` (`f_0281F878`, sixty_step.cpp: the
+wake's and bow waves' strips emit every frame). Adding or removing an override changes `funcs.h` (the `orig_f_X` declarations), which
 every shard includes: the next build compiles all generated code again (about 12 minutes on the
 worker), so batch them.
 
@@ -1575,10 +1578,34 @@ the boat's wake flickering, and a question whether the boat is too fast.
   phases' increments split between the half ticks, the countdowns and the alpha on whole ticks;
   `cLib_addCalc2`, `cLib_addCalc0` and `cLib_addCalcAngleS2` are converted already.
   `WWHD_60FPS_CONVERT=...,171`.
-* **The wake is particles.** The boat's wake, its bow waves and splashes are JParticle emitters
-  with the ship's callbacks (`dPa_trackEcallBack` and others); the particle calc (`dPa_control_c::calc3D`)
-  runs on whole ticks, so they move at 30 while the boat moves at 60. Next: the particle system
-  converted (its frame counters are floats, so a half step is exact there).
+* **Particles** (`WWHD_60FPS_PARTICLES=1`). The boat's wake, bow waves and splashes are JParticle
+  emitters with the ship's callbacks; the 3D particle calc (`dPa_control_c::calc3D`, `f_025A81A0`,
+  JPAEmitterManager::calc on groups 0-6) ran on whole ticks. Now an override replaces its tick rule:
+  whole ticks only, or with particles converted every frame with a step of h, its stores standing.
+  JParticle (as the GameCube's, with an HD deletion delay) keeps its frame counters as floats, so a
+  half step adds 0.5 exactly: emitter ticks, start frames, the rate step's timer (emission keeps a
+  tick's cadence), particle ages; and `*h` on gravity, the fields' velocities (`calcVel`, types 0
+  and 1), positions, `d` on air resistance and drag, `split` on rotation, children on whole ticks
+  (where ages are the 30-tick run's). Census (`particles.txt` with the probe): while sailing, 606
+  particles a whole tick at 30 against 595 at 60. Two strips are drawn through their particles, the
+  wake (`dPa_trackEcallBack`, a triangle strip through each three) and the bow waves
+  (`dPa_waveEcallBack`): their newest particles are the strip's end at the boat, so they emit every
+  frame at a frame's count (`calcCreatePtcls`, `f_0281F878`; twice the particles, the same strip
+  through twice the points; the wake's buffers hold 150 segments, 80 used). The bow waves' speed is
+  the emitter's move per step, read per tick (`/h`). The step-doubling trial now runs any per-tick
+  function (`WWHD_60FPS_TRIAL_PARTICLES=1`); for particles it mostly reports pooled particles
+  recycled differently, and children's first velocity a half step apart, so captures are the
+  measure.
+* **The wake rides the sea.** Converted, the wake still changed only every other frame in
+  captures: identical half and whole frames, then a jump. The renderer's trace (now with hashes of
+  what each draw reads: `| data u .. v .. vbufs .. vs-reads ..`) showed its 79 segment draws read new
+  vertices and uniforms on both; skipping them (`WWHD_RENDER_SKIP_VS`, a probe) left the area still.
+  The strip is the wake: it follows the boat, as the camera does, so on screen it only moves as its
+  points ride the waves (`getMaxWaterY` lays them on the water) and the sea's waves move on whole
+  ticks. Not the rollback, the hidden globals (`WWHD_60FPS_HIDE=0`, a probe), sead's nodes or
+  fapGm_After (each tried: byte-identical captures).
+* **Next: the sea** (process 38): its four waves' phases are tick counters (`daSea_WaveInfo`), and
+  its draw advances the ripple texture's scroll every draw (twice as fast at 60).
 
 ## Milestones
 

@@ -39,7 +39,6 @@
 025B0158    whole       bl 0256c8fc     dKyr_poison_light_colision
 025B0170    whole       bctrl           dComIfG_Bgsp()->Move(): moving collision
 025B0174    whole       bl 025be8dc     dSnap_Execute
-025B019C    whole       bl 025a81a0     particle calc3D
 025B01A8    whole       bl 025a8148     particle calc2D
 025B01B8    whole       stw             cCt_execCounter: g_Counter.mTimer +1
 025B01C4    whole       bl 025187d0     dComIfG_Ccsp()->MassClear()
@@ -249,3 +248,42 @@
 02163AA0    whole       sth             sail ho_move: the flap's countdown +0x2B8C jumps from 5 to 1
 02163AD0    whole       sth             sail ho_move: the flap's countdown +0x2B8C - 1
 02163B48    whole       sth             sail ho_move: the filling countdown +0x24C2 - 1 (the GameCube's 0x1B4A)
+# ---- step rules: JParticle, the particle system (JSystem's JPA, as in the GameCube's; calc3D is
+# converted by its override, src/overrides/sixty.cpp, WWHD_60FPS_PARTICLES=1). Frame counters are
+# floats here, so a half step adds 0.5: ages, emitter ticks and the emission cadence stay exact in
+# ticks (emission keeps its 30 Hz cadence: a rate step's emissions land on whole ticks).
+# JPABaseEmitter::calc (f_0281FE40), doStartFrameProcess (f_028200C4), calcCreatePtcls (f_0281F878)
+0281FF48    *h@f13      fadds           JPA emitter calc: mTick += 1
+02820120    *h@f0       fadds           JPA doStartFrameProcess: mTime += 1 (before the start frame)
+0281FA38    *h@f31      fadds           JPA calcCreatePtcls: the rate step's timer (+0x250) += 1
+# JPABaseEmitter::calcParticle (f_0281FBD8): children every n frames of a particle's age, at whole
+# ticks (where its age is the 30-tick run's)
+0281FCB8    whole       bl 0281fb08     JPA calcParticle: createChildren
+# JPABaseParticle::incFrame (f_028266C0), calcVelocity (f_02826720), calcPosition (f_0282685C)
+028266D0    *h@f13      fadds           JPA incFrame: mCurFrame += 1 (the age)
+02826780    *h@f0       fadds           JPA calcVelocity: mBaseVel.y += mAccel.y
+02826790    *h@f9       fadds           JPA calcVelocity: mBaseVel.x += mAccel.x
+02826798    *h@f10      fadds           JPA calcVelocity: mBaseVel.z += mAccel.z
+028267C0    d:f12       lfs             JPA calcVelocity: mBaseVel *= mAirResist (a damping)
+0282686C    *h@f11      fadds           JPA calcPosition: mLocalPosition.y += mVelocity.y
+02826874    *h@f13      fadds           JPA calcPosition: mLocalPosition.x += mVelocity.x
+02826884    *h@f12      fadds           JPA calcPosition: mLocalPosition.z += mVelocity.z
+# JPABaseField::calcVel (f_02822B54): a field's velocity into mFieldAccel (type 0, accumulated) or
+# mBaseVel (type 1) per step; type 2 (mFieldVel, this step's) stays
+02822BBC    *h@f6       fadds           JPA field calcVel: mFieldAccel.x += vel.x
+02822BC4    *h@f5       fadds           JPA field calcVel: mFieldAccel.y += vel.y
+02822BC8    *h@f7       fadds           JPA field calcVel: mFieldAccel.z += vel.z
+02822BE4    *h@f6       fadds           JPA field calcVel: mBaseVel.x += vel.x
+02822BEC    *h@f5       fadds           JPA field calcVel: mBaseVel.y += vel.y
+02822BF0    *h@f7       fadds           JPA field calcVel: mBaseVel.z += vel.z
+# JPADragField::calc (f_02823E8C): mDrag shrinks by a factor a step
+02823EAC    d@f0        fmuls           JPA drag field: mDrag *= mFieldDrag (children)
+02823ED8    d@f0        fmuls           JPA drag field: mDrag *= 1 - fade (1 - mFieldDrag)
+# JPADraw::calcParticle (f_0282DCBC) and calcChild (f_0282DD50): the rotation angle
+0282DCE8    split@r9    add             JPA draw calcParticle: rotation += rotation speed
+0282DD7C    split@r9    add             JPA draw calcChild: rotation += rotation speed
+# dPa_waveEcallBack::executeAfter (f_025A92F4), the bow waves: the waves' speed is the emitter's move
+# since the last calc (the boat's bow), per tick; a fade countdown when stopped
+025A93A0    whole       sth             wave executeAfter: the fade countdown (+6) - 1
+025A9460    /h:f1       bl 028f37f0     wave executeAfter: the emitter's move this step (a sqrt), per tick
+025A94AC    *h:f9       lfs             wave executeAfter: the speed's change per step, at most mVelSpeed (+0x10)

@@ -517,8 +517,12 @@ it in a window; D21 "Step 2"):**
     doesn't wait for the next vsync; the half tick's frame waits for the pair's second). Sail
     route, desktop, headless: 53.3 fps boarding with the island in view, now 60.1, no late frames.
   - The sail is GRID (171): rules in `tick_rules.txt`, converted with `WWHD_60FPS_CONVERT=...,171`.
-  - The wake, bow waves and splashes are particles, calculated on whole ticks: next, the particle
-    system converted.
+  - The wake, bow waves and splashes are particles: the particle system is converted
+    (`WWHD_60FPS_PARTICLES=1`: the 3D particle calc every frame with a step, JParticle's steps in
+    `tick_rules.txt`; the wake's and bow waves' strips emit every frame). Particle counts match the
+    30-tick run's. The wake still changes on whole ticks only: it rides the sea's waves, which move
+    on whole ticks (found with the renderer trace's data hashes and `WWHD_RENDER_SKIP_VS`). Next:
+    the sea (process 38).
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
   CPU, vsyncs missed; `tools/sixty/frames.py` summarises), `WWHD_PROFILE` (`tools/profile_report.py`
   on the worker with the same build). On the desktop, `~/wwhd-test` is ours to deploy to and run
@@ -526,7 +530,10 @@ it in a window; D21 "Step 2"):**
 - Then D21's order: particles, animation-heavy actors, the HUD, then actors route by route;
   uncapped. Tools: `tools/sixty/track.py` (fields tick by tick, half ticks too),
   `tools/sixty/camera.py` (the camera's view, 30 against 60).
-- Run converted: `WWHD_60FPS=1 WWHD_60FPS_CONVERT=476,168,165,171` (with `WWHD_60FPS_FROM` for routes).
+- Run converted: `WWHD_60FPS=1 WWHD_60FPS_CONVERT=476,168,165,171 WWHD_60FPS_PARTICLES=1` (with
+  `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;
+  the probe writes `particles.txt` (the particle census, every frame); for side-by-side runs copy the
+  binary to a folder of its own (`CEMU_BIN=`): one instance per folder.
 
 **How to measure** (all on the worker; dumps are game memory, keep them there):
 - `tools/sixty/run.sh tour /wwhd/data/m6/NAME` runs 30 and 60 (`WWHD_60FPS_FROM=900`,

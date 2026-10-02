@@ -447,7 +447,8 @@ namespace
 
 	void HideConvertedGlobals()
 	{
-		if (s_convGlobalsHidden || s_convGlobals.empty())
+		static const bool hide = [] { const char* e = getenv("WWHD_60FPS_HIDE"); return !(e && atoi(e) == 0); }();   // a probe
+		if (s_convGlobalsHidden || s_convGlobals.empty() || !hide)
 			return;
 		s_convGlobalsHidden = true;
 		if (Probe())
@@ -731,8 +732,9 @@ namespace
 		}
 	};
 
-	// One process's execute as a trial (see above); the game's step stands
-	void TrialExecute(PPCInterpreter_t* ctx)
+	// One process's execute as a trial (see above), or with fn another per-tick function (the particle
+	// calc); the game's step stands
+	void TrialExecute(PPCInterpreter_t* ctx, void (*fn)(PPCInterpreter_t*) = orig_f_025DE58C)
 	{
 		static bool once = [] { atexit(TrialWrite); at_quick_exit(TrialWrite); return true; }();
 		(void)once;
@@ -752,10 +754,10 @@ namespace
 		s_trialPhase = 1;                               // two half steps, as at 60 fps
 		g_rtStep = 0.5f;
 		s_converting++;
-		orig_f_025DE58C(ctx);
+		fn(ctx);
 		regs.Restore(ctx);
 		static const bool draw = [] { const char* e = getenv("WWHD_60FPS_TRIAL_DRAW"); return e && atoi(e) == 1; }();
-		if (draw)
+		if (draw && fn == orig_f_025DE58C)
 		{
 			s_converting--;                             // the draw as at 60 fps: a step of 1, not converting
 			g_rtStep = 1.0f;
@@ -765,7 +767,7 @@ namespace
 			s_converting++;
 		}
 		g_rtHalfTick = true;
-		orig_f_025DE58C(ctx);
+		fn(ctx);
 		g_rtHalfTick = false;
 		s_converting--;
 		g_rtStep = 1.0f;
@@ -776,7 +778,7 @@ namespace
 
 		regs.Restore(ctx);
 		s_trialPhase = 2;                               // the game's step: the run goes on from it
-		orig_f_025DE58C(ctx);
+		fn(ctx);
 		g_rtJournalOn = wwhd::rt::QuietWatching();   // a fast path's watch may still need it
 		g_rtStoreCensus = nullptr;
 		s_trialPhase = 0;
@@ -812,6 +814,65 @@ namespace
 			fflush(f);
 		}
 		s_tracked.clear();
+	}
+
+	// With the probe: the 3D particles after every frame's particle calc (dir/particles.txt: game frame
+	// times two, plus one on half ticks; emitters, particles, children, and the particles' positions
+	// summed), to compare the particle system at 60 with the 30-tick run's. JPAEmitterManager at
+	// *0x1047B2D4: a list per group (first link at +0x50 + 12 g); an emitter's particles at +0x1AC
+	// (count +0x1B4) and children at +0x1B8 (count +0x1C0); a particle's global position at +0x28.
+	void ParticleCensus(uint32 tick2)
+	{
+		static const std::string dir = getenv("WWHD_STATE_DUMP");
+		static FILE* f = fopen((dir + "/particles.txt").c_str(), "w");
+		const uint32 mgr = rd32(0x1047B2D4u);
+		if (!f || !mgr)
+			return;
+		uint32 emitters = 0, particles = 0, children = 0;
+		double sum[3] = {};
+		for (uint32 g = 0; g < 7; g++)
+			for (uint32 link = rd32(mgr + 0x50 + 12 * g); link; link = rd32(link + 12))
+			{
+				const uint32 e = rd32(link);
+				emitters++;
+				particles += rd32(e + 0x1B4);
+				children += rd32(e + 0x1C0);
+				for (uint32 list : { 0x1ACu, 0x1B8u })
+					for (uint32 pl = rd32(e + list); pl; pl = rd32(pl + 12))
+						for (int i = 0; i < 3; i++)
+						{
+							const uint32 v = rd32(rd32(pl) + 0x28 + 4 * i);
+							float x;
+							memcpy(&x, &v, 4);
+							sum[i] += x;
+						}
+			}
+		fprintf(f, "%u %u %u %u %.1f %.1f %.1f\n", tick2, emitters, particles, children, sum[0], sum[1], sum[2]);
+		fflush(f);
+		// WWHD_PARTICLE_LIST=t: at that census point, each emitter: its callbacks' vtables (emitter
+		// +0x1E4, particles +0x1E8), rate (+0x34), rate step (+0x27), dynamics flags (+0x84; 2 a fixed
+		// interval), volume type (+0x26), divisions (+0x66), particles, and the first one's age and life
+		static const uint32 list = [] { const char* e = getenv("WWHD_PARTICLE_LIST"); return e ? (uint32)atoi(e) : 0u; }();
+		if (tick2 != list)
+			return;
+		for (uint32 g = 0; g < 7; g++)
+			for (uint32 link = rd32(mgr + 0x50 + 12 * g); link; link = rd32(link + 12))
+			{
+				const uint32 e = rd32(link), cb = rd32(e + 0x1E4), pcb = rd32(e + 0x1E8), first = rd32(e + 0x1AC);
+				const uint32 rate = rd32(e + 0x34);
+				float r, age = 0, life = 0;
+				memcpy(&r, &rate, 4);
+				if (first)
+				{
+					const uint32 a = rd32(rd32(first) + 0x78), l = rd32(rd32(first) + 0x7C);
+					memcpy(&age, &a, 4);
+					memcpy(&life, &l, 4);
+				}
+				fprintf(f, "  emitter %08x group %u cb %08x pcb %08x rate %.3f step %u dyn %08x volume %u div %u particles %u age %.1f life %.1f\n",
+					e, g, cb ? rd32(cb) : 0, pcb ? rd32(pcb) : 0, r, rd8(e + 0x27), rd32(e + 0x84), rd8(e + 0x26), rd16(e + 0x66),
+					rd32(e + 0x1B4), age, life);
+			}
+		fflush(f);
 	}
 
 	void Dump(uint32 tick)
@@ -908,6 +969,7 @@ void f_025F172C(PPCInterpreter_t* __restrict ctx)
 		s_tracked.clear();
 		orig_f_025F172C(ctx);
 		DumpTracked(wwhd::rt::GameFrame(swap) * 2 + 1);
+		ParticleCensus(wwhd::rt::GameFrame(swap) * 2 + 1);
 		return;
 	}
 	if (!Probe() && wwhd::rt::SixtyFrom() == ~0u)
@@ -921,6 +983,7 @@ void f_025F172C(PPCInterpreter_t* __restrict ctx)
 	{
 		Dump(wwhd::rt::GameFrame(swap));
 		DumpTracked(wwhd::rt::GameFrame(swap) * 2);
+		ParticleCensus(wwhd::rt::GameFrame(swap) * 2);
 	}
 	if (Census() || Rollback())
 	{
@@ -1053,6 +1116,41 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	g_rtStep = 0.5f;
 	s_converting++;
 	orig_f_025DE58C(ctx);
+	s_converting--;
+	g_rtStep = step;
+}
+
+// dPa_control_c::calc3D (f_025A81A0; the play scene's draw calls it, f_025B019C): every 3D particle
+// emitter's calc, JPAEmitterManager::calc (f_0282167C) on groups 0 to 6: emission, the particles'
+// motion and ageing, the emitters' callbacks (the ship's wake and splashes). At 60 fps it runs on
+// whole ticks only, as the game's logic does, unless WWHD_60FPS_PARTICLES=1: then every frame, with
+// a time step of half a tick (config/US_v0/tick_rules.txt has JParticle's steps) and its stores
+// standing, as a converted process's do. At 30 fps with the probe, WWHD_60FPS_TRIAL_PARTICLES=1 runs
+// it as the step-doubling trial (TrialExecute).
+void f_025A81A0(PPCInterpreter_t* __restrict ctx)
+{
+	static const bool converted = [] { const char* e = getenv("WWHD_60FPS_PARTICLES"); return e && atoi(e) == 1; }();
+	const uint32 from = wwhd::rt::SixtyFrom();      // ~0 when 60 fps is off
+	if (from == ~0u)
+	{
+		static const bool trial = [] { const char* e = getenv("WWHD_60FPS_TRIAL_PARTICLES"); return Probe() && e && atoi(e) == 1; }();
+		if (trial && s_trialPhase == 0)
+		{
+			TrialExecute(ctx, orig_f_025A81A0);
+			return;
+		}
+		[[clang::musttail]] return orig_f_025A81A0(ctx);
+	}
+	if (!converted || wwhd::os::SwapCount() < from)
+	{
+		if (g_rtHalfTick)
+			return;                                     // whole ticks only, as the game's logic
+		[[clang::musttail]] return orig_f_025A81A0(ctx);
+	}
+	const float step = g_rtStep;
+	g_rtStep = 0.5f;
+	s_converting++;
+	orig_f_025A81A0(ctx);
 	s_converting--;
 	g_rtStep = step;
 }
