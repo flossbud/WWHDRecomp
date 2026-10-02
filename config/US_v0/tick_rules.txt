@@ -54,3 +54,139 @@
 020359AC    whole       bl 02614f74     the HD UI's per-frame update (DAT_101f4ff0: menus' state machines, layouts)
 020359D8    whole       bl 0270870c     f_0270870C: f_025E1988(0x7070)
 020359DC    whole       bl 0255e854     the environment update: cLib_addCalc smoothing, a cM_rndF a frame
+#
+# ---- step rules: the camera (dCamera_c, d_camera.cpp; WWHD keeps the GameCube's layout 4 bytes on:
+# the camera process holds it at +0x248). Converted with WWHD_60FPS_CONVERT=476; found with the
+# step-doubling trial (WWHD_60FPS_TRIAL) and tools/sixty/rmw.py, matched line by line with the decomp.
+# updateMonitor (f_024F9A48): the player's horizontal move per tick, smoothed; an idle counter
+024F9AA8    /h:f1       bl 024f7ac4     updateMonitor: the player's horizontal move this step, per tick
+024F9AD0    /h:f13      fsubs           updateMonitor: mMonitor.z = move - last move, per tick
+024F9ADC    k@f0        fmadds          updateMonitor: mMonitor.y += (move - y) * 0.075
+024F9B3C    whole       stw             updateMonitor: idle ticks (mMonitor +0x18) + 1
+024F9B40    whole       stfs            updateMonitor: mMonitor +0x1C = R - itself (flips each tick)
+024F9B5C    whole       stfs            updateMonitor: mMonitor +0x1C = R - itself (flips each tick)
+# Run (f_024FE3E8): tick counters, the forward-check cushion and the bank's damping
+024FE66C    whole       stw             Run: mForceLockTimer + 1
+024FEA54    whole       stw             Run: m07C + 1 (after the engine)
+024FEA60    whole       stw             Run: m11C + 1
+024FEA68    whole       stw             Run: m118 + 1
+024FEA70    whole       stw             Run: m080 + 1
+024FEA74    whole       stw             Run: m108 + 1 (the follow camera's ticks in its style)
+024FEAB8    whole       stw             Run: m07C + 1 (the other engine path)
+024FEAC0    whole       stw             Run: m11C + 1
+024FEAC8    whole       stw             Run: m118 + 1
+024FEACC    whole       stw             Run: m108 + 1
+024FEAD0    whole       stw             Run: m080 + 1
+024FE89C    k@f1        bl 0200693c     Run: m148 += (forwardCheckAngle - m148) * FwdCushion (cSAngle *)
+024FEB00    k@f1        bl 0200693c     Run: mViewCache.mBank -= mBank * 0.05 (cSAngle *)
+# followCamera (f_025028B8): the work area mWork.follow at r30 (dCamera +0x37C), mViewCache at r31
+02502CCC    k@f13       fmadds          followCamera: m3B0 += (dVar21 - m3B0) * 0.06
+02502E44    k@f8        fmadds          followCamera: m3AC += (+-45 - m3AC) * 0.04 (aiming)
+02502E8C    k@f8        fmadds          followCamera: m3AC += (+-45 - m3AC) * 0.04 (aiming)
+02502ECC    k@f8        fmadds          followCamera: m3AC += (dVar19 - m3AC) * 0.06
+0250329C    k@f1        bl 0201ae48     followCamera (style start): m3C0 += (target - m3C0) * m384/m380
+025032CC    k@f1        bl 0201ae48     followCamera (style start): mCenter += (m3C0 - mCenter) * dVar23
+025034AC    k@f31       fmadds          followCamera (style start): R += fVar40 * (R' - R)
+025034D0    k@f1        bl 0200693c     followCamera (style start): V += (V' - V) * fVar40
+02503540    k@f31       fmadds          followCamera (style start): R += fVar40 * (R' - R)
+02503564    k@f1        bl 0200693c     followCamera (style start): V += (V' - V) * fVar40
+025035BC    k@f1        bl 0200693c     followCamera (style start): U += (player's - U) * fVar40
+02503670    k@f31       fmadds          followCamera (style start): mFovy += fVar40 * (dVar31 - mFovy)
+02503688    whole       stfs            followCamera (style start): m380 -= m384 (the ramp's weight left)
+02503768    keep:r6     addi            followCamera: m388 + 1 (0..80, the bezier ramp's tick)
+025037B0    k@f1        fmadds          followCamera: m394 += (fVar40 - m394) * bezier(m388 / 80)
+025038BC    k@f18       stfs            followCamera: mCenter's approach factors (m3EC, m3F0, m3EC): y
+025038C4    k@f9        stfs            followCamera: mCenter's approach factors: x
+025038CC    k@f9        stfs            followCamera: mCenter's approach factors: z
+02503958    k@f11       stfs            followCamera: mCenter's approach factors: y
+02503960    k@f9        stfs            followCamera: mCenter's approach factors: x
+02503968    k@f9        stfs            followCamera: mCenter's approach factors: z
+0250399C    k@f9        stfs            followCamera: mCenter's approach factors: x
+025039A4    k@f11       stfs            followCamera: mCenter's approach factors: y
+025039AC    k@f9        stfs            followCamera: mCenter's approach factors: z
+02503DC8    whole       stfs            followCamera: m3B8 = (1 - m3B8) * ratio (charging)
+02503E20    k@f10       fmadds          followCamera: m3B8 += (1 - m3B8) * 0.2
+02503EC8    k@f7        fmadds          followCamera: m3B8 += (0.5 - m3B8) * 0.05
+02504084    whole       stw             followCamera: m38C = -1 (turn ramp start)
+025040AC    whole       stw             followCamera: m38C - 1
+025040CC    whole       stw             followCamera: m38C = 16
+02504148    whole       stw             followCamera: m38C = 1 (turn ramp start)
+025041A0    whole       stw             followCamera: m38C + 1 (m3B8 = m38C / 30)
+025042F8    k@f1        bl 0200693c     followCamera: U += (U' - U) * m3B8 cos V
+025043C8    k@f1        bl 0200693c     followCamera: U += (U' - U) * m3B8 cos V
+0250447C    k@f1        bl 0200693c     followCamera: U += (U' - U) * m3B8 cos V
+02504550    whole       sth             followCamera: m392 + 1 (charge ticks)
+02504620    k@f8        fmadds          followCamera: m3A0 += m3B8 * (dVar28 - m3A0)
+02504660    k@f18       fmadds          followCamera: m3E0 += (fVar40 - m3E0) * 0.5
+025046C0    k@f23       fmadds          followCamera: m3BC += dVar27 * (dVar28 - m3BC)
+025046FC    k@f12       fmadds          followCamera: m3A0 += dVar29 * (m3BC + m148 - m3A0)
+025047B8    k@f0        fmadds          followCamera: m3E0 += (0.1 - m3E0) * 0.05
+02504808    k@f29       fmadds          followCamera: m3E0 += dVar20 * (fVar40 - m3E0)
+025049CC    k@f13       fmadds          followCamera: m3E0 += (0.75 - m3E0) * 0.15
+02504B1C    k@f1        bl 0200693c     followCamera: V += (V' - V) * m3E0
+02504B70    k@f23       fmadds          followCamera: m398 += dVar27 * (dVar25 - m398)
+02504B78    k@f23       fmadds          followCamera: m39C += dVar27 * (dVar24 - m39C)
+02504B94    k@f17       fmadds          followCamera: m3DC += (dVar26 - m3DC) * 0.01
+02504BA8    k@f0        fmadds          followCamera: R += m3DC * (R' - R)
+02504C00    k@f17       fmadds          followCamera: m3DC += (dVar26 - m3DC) * 0.01
+02504C14    k@f0        fmadds          followCamera: R += m3DC * (R' - R)
+02504C68    k@f19       fmadds          followCamera: R += 1 * (R' - R)
+02504D50    k@f1        bl 0201ae48     followCamera: mEye += (m3CC - mEye) * 0.75
+02504DA0    k@f17       fmadds          followCamera: m3E8 += (dVar32 - m3E8) * 0.01
+02504DB0    k@f8        fmadds          followCamera: mFovy += m3E8 * (dVar31 - mFovy)
+02504DE0    *h@f1       fadds           followCamera: mFovy += cM_rndFX(m078) (the Deku Leaf's jitter)
+02504E94    *h@f1       fmadds          followCamera: mFovy += m07C * sin(m07C * 0x80) (flying)
+02504ECC    k@f1        bl 0200693c     followCamera: mBank += (bank' - mBank) * ratio (flying)
+02504F24    *h@f1       fmadds          followCamera: mFovy += m07C * sin(m07C * 0x80) (flying)
+02504F5C    k@f1        bl 0200693c     followCamera: mBank += (bank' - mBank) * ratio (flying)
+# the HD port's other follow engine (f_0250FDC8, through Run's engine table; no GameCube
+# counterpart: from WWHD's own code), its work area at r30 (dCamera +0x37C)
+02510550    *h@f1       bl 024f7df4     HD engine: work +0x20 += step (clamped; the stick's, per tick)
+0251059C    k@f14       fmadds          HD engine: work +0x20 += (t - x) * k
+025105D8    k@f14       fmadds          HD engine: work +0x20 += (t - x) * k
+025108D0    *h@f31      fadds           HD engine: distance (work +0x1C) + step
+025109F0    *h@f31      fsubs           HD engine: distance (work +0x1C) - step
+02510A98    k@f8        stfs            HD engine: mCenter's approach factors: x
+02510AA0    k@f8        stfs            HD engine: mCenter's approach factors: z
+02510AA8    k@f6        stfs            HD engine: mCenter's approach factors: y
+02510B04    k@f8        stfs            HD engine: mCenter's approach factors: x
+02510B0C    k@f8        stfs            HD engine: mCenter's approach factors: z
+02510B14    k@f6        stfs            HD engine: mCenter's approach factors: y
+02510B5C    k@f31       fmadds          HD engine: factor (work +0x38) += (t - x) * k
+02510B60    k@f31       fmadds          HD engine: factor (work +0x3C) += (t - x) * k
+02510B70    k@f10       stfs            HD engine: mCenter's approach factors: x
+02510B78    k@f10       stfs            HD engine: mCenter's approach factors: z
+02510B80    k@f6        stfs            HD engine: mCenter's approach factors: y
+02510DBC    *h@f1       bl 024f7df4     HD engine: R target += step (clamped; per tick)
+02510DF0    *h@f1       bl 024f7df4     HD engine: V target += step (clamped; per tick)
+02510E18    *h@f15      fmadds          HD engine: U target += stick rotation (per tick)
+02510E78    k@f20       fmadds          HD engine: R += (R' - R) * k
+02510EA0    k@f1        bl 0200693c     HD engine: V += (V' - V) * k
+02510EE4    k@f1        bl 0200693c     HD engine: U += (U' - U) * k
+02510F60    *h@f1       bl 024f7df4     HD engine: +0x54 target += step (clamped; per tick)
+02510FC4    *h@f1       fadds           HD engine: mFovy += cM_rndFX(...) (jitter)
+02511080    *h@f29      fmadds          HD engine: mFovy += m7C0 * sin(...) * k (flying)
+025110BC    k@f1        bl 0200693c     HD engine: mBank += (bank' - mBank) * k (flying)
+025110FC    *h@f29      fmadds          HD engine: mFovy += m7C0 * sin(...) * k (flying)
+02511138    k@f1        bl 0200693c     HD engine: mBank += (bank' - mBank) * k (flying)
+#
+# ---- step rules: Link (daPy_lk_c, d_a_player_main.cpp). Converted with WWHD_60FPS_CONVERT=168.
+# posMoveFromFootPos (f_023FCB9C): the speed taken from the feet's animation, gravity, the move
+023FCE9C    /h:f1       bl 028f4384     posMoveFromFootPos: the planted toe's move this step (sqrt), per tick
+023FCEE8    d@f7        fmuls           posMoveFromFootPos: m359C * 0.7 (the last move, smoothed)
+023FCEF0    k@f0        fmadds          posMoveFromFootPos: move * 0.3 + m359C * 0.7
+023FD2D4    note:f11    lfs             posMoveFromFootPos: speed.y before gravity
+023FD310    note:f11    lfs             posMoveFromFootPos: speed.y before gravity
+023FD338    *h@f9       fmadds          posMoveFromFootPos: speed.y += gravity * 2.25 (heavy)
+023FD35C    *h@f9       fadds           posMoveFromFootPos: speed.y += gravity
+023FD39C    arc@r4      bl 028e8d88     posMoveFromFootPos: current.pos += speed (the 30 Hz arc)
+# posMove (f_023FDA70): per-tick pushes on top of the feet's move
+023FDE44    *h@f12      fmadds          posMove: current.pos.x += m3610 * sin (a whirlpool's pull)
+023FDE5C    *h@f12      fmadds          posMove: current.pos.z += m3610 * cos (a whirlpool's pull)
+023FDF08    *h@f13      fmadds          posMove: current.pos.z += m36A0.z * cos (ice)
+023FDF3C    *h@f7       fmadds          posMove: current.pos.x += m36A0.x * cos (ice)
+023FDF50    vec@r4      bl 028e8d88     posMove: current.pos += m36B8 (a belt)
+023FDF70    *h@f10      fadds           posMove: current.pos.x += m3730.x (wind)
+023FDF84    *h@f7       fadds           posMove: current.pos.z += m3730.z (wind)
+# setNormalSpeedF (f_02416230): mNormalSpeed (+0x6A14) accelerates by an amount per tick
+02416410    *h@f28      fadds           setNormalSpeedF: mNormalSpeed += acceleration

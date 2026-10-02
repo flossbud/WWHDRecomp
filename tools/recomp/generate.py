@@ -60,6 +60,11 @@ its result. Step rules, for the code of processes that run every frame with a ti
                (REG - REG/2, then REG/2: the two add up to the 30 Hz step exactly)
   OP@REG       the same, for this instruction only: REG has its value back afterwards (unless the
                instruction writes it), as in `x += (t - x) * k` with k@f2 on its fmadds
+  note:REG     after the instruction, the float REG is noted (g_rtNote) for an arc@ later in the step
+  vec@rN       for a call, the vector (three floats) rN points to is h of itself (a per-tick move
+               handed to a vector add)
+  arc@rN       the same for a velocity: x and z times h, y as h y + (1 - h)/2 (y - noted), noted
+               before gravity was added: the semi-implicit 30 Hz arc exactly at whole ticks
 REG is a register (r3, f1). These name any instruction by its mnemonic (`bl TARGET` for a call).
 """
 import bisect
@@ -201,7 +206,8 @@ class Program:
                 kind, sep, arg = rule.partition(":")
                 if "@" in rule:
                     kind, sep, arg = rule.partition("@")
-                    assert kind in ("split",) or kind in self.STEP_OPS, f"tick_rules.txt:{n}: {rule}: @ takes a step operation"
+                    assert kind in ("split", "vec", "arc") or kind in self.STEP_OPS, f"tick_rules.txt:{n}: {rule}: @ takes a step operation"
+                    assert kind not in ("vec", "arc") or (arg[0] == "r" and words[2] == "bl"), f"tick_rules.txt:{n}: {rule}: a call's pointer register"
                     kind += "@"
                 if kind == "whole":
                     value = None
@@ -210,7 +216,8 @@ class Program:
                         assert key == "r3", f"tick_rules.txt:{n}: unknown rule argument {arg}"
                         value = int(v, 0)
                 else:
-                    assert kind.rstrip("@") in ("keep", "split") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert kind.rstrip("@") in ("keep", "split", "note", "vec", "arc") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert kind != "note" or arg[0] == "f", f"tick_rules.txt:{n}: note takes a float register"
                     assert re.fullmatch(r"[rf]([12]?[0-9]|3[01])", arg), f"tick_rules.txt:{n}: {rule}: a register expected"
                     assert kind.rstrip("@") != "split" or arg[0] == "r", f"tick_rules.txt:{n}: split takes an integer register"
                     value = arg
@@ -475,6 +482,13 @@ def apply_tick_rule(rule, i, lines):
                 + ["} else {", f"\t{dest} = {reg_expr(arg)};", "}"])
     reg = reg_expr(arg)
     op = kind.rstrip("@")
+    if op == "note":
+        return lines + [f"if (RT_STEPPED()) g_rtNote = (float){reg}.fp0;   // step rule: {what}"]
+    if op in ("vec", "arc"):
+        arc = "true" if op == "arc" else "false"
+        return ([f"{{ const uint32 vecEa_ = {reg}; float vecSaved_[3]; const bool vec_ = RT_STEPPED();   // step rule: {what}",
+                 f"\tif (vec_) rt_step_vec_begin(vecEa_, vecSaved_, {arc});"]
+                + ["\t" + l for l in lines] + ["\tif (vec_) rt_step_vec_end(vecEa_, vecSaved_);", "}"])
     if op == "split":
         change = f"if (RT_STEPPED()) {reg} = rt_step_split({reg});"
     elif arg[0] == "f":

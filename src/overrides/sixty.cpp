@@ -72,11 +72,51 @@ namespace
 		}();
 		return !names.empty() && std::find(names.begin(), names.end(), name) != names.end();
 	}
+	bool AnyConverted()
+	{
+		static const bool any = [] { const char* e = getenv("WWHD_60FPS_CONVERT"); return e && *e; }();
+		return any;
+	}
 	int s_converting = 0;                           // a converted process's execute is running
+
+	// The HD input object (*0x101F5088, something_button_related): +0x18 pad 0's buttons pressed this
+	// frame (f_02007814 and its neighbours test its bits), +0x124 held, +0x130/+0x134 the stick. The
+	// input manager runs on whole ticks (a tick rule), so on a half tick last tick's presses would read
+	// as pressed again: a converted process (Link's setStickData) would act on them twice (on the warp
+	// route he took the Wind Waker out and put it away in the same tick). They read as not pressed on
+	// a half tick and are put back after it.
+	constexpr uint32 kInputObject = 0x101F5088u, kPressed = 0x18u;
+
+	// A converted process steps at 60 only while no event runs (dComIfGp_event_runCheck: the byte at
+	// g_dComIfG_gameInfo +0x5292, as Link's code tests it): events and cutscenes drive Link and the
+	// camera through code not converted yet, which then runs on whole ticks as at 30. Decided at each
+	// whole tick for it and the half tick after, so a switch falls between ticks; an event that starts
+	// during a whole tick (after the process ran: the Wind Waker's song starts one from Link's own
+	// tick) also cancels the half tick's step, which would run event code half a tick early (it took
+	// Link out of the song on the warp route). The process then moves half a tick less at that start.
+	bool EventRunning()
+	{
+		return rd8(0x1046F0B0u + 0x5292u) != 0;
+	}
+
+	// An event ordered this tick (dEvt_control_c's order count, two bytes before its mode, as in the
+	// decomp's layout): the event manager starts it on the next whole tick, so a half tick between
+	// runs the orderer before the event is set up (Link's Wind Waker wait cancelled itself)
+	bool EventOrdered()
+	{
+		return (sint8)rd8(0x1046F0B0u + 0x5290u) > 0;
+	}
+	std::unordered_map<uint32, bool> s_stepping;    // process -> stepping at 60 this tick
+	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0;
+	void StepStats()
+	{
+		cemuLog_log(LogType::Force, "wwhd sixty: {} half steps of converted processes; {} stopped by a running event, {} by an ordered one",
+			s_halfSteps, s_eventStops, s_orderStops);
+	}
 
 	// WWHD_STATE_TRACK=n,m,...: with the probe, these processes' bytes after every whole tick and, at
 	// 60 fps, every half tick (dir/track.bin: tick x2 (+1 on a half tick), name, address, size, bytes;
-	// up to 0x4000 bytes of each), for tools/sixty/compare.py --track
+	// up to 0x8000 bytes of each: all of Link), for tools/sixty/compare.py --track
 	bool Tracked(uint16 name)
 	{
 		static const std::vector<uint16> names = [] {
@@ -313,7 +353,8 @@ namespace
 	// that made it last in the half steps (or, if only the game's step made it, by that one), with
 	// the value before, after the half steps and after the game's step: dir/trial.txt at exit, which
 	// tools/sixty/trial.py reports. Those are the open-coded steps, and the helpers' inexact cases, to
-	// give rules or overrides (D21).
+	// give rules or overrides (D21). WWHD_60FPS_TRIAL_DRAW=1 also runs the process's draw between the
+	// half steps, as a 60 fps frame does (its stores are put back with the rest).
 	bool Trial(uint16 name)
 	{
 		static const std::vector<uint16> names = [] {
@@ -554,6 +595,16 @@ namespace
 		s_converting++;
 		orig_f_025DE58C(ctx);
 		regs.Restore(ctx);
+		static const bool draw = [] { const char* e = getenv("WWHD_60FPS_TRIAL_DRAW"); return e && atoi(e) == 1; }();
+		if (draw)
+		{
+			s_converting--;                             // the draw as at 60 fps: a step of 1, not converting
+			g_rtStep = 1.0f;
+			orig_f_025DE2CC(ctx);                       // fpcM_Draw(the same process)
+			regs.Restore(ctx);
+			g_rtStep = 0.5f;
+			s_converting++;
+		}
 		g_rtHalfTick = true;
 		orig_f_025DE58C(ctx);
 		g_rtHalfTick = false;
@@ -594,7 +645,7 @@ namespace
 				uint32 size = profile ? rd32(profile + 0x10) : 0;
 				if (size == 0 || size > 0x40000)
 					continue;
-				size = std::min(size, 0x4000u);
+				size = std::min(size, 0x8000u);
 				const uint32 head[4] = { tick2, rd16(proc + 0x08), proc, size };
 				fwrite(head, 4, 4, f);
 				fwrite(memory_base + proc, 1, size, f);
@@ -707,9 +758,10 @@ void f_025F172C(PPCInterpreter_t* __restrict ctx)
 		for (uint32 proc : s_processes)
 			if (const uint32 profile = rd32(proc + 0x10); profile && rd32(profile + 0x10) <= 0x40000)
 				s_ranges.push_back({ proc, proc + rd32(profile + 0x10), rd16(proc + 0x08) });
-		// a converted process's draws are part of its frame, at 60 as its execute is: they stand
+		// a converted process's draws are part of its frame, at 60 as its execute is: they stand (while
+		// it steps at 60: in an event it runs on whole ticks, and its draws are put back as all others')
 		if (wwhd::rt::SixtyFrom() != ~0u)
-			std::erase_if(s_ranges, [](const ActorRange& r) { return Converted(r.name); });
+			std::erase_if(s_ranges, [](const ActorRange& r) { auto it = s_stepping.find(r.low); return Converted(r.name) && it != s_stepping.end() && it->second; });
 		std::sort(s_ranges.begin(), s_ranges.end(), [](const ActorRange& a, const ActorRange& b) { return a.low < b.low; });
 	}
 }
@@ -749,6 +801,10 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 	// settingTevStruct), so a half tick's frame would move it on. Drawing it gets the numbers the next
 	// whole tick's draws will get, and the stream is put back.
 	uint32 rng[3] = { rd32(0x101FF9D4u), rd32(0x101FF9D8u), rd32(0x101FF9DCu) };
+	const uint32 input = AnyConverted() ? rd32(kInputObject) : 0;
+	const uint32 pressed = input ? rd32(input + kPressed) : 0;
+	if (input)
+		wr32(input + kPressed, 0);
 	const bool watch = Census() || Rollback();
 	if (Census())
 	{
@@ -771,6 +827,8 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 	wr32(0x101FF9D4u, rng[0]);
 	wr32(0x101FF9D8u, rng[1]);
 	wr32(0x101FF9DCu, rng[2]);
+	if (input)
+		wr32(input + kPressed, pressed);
 }
 
 // fpcM_Execute: every process's execute goes through it (fpcM_Management's execute pass, f_025DE788):
@@ -787,7 +845,25 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 		TrialExecute(ctx);
 		return;
 	}
-	const bool converted = from != ~0u && wwhd::os::SwapCount() >= from && Converted(rd16(proc + 0x08));
+	bool converted = from != ~0u && wwhd::os::SwapCount() >= from && Converted(rd16(proc + 0x08));
+	if (converted)
+	{
+		if (!g_rtHalfTick)
+			s_stepping[proc] = !EventRunning();
+		else if (s_stepping[proc])
+		{
+			static bool once = [] { atexit(StepStats); at_quick_exit(StepStats); return true; }();
+			(void)once;
+			const bool running = EventRunning(), ordered = !running && EventOrdered();
+			s_eventStops += running;
+			s_orderStops += ordered;
+			if (running || ordered)
+				s_stepping[proc] = false;
+			else
+				s_halfSteps++;
+		}
+		converted = s_stepping[proc];
+	}
 	if (Probe() && Tracked(rd16(proc + 0x08)) && (!g_rtHalfTick || converted))
 		s_tracked.push_back(proc);
 	if (!g_rtHalfTick)

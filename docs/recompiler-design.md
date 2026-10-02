@@ -382,10 +382,13 @@ frame body (`f_025F172C`: the state probe after whole ticks), `fpcM_Execute` (`f
 nodes of sead's tree held to whole ticks (`f_0260C74C`, `f_027618B8`, `f_0273CBD0`); the WW-3
 prototype's override of the tick (`f_02746790`) is gone. `fpcM_Execute` also decides, per process,
 what runs on a half tick (only converted processes) and with which time step. The conversion (D21,
-2026-10-02) adds eighteen in `src/overrides/sixty_step.cpp`: the game's per-tick helpers with a time step for
-converted processes (the c_lib approaches and chases `f_0200ECD4` to `f_0200F8D0`,
+2026-10-02) adds twenty-four in `src/overrides/sixty_step.cpp`: the game's per-tick helpers with a time
+step for converted processes (the c_lib approaches and chases `f_0200ECD4` to `f_0200F8D0`,
 `fopAcM_calcSpeed` `f_025D67A8`, `fopAcM_posMove` `f_025D6800`, `J3DFrameCtrl::update`
-`f_027F2FC4`), each the game's function unchanged while the step is 1. With 60 fps and the probe
+`f_027F2FC4` and `checkPass` `f_027F2BF8`, `decOldFrameMorfCounter` `f_025E3EC8`), countdowns that
+count whole ticks (`cLib_calcTimer<u8>` `f_0207A9A0`, `dCcD_GStts::Move` `f_0251621C`), and
+registrations with whole-tick systems a half step must not repeat (`dCcS::Set` `f_0200E240`, a
+request list `f_02516C14`); each is the game's function unchanged while the step is 1. With 60 fps and the probe
 off each calls its original. Adding or removing an override changes `funcs.h` (the `orig_f_X` declarations), which
 every shard includes: the next build compiles all generated code again (about 12 minutes on the
 worker), so batch them.
@@ -1419,6 +1422,54 @@ baseline is "nothing converted": the 60-tick run must equal the 30-tick run at e
   multiplication), its turn and charge counters and the `m384/m380` ramp. Link's: the move speed
   he takes from his feet's animation (`posMoveFromFootPos`), his animation and its frame tests, his
   own gravity and integration, timers.
+
+**Step 2: the camera and Link (WW-4, in progress).**
+* **Events fall back to whole ticks.** A converted process steps at 60 only while no event runs
+  (`dComIfGp_event_runCheck`, the byte at `g_dComIfG_gameInfo` +0x5292); during events and cutscenes
+  it runs on whole ticks with a step of 1, as at 30 (the GameCube recomp's 60 Hz mode does the same).
+  The mode is chosen at each whole tick for it and the half tick after, so a switch falls between
+  ticks; a half tick also doesn't step if an event started or was ordered since (`dEvt_control_c`'s
+  order count, two bytes before its mode: the event manager starts an order on the next whole tick,
+  and Link's Wind Waker wait, ordered from his own tick, cancelled itself on the half tick between).
+  Without the fallback the warp route's songs and cyclone ran Link's and the camera's event code
+  twice a tick (Link ended 7,749 units off; with it he plays the song and warps).
+* **Button presses once a tick.** The HD input object (`*0x101F5088`: +0x18 pad 0's presses, +0x124
+  held, +0x130 the stick) is updated on whole ticks (a tick rule), so on a half tick last tick's
+  presses read as new: Link's `setStickData` took them twice. With conversions on, +0x18 reads 0 on a
+  half tick and is put back after it.
+* **The camera** (about 110 rules): `updateMonitor` (the player's move per step read per tick, its
+  0.075 smoothing, an idle counter), `Run`'s five tick counters, the bank's damping and the forward
+  cushion, `followCamera` (its approaches: scalar, vector through `cXyz` scaling, angle through
+  `cSAngle` multiplication, and a factor vector applied component-wise; its turn, charge and ramp
+  counters; the `m384/m380` ramp's weight) and the HD port's own follow engine (`f_0250FDC8`, no
+  GameCube counterpart: the same kinds, plus targets that the stick rotates each tick and a distance
+  chased by a fixed step, through a clamp helper `f_024F7DF4`). The trial's camera list fell from
+  about 200 differing stores to the coupling below. *Coupling:* `followCamera` moves the eye 0.75
+  of the way to `center + direction` and then takes the direction from `eye - center`, so the eye
+  approaches its target with factor `0.75 k` a tick; converting both factors separately gives
+  `approach(0.75) approach(k)` a half step, and the eye turns up to a third slower for small `k`
+  (the trial: 0.68-0.76 of the 30 Hz move; the HD engine 0.86). Exact would convert the product:
+  `approach(0.75 k) / approach(0.75)` at the direction's factors. Left for after Link.
+* **Link:** `posMoveFromFootPos` (the planted toe's move per step read per tick, its 0.3/0.7
+  smoothing, gravity `× h` in both branches, `current.pos += speed` with the arc correction through
+  the new `note:` and `arc@` rules), `posMove` (a whirlpool's pull, ice, belts, wind `× h`; the
+  collision push and the wind push are used once and cleared, so they stay), `setNormalSpeedF`'s
+  acceleration, and shared helpers: `checkPass`, `cLib_calcTimer<u8>`, `dCcD_GStts::Move`'s
+  countdown, `decOldFrameMorfCounter` (the old pose's blend: `h` a step, a whole 1 when it starts),
+  and two registrations with whole-tick systems that a half step must not repeat (`dCcS::Set`, the
+  colliders for the next resolution; a 5-entry request list). Integer helpers now split their steps
+  exactly (`s - s/2` then `s/2`; an approach's divisor `2s - 1` then `2s`, since
+  `(1 - 1/(2s-1))(1 - 1/(2s)) = 1 - 1/s`).
+* **Where Link stands** (60 fps from swap 900, camera and Link converted): on the tour route his
+  normal speed now ramps at the 30 Hz rate (`1.75` a half step, `3.5` a tick), half a tick early
+  because his state changes can fall on a half tick (60 fps reacts sooner); his worst position error
+  is 41 units, a lead of about two ticks of walking. Sail: worst 118 (boarding), 23 on average;
+  menus: 0; warp: he plays the song and warps, the last scene within 0.2 units, the one before off
+  by a tick at its start (created a tick later) and then 30-70. The speed he takes from his feet still runs
+  high in the first ticks of a walk and spiked once against a wall (with only Link converted he then
+  slid past it, 219 units off). The trial's half steps disagree with real 60 fps runs for Link (they
+  run back to back without the world between them; his foot checks read ground state): for him the
+  60 fps runs with `tools/sixty/track.py` (fields tick by tick, half ticks too) are the measure.
 
 ## Milestones
 

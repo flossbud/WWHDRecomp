@@ -482,11 +482,19 @@ it in a window; D21 "Step 2"):**
   (`WWHD_STATE_TRACK`, `compare.py --track`); stores name their guest instruction to the journal.
   Checked with the switch off: the fuzzer on every store mnemonic, both routes' traces, command
   streams and sound, diff mode.
-- Stage 2, the camera (in progress): rules for `updateMonitor`, `Run`'s counters, the bank's
-  damping, the forward cushion and `followCamera` (about 90). Next: measure with the trial, then
-  `bumpCheck`, the shake and the other engines it reaches.
-- Stage 3, Link: the trial lists his per-tick code (speed from the feet's animation, his own
-  gravity and integration, animation frame tests, timers); `checkPass` needs an override.
+- Stage 2, the camera (rules in, measured with the trial): `updateMonitor`, `Run`'s counters, the
+  bank's damping, the forward cushion, `followCamera` and the HD port's own engine (`f_0250FDC8`).
+  Left: the eye's coupling (D21: convert the direction's factors with the eye's 0.75 together),
+  `bumpCheck` and the shake.
+- Stage 3, Link (rules in, measured at 60 on every route): `posMoveFromFootPos` (with the new
+  `note:`/`arc@` rules for the arc), `posMove`, `setNormalSpeedF`, overrides for `checkPass`, the
+  old pose's blend, the byte timer, the collision status's countdown, and two whole-tick
+  registrations. Converted processes fall back to whole ticks during events (and on a half tick
+  after one is ordered), and button presses read once a tick. Worst errors: tour 41, sail 118,
+  menus 0, warp ok (one scene starts a tick later). Left: the speed from the feet in a walk's first
+  ticks and against walls; the camera's coupling; the owner's verdict on the feel (desktop asleep
+  when this was written: a real-time headless test first, `tools/play/deploy.sh` to wwhd-test).
+- Run converted: `WWHD_60FPS=1 WWHD_60FPS_CONVERT=476,168` (with `WWHD_60FPS_FROM` for routes).
 
 **How to measure** (all on the worker; dumps are game memory, keep them there):
 - `tools/sixty/run.sh tour /wwhd/data/m6/NAME` runs 30 and 60 (`WWHD_60FPS_FROM=900`,

@@ -34,6 +34,26 @@ static inline double rt_step_div(double x) { return (double)(float)(x / g_rtStep
 static inline double rt_step_approach(double k) { return k >= 0.0 && k <= 1.0 ? (double)(float)(1.0 - __builtin_pow(1.0 - k, (double)g_rtStep)) : k; }
 static inline double rt_step_damp(double d) { return d > 0.0 ? (double)(float)__builtin_pow(d, (double)g_rtStep) : d; }
 static inline uint32 rt_step_split(uint32 v) { const sint32 s = (sint32)v; return (uint32)(g_rtHalfTick ? s / 2 : s - s / 2); }
+extern float g_rtNote;                 // a value noted by a step rule for a later one in the same step
+// vec@ / arc@: for one call, the vector (three floats) at ea is h of itself; for arc@ (a velocity)
+// y is h y + (1 - h)/2 (y - g_rtNote), g_rtNote its value before gravity was added this step. The
+// vector is put back after the call (outside the store journal: nothing of it is left).
+static inline float rt_vec_rd(uint32 ea) { uint32 v; memcpy(&v, memory_base + ea, 4); v = __builtin_bswap32(v); float f; memcpy(&f, &v, 4); return f; }
+static inline void rt_vec_wr(uint32 ea, float f) { uint32 v; memcpy(&v, &f, 4); v = __builtin_bswap32(v); memcpy(memory_base + ea, &v, 4); }
+static inline void rt_step_vec_begin(uint32 ea, float saved[3], bool arc)
+{
+	const float h = g_rtStep;
+	for (int i = 0; i < 3; i++)
+		saved[i] = rt_vec_rd(ea + 4 * i);
+	rt_vec_wr(ea, saved[0] * h);
+	rt_vec_wr(ea + 4, arc ? saved[1] * h + (1.0f - h) * 0.5f * (saved[1] - g_rtNote) : saved[1] * h);
+	rt_vec_wr(ea + 8, saved[2] * h);
+}
+static inline void rt_step_vec_end(uint32 ea, const float saved[3])
+{
+	for (int i = 0; i < 3; i++)
+		rt_vec_wr(ea + 4 * i, saved[i]);
+}
 
 // Guest time (design D6, revised for M4): every instruction costs one cycle of the thread's
 // timeslice, exactly as in Cemu's `while ((--remainingCycles) >= 0)` loop. When the slice is used

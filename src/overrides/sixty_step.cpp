@@ -7,7 +7,9 @@
 // game's function with its per-tick arguments converted, so its own float arithmetic stays:
 //   exponential approach (x += k (t - x), clamped):  k -> 1 - (1 - k)^h, steps and caps x h
 //   linear chase (x += step):                        step x h
-//   integer versions (s16 angles, u8):               the same, rounded (a step of 1 stays 1)
+//   integer versions (s16 angles, u8):               a step split between the whole tick and the
+//                                                    half tick (s - s/2, then s/2); a divisor s of
+//                                                    an approach 2s - 1, then 2s: exact over a tick
 //   gravity (fopAcM_calcSpeed):                      v += g h
 //   movement (fopAcM_posMove):                       p += h v + (1 - h)/2 dv, dv what gravity added
 //                                                    this step: the 30 Hz semi-implicit arc exactly
@@ -44,21 +46,32 @@ namespace
 		return (double)(float)x;                      // a single in an FPR, as the game keeps them
 	}
 
-	// an integer step (a divisor or a per-tick amount) for a step of h, rounded, at least 1 if it was
+	// An integer argument for a half step (h = 1/2: the whole tick's, then the half tick's), returned
+	// sign-extended as the game passes it. A per-tick amount s is split, s - s/2 then s/2, so the two
+	// add up to s; an approach's divisor s (x += d / s) becomes 2s - 1 then 2s, since
+	// (1 - 1/(2s - 1))(1 - 1/(2s)) = 1 - 1/s: two half steps approach as one tick does.
 	uint32 ScaledInt(uint32 v, bool divisor)
 	{
 		const int s = (int)(sint16)v;
 		if (s == 0)
 			return v;
-		double scaled;
-		if (divisor)                                   // x += d / s: k = 1/s -> 1/k'
-			scaled = 1.0 / Approach(1.0 / std::fabs((double)s));
+		int r;
+		if (divisor)
+		{
+			const int a = std::abs(s);
+			r = g_rtHalfTick ? 2 * a : 2 * a - 1;
+			r = s < 0 ? -r : r;
+		}
 		else
-			scaled = std::fabs((double)s) * Step();
-		int r = (int)std::lround(scaled);
-		if (r < 1)
-			r = 1;
-		return (uint32)(s < 0 ? -r : r) & 0xFFFFu;
+			r = g_rtHalfTick ? s / 2 : s - s / 2;
+		return (uint32)(sint32)r;
+	}
+
+	// the same for an unsigned byte (cLib_chaseUC's step)
+	uint32 ScaledByte(uint32 v)
+	{
+		const uint32 s = v & 0xFFu;
+		return g_rtHalfTick ? s / 2 : s - s / 2;
 	}
 
 	float rdf(uint32 ea) { return std::bit_cast<float>(rd32(ea)); }
@@ -185,7 +198,7 @@ void f_0200F428(PPCInterpreter_t* __restrict ctx)
 void f_0200F4FC(PPCInterpreter_t* __restrict ctx)
 {
 	if (Stepped())
-		GPR(5) = ScaledInt(GPR(5), false);
+		GPR(5) = ScaledByte(GPR(5));
 	[[clang::musttail]] return orig_f_0200F4FC(ctx);
 }
 
@@ -271,6 +284,20 @@ void f_025D6800(PPCInterpreter_t* __restrict ctx)
 
 // ---- animation (J3DAnimation.cpp) ------------------------------------------------------------------
 
+// J3DFrameCtrl::checkPass(pass frame f1, ctrl r3): whether the next update (mFrame to mFrame + mRate)
+// passes the frame. With a step h the next update covers mRate h, so the rate is h of itself for the
+// call: the half steps' windows tile the 30 Hz tick's, and a frame is passed once.
+void f_027F2BF8(PPCInterpreter_t* __restrict ctx)
+{
+	if (!Stepped())
+		[[clang::musttail]] return orig_f_027F2BF8(ctx);
+	const uint32 frameCtrl = GPR(3);
+	const uint32 rate = rd32(frameCtrl);
+	wrf(frameCtrl, std::bit_cast<float>(rate) * Step());
+	orig_f_027F2BF8(ctx);
+	wr32(frameCtrl, rate);
+}
+
 // J3DFrameCtrl::update(ctrl r3): mFrame (+4) += mRate (+0), then the loop mode (+0xE). With a step h
 // the rate is h of itself for the call; a mode that stops (rate 0) or turns (negates) the
 // animation keeps that, in the rate's own units.
@@ -284,4 +311,71 @@ void f_027F2FC4(PPCInterpreter_t* __restrict ctx)
 	orig_f_027F2FC4(ctx);
 	const float after = rdf(frameCtrl);
 	wrf(frameCtrl, after == scaled ? rate : after / Step());
+}
+
+// ---- systems that run on whole ticks --------------------------------------------------------------
+// A converted process's half step must not hand work to systems that only run on whole ticks: it
+// would be there twice when they next run. And per-tick countdowns count whole ticks.
+
+namespace
+{
+	inline bool HalfStep()
+	{
+		return Stepped() && g_rtHalfTick;
+	}
+}
+
+// cLib_calcTimer<u8>(u8* t r3) -> t: if (*t) --*t; return *t. On a half step it doesn't count.
+void f_0207A9A0(PPCInterpreter_t* __restrict ctx)
+{
+	if (!HalfStep())
+		[[clang::musttail]] return orig_f_0207A9A0(ctx);
+	GPR(3) = rd8(GPR(3));
+}
+
+// dCcD_GStts::Move(stts r3): clears last tick's hit state and counts a byte (+0xA8) down to 0. On a
+// half step the count stays.
+void f_0251621C(PPCInterpreter_t* __restrict ctx)
+{
+	if (!HalfStep())
+		[[clang::musttail]] return orig_f_0251621C(ctx);
+	const uint32 stts = GPR(3);
+	const uint8 count = rd8(stts + 0xA8);
+	orig_f_0251621C(ctx);
+	wr8(stts + 0xA8, count);
+}
+
+// dCcS::Set(manager r3, collider r4): enters a collider into the collision manager's lists for this
+// tick's resolution (Ccsp()->Move(), whole ticks only). Not on a half step.
+void f_0200E240(PPCInterpreter_t* __restrict ctx)
+{
+	if (!HalfStep())
+		[[clang::musttail]] return orig_f_0200E240(ctx);
+}
+
+// a per-tick request list (up to 5 entries at +0x44, count at +0x40; full: replaced by priority and
+// at random), read by a whole-tick system. Not on a half step.
+void f_02516C14(PPCInterpreter_t* __restrict ctx)
+{
+	if (!HalfStep())
+		[[clang::musttail]] return orig_f_02516C14(ctx);
+}
+
+// ---- animation blends (m_Do_ext.cpp) ----------------------------------------------------------------
+
+// mDoExt_MtxCalcOldFrame::decOldFrameMorfCounter(r3): the blend from the old pose, counted down 1 a
+// tick (+4), the rate of the old pose recomputed from it (+0xC, +0x10, +0x14). The model's last joint
+// calls it every calc (each step at 60 fps), so with a step h it counts h: the old pose's weight
+// then falls on the 30 Hz line at whole ticks. initOldFrameMorf (f_025E3F3C) calls it once when a
+// blend starts: that one is part of the start, a whole 1.
+void f_025E3EC8(PPCInterpreter_t* __restrict ctx)
+{
+	const uint32 lr = ctx->spr.LR;
+	if (!Stepped() || (lr >= 0x025E3F3Cu && lr < 0x025E3FB4u))
+		[[clang::musttail]] return orig_f_025E3EC8(ctx);
+	const uint32 counter = GPR(3) + 4;
+	const float c = rdf(counter);
+	if (c > 0.0f)
+		wrf(counter, c + (1.0f - Step()));          // the game's - 1 then makes it - h
+	orig_f_025E3EC8(ctx);
 }

@@ -44,6 +44,7 @@ void LatteBufferCache_notifyDCFlush(MPTR address, uint32 size);
 // 60 fps (D21, tools/recomp/runtime/ppc_ops.h): set per frame by src/overrides/sixty.cpp
 bool g_rtHalfTick = false;
 float g_rtStep = 1.0f;
+float g_rtNote = 0.0f;
 
 namespace wwhd::rt
 {
