@@ -77,6 +77,8 @@
 024FEAC8    whole       stw             Run: m118 + 1
 024FEACC    whole       stw             Run: m108 + 1
 024FEAD0    whole       stw             Run: m080 + 1
+024FE644    whole:r3=r4 bl 024fa410     Run: mNextType = nextType(mCurType) on whole ticks (requests come on them)
+024FE670    whole:r3=r4 bl 024fa410     Run: mNextType = nextType(mCurType) on whole ticks
 024FE89C    k@f1        bl 0200693c     Run: m148 += (forwardCheckAngle - m148) * FwdCushion (cSAngle *)
 024FEB00    k@f1        bl 0200693c     Run: mViewCache.mBank -= mBank * 0.05 (cSAngle *)
 # followCamera (f_025028B8): the work area mWork.follow at r30 (dCamera +0x37C), mViewCache at r31.
@@ -193,3 +195,44 @@
 023FDF84    *h@f7       fadds           posMove: current.pos.z += m3730.z (wind)
 # setNormalSpeedF (f_02416230): mNormalSpeed (+0x6A14) accelerates by an amount per tick
 02416410    *h@f28      fadds           setNormalSpeedF: mNormalSpeed += acceleration
+#
+# ---- step rules: the ship (daShip_c, d_a_ship.cpp; WWHD's fields 0x2E8 on from the GameCube's).
+# Converted with WWHD_60FPS_CONVERT=165.
+# execute (f_02477A24): timers, the pitch spring, the turn rate, a phase, the move per step, the drift
+02477D90    whole       sth             ship execute: +0x69E - 1 (a countdown)
+02477DAC    whole       sth             ship execute: m0388 - 1 (+0x670, a countdown)
+0247836C    keep:r7     addi            ship execute: pitch spring m0386 += 1 (the nudge when the force rounds to 0)
+02478378    split@r7    add             ship execute: pitch spring m0384 += m0386
+024783CC    split@r9    add             ship execute: pitch spring m0386 += force
+024783D8    split@r7    add             ship execute: pitch spring m0384 += m0386
+0247865C    split@r9    add             ship execute: current.angle.y += m03B8 (the turn rate)
+02478664    split@r9    add             ship execute: shape_angle.y += m03B8
+02478CE0    vec@r4      bl 028e8d88     ship execute: current.pos += m1044 (the path's current)
+02478D68    vec@r4      bl 028e8d88     ship execute: current.pos += m1044 (the path's current)
+0247AAA4    *h@f29      fadds           ship execute: a phase (+0x6B8) += its least step
+0247AAD0    *h@f11      fadds           ship execute: a phase (+0x6B8) += speed-based step
+0247AB54    /h:f1       bl 028f4384     ship execute: the move this step (m03F8 +0x6E0), per tick
+0247ABBC    /h:f1       bl 028f4384     ship execute: the move this step (m03F8 +0x6E0), per tick
+# setWaveAngle (f_024759CC): roll and pitch springs toward the waves' slope
+02475CB8    *h@f31      fmadds          ship setWaveAngle: m0376 += (wave roll - m0372) * 0.045
+02475CE8    split@r9    add             ship setWaveAngle: m0372 += m0376
+02475D2C    *h@f31      fmadds          ship setWaveAngle: m0374 += (wave pitch - m0370) * 0.045
+02475D58    split@r7    add             ship setWaveAngle: m0370 += m0374
+# setYPos (f_024754D8): riding the water (fVar2 = |speedF| / 55, at most 1)
+024756D0    k@f13       fmuls           ship setYPos: (water - y) * 0.1, y's approach to the water
+024756F0    *h@f28      fmadds          ship setYPos: m03D0 += (water - y) * 0.05 (a spring's force)
+02475740    *h@f11      fadds           ship setYPos: y += m03D0
+02475790    *h@f10      fadds           ship setYPos: m03B0 += 1000 + rnd(1000) + 500 fVar2 (a phase)
+024757E4    *h@f11      fadds           ship setYPos: y += fVar2 0.25 sin(m03B0) + 0.6
+02475874    *h@f9       fmadds          ship setYPos: m03AE += (fVar2 0.5 + 1) (rnd(800) + 800) (a phase)
+024758D4    *h@f7       fmadds          ship setYPos: m03AC += (fVar2 0.5 + 1) (rnd(600) + 600) (a phase)
+02475928    *h@f8       fadds           ship setYPos: m0370 += fVar2 100 sin(m03AE) + 30
+02475978    *h@f10      fadds           ship setYPos: m0372 += fVar2 115 sin(m03AC) + 35
+# setMoveAngle (f_0247D4B0): the heading turns by -turnRate (tiller >> 6) a tick
+0247D59C    split@r8    add             ship setMoveAngle: shape_angle.y += -turnRate (tiller >> 6)
+0247D624    split@r8    add             ship setMoveAngle: shape_angle.y += -turnRate (tiller >> 6)
+# setControllAngle (f_024751E0): the tiller's spring (m036C, m036E)
+02475258    keep:r10    addi            ship setControllAngle: m036E += 1 (the nudge when the force rounds to 0)
+0247526C    split@r10   add             ship setControllAngle: m036C += m036E
+0247528C    split@r0    add             ship setControllAngle: m036E += force
+024752A0    split@r10   add             ship setControllAngle: m036C += m036E

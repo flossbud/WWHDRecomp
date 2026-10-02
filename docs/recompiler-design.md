@@ -1477,11 +1477,23 @@ baseline is "nothing converted": the 60-tick run must equal the 30-tick run at e
   desktop a task-loop watch inside a half tick would have read as quiet, and switched the half
   tick's rollback off when it ended). The virtual clock has no fast paths, so only real time (and
   the owner's test) sees this.
-* **Mixed rates on the boat:** with Link and the camera converted and the ship not, the camera's
-  type selection (`nextType`, `f_024FA410`) picks the ship's turning camera on whole ticks and the
-  other one on half ticks, restarting its style every frame; the camera holds still through the
-  turn and then swings (sail route, ticks 1294-1374). The ship moves Link on whole ticks only; it
-  is the next system to convert.
+* **The boat** (`WWHD_60FPS_CONVERT=165`, about 35 rules; WWHD's `daShip_c` fields sit 0x2E8 on
+  from the GameCube's): its execute (two countdowns, the pitch spring `m0386 += force; m0384 +=
+  m0386` with integer angles split between the half ticks, the turn rate, a wake phase, its move
+  per step read per tick, the path's current), `setWaveAngle` (the roll and pitch springs toward
+  the waves), `setYPos` (riding the water: an approach, a bob spring, random phases and wobbles,
+  each per-tick part `× h`; the random draws mean the wave motion matches in kind, not number for
+  number), `setMoveAngle` (the heading turns by the tiller each tick) and `setControllAngle` (the
+  tiller's spring). Its speed goes through `cLib_addCalc` (converted). Without the steering rules
+  the boat turned twice as fast and ended 63,000 units off; with them it sails the 30-tick run's
+  course within 84 units (one tick of sailing ahead).
+* **Discrete choices from requests stay on whole ticks.** The camera's type comes from requests
+  other processes leave (`+0x528`) and the camera consumes; an unconverted requester leaves one
+  on whole ticks only, so the camera took the requested type on a whole tick and dropped it on the
+  half tick, restarting its style every frame and holding still (sail route: the Fishman, process
+  118, asked for his camera, the boat being a tick of sailing nearer him than at 30). `nextType`
+  now runs on whole ticks only (tick rule `whole:r3=r4`: on a half tick it returns the current
+  type).
 * **Where Link stands** (60 fps from swap 900, camera and Link converted): on the tour route his
   normal speed now ramps at the 30 Hz rate (`1.75` a half step, `3.5` a tick), half a tick early
   because his state changes can fall on a half tick (60 fps reacts sooner); his worst position error

@@ -48,7 +48,8 @@ whole ticks when it runs 60 frames a second: its code is wrapped in `if (RT_WHOL
 is always true at 30 fps, so nothing changes there. A rule names the instruction it expects (a call:
 `bl TARGET` or `bctrl`; a store without update: its mnemonic), and a different instruction at that
 address is an error. `whole:r3=N` also sets r3 to N when a call is skipped, for callers that test
-its result. Step rules, for the code of processes that run every frame with a time step h
+its result, `whole:r3=rN` sets it to the register rN (a call's own argument: "unchanged"). Step
+rules, for the code of processes that run every frame with a time step h
 (g_rtStep, src/overrides/sixty.cpp; nothing changes while it is 1, at 30 fps always):
   keep:SRC     on a half tick the instruction's destination gets SRC instead (a counter that
                counts whole ticks: `addi r0, r3, 1` with keep:r3)
@@ -217,7 +218,7 @@ class Program:
                     if arg:
                         key, _, v = arg.partition("=")
                         assert key == "r3", f"tick_rules.txt:{n}: unknown rule argument {arg}"
-                        value = int(v, 0)
+                        value = v if re.fullmatch(r"r([12]?[0-9]|3[01])", v) else int(v, 0)
                 else:
                     assert kind.rstrip("@") in ("keep", "split", "note", "vec", "arc") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
                     assert kind != "note" or arg[0] == "f", f"tick_rules.txt:{n}: note takes a float register"
@@ -477,7 +478,7 @@ def apply_tick_rule(rule, i, lines):
     if kind == "whole":
         out = [f"if (RT_WHOLE_TICK()) {{   // tick rule: {what}"] + ["\t" + l for l in lines] + ["}"]
         if arg is not None:
-            out += ["else", f"\tGPR(3) = {emit.hx(arg)};"]
+            out += ["else", f"\tGPR(3) = {reg_expr(arg) if isinstance(arg, str) else emit.hx(arg)};"]
         return out
     if kind == "keep":
         dest = f"GPR({i.rD})" if i.op in ("addi", "addic", "add") else f"FPR({i.frD})"
