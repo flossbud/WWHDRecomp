@@ -24,6 +24,7 @@
 #include "util/helpers/helpers.h"
 #include "vk/renderer.h"
 #include <algorithm>
+#include <ctime>
 #include <map>
 #include <set>
 
@@ -69,11 +70,16 @@ bool LatteTiming_getCustomVsyncFrequency(sint32& f)
 	return true;
 }
 
+// wwhd: vsyncs signalled so far, for 60 fps pacing (src/overrides/pacing.cpp); counted before waiters
+// are woken, so one that checks it under the scheduler lock never misses one
+static std::atomic<uint64> s_vsyncCount = 0;
+
 void LatteTiming_signalVsync()
 {
 	static uint32 s_vsyncIntervalCounter = 0;
 	if (!LatteGPUState.gx2InitCalled)
 		return;
+	s_vsyncCount.fetch_add(1);
 	s_vsyncIntervalCounter++;
 	uint32 swapInterval = LatteGPUState.sharedArea ? (uint32)LatteGPUState.sharedArea->swapInterval : 1;
 	if (s_vsyncIntervalCounter >= swapInterval)
@@ -167,6 +173,27 @@ namespace frametimes
 		s_periodStart = now;
 		s_idleAtStart = idle;
 	}
+
+	// the GPU thread's CPU time from one swap to the next: the command processor's and the
+	// renderer's work for a frame (src/overrides/pacing.cpp's frame log)
+	std::atomic<uint64> s_gpuFrameNs = 0;
+	void GpuFrame()
+	{
+#if defined(CLOCK_THREAD_CPUTIME_ID)
+		static uint64 s_last = 0;
+		timespec ts;
+		clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+		const uint64 now = (uint64)ts.tv_sec * 1000000000ull + (uint64)ts.tv_nsec;
+		s_gpuFrameNs.store(now - s_last);
+		s_last = now;
+#endif
+	}
+}
+
+namespace wwhd::gpu
+{
+	uint64 VsyncCount() { return s_vsyncCount.load(); }
+	uint64 GpuFrameCpuNs() { return frametimes::s_gpuFrameNs.load(); }
 }
 
 // ---- G0 draw statistics (docs/recompiler-design.md D15) -----------------------------------------
@@ -582,7 +609,10 @@ namespace
 			if (wwhd::gpu::RendererOn())
 				wwhd::gpu::RendererSwap();
 			if (!PPCTimer_isVirtualClock())
+			{
 				frametimes::Swap();
+				frametimes::GpuFrame();
+			}
 			break;
 		case IT_HLE_WAIT_FOR_FLIP:
 		{

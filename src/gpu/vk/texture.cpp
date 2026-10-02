@@ -22,6 +22,7 @@ Latte::E_GX2SURFFMT LatteTexture_ReconstructGX2Format(const Latte::LATTE_SQ_TEX_
 void LatteTextureLoader_begin(LatteTextureLoaderCtx* textureLoader, uint32 sliceIndex, uint32 mipIndex, MPTR physImagePtr,
 	MPTR physMipPtr, Latte::E_GX2SURFFMT format, Latte::E_DIM dim, uint32 width, uint32 height, uint32 depth, uint32 mipLevels,
 	uint32 pitch, Latte::E_HWTILEMODE tileMode, uint32 swizzle);
+bool PPCTimer_isVirtualClock();                                  // src/runtime/espresso/PPCTimer.cpp
 
 namespace wwhd::gpu
 {
@@ -322,8 +323,8 @@ namespace wwhd::gpu
 			Image img;                                                 // img.layout is that of every subresource
 			VkImageType type = VK_IMAGE_TYPE_2D;
 			uint32 depth = 1, layers = 1, mips = 1;
-			uint64 hash = 0;
-			uint32 checkedFrame = UINT32_MAX;
+			uint64 hash = 0, sample = 0;                               // of its memory (level 0): whole, sampled
+			uint32 checkedFrame = UINT32_MAX, hashedFrame = 0;
 			std::unordered_map<uint64, VkImageView> views;
 		};
 		std::unordered_map<uint64, Texture> s_textures;
@@ -341,6 +342,42 @@ namespace wwhd::gpu
 			for (size_t j = i * 8; j < n; j++)
 				r = (r ^ p[j]) * 0x100000001B3ull;
 			return r ^ n;
+		}
+
+		// A sample of a texture's memory: its first and last 256 bytes and 64 words spread over it
+		uint64 SampleMemory(const uint8* p, size_t n)
+		{
+			if (n <= 4096)
+				return HashMemory(p, n);
+			uint64 h = HashMemory(p, 256) ^ std::rotl(HashMemory(p + n - 256, 256), 23);
+			const size_t step = ((n - 8) / 64) & ~size_t(7);
+			for (size_t i = 0; i < 64; i++)
+			{
+				uint64 w;
+				memcpy(&w, p + i * step, 8);
+				h = (std::rotl(h ^ w, 29) + w) * 0x9FB21C651E98DF25ull;
+			}
+			return h ^ n;
+		}
+
+		// Whether a texture's memory changed since it was uploaded. Checks run in the first draw of a
+		// frame that samples it. Hashing every texture whole every frame took a fifth of the GPU
+		// thread's time facing Outset at 60 fps (tens of MB a frame, D21), and textures change rarely
+		// (a scene's loading, a pictograph). So in real time a frame hashes a sample of each (SampleMemory)
+		// and whole textures in turn: one whose sample changed, and each at most every kWholeEvery
+		// frames while the frame has kWholeBudget bytes left; a change the sample misses shows within
+		// a fraction of a second. With the virtual clock (checks, captures) and with
+		// WWHD_TEXTURE_HASH=whole, every texture whole every frame, as before.
+		constexpr uint32 kWholeEvery = 30;
+		constexpr size_t kWholeBudget = 4u << 20;
+
+		bool HashWholeAlways()
+		{
+			static const bool whole = [] {
+				const char* e = getenv("WWHD_TEXTURE_HASH");
+				return PPCTimer_isVirtualClock() || (e && strcmp(e, "whole") == 0);
+			}();
+			return whole;
 		}
 
 		struct TexDesc
@@ -460,11 +497,35 @@ namespace wwhd::gpu
 			if (t.checkedFrame != s.frame)
 			{
 				t.checkedFrame = s.frame;
-				uint64 h = HashMemory(memory_getPointerFromPhysicalOffset(d.phys), (size_t)info.surfSize);
-				if (h != t.hash || t.img.layout == VK_IMAGE_LAYOUT_UNDEFINED)
+				const uint8* p = memory_getPointerFromPhysicalOffset(d.phys);
+				const size_t n = (size_t)info.surfSize;
+				bool whole = HashWholeAlways() || t.img.layout == VK_IMAGE_LAYOUT_UNDEFINED;
+				if (!whole)
 				{
-					t.hash = h;
-					Upload(t, d, f);
+					static uint32 s_budgetFrame = UINT32_MAX;
+					static size_t s_budget = 0;
+					if (s_budgetFrame != s.frame)
+						s_budgetFrame = s.frame, s_budget = kWholeBudget;
+					const uint64 sample = SampleMemory(p, n);
+					whole = sample != t.sample;
+					t.sample = sample;
+					if (!whole && s.frame - t.hashedFrame >= kWholeEvery && s_budget)
+					{
+						whole = true;
+						s_budget -= std::min(s_budget, n);
+					}
+				}
+				if (whole)
+				{
+					t.hashedFrame = s.frame;
+					uint64 h = HashMemory(p, n);
+					if (h != t.hash || t.img.layout == VK_IMAGE_LAYOUT_UNDEFINED)
+					{
+						t.hash = h;
+						if (!HashWholeAlways())
+							t.sample = SampleMemory(p, n);
+						Upload(t, d, f);
+					}
 				}
 			}
 			return &t;

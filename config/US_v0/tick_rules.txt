@@ -236,3 +236,16 @@
 0247526C    split@r10   add             ship setControllAngle: m036C += m036E
 0247528C    split@r0    add             ship setControllAngle: m036E += force
 024752A0    split@r10   add             ship setControllAngle: m036C += m036E
+# ---- step rules: the King of Red Lions' sail (GRID 171, daGrid_c, d_a_grid.cpp; WWHD's fields 0x978
+# on from the GameCube's, 0x984 past a flap the GameCube's hasn't, +0x2B84 to +0x2B8C). _execute
+# (f_021642D4):
+021643EC    whole       stb             sail _execute: the cloth's alpha + 5, toward its target
+02164414    whole       stb             sail _execute: the cloth's alpha - 5
+0216442C    whole       stb             sail _execute: the cloth's alpha = its target (within 5)
+# ho_move (f_02163678), the cloth's shape
+02163988    split@r7    add             sail ho_move: wave phase +0x24BC += min(2500 + 7200 wind, 10000)
+021639C4    split@r0    add             sail ho_move: billow phase +0x2B96 += 3000 cos(wind against the sail)
+021639EC    split@r6    add             sail ho_move: billow phase +0x2B96 += 300, or -300 below 0
+02163AA0    whole       sth             sail ho_move: the flap's countdown +0x2B8C jumps from 5 to 1
+02163AD0    whole       sth             sail ho_move: the flap's countdown +0x2B8C - 1
+02163B48    whole       sth             sail ho_move: the filling countdown +0x24C2 - 1 (the GameCube's 0x1B4A)

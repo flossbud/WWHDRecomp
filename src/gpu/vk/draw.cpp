@@ -33,6 +33,7 @@
 #include <glslang/Public/ShaderLang.h>
 #include <glslang/Public/ResourceLimits.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
+#include <array>
 
 Latte::E_GX2SURFFMT LatteTexture_ReconstructGX2Format(const Latte::LATTE_SQ_TEX_RESOURCE_WORD1_N& texUnitWord1,
 	const Latte::LATTE_SQ_TEX_RESOURCE_WORD4_N& texUnitWord4);  // latte_glue.cpp
@@ -51,6 +52,19 @@ namespace wwhd::gpu
 			for (size_t i = 0; i < n; i++)
 				h = (h ^ p[i]) * 0x100000001B3ull;
 			return h;
+		}
+
+		// A shader program's Fnv, once a frame per program: a frame's thousands of draws use a few
+		// hundred programs, and hashing every draw's three byte by byte took a quarter of the GPU
+		// thread's time facing Outset at 60 fps (D21). A program doesn't change within a frame.
+		uint64 ProgramHash(const uint8* code, uint32 size)
+		{
+			struct Entry { const uint8* code; uint32 size, frame; uint64 hash; };
+			static std::array<Entry, 1024> s_memo{};
+			Entry& e = s_memo[((uintptr_t)code >> 8) & (s_memo.size() - 1)];   // programs are 256-byte aligned
+			if (e.code != code || e.size != size || e.frame != s.frame + 1)
+				e = { code, size, s.frame + 1, Fnv(code, size) };
+			return e.hash;
 		}
 
 		template<typename F>
@@ -1431,7 +1445,7 @@ namespace wwhd::gpu
 		if (!program(mmSQ_PGM_START_FS, fsCode, fsSize) || !program(mmSQ_PGM_START_VS, vsCode, vsSize) ||
 			!program(mmSQ_PGM_START_PS, psCode, psSize))
 			return skip("a draw without fetch, vertex or pixel shader");
-		uint64 fsHash = Fnv(fsCode, fsSize);
+		uint64 fsHash = ProgramHash(fsCode, fsSize);
 		LatteFetchShader*& fetch = s_fetchShaders[fsHash];
 		if (!fetch)
 		{
@@ -1439,7 +1453,7 @@ namespace wwhd::gpu
 			if (shaderlist::Capturing())
 				shaderlist::Capture(fmt::format("fetch {:016x} {} {}", fsHash, shaderlist::Hex({ fsCode, fsSize }), shaderlist::Registers(regs)));
 		}
-		uint64 vsKey = VertexKey(regs, Fnv(vsCode, vsSize), fetch), psKey = PixelKey(regs, Fnv(psCode, psSize));
+		uint64 vsKey = VertexKey(regs, ProgramHash(vsCode, vsSize), fetch), psKey = PixelKey(regs, ProgramHash(psCode, psSize));
 		Shader* vs = GetShader(true, vsKey, vsCode, vsSize, fetch, fsHash);
 		Shader* ps = GetShader(false, psKey, psCode, psSize, nullptr, 0);
 		if (!vs->module || !ps->module)

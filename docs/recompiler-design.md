@@ -391,7 +391,9 @@ registrations with whole-tick systems a half step must not repeat (`dCcS::Set` `
 request list `f_02516C14`), and two moves measured over a whole tick (Link's `posMoveFromFootPos`
 `f_023FCB9C`, the camera's `updateMonitor` `f_024F9A48`); each is the game's function unchanged
 while the step is 1. With 60 fps and the probe
-off each calls its original. Adding or removing an override changes `funcs.h` (the `orig_f_X` declarations), which
+off each calls its original. Frame pacing (D21, the owner's feel test) adds sead's `fw_waitForVsync`
+(`f_0274C874`, `src/overrides/pacing.cpp`): in real time at 60 fps a tick's two frames share their two
+vsyncs, and `WWHD_FRAME_LOG` times every frame; otherwise it calls its original. Adding or removing an override changes `funcs.h` (the `orig_f_X` declarations), which
 every shard includes: the next build compiles all generated code again (about 12 minutes on the
 worker), so batch them.
 
@@ -1528,6 +1530,55 @@ baseline is "nothing converted": the 60-tick run must equal the 30-tick run at e
   slid past it, 219 units off). The trial's half steps disagree with real 60 fps runs for Link (they
   run back to back without the world between them; his foot checks read ground state): for him the
   60 fps runs with `tools/sixty/track.py` (fields tick by tick, half ticks too) are the measure.
+
+**Step 3: the owner's feel test (2026-10-02).** The owner played the converted build in a window
+on the desktop: smooth with the sea in view, a chug and slow motion facing Outset, the sail and
+the boat's wake flickering, and a question whether the boat is too fast.
+* **The boat's speed is right.** Its move per tick from the tracked runs, 30-tick and 60: sailing
+  north 33.06 and 33.06 units, turning west 46.11 and 45.74, open sea 49.94 and 49.93, after the
+  gentle turn 44.57 and 44.58.
+* **Why it chugged: frames that missed their vsync.** sead's frame ends in `fw_waitForVsync`
+  (`f_0274C874`): the next vsync, then every swap flipped. At 60 a tick is two frames, and the game
+  is frame-locked: a frame that overruns 16.7 ms waits for the vsync after, its tick takes 50 ms
+  instead of 33, and the game runs slower. The owner's log facing Outset: 41-48 fps, frame times
+  of 17 and 33 ms. Two causes, both found with the frame log (`WWHD_FRAME_LOG`, `tools/sixty/frames.py`:
+  per frame the work, the GX2DrawDone wait, both threads' CPU, vsyncs missed) and the profiler
+  (`WWHD_PROFILE` in a headless real-time run):
+  * *The half tick's journal* took a fifth of the main thread: every store of a half tick's frame
+    went through `RollbackStore`'s range search (a binary search over the executed processes), and
+    a store into journaled memory was saved each time, repeats included (the matrix stack, a draw's
+    fields). Now which 4 KB pages hold journaled memory is worked out once a frame, and each keeps a
+    bit per byte saved: a store is saved once. Sail route: 540-820 thousand stores a half tick,
+    about a thousand saved. The rollback is the same (saves restored last to first).
+  * *The renderer's thread*, which the game waits for at the end of every frame (gfx_EndFrame's
+    GX2DrawDone): 15-22 ms a frame boarding the boat with the island in view. Two hashes were half
+    of it: each draw hashed its three shader programs byte by byte (now once a frame per program:
+    `ProgramHash`, the same values), and each texture used was hashed whole every frame to see if it
+    changed (in real time now a sample of each, its ends and 64 words, every frame, and whole
+    textures in turn, at most 4 MB a frame and each every 30 frames or when its sample changes; a
+    change the sample misses shows within a fraction of a second; with the virtual clock or
+    `WWHD_TEXTURE_HASH=whole`, every texture whole every frame as before). 8-10 ms now.
+  * *Pacing by pairs* (`src/overrides/pacing.cpp`): in real time at 60 a whole tick's frame that
+    has missed its vsync doesn't wait for the next, and the half tick's frame waits for the pair's
+    second vsync; flips aren't waited for (GX2DrawDone has the GPU done with the frame). A tick keeps
+    its 33.3 ms whenever its two frames fit together, whichever overruns; a pair that overruns both
+    slows the game by the overrun, not by a vsync. `WWHD_60FPS_PACING=vsync` keeps the game's wait.
+    With the virtual clock the game's own wait runs (frames always fit there).
+  * Sail route on the desktop, headless (frames 1801-2400, boarding with the island in view): 53.3
+    fps before, 57.4 with pairs, 60.1 with the journal and renderer fixes too (no frame late; the
+    work 9-13 ms, the renderer's thread 8-10 ms at its heaviest, 3.4 on average).
+* **The sail flickered: it moved at 30.** Consecutive captures while sailing: the sail's change
+  between frames alternated 6.1/2.6/5.5/2.3 (the wake's 11/22/14/26), the boat's steady. The sail
+  is the cloth `GRID` (171, `daGrid_c`); `SAIL` (172) is a pirate ship's. Its `_execute` chases its
+  alpha by 5 a tick and `ho_move` shapes the cloth from two phases advanced each tick, an
+  approach, a countdown and the HD port's own flap (a 15-tick countdown, +0x2B8C). Rules: the
+  phases' increments split between the half ticks, the countdowns and the alpha on whole ticks;
+  `cLib_addCalc2`, `cLib_addCalc0` and `cLib_addCalcAngleS2` are converted already.
+  `WWHD_60FPS_CONVERT=...,171`.
+* **The wake is particles.** The boat's wake, its bow waves and splashes are JParticle emitters
+  with the ship's callbacks (`dPa_trackEcallBack` and others); the particle calc (`dPa_control_c::calc3D`)
+  runs on whole ticks, so they move at 30 while the boat moves at 60. Next: the particle system
+  converted (its frame counters are floats, so a half step is exact there).
 
 ## Milestones
 

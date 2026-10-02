@@ -14,12 +14,20 @@
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "config/ActiveSettings.h"
 #include "util/helpers/ConcurrentQueue.h"
+#include <atomic>
+#include <chrono>
+
+namespace wwhd::gpu
+{
+	uint64 VsyncCount();                           // src/gpu/null_gpu.cpp
+}
 
 namespace GX2
 {
 
 	SysAllocator<coreinit::OSThreadQueue> g_vsyncThreadQueue;
 	SysAllocator<coreinit::OSThreadQueue> g_flipThreadQueue;
+	std::atomic<uint64> s_drawDoneWaitNs = 0;      // wwhd: GX2DrawDone's waits, for the frame log
 
 	void GX2SetGPUFence(uint32be* fencePtr, uint32 mask, uint32 compareOp, uint32 compareValue)
 	{
@@ -210,6 +218,17 @@ namespace GX2
 		__OSUnlockScheduler();
 	}
 
+	// wwhd: 60 fps pacing (src/overrides/pacing.cpp): wait until vsync number `count` (null_gpu.cpp
+	// counts them) has come. Checked under the scheduler lock, which the vsync's wakeup takes after
+	// counting: none is missed.
+	void wwhd_WaitForVsyncCount(uint64 count)
+	{
+		__OSLockScheduler();
+		while (wwhd::gpu::VsyncCount() < count)
+			g_vsyncThreadQueue.GetPtr()->queueAndWait(coreinit::OSGetCurrentThread());
+		__OSUnlockScheduler();
+	}
+
 	void GX2WaitForFlip()
 	{
 		if ((sint32)(_swapEndianU32(LatteGPUState.sharedArea->flipRequestCountBE) == _swapEndianU32(LatteGPUState.sharedArea->flipExecuteCountBE)))
@@ -236,7 +255,17 @@ namespace GX2
 		GX2Command_Flush(0x100, true);
 
 		uint64 ts = GX2GetLastSubmittedTimeStamp();
-		return GX2WaitTimeStamp(ts);
+		const auto start = std::chrono::steady_clock::now();
+		const bool done = GX2WaitTimeStamp(ts);
+		s_drawDoneWaitNs += (uint64)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count();
+		return done;
+	}
+
+	// wwhd: how long GX2DrawDone has waited for the GPU since the last call (the frame log,
+	// src/overrides/pacing.cpp)
+	uint64 wwhd_TakeDrawDoneWaitNs()
+	{
+		return s_drawDoneWaitNs.exchange(0);
 	}
 
 	void GX2Init_event()

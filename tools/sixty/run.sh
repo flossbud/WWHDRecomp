@@ -8,7 +8,8 @@
 # of the functions FILTER names (CEMU_HLE_TRACE_FILTER prefixes) to OUT/RATE/trace.zst, for
 # tools/sixty/sound.py. Both rates run with WWHD_VIRTUAL_SPEED (default 3 here):
 # the emulated CPU that fast, so that a 60 fps frame fits in one vsync of guest time and both runs
-# keep the same guest time per game frame. Extra environment passes through (WWHD_STATE_DUMP_EVERY, CEMU_SHOT_FRAMES with doubled
+# keep the same guest time per game frame. SIXTY_FRAMES=N ends the route early, at game frame N.
+# Extra environment passes through (WWHD_STATE_DUMP_EVERY, CEMU_SHOT_FRAMES with doubled
 # frames at 60, WWHD_RENDER=vk REF_GPU=llvmpipe). Run it on the worker: tools/worker/job start NAME ...
 # The dumps are game memory: keep OUT_DIR on the worker.
 set -euo pipefail
@@ -20,6 +21,7 @@ shift 2
 rates=("$@"); [ ${#rates[@]} -gt 0 ] || rates=(30 60)
 . "$ref/routes.sh"
 route_info "$which" || { echo "routes: $route_names" >&2; exit 2; }
+frames=${SIXTY_FRAMES:-$frames}                    # SIXTY_FRAMES=N ends the route at game frame N
 [ -n "$save" ] && export REF_SAVE=$save
 export CEMU_BIN=${CEMU_BIN:-$(cd "$here/../.." && pwd)/build/wwhd/wwhd-null} WWHD_NATIVE=${WWHD_NATIVE:-on}
 export WWHD_VIRTUAL_SPEED=${WWHD_VIRTUAL_SPEED:-3}

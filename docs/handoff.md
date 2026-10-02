@@ -505,11 +505,28 @@ it in a window; D21 "Step 2"):**
   dangling pointers); the HD port renders the HUD every frame anyway. Booting at 60 now runs
   clean, in real time too. Real time: 60.1 fps, frame times median
   16.7 ms, 99th 18.6 ms (tour, camera + Link + boat converted, desktop headless).
-- Next: the owner's feel test in a window (`WWHD_60FPS=1 WWHD_60FPS_CONVERT=476,168,165` with
-  `tools/play/play.sh` after `deploy.sh`, only when they ask); then D21's order: animation-heavy
-  actors, particles, the HUD, then actors route by route; uncapped. Tools: `tools/sixty/track.py` (fields tick by tick, half
-  ticks too), `tools/sixty/camera.py` (the camera's view, 30 against 60).
-- Run converted: `WWHD_60FPS=1 WWHD_60FPS_CONVERT=476,168` (with `WWHD_60FPS_FROM` for routes).
+- The owner's feel test (2026-10-02, in a window on the desktop; D21 "Step 3"): smooth facing the
+  sea; facing Outset a chug and slow motion; the sail and the wake flickered; was the boat too
+  fast? Answers and fixes:
+  - The boat's speed per tick equals the 30-tick run's (33.06/33.06, 49.94/49.93 units).
+  - The chug: frames over 16.7 ms waited a whole extra vsync (the game is frame-locked). The half
+    tick's journal now filters by page and saves each byte once a frame (it was a fifth of the
+    main thread); the renderer hashes shader programs once a frame and, in real time, samples
+    textures (whole textures in turn) instead of hashing all of them every frame (half of the
+    renderer thread); and `src/overrides/pacing.cpp` paces by pairs (a late whole-tick frame
+    doesn't wait for the next vsync; the half tick's frame waits for the pair's second). Sail
+    route, desktop, headless: 53.3 fps boarding with the island in view, now 60.1, no late frames.
+  - The sail is GRID (171): rules in `tick_rules.txt`, converted with `WWHD_60FPS_CONVERT=...,171`.
+  - The wake, bow waves and splashes are particles, calculated on whole ticks: next, the particle
+    system converted.
+- Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
+  CPU, vsyncs missed; `tools/sixty/frames.py` summarises), `WWHD_PROFILE` (`tools/profile_report.py`
+  on the worker with the same build). On the desktop, `~/wwhd-test` is ours to deploy to and run
+  headless; `~/wwhd-play` is the owner's.
+- Then D21's order: particles, animation-heavy actors, the HUD, then actors route by route;
+  uncapped. Tools: `tools/sixty/track.py` (fields tick by tick, half ticks too),
+  `tools/sixty/camera.py` (the camera's view, 30 against 60).
+- Run converted: `WWHD_60FPS=1 WWHD_60FPS_CONVERT=476,168,165,171` (with `WWHD_60FPS_FROM` for routes).
 
 **How to measure** (all on the worker; dumps are game memory, keep them there):
 - `tools/sixty/run.sh tour /wwhd/data/m6/NAME` runs 30 and 60 (`WWHD_60FPS_FROM=900`,

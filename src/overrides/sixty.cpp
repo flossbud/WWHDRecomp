@@ -27,6 +27,7 @@
 // The dumps are game memory: they stay on the worker.
 #include "override.h"
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cmath>
 #include <cstdio>
@@ -327,6 +328,90 @@ namespace
 		s_saved.clear();
 	}
 
+	// The journal's filter. Every store the half tick's frame makes comes here (in real time a fifth
+	// of the main thread's time went to RollbackStore's checks and its saves, on the sail route), and
+	// most are into memory that isn't journaled (the heap: models' matrices, display lists, packets)
+	// or into bytes the frame has already saved (the matrix stack, a draw's fields, many times a
+	// frame). So which 4 KB pages hold journaled memory is worked out once a frame (all of the page,
+	// or part of it: then RollbackStore's own check), and each page keeps a bit per byte saved this
+	// frame: a store is saved once. Saves of bytes saved before (a store over some new bytes is saved
+	// whole) are harmless, as RollbackRestore puts them back last to first.
+	constexpr uint32 kPartPage = 0x80000000u;
+	std::vector<uint32> s_page;                     // per page of the 32-bit space: 0, or its bits' index + 1, | kPartPage
+	std::vector<uint32> s_pagesSet;                 // the pages set this frame
+	std::vector<std::array<uint64, 64>> s_savedBits;   // per journaled page: the bytes saved this frame
+	uint64 s_storesSeen = 0, s_storesSaved = 0;     // the frame log's counts (src/overrides/pacing.cpp)
+
+	void JournalPages()
+	{
+		if (s_page.empty())
+			s_page.assign(1u << 20, 0);
+		auto mark = [](uint32 low, uint32 high) {
+			for (uint32 p = low >> 12; p <= (high - 1) >> 12; p++)
+			{
+				uint32& e = s_page[p];
+				if (!e)
+				{
+					s_savedBits.emplace_back();
+					s_savedBits.back().fill(0);
+					e = (uint32)s_savedBits.size() | kPartPage;
+					s_pagesSet.push_back(p);
+				}
+				if (low <= p << 12 && high - (p << 12) >= 0x1000)
+					e &= ~kPartPage;
+			}
+		};
+		mark(kGlobalsLow, kGlobalsHigh);
+		for (const ActorRange& r : s_ranges)
+			if (r.high > r.low)
+				mark(r.low, r.high);
+	}
+
+	void JournalPagesClear()
+	{
+		for (uint32 p : s_pagesSet)
+			s_page[p] = 0;
+		s_pagesSet.clear();
+		s_savedBits.clear();
+	}
+
+	// RollbackStore through the filter: nothing if the store's page isn't journaled or its bytes are
+	// saved already this frame
+	inline void FilteredRollbackStore(uint32 ea, uint32 size)
+	{
+		s_storesSeen++;
+		const uint32 e = s_page[ea >> 12];
+		if (!e)
+			return;
+		const uint32 off = ea & 0xFFF;
+		if (off + size > 0x1000 || size > 32)       // across two pages (rare): unfiltered
+		{
+			RollbackStore(ea, size);
+			return;
+		}
+		uint64* bits = s_savedBits[(e & ~kPartPage) - 1].data();
+		const uint32 i0 = off >> 6, i1 = (off + size - 1) >> 6;
+		uint64 m0, m1 = 0;                           // the store's bytes in bits[i0] and bits[i1]
+		if (i0 == i1)
+			m0 = ((1ull << size) - 1) << (off & 63);
+		else
+		{
+			m0 = ~0ull << (off & 63);
+			const uint32 end = (off + size) & 63;
+			m1 = end ? (1ull << end) - 1 : ~0ull;
+		}
+		if ((bits[i0] & m0) == m0 && (bits[i1] & m1) == m1)
+			return;
+		const size_t before = s_saved.size();
+		RollbackStore(ea, size);                    // its own checks: the thread, part pages' ranges
+		if (s_saved.size() != before)
+		{
+			bits[i0] |= m0;
+			bits[i1] |= m1;
+			s_storesSaved++;
+		}
+	}
+
 	void HalfTickStore(uint32 ea, uint32 size, uint32 pc);
 
 	bool Census()
@@ -409,7 +494,11 @@ namespace
 			e.size = size;
 			memcpy(e.bytes, memory_base + ea, size);
 		}
-		if (Rollback())
+		if (!Rollback())
+			return;
+		if (!s_pagesSet.empty() && RollbackLevel() == 2)
+			FilteredRollbackStore(ea, size);
+		else
 			RollbackStore(ea, size);
 	}
 
@@ -794,6 +883,17 @@ namespace
 	}
 }
 
+namespace wwhd::sixty
+{
+	// the half tick's journal since the last call: stores seen and saved (the frame log, pacing.cpp)
+	void TakeJournalCounts(uint64& seen, uint64& saved)
+	{
+		seen = s_storesSeen;
+		saved = s_storesSaved;
+		s_storesSeen = s_storesSaved = 0;
+	}
+}
+
 // m_Do_main's frame body (see the top)
 void f_025F172C(PPCInterpreter_t* __restrict ctx)
 {
@@ -886,6 +986,8 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		s_frameThread = PPCInterpreter_getCurrentInstance();
 		g_rtStoreCensus = HalfTickStore;
 		g_rtJournalOn = true;
+		if (RollbackLevel() == 2)
+			JournalPages();
 	}
 	orig_f_0274C264(ctx);
 	if (watch)
@@ -893,6 +995,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		g_rtJournalOn = wwhd::rt::QuietWatching();   // a fast path's watch may still need it
 		g_rtStoreCensus = nullptr;
 		RollbackRestore();
+		JournalPagesClear();
 		ShowConvertedGlobals();                         // the converted processes' half-step globals, back
 	}
 	wr32(0x101FF9D4u, rng[0]);
