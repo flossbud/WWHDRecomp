@@ -991,8 +991,12 @@ void f_0273CBD0(PPCInterpreter_t* __restrict ctx)
 }
 
 // fpcM_Draw: every process's draw goes through it (fpcDw_Handler's iterator, and the play scene's
-// draw for its actors). WWHD_60FPS_SKIPDRAW=n,m,...: on half ticks the draws of processes with these
-// names don't run (a probe: which draws move state the rollback doesn't reach).
+// draw for its actors). On half ticks the HUD (METER, process 481) isn't drawn: its draw rebuilds its
+// text there when what it shows has changed, and the rollback put back its pointers but not the heap
+// they pointed into (entering play at 60 from boot, its next draw crashed in the text code every
+// time); the HD port renders the HUD's layouts every frame anyway, so half ticks still show it.
+// WWHD_60FPS_SKIPDRAW=n,m,... (or "all") replaces that list of processes not drawn on half ticks
+// (a probe: which draws move state the rollback doesn't reach); WWHD_60FPS_SKIPDRAW= (empty) draws all.
 void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
 {
 	if (g_rtHalfTick)
@@ -1000,23 +1004,26 @@ void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
 		HideConvertedGlobals();                         // the draw pass sees the whole tick's globals
 		static const std::vector<uint16> skip = [] {
 			std::vector<uint16> v;
-			if (const char* e = getenv("WWHD_60FPS_SKIPDRAW"))
-				for (const char* p = e; *p;)
-				{
-					char* end;
-					const unsigned long n = strtoul(p, &end, 10);
-					if (end == p)
-						break;                                 // "all", or the end of the numbers
-					v.push_back((uint16)n);
-					for (p = end; *p == ','; p++)
-						;
-				}
+			const char* e = getenv("WWHD_60FPS_SKIPDRAW");
+			if (!e)
+				return std::vector<uint16>{ 481 };            // the HUD (see above)
+			for (const char* p = e; *p;)
+			{
+				char* end;
+				const unsigned long n = strtoul(p, &end, 10);
+				if (end == p)
+					break;                                     // "all", or the end of the numbers
+				v.push_back((uint16)n);
+				for (p = end; *p == ','; p++)
+					;
+			}
 			return v;
 		}();
 		static const bool all = [] { const char* e = getenv("WWHD_60FPS_SKIPDRAW"); return e && strcmp(e, "all") == 0; }();
+		static const bool probing = getenv("WWHD_60FPS_SKIPDRAW") != nullptr;
 		const uint16 name = rd16(GPR(3) + 0x08);
 		static std::set<uint16> drawn;                 // which process names draw on half ticks, logged once each
-		if (drawn.insert(name).second && (all || !skip.empty()))
+		if (probing && drawn.insert(name).second)
 			cemuLog_log(LogType::Force, "wwhd sixty: process {} draws on half ticks", name);
 		if (all || (!skip.empty() && std::find(skip.begin(), skip.end(), name) != skip.end()))
 		{

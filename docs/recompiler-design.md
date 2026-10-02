@@ -1491,16 +1491,25 @@ baseline is "nothing converted": the 60-tick run must equal the 30-tick run at e
   writes the game's globals too (Link sets gameInfo's player status and the action the HUD shows
   every step); the draws of unconverted processes then met a state their own update (whole ticks
   only) hadn't prepared, which the 30 Hz game never reaches. In a real-time run on the desktop the
-  HUD's draw crashed once in its text code just after the switch to 60 (not seen again in four
-  more runs; the likeliest cause). What converted processes write to .data and .bss during a half
+  HUD's draw crashed once in its text code just after the switch to 60 (the HUD's own half-tick
+  draw turned out to be the cause, below; this is still right). What converted processes write to .data and .bss during a half
   tick's execute pass is now hidden from its draw pass (the whole tick's values put back before the
   first draw) and handed back after the frame's rollback; on the tour route that is 115 words
   (the matrix stack, J3D scratch, gameInfo's player status, the random state). The tracked
   measurements don't change, and consecutive captures still all differ (the scene moves every
   frame). `hidden.txt` (with the probe) lists the words.
+* **The HUD isn't drawn on half ticks.** Booting at 60 (no switch at swap 900) crashed every time
+  just after play began, converted or not: the HUD's draw (METER, process 481) rebuilds its text
+  on a half tick when what it shows changed, and the rollback put back its pointers but not the
+  heap they pointed into, so its next draw read freed text (no crash without the rollback, without
+  the HUD's half-tick draw, or with nothing on half ticks; the one real-time crash after a switch
+  at 900 was this too). The HD port renders the HUD's layouts every frame from their own state, so
+  half ticks still show it (captures: the HUD whole on both kinds of tick). `WWHD_60FPS_SKIPDRAW`
+  now defaults to 481. The unconverted baseline stays exact (tour, menus).
 * **Real time** (the owner's desktop, headless, 2026-10-02): the tour route at 60 with the camera,
   Link and the boat converted runs at 60.1 fps, frame times median 16.7 ms, 99th percentile
-  18.4 ms; without conversion 56.8-60 fps.
+  18.4 ms; without conversion 56.8-60 fps. Booting at 60 (the save route, converted): 59.6-60
+  fps, median 17.7-18.8 ms, 99th 22-25 ms, no crash in two runs.
 * **Discrete choices from requests stay on whole ticks.** The camera's type comes from requests
   other processes leave (`+0x528`) and the camera consumes; an unconverted requester leaves one
   on whole ticks only, so the camera took the requested type on a whole tick and dropped it on the

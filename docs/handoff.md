@@ -500,8 +500,10 @@ it in a window; D21 "Step 2"):**
   `setControllAngle`); the camera's type is chosen on whole ticks (`whole:r3=r4`). Sail: the boat
   within 84 units of the 30-tick run, the camera's view within 1.3 degrees on average.
 - A half tick's draws see the whole tick's globals (converted processes' half-step writes hidden
-  from the draw pass, handed back after): one real-time run on the desktop had crashed in the
-  HUD's draw just after the switch; six runs since, none. Real time: 60.1 fps, frame times median
+  from the draw pass, handed back after), and the HUD (481) isn't drawn on half ticks: booting at
+  60 crashed every time in its text code (its half-tick draw rebuilt text, the rollback put back
+  dangling pointers); the HD port renders the HUD every frame anyway. Booting at 60 now runs
+  clean, in real time too. Real time: 60.1 fps, frame times median
   16.7 ms, 99th 18.6 ms (tour, camera + Link + boat converted, desktop headless).
 - Next: the owner's feel test in a window (`WWHD_60FPS=1 WWHD_60FPS_CONVERT=476,168,165` with
   `tools/play/play.sh` after `deploy.sh`, only when they ask); then D21's order: animation-heavy
