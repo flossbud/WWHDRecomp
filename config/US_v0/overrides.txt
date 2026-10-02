@@ -13,3 +13,4 @@
 0260C74C    src/overrides/sixty.cpp            a sead tree node (a request queue by the HD UI): whole ticks only at 60 fps (D21, probe)
 027618B8    src/overrides/sixty.cpp            a sead tree node (a manager calling its objects): whole ticks only at 60 fps (D21, probe)
 0273CBD0    src/overrides/sixty.cpp            a sead tree node (a manager calling its objects): whole ticks only at 60 fps (D21, probe)
+025DE2CC    src/overrides/sixty.cpp            fpcM_Draw, every process's draw: the census's attribution, and a probe (WWHD_60FPS_SKIPDRAW) (D21)

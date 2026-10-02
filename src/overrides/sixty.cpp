@@ -30,6 +30,7 @@
 #include <cstdio>
 #include <cstring>
 #include <dlfcn.h>
+#include <set>
 #include <unordered_map>
 #include <string>
 #include <vector>
@@ -107,8 +108,11 @@ namespace
 		s_traces[GuestChain(8)]++;
 	}
 
+	uint32 s_drawing = 0;                            // the process whose draw is running (fpcM_Draw), or 0
+
 	// WWHD_STATE_CENSUS_HEAP=1: the main thread's stores anywhere else too (heap objects: layouts,
-	// effects, sound), counted by the first 4 callers, as "heap" in census_chains.txt
+	// effects, sound), counted by the process being drawn and the first 4 callers, as "heap" in
+	// census_chains.txt
 	void CensusHeap(uint32 ea)
 	{
 		static const bool on = [] { const char* e = getenv("WWHD_STATE_CENSUS_HEAP"); return e && atoi(e) == 1; }();
@@ -118,7 +122,9 @@ namespace
 		const uint32 sp = cpu->gpr[1];
 		if (ea + 0x10000 > sp && ea < sp + 0x10000)  // the stack (near its pointer)
 			return;
-		s_chains["heap" + GuestChain(4)]++;
+		char who[24];
+		snprintf(who, sizeof(who), "heap %d", s_drawing ? (int)rd16(s_drawing + 0x08) : -1);
+		s_chains[who + GuestChain(4)]++;
 	}
 
 	void CensusStore(uint32 ea, uint32 size, void* from)
@@ -173,18 +179,30 @@ namespace
 				}
 	}
 
-	// ---- half-tick draws leave no trace in actors (WWHD_60FPS_ROLLBACK, default on) -----------------
+	// ---- half ticks' draws leave no trace (WWHD_60FPS_ROLLBACK, default 2) ----------------------------
 	// A half tick runs every process's draw. Draws change their process too: the lighting's blend
-	// state (settingTevStruct), culling flags, display-list pointers, and for some logic (the raft's
-	// light flicker, f_02363374, picks new random targets from its draw; the HUD's draw moves
-	// counters in g_dComIfG_gameInfo). A process whose logic runs at 30 must reach its next tick as it
-	// left the last one, so every store the main thread makes into a process that executed in the last
-	// whole tick, or into g_dComIfG_gameInfo, is journaled (its old bytes) and put back when the half
-	// tick's frame ends: the draw shows its frame and leaves nothing behind.
+	// state (settingTevStruct), culling flags, display-list pointers, and some run logic (the raft's
+	// light flicker, f_02363374, picks new random targets from its draw; the HUD's draw moves counters
+	// in g_dComIfG_gameInfo and statics beside the menu flag; the environment's draw blends light
+	// transitions in g_env_light). A process whose logic runs at 30 must reach its next tick as it left
+	// the last one, so every store the main thread makes during a half tick's frame into a process
+	// that executed in the last whole tick, or into the game's .data and .bss, is journaled (its old
+	// bytes) and put back when the frame ends (gfx_EndFrame's GX2DrawDone has let the GPU finish with
+	// it by then): the draw shows its frame and leaves nothing behind. Level 3 also undid what draws
+	// write to the heap; that broke state that has to persist (the warp route diverged), so it stays
+	// a probe.
+	// WWHD_60FPS_ROLLBACK: 0 off; 1 processes and g_dComIfG_gameInfo; 2 (default) processes and all of
+	// the game's .data and .bss; 3 also every store a process's draw makes anywhere but the stack
+	// (heap objects: layouts, cloth, effects)
+	int RollbackLevel()
+	{
+		static const int level = [] { const char* e = getenv("WWHD_60FPS_ROLLBACK"); return e ? atoi(e) : 2; }();
+		return level;
+	}
+
 	bool Rollback()
 	{
-		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ROLLBACK"); return !e || atoi(e) != 0; }();
-		return on;
+		return RollbackLevel() != 0;
 	}
 
 	struct Saved { uint32 ea, size; uint8 bytes[32]; };
@@ -194,11 +212,15 @@ namespace
 	{
 		if (PPCInterpreter_getCurrentInstance() != s_frameThread || size > 32)
 			return;
-		// WWHD_60FPS_ROLLBACK=2: all of the game's .data and .bss too, not only g_dComIfG_gameInfo (the
-		// HUD's draw and dMenu's helpers keep menu state in statics beside the menu flag, 0x101EA069)
-		static const bool statics = [] { const char* e = getenv("WWHD_60FPS_ROLLBACK"); return e && atoi(e) == 2; }();
-		const bool global = statics ? (ea >= kGlobalsLow && ea < kGlobalsHigh) : (ea >= kGameInfo && ea < kGameInfo + kGameInfoSize);
-		if (!global)
+		// level 2: all of the game's .data and .bss, not only g_dComIfG_gameInfo (the environment's draw
+		// blends its light transitions in g_env_light, the HUD's draw and dMenu's helpers keep state in
+		// statics beside the menu flag, 0x101EA069); level 3: anything a process's draw writes but its
+		// stack
+		const int level = RollbackLevel();
+		const bool global = level >= 2 ? (ea >= kGlobalsLow && ea < kGlobalsHigh) : (ea >= kGameInfo && ea < kGameInfo + kGameInfoSize);
+		const uint32 sp = s_frameThread->gpr[1];
+		const bool drawn = level >= 3 && s_drawing != 0 && !(ea + 0x10000 > sp && ea < sp + 0x10000);
+		if (!global && !drawn)
 		{
 			auto it = std::upper_bound(s_ranges.begin(), s_ranges.end(), ea, [](uint32 v, const ActorRange& r) { return v < r.low; });
 			if (it == s_ranges.begin() || ea >= (--it)->high)
@@ -265,9 +287,13 @@ namespace
 			if (const char* e = getenv("WWHD_STATE_DUMP_GLOBALS"))
 				for (const char* p = e; *p;)
 				{
-					v.push_back((uint32)strtoul(p, (char**)&p, 10));
-					while (*p == ',')
-						p++;
+					char* end;
+					const unsigned long n = strtoul(p, &end, 10);
+					if (end == p)
+						break;
+					v.push_back((uint32)n);
+					for (p = end; *p == ','; p++)
+						;
 				}
 			return v;
 		}();
@@ -437,6 +463,45 @@ void f_0273CBD0(PPCInterpreter_t* __restrict ctx)
 	if (!NodeOnHalfTick(4))
 		return;
 	[[clang::musttail]] return orig_f_0273CBD0(ctx);
+}
+
+// fpcM_Draw: every process's draw goes through it (fpcDw_Handler's iterator, and the play scene's
+// draw for its actors). WWHD_60FPS_SKIPDRAW=n,m,...: on half ticks the draws of processes with these
+// names don't run (a probe: which draws move state the rollback doesn't reach).
+void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
+{
+	if (g_rtHalfTick)
+	{
+		static const std::vector<uint16> skip = [] {
+			std::vector<uint16> v;
+			if (const char* e = getenv("WWHD_60FPS_SKIPDRAW"))
+				for (const char* p = e; *p;)
+				{
+					char* end;
+					const unsigned long n = strtoul(p, &end, 10);
+					if (end == p)
+						break;                                 // "all", or the end of the numbers
+					v.push_back((uint16)n);
+					for (p = end; *p == ','; p++)
+						;
+				}
+			return v;
+		}();
+		static const bool all = [] { const char* e = getenv("WWHD_60FPS_SKIPDRAW"); return e && strcmp(e, "all") == 0; }();
+		const uint16 name = rd16(GPR(3) + 0x08);
+		static std::set<uint16> drawn;                 // which process names draw on half ticks, logged once each
+		if (drawn.insert(name).second && (all || !skip.empty()))
+			cemuLog_log(LogType::Force, "wwhd sixty: process {} draws on half ticks", name);
+		if (all || (!skip.empty() && std::find(skip.begin(), skip.end(), name) != skip.end()))
+		{
+			GPR(3) = 1;
+			return;
+		}
+	}
+	const uint32 outer = s_drawing;
+	s_drawing = GPR(3);
+	orig_f_025DE2CC(ctx);
+	s_drawing = outer;
 }
 
 // fopAc_Execute: every actor's execute goes through it (from fpcM_Management's execute pass)

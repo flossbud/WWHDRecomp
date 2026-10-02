@@ -455,21 +455,21 @@ every process's execute and draw; where the per-tick steps are (a study of the G
 prior art (the Wind Waker Recomp's experimental 60 Hz mode is the closest); the probe that showed
 the game runs at 60 frames a second with its logic held to whole ticks; the options. D21 has it all.
 
-**Step 2, the measuring tool and the baseline (committed d424162 and after; D21 "Step 1"):**
-- Tick rules (`config/US_v0/tick_rules.txt`, 38) hold the game's logic to whole ticks; the random
-  stream is saved and put back around half ticks; the rollback undoes what the main thread's draws
-  write into processes and the game info on half ticks; three per-frame sead nodes are held to
-  whole ticks (`WWHD_60FPS_NODES`).
-- With nothing of the game's frame on half ticks (`WWHD_60FPS_HALF=none`): every actor equals the
-  30-tick run at every whole tick of the tour route, pause menu included, and whole ticks'
-  pictures are pixel-identical. The tool reports no difference when there is none.
-- With the draw pass on half ticks (the default; converted systems need it): equal until the pause
-  menu closes, then play resumes one tick early. The HD menu controller (`f_027152B4`) waits on heap
-  state (the HD menu's or HUD's layouts, probably) that half ticks' draws move; rolling back all of
-  .data/.bss (`WWHD_60FPS_ROLLBACK=2`) doesn't reach it. Sound requests are serviced up to half a
-  tick sooner (the sound engine runs per frame).
-- Not yet run: the sail, menus and warp routes (sailing: wind, sea, the boat); a hook on the
-  game's sound calls for per-effect timing; captures in the draw-pass mode.
+**Step 2, the measuring tool and the baseline (the owner: finish it on every route before
+converting; D21 "Step 1"):**
+- Tick rules (`config/US_v0/tick_rules.txt`, 39) hold the game's logic to whole ticks; the random
+  stream is saved and put back around half ticks; the rollback (level 2, the default) undoes what
+  the main thread writes on half ticks into processes and the game's .data/.bss; three per-frame
+  sead nodes are held to whole ticks (`WWHD_60FPS_NODES`).
+- With the draw pass on half ticks (what converted systems need): save, tour, sail and menus are
+  exact (every actor, every tick); warp is exact through the cyclone, the Tower of the Gods and
+  the descent into Hyrule Castle, and two actors differ in a few fields near its end (the pirate
+  flag's cloth packet, a Moblin byte), without spreading. Sound requests are serviced up to half
+  a tick sooner (the sound engine runs per frame).
+- With nothing of the game's frame on half ticks (`WWHD_60FPS_HALF=none`): exact on the tour
+  route too, and whole ticks' pictures are pixel-identical to the 30-tick run's.
+- Left: the two warp fields; per-effect sound timing (a hook on the game's sound calls); the title
+  route (boot and menus at 60 aren't measured: runs switch at swap 900, in play).
 
 **How to measure** (all on the worker; dumps are game memory, keep them there):
 - `tools/sixty/run.sh tour /wwhd/data/m6/NAME` runs 30 and 60 (`WWHD_60FPS_FROM=900`,
@@ -479,8 +479,10 @@ the game runs at 60 frames a second with its logic held to whole ticks; the opti
   `WWHD_STATE_CENSUS=1` (half ticks) or `2` (every frame) with `WWHD_STATE_CENSUS_CHAINS=1` or
   `WWHD_STATE_CENSUS_TRACE=addr` finds who writes what (`tools/sixty/census.py`).
 - `WWHD_60FPS_HALF=none` skips the game's frame on half ticks (the exact reference: whole ticks'
-  pictures equal the 30-tick run's; half ticks repeat the frame before). `WWHD_60FPS_ROLLBACK=0`
-  turns the rollback off.
+  pictures equal the 30-tick run's; half ticks repeat the frame before). `WWHD_60FPS_ROLLBACK=0..3`
+  sets the rollback's reach (2 is the default); `WWHD_60FPS_SKIPDRAW=n,m|all` skips those
+  processes' draws on half ticks (a probe); `tools/sixty/probe_menu.sh` runs one such probe on the
+  tour route and reports the menu's timing.
 - `SIXTY_TRACE=snd_core.` records each run's OS calls of that prefix (`hle_trace.py dump`).
 - Finding code: `tools/ghidra/source_files.py` (functions by assert file), `tools/ghidra/disasm.py`,
   `decompile.py`, `tools/profile_tree.py` with `WWHD_PROFILE_DEPTH=64` (whole call chains),
