@@ -50,5 +50,6 @@
 # the game task's calc (f_0203593C): the HD per-frame logic around m_Do_main's frame body
 0203596C    whole       bl 020357cc     HD frame counters (DAT_1018f338...)
 02035998    whole       bl 02617af4     the input manager (something_button_related)
+020359AC    whole       bl 02614f74     the HD UI's per-frame update (DAT_101f4ff0: menus' state machines, layouts)
 020359D8    whole       bl 0270870c     f_0270870C: f_025E1988(0x7070)
 020359DC    whole       bl 0255e854     the environment update: cLib_addCalc smoothing, a cM_rndF a frame

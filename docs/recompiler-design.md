@@ -374,10 +374,11 @@ jobs draw each scene's views through `f_027D6BB0` (`gfx_RenderSceneView`), and a
 target is the GamePad's 854x480 rectangle is the ITEMS menu for a GamePad that isn't there (9% of
 the draws, about 1% of CPU). Forced with the virtual clock (`WWHD_SKIP_GAMEPAD=1`), exactly those
 draws go and the TV's frames stay byte-identical; unforced, every check runs the game's code.
-The 60 fps work (D21, WW-4) adds four, in `src/overrides/sixty.cpp`: sead's `fw_procFrame`
+The 60 fps work (D21, WW-4) adds seven, in `src/overrides/sixty.cpp`: sead's `fw_procFrame`
 (`f_0274C264`: whole or half tick, the random stream, the rollback, the store census), m_Do_main's
 frame body (`f_025F172C`: the state probe after whole ticks), `fpcM_Execute` (`f_025DE58C`) and
-`fopAc_Execute` (`f_025D475C`), which note the processes and actors that executed; the WW-3
+`fopAc_Execute` (`f_025D475C`), which note the processes and actors that executed, and three nodes
+of sead's tree held to whole ticks (`f_0260C74C`, `f_027618B8`, `f_0273CBD0`); the WW-3
 prototype's override of the tick (`f_02746790`) is gone. With 60 fps and the probe off each calls
 its original. Adding or removing an override changes `funcs.h` (the `orig_f_X` declarations), which
 every shard includes: the next build compiles all generated code again (about 12 minutes on the
@@ -1292,7 +1293,7 @@ ticks, which the owner ruled out); interpolation (the WW-3 plan).
 **Step 1: the measuring tool and the baseline (WW-4, in progress).** At 60 fps every frame is
 either a *whole tick* (the game's 30 Hz logic, exactly as at 30) or a *half tick* between two; the
 baseline is "nothing converted": the 60-tick run must equal the 30-tick run at every whole tick.
-* **Tick rules** (`config/US_v0/tick_rules.txt`, applied by `tools/recomp/generate.py`): 37
+* **Tick rules** (`config/US_v0/tick_rules.txt`, applied by `tools/recomp/generate.py`): 38
   instructions, each a call or a store at an exact address, that run only on whole ticks
   (`if (RT_WHOLE_TICK())` around their generated code; always true at 30 fps, so every check is
   unchanged). Each names the instruction it expects, so a wrong address is a generator error. They
@@ -1303,7 +1304,8 @@ baseline is "nothing converted": the 60-tick run must equal the 30-tick run at e
   r3=1), vibration, magma, `PrepareMass`, grass, trees, wood, flowers, poison light, moving
   collision, snap, particle calc 3D/2D/menu, the `g_Counter.mTimer` store, `MassClear` and
   `Ccsp()->Draw()` (which rewrites the mass manager in WWHD); and in the game task's calc the HD
-  frame counters, the input manager, `f_0270870C` and the environment update. `fw_procFrame`'s
+  frame counters, the input manager, the HD UI's per-frame update (`f_02614F74` with the UI
+  manager `DAT_101f4ff0`), `f_0270870C` and the environment update. `fw_procFrame`'s
   override decides per frame (`g_rtHalfTick`).
 * **The random stream** (`cM_rnd`'s state at 0x101FF9D4) is saved before a half tick's frame and
   put back after: the lighting that every actor's draw calls (`f_025615B8`, through a
@@ -1319,15 +1321,26 @@ baseline is "nothing converted": the 60-tick run must equal the 30-tick run at e
   flicker, `f_02363374`, picks random targets from its draw; the HUD's draw moves counters in the
   game info).
 * **Where the tour route stands** (the dock from the 100% save, 60 fps from swap 900; walking,
-  camera swings, the pause menu and its pages): with the rules alone the first actors diverged one
-  tick after the switch; with the random stream and the rollback, all 134 actors equal the 30-tick
-  run at every whole tick through the walk, the camera swing and the whole pause menu, until the menu
-  closes. Left: (a) the menu's open and close sounds start 1.5 ticks early (voice starts at game
-  frames 1562.5 and 1981.5 instead of 1564 and 1983) and the actors resume a tick early: the HD menu
-  (and HUD) animate their layouts every frame, in heap objects outside the processes, which the
-  rollback doesn't reach; (b) Link's list of effect or sound handles (+0x64F4 to +0x651C) holds other
-  pointers, allocation order, nothing in his state; (c) a few render globals (the sea's draw counter
-  at 0x1046DAFC, render pointers) and the sound threads' state, which move with timing.
+  camera swings, the pause menu and its pages):
+  - *With nothing of the game's frame on half ticks* (`WWHD_60FPS_HALF=none`, plus the rules below
+    for what runs outside it): every actor equals the 30-tick run at every whole tick of the route,
+    the pause menu included. That validates the tool: it reports no difference when there is none.
+  - *With the draw pass on half ticks* (the default, which converted systems need): with the rules
+    alone the first actors diverged one tick after the switch; with the random stream and the
+    rollback, all 134 actors are equal through the walk, the camera swing and the whole menu, until
+    the menu closes: the 60-tick run resumes play one tick early (`g_Counter.mTimer` one ahead, the
+    seagulls one step ahead). The flag is cleared by the HD menu controller (`f_027152B4`, from the
+    play scene's execute, on a whole tick) a tick early; neither the HD UI's per-frame update
+    (`f_02614F74`, now a rule) nor rolling back all of .data and .bss (`WWHD_60FPS_ROLLBACK=2`)
+    changes it, so what it waits on is heap state that half ticks' draws move (the HD menu's or the
+    HUD's layouts): next to find.
+  - Three other nodes of sead's tree run every frame (`f_0260C74C` a request queue by the HD UI,
+    `f_027618B8` and `f_0273CBD0` managers calling their objects; overridden, `WWHD_60FPS_NODES`):
+    held to whole ticks, Link's list of effect or sound handles (+0x64F4 to +0x651C, other pointers
+    from 978 on) matches too.
+  - Sound requests are serviced up to half a tick sooner: the menu's open and close voices start at
+    game frames 1563.5 and 1982.5 instead of 1564 and 1983 (the sound engine runs per frame);
+    render globals and the sound threads' state move with timing.
 * **Pictures.** With nothing of the game's frame on half ticks (`WWHD_60FPS_HALF=none`) the whole
   ticks' captures equal the 30-tick run's pixel for pixel, and a half tick repeats the frame before
   it exactly: the HD renderer keeps its draw lists and renders them again when the game's frame

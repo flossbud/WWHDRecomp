@@ -58,6 +58,7 @@ namespace
 	// census.py names the host addresses. That is what the frame changes outside the game's tick.
 	struct ActorRange { uint32 low, high; uint16 name; };
 	std::vector<ActorRange> s_ranges;               // the last whole tick's actors, by address
+	PPCInterpreter_t* s_frameThread = nullptr;      // the main thread: the one running fw_procFrame
 	struct CensusKey
 	{
 		uintptr_t from;
@@ -106,6 +107,20 @@ namespace
 		s_traces[GuestChain(8)]++;
 	}
 
+	// WWHD_STATE_CENSUS_HEAP=1: the main thread's stores anywhere else too (heap objects: layouts,
+	// effects, sound), counted by the first 4 callers, as "heap" in census_chains.txt
+	void CensusHeap(uint32 ea)
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_STATE_CENSUS_HEAP"); return e && atoi(e) == 1; }();
+		PPCInterpreter_t* cpu = on ? PPCInterpreter_getCurrentInstance() : nullptr;
+		if (!cpu || cpu != s_frameThread)
+			return;
+		const uint32 sp = cpu->gpr[1];
+		if (ea + 0x10000 > sp && ea < sp + 0x10000)  // the stack (near its pointer)
+			return;
+		s_chains["heap" + GuestChain(4)]++;
+	}
+
 	void CensusStore(uint32 ea, uint32 size, void* from)
 	{
 		CensusTrace(ea);
@@ -116,7 +131,10 @@ namespace
 		{
 			auto it = std::upper_bound(s_ranges.begin(), s_ranges.end(), ea, [](uint32 v, const ActorRange& r) { return v < r.low; });
 			if (it == s_ranges.begin() || ea >= (--it)->high)
+			{
+				CensusHeap(ea);
 				return;
+			}
 			k.name = it->name + 1u;
 			k.where = ea - it->low;
 		}
@@ -171,13 +189,16 @@ namespace
 
 	struct Saved { uint32 ea, size; uint8 bytes[32]; };
 	std::vector<Saved> s_saved;
-	PPCInterpreter_t* s_frameThread = nullptr;      // the main thread: the one running fw_procFrame
 
 	void RollbackStore(uint32 ea, uint32 size)
 	{
 		if (PPCInterpreter_getCurrentInstance() != s_frameThread || size > 32)
 			return;
-		if (ea < kGameInfo || ea >= kGameInfo + kGameInfoSize)
+		// WWHD_60FPS_ROLLBACK=2: all of the game's .data and .bss too, not only g_dComIfG_gameInfo (the
+		// HUD's draw and dMenu's helpers keep menu state in statics beside the menu flag, 0x101EA069)
+		static const bool statics = [] { const char* e = getenv("WWHD_60FPS_ROLLBACK"); return e && atoi(e) == 2; }();
+		const bool global = statics ? (ea >= kGlobalsLow && ea < kGlobalsHigh) : (ea >= kGameInfo && ea < kGameInfo + kGameInfoSize);
+		if (!global)
 		{
 			auto it = std::upper_bound(s_ranges.begin(), s_ranges.end(), ea, [](uint32 v, const ActorRange& r) { return v < r.low; });
 			if (it == s_ranges.begin() || ea >= (--it)->high)
@@ -380,6 +401,42 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	if (wwhd::rt::SixtyFrom() != ~0u || Census())
 		s_processes.push_back(GPR(3));
 	[[clang::musttail]] return orig_f_025DE58C(ctx);
+}
+
+// sead's method tree runs other nodes beside the game's every frame (f_02747BDC; their share of the
+// tour route's tick: the game's f_0203593C 94%, these 2.1, 2.1 and 0.5%). WWHD_60FPS_NODES=mask
+// says which run only on whole ticks (default all): 1 f_0260C74C, a request queue (a ring of
+// 0xa0-byte entries) beside the HD UI's code; 2 f_027618B8, a manager that calls each of its objects;
+// 4 f_0273CBD0, another such manager. (A probe: which of them drives the HD menus' state machines and
+// layout animations, which ran every frame.)
+namespace
+{
+	bool NodeOnHalfTick(uint32 bit)
+	{
+		static const uint32 mask = [] { const char* e = getenv("WWHD_60FPS_NODES"); return e ? (uint32)strtoul(e, nullptr, 0) : 7u; }();
+		return !g_rtHalfTick || !(mask & bit);
+	}
+}
+
+void f_0260C74C(PPCInterpreter_t* __restrict ctx)
+{
+	if (!NodeOnHalfTick(1))
+		return;
+	[[clang::musttail]] return orig_f_0260C74C(ctx);
+}
+
+void f_027618B8(PPCInterpreter_t* __restrict ctx)
+{
+	if (!NodeOnHalfTick(2))
+		return;
+	[[clang::musttail]] return orig_f_027618B8(ctx);
+}
+
+void f_0273CBD0(PPCInterpreter_t* __restrict ctx)
+{
+	if (!NodeOnHalfTick(4))
+		return;
+	[[clang::musttail]] return orig_f_0273CBD0(ctx);
 }
 
 // fopAc_Execute: every actor's execute goes through it (from fpcM_Management's execute pass)

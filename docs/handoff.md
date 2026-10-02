@@ -455,16 +455,21 @@ every process's execute and draw; where the per-tick steps are (a study of the G
 prior art (the Wind Waker Recomp's experimental 60 Hz mode is the closest); the probe that showed
 the game runs at 60 frames a second with its logic held to whole ticks; the options. D21 has it all.
 
-**In progress (step 2, the measuring tool and an exact baseline):** D21 "Step 1" has the details.
-- Tick rules (`config/US_v0/tick_rules.txt`, 37) hold the game's logic to whole ticks; the random
-  stream is saved and put back around half ticks; the rollback undoes what draws write into
-  processes and the game info on half ticks.
-- On the tour route all 134 actors equal the 30-tick run at every whole tick until the pause menu
-  closes; the HD menu's layout animations still run every frame (menu sounds 1.5 ticks early,
-  actors resume a tick early). Next: find those layout calls (heap objects outside processes) and
-  hold them to whole ticks; then captures in this mode, a hook on the game's sound calls, the
-  other routes (sail first: wind, sea, the boat).
-- Then report to the owner and start step 3 (conversion: camera, Link, animation, ...).
+**Step 2, the measuring tool and the baseline (committed d424162 and after; D21 "Step 1"):**
+- Tick rules (`config/US_v0/tick_rules.txt`, 38) hold the game's logic to whole ticks; the random
+  stream is saved and put back around half ticks; the rollback undoes what the main thread's draws
+  write into processes and the game info on half ticks; three per-frame sead nodes are held to
+  whole ticks (`WWHD_60FPS_NODES`).
+- With nothing of the game's frame on half ticks (`WWHD_60FPS_HALF=none`): every actor equals the
+  30-tick run at every whole tick of the tour route, pause menu included, and whole ticks'
+  pictures are pixel-identical. The tool reports no difference when there is none.
+- With the draw pass on half ticks (the default; converted systems need it): equal until the pause
+  menu closes, then play resumes one tick early. The HD menu controller (`f_027152B4`) waits on heap
+  state (the HD menu's or HUD's layouts, probably) that half ticks' draws move; rolling back all of
+  .data/.bss (`WWHD_60FPS_ROLLBACK=2`) doesn't reach it. Sound requests are serviced up to half a
+  tick sooner (the sound engine runs per frame).
+- Not yet run: the sail, menus and warp routes (sailing: wind, sea, the boat); a hook on the
+  game's sound calls for per-effect timing; captures in the draw-pass mode.
 
 **How to measure** (all on the worker; dumps are game memory, keep them there):
 - `tools/sixty/run.sh tour /wwhd/data/m6/NAME` runs 30 and 60 (`WWHD_60FPS_FROM=900`,
