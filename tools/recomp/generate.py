@@ -55,6 +55,8 @@ its result. Step rules, for the code of processes that run every frame with a ti
   *h:REG /h:REG  after the instruction, REG times or divided by h (a per-tick amount; a distance
                per step that should read per tick)
   k:REG        after it, REG = 1 - (1 - REG)^h (an exponential approach's factor)
+  k75:REG      an approach whose result is then approached by 0.75 (k@ on that one): REG becomes
+               approach(0.75 REG) / approach(0.75), so the two together approach as one tick does
   d:REG        after it, REG = REG^h (a damping factor)
   split:REG    after it, an integer per-tick amount split between the whole tick and the half tick
                (REG - REG/2, then REG/2: the two add up to the 30 Hz step exactly)
@@ -184,7 +186,8 @@ class Program:
             self.funcs = sorted(self.funcs + self.synthetic)
             self.entries |= {a for a, _, _ in self.synthetic}
 
-    STEP_OPS = {"*h": "rt_step_mul", "/h": "rt_step_div", "k": "rt_step_approach", "d": "rt_step_damp"}
+    STEP_OPS = {"*h": "rt_step_mul", "/h": "rt_step_div", "k": "rt_step_approach", "d": "rt_step_damp",
+                "k75": "rt_step_approach75"}
 
     def load_tick_rules(self, path):
         """address -> (rule, argument, expected instruction text, what): see the docstring. rule is

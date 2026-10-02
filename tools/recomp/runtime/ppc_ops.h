@@ -33,6 +33,15 @@ static inline double rt_step_mul(double x) { return (double)(float)(x * g_rtStep
 static inline double rt_step_div(double x) { return (double)(float)(x / g_rtStep); }
 static inline double rt_step_approach(double k) { return k >= 0.0 && k <= 1.0 ? (double)(float)(1.0 - __builtin_pow(1.0 - k, (double)g_rtStep)) : k; }
 static inline double rt_step_damp(double d) { return d > 0.0 ? (double)(float)__builtin_pow(d, (double)g_rtStep) : d; }
+// k75: a factor k whose approach the code then follows with an approach of 0.75 (the camera's eye):
+// together they move 0.75 k a tick, so a step takes approach(0.75 k) / approach(0.75) here
+static inline double rt_step_approach75(double k)
+{
+	if (!(k >= 0.0 && k <= 1.0))
+		return k;
+	const double h = (double)g_rtStep;
+	return (double)(float)((1.0 - __builtin_pow(1.0 - 0.75 * k, h)) / (1.0 - __builtin_pow(0.25, h)));
+}
 static inline uint32 rt_step_split(uint32 v) { const sint32 s = (sint32)v; return (uint32)(g_rtHalfTick ? s / 2 : s - s / 2); }
 extern float g_rtNote;                 // a value noted by a step rule for a later one in the same step
 // vec@ / arc@: for one call, the vector (three floats) at ea is h of itself; for arc@ (a velocity)

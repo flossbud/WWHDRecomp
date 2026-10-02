@@ -58,8 +58,8 @@
 # ---- step rules: the camera (dCamera_c, d_camera.cpp; WWHD keeps the GameCube's layout 4 bytes on:
 # the camera process holds it at +0x248). Converted with WWHD_60FPS_CONVERT=476; found with the
 # step-doubling trial (WWHD_60FPS_TRIAL) and tools/sixty/rmw.py, matched line by line with the decomp.
-# updateMonitor (f_024F9A48): the player's horizontal move per tick, smoothed; an idle counter
-024F9AA8    /h:f1       bl 024f7ac4     updateMonitor: the player's horizontal move this step, per tick
+# updateMonitor (f_024F9A48): the player's horizontal move per tick (measured over a whole tick by its
+# override, sixty_step.cpp), smoothed; an idle counter
 024F9AD0    /h:f13      fsubs           updateMonitor: mMonitor.z = move - last move, per tick
 024F9ADC    k@f0        fmadds          updateMonitor: mMonitor.y += (move - y) * 0.075
 024F9B3C    whole       stw             updateMonitor: idle ticks (mMonitor +0x18) + 1
@@ -79,7 +79,10 @@
 024FEAD0    whole       stw             Run: m080 + 1
 024FE89C    k@f1        bl 0200693c     Run: m148 += (forwardCheckAngle - m148) * FwdCushion (cSAngle *)
 024FEB00    k@f1        bl 0200693c     Run: mViewCache.mBank -= mBank * 0.05 (cSAngle *)
-# followCamera (f_025028B8): the work area mWork.follow at r30 (dCamera +0x37C), mViewCache at r31
+# followCamera (f_025028B8): the work area mWork.follow at r30 (dCamera +0x37C), mViewCache at r31.
+# The eye then moves 0.75 of the way to center + direction and the direction is taken back from
+# eye - center, so the direction's factors (U, V, R after a style starts) are k75: together with the
+# eye's k they move 0.75 k a tick (D21, "coupling").
 02502CCC    k@f13       fmadds          followCamera: m3B0 += (dVar21 - m3B0) * 0.06
 02502E44    k@f8        fmadds          followCamera: m3AC += (+-45 - m3AC) * 0.04 (aiming)
 02502E8C    k@f8        fmadds          followCamera: m3AC += (+-45 - m3AC) * 0.04 (aiming)
@@ -112,9 +115,9 @@
 025040CC    whole       stw             followCamera: m38C = 16
 02504148    whole       stw             followCamera: m38C = 1 (turn ramp start)
 025041A0    whole       stw             followCamera: m38C + 1 (m3B8 = m38C / 30)
-025042F8    k@f1        bl 0200693c     followCamera: U += (U' - U) * m3B8 cos V
-025043C8    k@f1        bl 0200693c     followCamera: U += (U' - U) * m3B8 cos V
-0250447C    k@f1        bl 0200693c     followCamera: U += (U' - U) * m3B8 cos V
+025042F8    k75@f1      bl 0200693c     followCamera: U += (U' - U) * m3B8 cos V
+025043C8    k75@f1      bl 0200693c     followCamera: U += (U' - U) * m3B8 cos V
+0250447C    k75@f1      bl 0200693c     followCamera: U += (U' - U) * m3B8 cos V
 02504550    whole       sth             followCamera: m392 + 1 (charge ticks)
 02504620    k@f8        fmadds          followCamera: m3A0 += m3B8 * (dVar28 - m3A0)
 02504660    k@f18       fmadds          followCamera: m3E0 += (fVar40 - m3E0) * 0.5
@@ -123,14 +126,14 @@
 025047B8    k@f0        fmadds          followCamera: m3E0 += (0.1 - m3E0) * 0.05
 02504808    k@f29       fmadds          followCamera: m3E0 += dVar20 * (fVar40 - m3E0)
 025049CC    k@f13       fmadds          followCamera: m3E0 += (0.75 - m3E0) * 0.15
-02504B1C    k@f1        bl 0200693c     followCamera: V += (V' - V) * m3E0
+02504B1C    k75@f1      bl 0200693c     followCamera: V += (V' - V) * m3E0
 02504B70    k@f23       fmadds          followCamera: m398 += dVar27 * (dVar25 - m398)
 02504B78    k@f23       fmadds          followCamera: m39C += dVar27 * (dVar24 - m39C)
 02504B94    k@f17       fmadds          followCamera: m3DC += (dVar26 - m3DC) * 0.01
-02504BA8    k@f0        fmadds          followCamera: R += m3DC * (R' - R)
+02504BA8    k75@f0      fmadds          followCamera: R += m3DC * (R' - R)
 02504C00    k@f17       fmadds          followCamera: m3DC += (dVar26 - m3DC) * 0.01
-02504C14    k@f0        fmadds          followCamera: R += m3DC * (R' - R)
-02504C68    k@f19       fmadds          followCamera: R += 1 * (R' - R)
+02504C14    k75@f0      fmadds          followCamera: R += m3DC * (R' - R)
+02504C68    k75@f19     fmadds          followCamera: R += 1 * (R' - R)
 02504D50    k@f1        bl 0201ae48     followCamera: mEye += (m3CC - mEye) * 0.75
 02504DA0    k@f17       fmadds          followCamera: m3E8 += (dVar32 - m3E8) * 0.01
 02504DB0    k@f8        fmadds          followCamera: mFovy += m3E8 * (dVar31 - mFovy)
@@ -171,8 +174,8 @@
 02511138    k@f1        bl 0200693c     HD engine: mBank += (bank' - mBank) * k (flying)
 #
 # ---- step rules: Link (daPy_lk_c, d_a_player_main.cpp). Converted with WWHD_60FPS_CONVERT=168.
-# posMoveFromFootPos (f_023FCB9C): the speed taken from the feet's animation, gravity, the move
-023FCE9C    /h:f1       bl 028f4384     posMoveFromFootPos: the planted toe's move this step (sqrt), per tick
+# posMoveFromFootPos (f_023FCB9C): the speed taken from the feet's animation (measured over a whole tick
+# by its override, sixty_step.cpp), gravity, the move
 023FCEE8    d@f7        fmuls           posMoveFromFootPos: m359C * 0.7 (the last move, smoothed)
 023FCEF0    k@f0        fmadds          posMoveFromFootPos: move * 0.3 + m359C * 0.7
 023FD2D4    note:f11    lfs             posMoveFromFootPos: speed.y before gravity

@@ -490,10 +490,15 @@ it in a window; D21 "Step 2"):**
   `note:`/`arc@` rules for the arc), `posMove`, `setNormalSpeedF`, overrides for `checkPass`, the
   old pose's blend, the byte timer, the collision status's countdown, and two whole-tick
   registrations. Converted processes fall back to whole ticks during events (and on a half tick
-  after one is ordered), and button presses read once a tick. Worst errors: tour 41, sail 118,
-  menus 0, warp ok (one scene starts a tick later). Left: the speed from the feet in a walk's first
-  ticks and against walls; the camera's coupling; the owner's verdict on the feel (desktop asleep
-  when this was written: a real-time headless test first, `tools/play/deploy.sh` to wwhd-test).
+  after one is ordered), and button presses read once a tick. The feet's and the camera monitor's
+  moves are measured over a whole tick; the camera's direction factors are converted with the
+  eye's (`k75`). Worst errors: tour 24 (camera 1.2 degrees on average), menus 0, warp ok (one
+  scene starts a tick later); sail: the camera holds through the boat's turn (mixed rates: the
+  ship isn't converted, D21). The real-time fast paths and the half ticks now share the store
+  journal (only real time sees it). Left: the boat (next in D21's order); the owner's verdict on
+  the feel (desktop asleep when this was written: a real-time headless test first,
+  `tools/play/deploy.sh` to wwhd-test). Tools: `tools/sixty/track.py` (fields tick by tick, half
+  ticks too), `tools/sixty/camera.py` (the camera's view, 30 against 60).
 - Run converted: `WWHD_60FPS=1 WWHD_60FPS_CONVERT=476,168` (with `WWHD_60FPS_FROM` for routes).
 
 **How to measure** (all on the worker; dumps are game memory, keep them there):

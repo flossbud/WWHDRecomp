@@ -31,6 +31,7 @@ namespace wwhd::rt
 	// ending, a wait), or another thread running meanwhile.
 	uint64 QuietBegin(PPCInterpreter_t* ctx, uint32 low, uint32 high);
 	sint32 QuietEnd(uint64 token);
+	bool QuietWatching();                  // a watch is on (the 60 fps tools keep the journal on for it)
 
 	// for the real-time log: a thread slept through an idle round, woken by a message or not
 	void CountIdleWait(bool byMessage);

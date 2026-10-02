@@ -618,7 +618,7 @@ namespace
 		regs.Restore(ctx);
 		s_trialPhase = 2;                               // the game's step: the run goes on from it
 		orig_f_025DE58C(ctx);
-		g_rtJournalOn = false;
+		g_rtJournalOn = wwhd::rt::QuietWatching();   // a fast path's watch may still need it
 		g_rtStoreCensus = nullptr;
 		s_trialPhase = 0;
 		TrialCompare(tick);
@@ -790,7 +790,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		g_rtStoreCensus = CensusStore;
 		g_rtJournalOn = true;
 		orig_f_0274C264(ctx);
-		g_rtJournalOn = false;
+		g_rtJournalOn = wwhd::rt::QuietWatching();   // a fast path's watch may still need it
 		g_rtStoreCensus = nullptr;
 		return;
 	}
@@ -820,7 +820,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 	orig_f_0274C264(ctx);
 	if (watch)
 	{
-		g_rtJournalOn = false;
+		g_rtJournalOn = wwhd::rt::QuietWatching();   // a fast path's watch may still need it
 		g_rtStoreCensus = nullptr;
 		RollbackRestore();
 	}

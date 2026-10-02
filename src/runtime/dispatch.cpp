@@ -93,7 +93,8 @@ namespace wwhd::rt
 			Log("quiet: not quiet (%s %08X; dead stack %08X-%08X, LR %08X)", why, ea, g_quiet.low, g_quiet.high, g_quiet.ctx->spr.LR);
 		}
 		g_quiet.visible = true;
-		g_rtJournalOn = false;                // nothing more to learn from this call's stores
+		g_rtJournalOn = g_rtStoreCensus != nullptr;   // nothing more to learn from this call's stores
+		                                              // (but the 60 fps hook may still want them)
 	}
 
 	void QuietStore(uint32 ea, uint32 size)
@@ -417,6 +418,11 @@ namespace wwhd::rt
 		return swap < from ? swap : from + (swap - from) / 2;
 	}
 
+	bool QuietWatching()
+	{
+		return g_quiet.token != 0;
+	}
+
 	uint64 QuietBegin(PPCInterpreter_t* ctx, uint32 low, uint32 high)
 	{
 		g_quiet = { ++s_quietTokens, ctx, low, high, coreinit::OSGetCurrentThread()->wakeUpCount, 0, false };
@@ -428,7 +434,7 @@ namespace wwhd::rt
 	{
 		if (g_quiet.token != token)               // another thread's watch began since: others ran
 			return -1;
-		g_rtJournalOn = false;
+		g_rtJournalOn = g_rtStoreCensus != nullptr;   // the 60 fps hook's journaling goes on
 		g_quiet.token = 0;
 		if (!g_quiet.visible && coreinit::OSGetCurrentThread()->wakeUpCount != g_quiet.wakeUps)
 			QuietVisible("left the core", 0);

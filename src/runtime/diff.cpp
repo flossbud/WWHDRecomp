@@ -62,6 +62,8 @@ void rt_journal_store(uint32 ea, uint32 size, uint32 pc)
 	if (g_rtStoreCensus) [[unlikely]]                // the 60 fps tools (overrides/sixty.cpp)
 	{
 		g_rtStoreCensus(ea, size, pc);
+		if (g_quiet.token)                           // and a fast path's watch (real time at 60 fps)
+			QuietStore(ea, size);
 		return;
 	}
 	if (g_quiet.token) [[unlikely]]                  // the fast paths' quiet watch (dispatch.cpp), not a diff run

@@ -382,13 +382,15 @@ frame body (`f_025F172C`: the state probe after whole ticks), `fpcM_Execute` (`f
 nodes of sead's tree held to whole ticks (`f_0260C74C`, `f_027618B8`, `f_0273CBD0`); the WW-3
 prototype's override of the tick (`f_02746790`) is gone. `fpcM_Execute` also decides, per process,
 what runs on a half tick (only converted processes) and with which time step. The conversion (D21,
-2026-10-02) adds twenty-four in `src/overrides/sixty_step.cpp`: the game's per-tick helpers with a time
+2026-10-02) adds twenty-six in `src/overrides/sixty_step.cpp`: the game's per-tick helpers with a time
 step for converted processes (the c_lib approaches and chases `f_0200ECD4` to `f_0200F8D0`,
 `fopAcM_calcSpeed` `f_025D67A8`, `fopAcM_posMove` `f_025D6800`, `J3DFrameCtrl::update`
 `f_027F2FC4` and `checkPass` `f_027F2BF8`, `decOldFrameMorfCounter` `f_025E3EC8`), countdowns that
 count whole ticks (`cLib_calcTimer<u8>` `f_0207A9A0`, `dCcD_GStts::Move` `f_0251621C`), and
 registrations with whole-tick systems a half step must not repeat (`dCcS::Set` `f_0200E240`, a
-request list `f_02516C14`); each is the game's function unchanged while the step is 1. With 60 fps and the probe
+request list `f_02516C14`), and two moves measured over a whole tick (Link's `posMoveFromFootPos`
+`f_023FCB9C`, the camera's `updateMonitor` `f_024F9A48`); each is the game's function unchanged
+while the step is 1. With 60 fps and the probe
 off each calls its original. Adding or removing an override changes `funcs.h` (the `orig_f_X` declarations), which
 every shard includes: the next build compiles all generated code again (about 12 minutes on the
 worker), so batch them.
@@ -1448,8 +1450,18 @@ baseline is "nothing converted": the 60-tick run must equal the 30-tick run at e
   of the way to `center + direction` and then takes the direction from `eye - center`, so the eye
   approaches its target with factor `0.75 k` a tick; converting both factors separately gives
   `approach(0.75) approach(k)` a half step, and the eye turns up to a third slower for small `k`
-  (the trial: 0.68-0.76 of the 30 Hz move; the HD engine 0.86). Exact would convert the product:
-  `approach(0.75 k) / approach(0.75)` at the direction's factors. Left for after Link.
+  (the trial: 0.68-0.76 of the 30 Hz move; the HD engine 0.86). So the direction's factors are
+  converted with the eye's: `approach(0.75 k) / approach(0.75)` (the step rule `k75`), the product
+  `approach(0.75 k)` a half step (the trial: 0.81-0.90 after; the HD engine, without that
+  structure, still 0.86).
+* **Measured over a whole tick.** Two quantities are a distance moved since the last step, read as
+  a speed: the camera's `updateMonitor` (the player's move) and Link's `posMoveFromFootPos` (his
+  planted toe's move, from his animation). Divided by h they double whatever moves per step rather
+  than per tick: the feet's step-to-step jitter (their ground fitting; Link's speed ran 20-30%
+  high) and, worse, a move made on whole ticks only (on the boat the ship moves Link, 33 units at a
+  whole tick and none at the half tick: the camera read 66 and 0). Their overrides keep the last
+  two steps' positions and measure from the one a tick ago, with no division: the 30 Hz
+  measurement exactly at whole ticks, a centred one between them.
 * **Link:** `posMoveFromFootPos` (the planted toe's move per step read per tick, its 0.3/0.7
   smoothing, gravity `× h` in both branches, `current.pos += speed` with the arc correction through
   the new `note:` and `arc@` rules), `posMove` (a whirlpool's pull, ice, belts, wind `× h`; the
@@ -1460,10 +1472,21 @@ baseline is "nothing converted": the 60-tick run must equal the 30-tick run at e
   colliders for the next resolution; a 5-entry request list). Integer helpers now split their steps
   exactly (`s - s/2` then `s/2`; an approach's divisor `2s - 1` then `2s`, since
   `(1 - 1/(2s-1))(1 - 1/(2s)) = 1 - 1/s`).
+* **Real time:** the fast paths' quiet watch (D19) and the half ticks' store hook share the store
+  journal: every store goes to both, and turning one off leaves the journal on for the other (on the
+  desktop a task-loop watch inside a half tick would have read as quiet, and switched the half
+  tick's rollback off when it ended). The virtual clock has no fast paths, so only real time (and
+  the owner's test) sees this.
+* **Mixed rates on the boat:** with Link and the camera converted and the ship not, the camera's
+  type selection (`nextType`, `f_024FA410`) picks the ship's turning camera on whole ticks and the
+  other one on half ticks, restarting its style every frame; the camera holds still through the
+  turn and then swings (sail route, ticks 1294-1374). The ship moves Link on whole ticks only; it
+  is the next system to convert.
 * **Where Link stands** (60 fps from swap 900, camera and Link converted): on the tour route his
   normal speed now ramps at the 30 Hz rate (`1.75` a half step, `3.5` a tick), half a tick early
   because his state changes can fall on a half tick (60 fps reacts sooner); his worst position error
-  is 41 units, a lead of about two ticks of walking. Sail: worst 118 (boarding), 23 on average;
+  is 24 units (after the toe fix; 41 before), a lead of about two ticks of walking; the camera's
+  view direction is within 1.2 degrees of the 30-tick run's on average (7 at worst). Sail: worst 118 (boarding), 23 on average;
   menus: 0; warp: he plays the song and warps, the last scene within 0.2 units, the one before off
   by a tick at its start (created a tick later) and then 30-70. The speed he takes from his feet still runs
   high in the first ticks of a walk and spiked once against a wall (with only Link converted he then

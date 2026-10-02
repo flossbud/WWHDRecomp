@@ -38,3 +38,5 @@
 0200E240    src/overrides/sixty_step.cpp       dCcS::Set: colliders enter the whole tick's resolution once (D21)
 02516C14    src/overrides/sixty_step.cpp       a per-tick request list read on whole ticks: once a tick (D21)
 025E3EC8    src/overrides/sixty_step.cpp       mDoExt_MtxCalcOldFrame::decOldFrameMorfCounter: the old pose's blend, with a time step (D21)
+023FCB9C    src/overrides/sixty_step.cpp       daPy_lk_c::posMoveFromFootPos: the feet's move measured over a whole tick (D21)
+024F9A48    src/overrides/sixty_step.cpp       dCamera_c::updateMonitor: the player's move measured over a whole tick (D21)

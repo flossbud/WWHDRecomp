@@ -77,9 +77,12 @@ namespace
 	float rdf(uint32 ea) { return std::bit_cast<float>(rd32(ea)); }
 	void wrf(uint32 ea, float v) { wr32(ea, std::bit_cast<uint32>(v)); }
 
-	// This step (a frame at 60 fps; in the trial, either half step of the tick)
+	// This step (a frame at 60 fps; in the trial, either half step of the tick), numbered so that
+	// consecutive steps differ by 1
 	uint32 StepId()
 	{
+		if (wwhd::rt::SixtyFrom() != ~0u)
+			return wwhd::os::SwapCount();              // 60 fps: a step a frame
 		return wwhd::os::SwapCount() * 2 + (g_rtHalfTick ? 1 : 0);
 	}
 
@@ -378,4 +381,111 @@ void f_025E3EC8(PPCInterpreter_t* __restrict ctx)
 	if (c > 0.0f)
 		wrf(counter, c + (1.0f - Step()));          // the game's - 1 then makes it - h
 	orig_f_025E3EC8(ctx);
+}
+
+// ---- Link (d_a_player_main.cpp) ----------------------------------------------------------------------
+
+namespace
+{
+	// daPy_lk_c::posMoveFromFootPos's toe positions (mFootData[i].field_0x018, three floats at Link
+	// +0x7408 and +0x7520): the last two steps' for each Link, so a step's move is measured over a whole
+	// tick
+	struct Toes { float pos[2][3]; };
+	struct ToeHistory { Toes last, before; uint32 lastStep = 0; bool haveBefore = false; };
+	std::unordered_map<uint32, ToeHistory> s_toes;
+	constexpr uint32 kToe[2] = { 0x7408u, 0x7520u };
+
+	Toes ReadToes(uint32 link)
+	{
+		Toes t;
+		for (int i = 0; i < 2; i++)
+			for (int c = 0; c < 3; c++)
+				t.pos[i][c] = rdf(link + kToe[i] + 4 * c);
+		return t;
+	}
+
+	void WriteToes(uint32 link, const Toes& t)
+	{
+		for (int i = 0; i < 2; i++)
+			for (int c = 0; c < 3; c++)
+				wrf(link + kToe[i] + 4 * c, t.pos[i][c]);
+	}
+}
+
+// daPy_lk_c::posMoveFromFootPos(Link r3): Link's speed from his feet, the planted toe's move since the
+// last step (in model space, |dx dz|), then gravity and the move. With half steps a step's move is
+// measured from the toe of two steps before, a whole tick: at whole ticks that is the 30 Hz
+// measurement exactly, and the feet's small step-to-step jitter (their ground fitting) isn't
+// doubled as a half step's move divided by h would be (the speed ran 20-30% high). The first step
+// after a pause measures from the last one, half a tick.
+void f_023FCB9C(PPCInterpreter_t* __restrict ctx)
+{
+	const uint32 link = GPR(3);
+	if (!Stepped())
+	{
+		s_toes.erase(link);
+		[[clang::musttail]] return orig_f_023FCB9C(ctx);
+	}
+	const uint32 step = StepId();
+	ToeHistory& history = s_toes[link];
+	const Toes now = ReadToes(link);                 // as the last step left them
+	const bool continuing = history.lastStep != 0 && step - history.lastStep == 1;
+	if (!continuing)
+		history.haveBefore = false;
+	if (history.haveBefore)
+		WriteToes(link, history.before);               // the move is measured from a tick ago
+	orig_f_023FCB9C(ctx);
+	history.before = now;
+	history.haveBefore = true;
+	history.lastStep = step;
+}
+
+// ---- the camera (d_camera.cpp) ----------------------------------------------------------------------
+
+namespace
+{
+	// dCamera_c::updateMonitor's last player position (mMonitor.mPos, dCamera +0x22C): the last two
+	// steps' for each camera
+	struct Position { float p[3]; };
+	struct PositionHistory { Position before; uint32 lastStep = 0; bool haveBefore = false; };
+	std::unordered_map<uint32, PositionHistory> s_monitor;
+
+	Position ReadPosition(uint32 ea)
+	{
+		return { { rdf(ea), rdf(ea + 4), rdf(ea + 8) } };
+	}
+
+	void WritePosition(uint32 ea, const Position& p)
+	{
+		for (int c = 0; c < 3; c++)
+			wrf(ea + 4 * c, p.p[c]);
+	}
+}
+
+// dCamera_c::updateMonitor(camera r3): mMonitor.x (+0x238) = the player's horizontal move since the
+// last update, measured from mMonitor.mPos (+0x22C), then mPos = the player's position. With half
+// steps the move is measured from the position of two steps before, a whole tick: right at whole
+// ticks, and right when something unconverted moves the player on whole ticks only (the boat moved
+// Link 33 units at a whole tick and none at the half tick: per step and divided by h, the camera
+// read 66 and 0 and held still through a turn). The first step after a pause measures from the last.
+void f_024F9A48(PPCInterpreter_t* __restrict ctx)
+{
+	const uint32 camera = GPR(3);
+	if (!Stepped())
+	{
+		s_monitor.erase(camera);
+		[[clang::musttail]] return orig_f_024F9A48(ctx);
+	}
+	const uint32 step = StepId();
+	PositionHistory& history = s_monitor[camera];
+	const uint32 mPos = camera + 0x22C;
+	const Position last = ReadPosition(mPos);
+	if (history.lastStep == 0 || step - history.lastStep != 1)
+		history.haveBefore = false;
+	if (history.haveBefore)
+		WritePosition(mPos, history.before);
+	orig_f_024F9A48(ctx);
+	history.before = last;
+	history.haveBefore = true;
+	history.lastStep = step;
 }
