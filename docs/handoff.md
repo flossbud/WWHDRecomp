@@ -495,9 +495,17 @@ it in a window; D21 "Step 2"):**
   eye's (`k75`). Worst errors: tour 24 (camera 1.2 degrees on average), menus 0, warp ok (one
   scene starts a tick later); sail: the camera holds through the boat's turn (mixed rates: the
   ship isn't converted, D21). The real-time fast paths and the half ticks now share the store
-  journal (only real time sees it). Left: the boat (next in D21's order); the owner's verdict on
-  the feel (desktop asleep when this was written: a real-time headless test first,
-  `tools/play/deploy.sh` to wwhd-test). Tools: `tools/sixty/track.py` (fields tick by tick, half
+  journal (only real time sees it).
+- Stage 4, the boat (done): about 35 rules (execute, `setYPos`, `setWaveAngle`, `setMoveAngle`,
+  `setControllAngle`); the camera's type is chosen on whole ticks (`whole:r3=r4`). Sail: the boat
+  within 84 units of the 30-tick run, the camera's view within 1.3 degrees on average.
+- A half tick's draws see the whole tick's globals (converted processes' half-step writes hidden
+  from the draw pass, handed back after): one real-time run on the desktop had crashed in the
+  HUD's draw just after the switch; six runs since, none. Real time: 60.1 fps, frame times median
+  16.7 ms, 99th 18.6 ms (tour, camera + Link + boat converted, desktop headless).
+- Next: the owner's feel test in a window (`WWHD_60FPS=1 WWHD_60FPS_CONVERT=476,168,165` with
+  `tools/play/play.sh` after `deploy.sh`, only when they ask); then D21's order: animation-heavy
+  actors, particles, the HUD, then actors route by route; uncapped. Tools: `tools/sixty/track.py` (fields tick by tick, half
   ticks too), `tools/sixty/camera.py` (the camera's view, 30 against 60).
 - Run converted: `WWHD_60FPS=1 WWHD_60FPS_CONVERT=476,168` (with `WWHD_60FPS_FROM` for routes).
 

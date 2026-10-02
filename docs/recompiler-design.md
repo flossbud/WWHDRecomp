@@ -1487,6 +1487,20 @@ baseline is "nothing converted": the 60-tick run must equal the 30-tick run at e
   tiller's spring). Its speed goes through `cLib_addCalc` (converted). Without the steering rules
   the boat turned twice as fast and ended 63,000 units off; with them it sails the 30-tick run's
   course within 84 units (one tick of sailing ahead).
+* **A half tick's draws see the whole tick's shared state.** A converted process's half step
+  writes the game's globals too (Link sets gameInfo's player status and the action the HUD shows
+  every step); the draws of unconverted processes then met a state their own update (whole ticks
+  only) hadn't prepared, which the 30 Hz game never reaches. In a real-time run on the desktop the
+  HUD's draw crashed once in its text code just after the switch to 60 (not seen again in four
+  more runs; the likeliest cause). What converted processes write to .data and .bss during a half
+  tick's execute pass is now hidden from its draw pass (the whole tick's values put back before the
+  first draw) and handed back after the frame's rollback; on the tour route that is 115 words
+  (the matrix stack, J3D scratch, gameInfo's player status, the random state). The tracked
+  measurements don't change, and consecutive captures still all differ (the scene moves every
+  frame). `hidden.txt` (with the probe) lists the words.
+* **Real time** (the owner's desktop, headless, 2026-10-02): the tour route at 60 with the camera,
+  Link and the boat converted runs at 60.1 fps, frame times median 16.7 ms, 99th percentile
+  18.4 ms; without conversion 56.8-60 fps.
 * **Discrete choices from requests stay on whole ticks.** The camera's type comes from requests
   other processes leave (`+0x528`) and the camera consumes; an unconverted requester leaves one
   on whole ticks only, so the camera took the requested type on a whole tick and dropped it on the

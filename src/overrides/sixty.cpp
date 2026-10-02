@@ -335,10 +335,80 @@ namespace
 		return on;
 	}
 
+	// ---- a half tick's draws see the last whole tick's shared state -----------------------------------
+	// A converted process's half step writes the game's globals too (Link sets the action the HUD shows,
+	// gameInfo's do and A statuses, every step). The draws of unconverted processes then saw a state
+	// their own update (whole ticks) hadn't prepared for, which the 30 Hz game never reaches (once, in
+	// real time, the HUD's draw crashed in its text code). So what converted processes write to .data
+	// and .bss during a half tick's execute pass is hidden from its draw pass (put back to the whole
+	// tick's values before the first draw) and handed back after the frame's rollback: the converted
+	// processes go on from their own state, and draws see the whole tick's.
+	std::vector<Saved> s_convGlobals;               // converted executes' stores into .data/.bss: old bytes
+	std::vector<Saved> s_convGlobalsNew;            // and their bytes after the execute pass
+	bool s_convGlobalsHidden = false;
+
+	// with the probe: which globals were hidden, and how often (dir/hidden.txt at exit)
+	std::unordered_map<uint32, uint64> s_hiddenCounts;
+	void HiddenWrite()
+	{
+		static const std::string dir = getenv("WWHD_STATE_DUMP");
+		if (FILE* f = fopen((dir + "/hidden.txt").c_str(), "w"))
+		{
+			for (const auto& [ea, n] : s_hiddenCounts)
+				fprintf(f, "%08x %llu\n", ea, (unsigned long long)n);
+			fclose(f);
+		}
+	}
+
+	void HideConvertedGlobals()
+	{
+		if (s_convGlobalsHidden || s_convGlobals.empty())
+			return;
+		s_convGlobalsHidden = true;
+		if (Probe())
+		{
+			static bool once = [] { atexit(HiddenWrite); at_quick_exit(HiddenWrite); return true; }();
+			(void)once;
+			std::set<uint32> words;
+			for (const Saved& e : s_convGlobals)
+				words.insert(e.ea & ~3u);
+			for (uint32 w : words)
+				s_hiddenCounts[w]++;
+		}
+		s_convGlobalsNew.clear();
+		for (const Saved& e : s_convGlobals)
+		{
+			Saved& n = s_convGlobalsNew.emplace_back();
+			n.ea = e.ea;
+			n.size = e.size;
+			memcpy(n.bytes, memory_base + e.ea, e.size);
+		}
+		for (auto it = s_convGlobals.rbegin(); it != s_convGlobals.rend(); ++it)
+			memcpy(memory_base + it->ea, it->bytes, it->size);
+	}
+
+	void ShowConvertedGlobals()
+	{
+		if (s_convGlobalsHidden)
+			for (const Saved& n : s_convGlobalsNew)
+				memcpy(memory_base + n.ea, n.bytes, n.size);
+		s_convGlobals.clear();
+		s_convGlobalsNew.clear();
+		s_convGlobalsHidden = false;
+	}
+
 	void HalfTickStore(uint32 ea, uint32 size, uint32 pc)
 	{
 		if (Census())
 			CensusStore(ea, size, pc);
+		if (s_converting && !s_convGlobalsHidden && size <= 32 && ea >= kGlobalsLow && ea < kGlobalsHigh &&
+			PPCInterpreter_getCurrentInstance() == s_frameThread)
+		{
+			Saved& e = s_convGlobals.emplace_back();
+			e.ea = ea;
+			e.size = size;
+			memcpy(e.bytes, memory_base + ea, size);
+		}
 		if (Rollback())
 			RollbackStore(ea, size);
 	}
@@ -823,6 +893,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		g_rtJournalOn = wwhd::rt::QuietWatching();   // a fast path's watch may still need it
 		g_rtStoreCensus = nullptr;
 		RollbackRestore();
+		ShowConvertedGlobals();                         // the converted processes' half-step globals, back
 	}
 	wr32(0x101FF9D4u, rng[0]);
 	wr32(0x101FF9D8u, rng[1]);
@@ -926,6 +997,7 @@ void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
 {
 	if (g_rtHalfTick)
 	{
+		HideConvertedGlobals();                         // the draw pass sees the whole tick's globals
 		static const std::vector<uint16> skip = [] {
 			std::vector<uint16> v;
 			if (const char* e = getenv("WWHD_60FPS_SKIPDRAW"))
