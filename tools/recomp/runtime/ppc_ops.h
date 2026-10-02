@@ -23,10 +23,14 @@ void rt_journal_store(uint32 ea, uint32 size, uint32 pc);
 // 60 fps (D21): instructions listed in config/US_v0/tick_rules.txt run only on the game's whole
 // ticks. g_rtHalfTick is set for a frame that falls between two of them (60 fps only; never at 30
 // fps, so there every instruction runs). g_rtStep is the time step of a converted step, in 30 Hz
-// ticks (1 whenever 60 fps is off). The runtime owns both (src/runtime/dispatch.cpp).
+// ticks (1 whenever 60 fps is off). g_rtSixty is set while the game runs 60 frames a second (from
+// WWHD_60FPS_FROM's swap on). The runtime owns them (src/runtime/dispatch.cpp, set by
+// src/overrides/sixty.cpp).
 extern bool g_rtHalfTick;
 extern float g_rtStep;
+extern bool g_rtSixty;
 #define RT_WHOLE_TICK() (!g_rtHalfTick)
+#define RT_SIXTY() (g_rtSixty)
 // Step rules (config/US_v0/tick_rules.txt, tools/recomp/generate.py) for code run with a time step
 #define RT_STEPPED() (g_rtStep != 1.0f)
 static inline double rt_step_mul(double x) { return (double)(float)(x * g_rtStep); }

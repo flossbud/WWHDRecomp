@@ -279,6 +279,11 @@
 # JPADragField::calc (f_02823E8C): mDrag shrinks by a factor a step
 02823EAC    d@f0        fmuls           JPA drag field: mDrag *= mFieldDrag (children)
 02823ED8    d@f0        fmuls           JPA drag field: mDrag *= 1 - fade (1 - mFieldDrag)
+# JPADrawExecSetTexMtx::exec, the emitter's (f_02832604) and a particle's (f_02830814): the texture
+# scroll takes `int tick = getFrame()` (the emitter's mTick) or `getAge()`, so at half steps (.5) it
+# moved once a tick and the wake's texture jumped every other frame
+02832708    reload:f31=r30+0xc+0x194    frsp    JPA SetTexMtx (emitter): the scroll's tick is mTick (pDC->pbe +0x194), not (int)mTick
+0283091C    reload:f27=r31+0x78         frsp    JPA SetTexMtx (particle): the scroll's tick is the age (+0x78), not (int)age
 # JPADraw::calcParticle (f_0282DCBC) and calcChild (f_0282DD50): the rotation angle
 0282DCE8    split@r9    add             JPA draw calcParticle: rotation += rotation speed
 0282DD7C    split@r9    add             JPA draw calcChild: rotation += rotation speed
@@ -287,3 +292,9 @@
 025A93A0    whole       sth             wave executeAfter: the fade countdown (+6) - 1
 025A9460    /h:f1       bl 028f37f0     wave executeAfter: the emitter's move this step (a sqrt), per tick
 025A94AC    *h:f9       lfs             wave executeAfter: the speed's change per step, at most mVelSpeed (+0x10)
+# ---- the sea (d_a_sea.cpp). WWHD's sea makes its waves on the GPU; the height table its execute
+# makes (daSea_packet_c::execute f_0246C088, from four tick counters) stays flat (1.0) all along the
+# sail route, so nothing in it is converted.
+# the sea's draw (f_0246C7C8): its ripple texture scrolls by a counter (+0x22C, 1 a draw to 300): at
+# 60 every frame draws, so it counts on whole ticks (converted or not)
+0246C950    whole       sth             sea draw: the ripple texture's scroll counter

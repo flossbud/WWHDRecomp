@@ -68,6 +68,10 @@ rules, for the code of processes that run every frame with a time step h
                handed to a vector add)
   arc@rN       the same for a velocity: x and z times h, y as h y + (1 - h)/2 (y - noted), noted
                before gravity was added: the semi-implicit 30 Hz arc exactly at whole ticks
+  reload:fD=rB+O[+O2]  after the instruction, at 60 fps (g_rtSixty, drawing too, where the step
+               is 1), fD is the float at rB + O again (with O2, at the word at rB + O, plus O2):
+               code that truncates a frame count kept as a float (whose half steps are .5) gets it
+               whole (the particles' texture scroll, `int tick = getFrame()`)
 REG is a register (r3, f1). These name any instruction by its mnemonic (`bl TARGET` for a call).
 """
 import bisect
@@ -213,6 +217,14 @@ class Program:
                     assert kind in ("split", "vec", "arc") or kind in self.STEP_OPS, f"tick_rules.txt:{n}: {rule}: @ takes a step operation"
                     assert kind not in ("vec", "arc") or (arg[0] == "r" and words[2] == "bl"), f"tick_rules.txt:{n}: {rule}: a call's pointer register"
                     kind += "@"
+                if kind == "reload":
+                    m = re.fullmatch(r"(f(?:[12]?[0-9]|3[01]))=(r(?:[12]?[0-9]|3[01]))\+(0x[0-9a-fA-F]+)(?:\+(0x[0-9a-fA-F]+))?", arg)
+                    assert m, f"tick_rules.txt:{n}: {rule}: reload:fD=rB+OFFSET[+OFFSET] expected"
+                    value = (m.group(1), m.group(2), int(m.group(3), 16), None if m.group(4) is None else int(m.group(4), 16))
+                    assert self.function_containing(ea) is not None, f"tick_rules.txt:{n}: {ea:08X} is in no function"
+                    assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
+                    rules[ea] = (kind, value, expect, what)
+                    continue
                 if kind == "whole":
                     value = None
                     if arg:
@@ -480,6 +492,14 @@ def apply_tick_rule(rule, i, lines):
         if arg is not None:
             out += ["else", f"\tGPR(3) = {reg_expr(arg) if isinstance(arg, str) else emit.hx(arg)};"]
         return out
+    if kind == "reload":
+        dest, base, off, off2 = arg
+        ea = f"GPR({base[1:]}) + {emit.hx(off)}"
+        if off2 is not None:
+            ea = f"rd32({ea}) + {emit.hx(off2)}"
+        d = reg_expr(dest)
+        return lines + [f"if (RT_SIXTY()) {{ const uint32 w_ = rd32({ea}); float f_; memcpy(&f_, &w_, 4); "
+                        f"{d}.fp0 = (double)f_; {d}.fp1 = {d}.fp0; }}   // step rule: {what}"]
     if kind == "keep":
         dest = f"GPR({i.rD})" if i.op in ("addi", "addic", "add") else f"FPR({i.frD})"
         return ([f"if (RT_WHOLE_TICK()) {{   // step rule: {what}"] + ["\t" + l for l in lines]

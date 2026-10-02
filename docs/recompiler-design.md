@@ -409,7 +409,8 @@ every call site reaches the 60 fps work. *Step rules* (the conversion) are the s
 `keep:SRC` (a counter that counts whole ticks), and `OP:REG` / `OP@REG` (after the instruction, or
 for that instruction only) with OP `*h`, `/h`, `k` (an approach's factor, `1 - (1 - k)^h`), `d`
 (a damping factor, `d^h`) or `split` (an integer step split between the two half ticks); each is a
-no-op while `g_rtStep` is 1 (`RT_STEPPED()`). Every generated store also names its instruction to
+no-op while `g_rtStep` is 1 (`RT_STEPPED()`). `reload:fD=rB+O[+O2]` is for code that truncates a
+frame count kept as a float (drawing too): at 60 (`g_rtSixty`) the float is read back. Every generated store also names its instruction to
 the store journal (`rt_journal_store(ea, size, pc)`, only on the journaling path), so the 60 fps
 tools report guest addresses.
 
@@ -1596,16 +1597,27 @@ the boat's wake flickering, and a question whether the boat is too fast.
   function (`WWHD_60FPS_TRIAL_PARTICLES=1`); for particles it mostly reports pooled particles
   recycled differently, and children's first velocity a half step apart, so captures are the
   measure.
-* **The wake rides the sea.** Converted, the wake still changed only every other frame in
-  captures: identical half and whole frames, then a jump. The renderer's trace (now with hashes of
-  what each draw reads: `| data u .. v .. vbufs .. vs-reads ..`) showed its 79 segment draws read new
-  vertices and uniforms on both; skipping them (`WWHD_RENDER_SKIP_VS`, a probe) left the area still.
-  The strip is the wake: it follows the boat, as the camera does, so on screen it only moves as its
-  points ride the waves (`getMaxWaterY` lays them on the water) and the sea's waves move on whole
-  ticks. Not the rollback, the hidden globals (`WWHD_60FPS_HIDE=0`, a probe), sead's nodes or
-  fapGm_After (each tried: byte-identical captures).
-* **Next: the sea** (process 38): its four waves' phases are tick counters (`daSea_WaveInfo`), and
-  its draw advances the ripple texture's scroll every draw (twice as fast at 60).
+* **The wake's texture scrolled once a tick.** Converted, the wake still changed only every other
+  frame in captures: each half tick's frame matched the whole tick's after it, then a jump. The
+  renderer's trace (now with hashes of what each draw reads, `| data u .. v .. vbufs .. vs-reads`,
+  and `WWHD_RENDER_TRACE_VS=key` for one shader's constants and vertices) showed its 79 segment draws
+  read new vertices and a new view on every frame, and skipping them (`WWHD_RENDER_SKIP_VS`, a
+  probe) left the area still: the strip moves with the boat, as the camera does, so what showed on
+  screen was its texture, scrolled by one of its two texture matrices only once a tick.
+  JParticle's `JPADrawExecSetTexMtx` (the emitter's, `f_02832604`, and a particle's, `f_02830814`)
+  takes `int tick = getFrame()` (or `getAge()`): with half steps the frame is .5 between ticks and
+  the truncation moved the scroll on whole ticks only. The generator's new `reload:fD=rB+O[+O2]`
+  rule puts the float frame back after the conversion. These run in the draw pass, where the step
+  is 1, so it is conditioned on `g_rtSixty` (set while the game runs at 60; at 30 the frame counts
+  are whole and the truncation changes nothing). The wake's tiles now change every frame alike
+  (alternation 1.0-1.3, was 5-70). Ruled out on the way, each with byte-identical captures: the
+  rollback, the hidden globals (`WWHD_60FPS_HIDE=0`, a probe), sead's nodes, fapGm_After, the
+  GamePad's screen.
+* **The sea isn't converted.** WWHD makes the sea's waves on the GPU: the height table its execute
+  makes (`daSea_packet_c::execute`, four tick counters) stays flat (1.0) all along the sail route,
+  open sea too, so the wake's points sit at a constant height. Its draw advanced the ripple
+  texture's scroll every draw, twice as fast at 60 converted or not: now on whole ticks (a tick
+  rule).
 
 ## Milestones
 

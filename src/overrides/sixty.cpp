@@ -1014,6 +1014,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		cemuLog_log(LogType::Force, "wwhd sixty: 60 fps from swap {}", swap);
 	}
 	g_rtHalfTick = swap >= from && (swap - from) % 2 != 0;
+	g_rtSixty = swap >= from;
 	// WWHD_STATE_CENSUS=2 watches whole ticks' frames too (from the switch on), for the trace
 	static const bool censusAll = [] { const char* e = getenv("WWHD_STATE_CENSUS"); return Probe() && e && atoi(e) == 2; }();
 	if (!g_rtHalfTick && censusAll && swap >= from)

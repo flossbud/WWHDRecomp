@@ -520,9 +520,11 @@ it in a window; D21 "Step 2"):**
   - The wake, bow waves and splashes are particles: the particle system is converted
     (`WWHD_60FPS_PARTICLES=1`: the 3D particle calc every frame with a step, JParticle's steps in
     `tick_rules.txt`; the wake's and bow waves' strips emit every frame). Particle counts match the
-    30-tick run's. The wake still changes on whole ticks only: it rides the sea's waves, which move
-    on whole ticks (found with the renderer trace's data hashes and `WWHD_RENDER_SKIP_VS`). Next:
-    the sea (process 38).
+    30-tick run's. The wake's last flicker was its texture scroll, which truncated the half-step
+    frame count (`int tick = getFrame()` in JParticle's texture matrix): the new `reload` step rule
+    reads the float back at 60 (`g_rtSixty`, drawing too). Now the wake changes every frame alike.
+    The sea's CPU waves are flat in WWHD (the GPU makes them), so the sea isn't converted; its
+    ripple texture's scroll counted every draw (twice as fast at 60) and now counts whole ticks.
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
   CPU, vsyncs missed; `tools/sixty/frames.py` summarises), `WWHD_PROFILE` (`tools/profile_report.py`
   on the worker with the same build). On the desktop, `~/wwhd-test` is ours to deploy to and run

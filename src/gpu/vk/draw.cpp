@@ -1164,8 +1164,10 @@ namespace wwhd::gpu
 					ps->dec->textureUsesDepthCompare[unit] ? " cmp" : "");
 			}
 			// the data the draw reads: its vertex shader's constants (registers and uniform blocks) and
-			// its vertex buffers, hashed (whether a draw sees new data from frame to frame)
+			// its vertex buffers, hashed (whether a draw sees new data from frame to frame);
+			// WWHD_RENDER_TRACE_VS=key: that vertex shader's constants and vertices too (a probe)
 			{
+				static const uint64 dumpVs = [] { const char* e = getenv("WWHD_RENDER_TRACE_VS"); return e ? strtoull(e, nullptr, 16) : 0ull; }();
 				uint64 hu = 0xCBF29CE484222325ull, hv = hu;
 				auto mix = [](uint64& h, const uint8* p, size_t n) { h ^= HashBytes(p, n) + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2); };
 				if (r.SQ_CONFIG.get_DX9_CONSTS())
@@ -1181,7 +1183,19 @@ namespace wwhd::gpu
 				}
 				// what the vertex shader itself reads: its uniform registers, remapped entries and blocks
 				uint64 hs = 0xCBF29CE484222325ull;
-				auto take = [&](const uint8* p, size_t n) { mix(hs, p, n); };
+				std::string floats;
+				auto take = [&](const uint8* p, size_t n) {
+					mix(hs, p, n);
+					if (vsKey == dumpVs)
+						for (size_t i = 0; i + 4 <= n && i < 256; i += 4)
+						{
+							uint32 w;
+							memcpy(&w, p + i, 4);
+							float x;
+							memcpy(&x, &w, 4);
+							floats += fmt::format(" {}", x);
+						}
+				};
 				const uint32 aluConst = 0x400;
 				if (vs->uniforms.offset_uniformRegister >= 0)
 					take((const uint8*)(regs + mmSQ_ALU_CONSTANT0_0 + aluConst), vs->uniforms.count_uniformRegister * 16);
@@ -1202,6 +1216,8 @@ namespace wwhd::gpu
 				for (uint8 index : vs->uniformBuffers)
 				{
 					const MPTR phys = regs[mmSQ_VTX_UNIFORM_BLOCK_START + index * 7];
+					if (vsKey == dumpVs)
+						floats += fmt::format(" [block {} at {:08x}]", index, phys);
 					uint32 size = regs[mmSQ_VTX_UNIFORM_BLOCK_START + index * 7 + 1] + 1;
 					for (auto& q : vs->dec->list_quickBufferList)
 						if (q.index == index)
@@ -1216,9 +1232,19 @@ namespace wwhd::gpu
 					const MPTR a = regs[mmSQ_VTX_ATTRIBUTE_BLOCK_START + i * 7];
 					const uint32 n = regs[mmSQ_VTX_ATTRIBUTE_BLOCK_START + i * 7 + 1] + 1;
 					if (a && n > 1)
+					{
 						vb += fmt::format(" b{} {:08x}:{:08x}", i, a, (uint32)HashBytes(memory_getPointerFromPhysicalOffset(a), std::min<uint32>(n, 256)));
+						if (vsKey == dumpVs)                    // the first words, big-endian floats
+							for (uint32 k = 0; k < std::min<uint32>(n / 4, 30); k++)
+							{
+								const uint32 w = _swapEndianU32(*(const uint32*)memory_getPointerFromPhysicalOffset(a + 4 * k));
+								float x;
+								memcpy(&x, &w, 4);
+								vb += fmt::format(" {}", x);
+							}
+					}
 				}
-				line += fmt::format(" | data u {:08x} v {:08x} vbufs{} vs-reads {:08x}", (uint32)hu, (uint32)hv, vb, (uint32)hs);
+				line += fmt::format(" | data u {:08x} v {:08x} vbufs{} vs-reads {:08x}{}", (uint32)hu, (uint32)hv, vb, (uint32)hs, floats);
 			}
 			if (frame)
 				Log(line);
