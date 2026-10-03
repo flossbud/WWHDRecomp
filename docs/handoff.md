@@ -585,8 +585,13 @@ it in a window; D21 "Step 2"):**
     the stick) isn't converted: with it stepping the song failed, so its actions stay off the list
     (the song still works, at 30). `WWHD_60FPS_EVENTS=0` turns event stepping off. Next: convert
     the song's procs; door-opening and talking actions; cutscenes (dDemo's frame).
-  - Also seen: Link turning at 60 ends up ~10 units off the 30-tick run after a walk (`land`):
-    small, open.
+  - **Seagulls** (KAMOME, 194, d_a_kamome.cpp) converted: position adds `*h`, the tick count and six
+    timers `whole`. They fly smoothly at 60 at the 30-tick run's speeds; their paths drift apart over
+    time (integer angle approaches round differently by half steps, and they pick random targets), as
+    any wandering actor's will.
+  - Link turning at 60 ends up ~10 units ahead: an action that ends with its animation (the turn)
+    can end on a half tick, so he starts walking a tick early (route `door`, ticks 1004-1006). Left
+    as is: holding such switches to whole ticks would stall him half a tick each time.
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
   CPU, vsyncs missed; `tools/sixty/frames.py` summarises), `WWHD_PROFILE` (`tools/profile_report.py`
   on the worker with the same build). On the desktop, `~/wwhd-test` is ours to deploy to and run
@@ -594,7 +599,9 @@ it in a window; D21 "Step 2"):**
 - Then D21's order: particles, animation-heavy actors, the HUD, then actors route by route;
   uncapped. Tools: `tools/sixty/track.py` (fields tick by tick, half ticks too),
   `tools/sixty/camera.py` (the camera's view, 30 against 60).
-- Run converted: `WWHD_60FPS=1 WWHD_60FPS_CONVERT=476,168,165,171 WWHD_60FPS_PARTICLES=1` (with
+- Run converted: `WWHD_60FPS=1` (the checked conversions are the default now: camera 476, Link 168,
+  ship 165, sail 171, seagulls 194, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
+  `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;
   the probe writes `particles.txt` (the particle census, every frame); for side-by-side runs copy the
   binary to a folder of its own (`CEMU_BIN=`): one instance per folder.

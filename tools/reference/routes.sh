@@ -14,6 +14,7 @@ route_info() {
         bow)   route=bow-100.txt       frames=1040  save=/wwhd/data/saves/wwhd_100 trace= ;;
         sidle) route=drc-sidle.txt     frames=1400  save=/wwhd/data/saves/owner_drc trace= ;;
         door)  route=drc-door.txt      frames=1300  save=/wwhd/data/saves/owner_drc trace= ;;
+        bk)    route=drc-bk.txt        frames=1300  save=/wwhd/data/saves/owner_drc trace= ;;
         pot)   route=drc-pot.txt       frames=1440  save=/wwhd/data/saves/owner_drc trace= ;;
         sail)  route=sail-100.txt      frames=2940  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/sail-det/a.zst ;;
         menus) route=menus-100.txt     frames=1920  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/menus-det/a.zst ;;
@@ -21,4 +22,4 @@ route_info() {
         *) return 1 ;;
     esac
 }
-route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door"
+route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk"

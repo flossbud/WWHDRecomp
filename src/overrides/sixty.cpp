@@ -60,11 +60,19 @@ namespace
 	// A converted process runs its logic every frame at 60 fps, with g_rtStep the part of a 30 Hz
 	// tick a frame is (0.5; the helpers in sixty_step.cpp read it), and its writes stand; every other
 	// process runs on whole ticks with a step of 1 (D21 step 3).
+	// The processes converted and checked so far (D21), when WWHD_60FPS_CONVERT isn't set: the
+	// camera, Link, the ship, its sail (GRID), the seagulls. WWHD_60FPS_CONVERT= (empty) converts none.
+	constexpr const char* kConvertedByDefault = "476,168,165,171,194";
+	const char* ConvertList()
+	{
+		const char* e = getenv("WWHD_60FPS_CONVERT");
+		return e ? e : kConvertedByDefault;
+	}
 	bool Converted(uint16 name)
 	{
 		static const std::vector<uint16> names = [] {
 			std::vector<uint16> v;
-			if (const char* e = getenv("WWHD_60FPS_CONVERT"))
+			if (const char* e = ConvertList())
 				for (const char* p = e; *p;)
 				{
 					char* end;
@@ -81,7 +89,7 @@ namespace
 	}
 	bool AnyConverted()
 	{
-		static const bool any = [] { const char* e = getenv("WWHD_60FPS_CONVERT"); return e && *e; }();
+		static const bool any = [] { const char* e = ConvertList(); return e && *e; }();
 		return any;
 	}
 	int s_converting = 0;                           // a converted process's execute is running
@@ -1336,7 +1344,7 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 // it as the step-doubling trial (TrialExecute).
 void f_025A81A0(PPCInterpreter_t* __restrict ctx)
 {
-	static const bool converted = [] { const char* e = getenv("WWHD_60FPS_PARTICLES"); return e && atoi(e) == 1; }();
+	static const bool converted = [] { const char* e = getenv("WWHD_60FPS_PARTICLES"); return !e || atoi(e) == 1; }();   // on unless =0
 	const uint32 from = wwhd::rt::SixtyFrom();      // ~0 when 60 fps is off
 	if (from == ~0u)
 	{

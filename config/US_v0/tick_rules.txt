@@ -318,3 +318,11 @@
 # the sea's draw (f_0246C7C8): its ripple texture scrolls by a counter (+0x22C, 1 a draw to 300): at
 # 60 every frame draws, so it counts on whole ticks (converted or not)
 0246C950    whole       sth             sea draw: the ripple texture's scroll counter
+#
+# ---- step rules: the seagulls (KAMOME, process 194, d_a_kamome.cpp: methods 0x02185AE0-0x02188D84).
+# Converted with WWHD_60FPS_CONVERT=...,194; found with the step-doubling trial on the 100% save's dock.
+02185D78    *h@f0       fadds           kamome move: current.pos.x += speed.x
+02185D80    *h@f12      fadds           kamome move: current.pos.y += speed.y
+02185D8C    *h@f12      fadds           kamome move: current.pos.z += speed.z
+02186254    whole       stw             kamome execute: the tick count (+0x3BC) + 1, before its uses
+02186458    whole       sthx            kamome execute: its six timers (+0x3F8) count down
