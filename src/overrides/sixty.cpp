@@ -1207,10 +1207,77 @@ namespace
 	}
 }
 
+// WWHD_DEBUG_SPAWN=tick:process,param,x,y,z[;...] (a test aid): at those game frames an actor of that
+// process name (actor_names.tsv's numbers) and parameters (hex) is created at that position in
+// Link's room, as fopAcM_create does: the creation record (f_025D5678: parameters, position, room,
+// angle, scale, subtype, parent) and fpcM_Create (f_025E14A8: the layer, *0x101F3AE8, the process
+// name, no create function, the record)
+void f_025D5678(PPCInterpreter_t* __restrict ctx);
+void f_025E14A8(PPCInterpreter_t* __restrict ctx);
+namespace
+{
+	struct Spawn { int tick, proc; uint32 param; float x, y, z; };
+	void DebugSpawn(PPCInterpreter_t* ctx)
+	{
+		static const std::vector<Spawn> spawns = [] {
+			std::vector<Spawn> v;
+			if (const char* e = getenv("WWHD_DEBUG_SPAWN"))
+				for (const char* p = e; p && *p; p = strchr(p, ';') ? strchr(p, ';') + 1 : nullptr)
+				{
+					Spawn w{ -1, 0, 0, 0, 0, 0 };
+					if (sscanf(p, "%d:%d,%x,%f,%f,%f", &w.tick, &w.proc, &w.param, &w.x, &w.y, &w.z) == 6)
+						v.push_back(w);
+				}
+			return v;
+		}();
+		if (spawns.empty() || g_rtHalfTick || !s_link)
+			return;
+		const int now = (int)wwhd::rt::GameFrame(wwhd::os::SwapCount());
+		for (const Spawn& w : spawns)
+		{
+			if (w.tick != now)
+				continue;
+			Registers regs;
+			regs.Save(ctx);
+			const uint32 sp = (ctx->gpr[1] - 0x200) & ~0xFu;
+			const uint32 pos = sp + 0x100;
+			wr32(pos, std::bit_cast<uint32>(w.x));
+			wr32(pos + 4, std::bit_cast<uint32>(w.y));
+			wr32(pos + 8, std::bit_cast<uint32>(w.z));
+			wr32(sp, ctx->gpr[1]);                     // a back chain
+			ctx->gpr[1] = sp;
+			ctx->gpr[3] = w.param;
+			ctx->gpr[4] = pos;
+			ctx->gpr[5] = (uint32)(sint32)(sint8)rd8(s_link + 0x326);   // Link's room
+			ctx->gpr[6] = 0;
+			ctx->gpr[7] = 0;
+			ctx->gpr[8] = 0;
+			ctx->gpr[9] = ~0u;
+			f_025D5678(ctx);
+			const uint32 append = ctx->gpr[3];
+			uint32 id = ~0u;
+			if (append)
+			{
+				ctx->gpr[1] = sp;
+				ctx->gpr[3] = rd32(0x101F3AE8u);
+				ctx->gpr[4] = (uint32)w.proc;
+				ctx->gpr[5] = 0;
+				ctx->gpr[6] = 0;
+				ctx->gpr[7] = append;
+				f_025E14A8(ctx);
+				id = ctx->gpr[3];
+			}
+			regs.Restore(ctx);
+			cemuLog_log(LogType::Force, "wwhd debug: spawned process {} param {:08x} at {} {} {}: id {:x}", w.proc, w.param, w.x, w.y, w.z, id);
+		}
+	}
+}
+
 // m_Do_main's frame body (see the top)
 void f_025F172C(PPCInterpreter_t* __restrict ctx)
 {
 	DebugStage();
+	DebugSpawn(ctx);
 	s_firstDraw = true;
 	s_held.clear();
 	if (g_rtHalfTick)

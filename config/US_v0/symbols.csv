@@ -157,3 +157,7 @@ address,name,evidence
 0246BD4C,daSea_packet_c::CalcFlatInter,"WW-4 decompile: the GameCube's CalcFlatInter (mFlatInter +0x130 toward a target by 1/n, n +0x138 a float - 1)"
 0246DD14,daSea_packet_c::create,"WW-4: installs the wave table wi_prm_ocean (0x101D0110, found by its floats 2.5, 7.352941e-5 (0x389A33CD)) at +0xf0"
 0246C7C8,daSea_packet_c::draw,"WW-4 disassembly: the GameCube's draw's ripple scroll, mAnimCounter (+0x22C) + 1 to 300 (0x12c), and the height table into HD vertex buffers (f_0246C5E8)"
+025D5678,fopAcM_createAppendFill,"WW-4 decompile: fills a creation record from fopAcM_GetAppend (f_025D5600): parameters, position, room (+0x21), angle, scale bytes scaled by 10, subtype, parent ID; called by fopAcM_createChild (f_025D5B20, its assert 'mother != (0)' at f_op_actor_mng.cpp:752) before fpcM_Create"
+025D5B20,fopAcM_createChild,"WW-4 decompile: assert f_op_actor_mng.cpp:752 'mother != (0)'; the parent's position and angle plus an offset, the creation record (f_025D5678), then fpcM_Create (f_025E14A8)"
+025E14A8,fpcM_Create,"WW-4 decompile: (layer, process name < 0x7FFF, create function, ?, append) -> a creation request (0x60 bytes, its fields +0x50 name, +0x54 append, +0x58 function), returns its process ID; 27 callers (actors creating actors)"
+

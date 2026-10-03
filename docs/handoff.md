@@ -627,8 +627,11 @@ it in a window; D21 "Step 2"):**
     next stage at +0x5140: name[8], s16 point, s8 room, s8 layer, s8 enabled, u8 wipe; the current
     stage's name is at +0x5134). From the Outset dock `920:M_NewD2,0,0,-1` lands in Dragon Roost
     Cavern's entrance; rooms 1-4 of M_NewD2 with point 0 land in four other places (room 3 outdoors at
-    night: a layer?). `WWHD_DEBUG_PLACE=tick:x,y,z` moves Link within a stage. Next: spawning an
-    actor by process name (fopAcM_create), and an in-game menu on top of these.
+    night: a layer?). `WWHD_DEBUG_PLACE=tick:x,y,z` moves Link within a stage.
+    `WWHD_DEBUG_SPAWN=tick:process,param,x,y,z[;...]` creates an actor there in Link's room
+    (the creation record `f_025D5678`, then fpcM_Create `f_025E14A8` on the layer at *0x101F3AE8):
+    a Bokoblin at `950:189,0,-201622,190,312600` stands on the Outset dock behind Link and acts.
+    Next: an in-game menu on top of these.
   - **Converting an actor**: `uv run tools/sixty/actor_rmw.py PROCESS` lists the type's
     read-modify-write stores with suggested rules (review them: `+= 1` can be a state machine's next
     step, not a tick count); `WWHD_DEBUG_PLACE=tick:x,y,z` puts Link beside it; the trial and a
