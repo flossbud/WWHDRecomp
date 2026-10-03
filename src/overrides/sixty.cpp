@@ -61,8 +61,9 @@ namespace
 	// tick a frame is (0.5; the helpers in sixty_step.cpp read it), and its writes stand; every other
 	// process runs on whole ticks with a step of 1 (D21 step 3).
 	// The processes converted and checked so far (D21), when WWHD_60FPS_CONVERT isn't set: the
-	// camera, Link, the ship, its sail (GRID), the seagulls. WWHD_60FPS_CONVERT= (empty) converts none.
-	constexpr const char* kConvertedByDefault = "476,168,165,171,194";
+	// camera, Link, the ship, its sail (GRID), the seagulls, Bokoblins and their sticks (BOKO).
+	// WWHD_60FPS_CONVERT= (empty) converts none.
+	constexpr const char* kConvertedByDefault = "476,168,165,171,194,189,463";
 	const char* ConvertList()
 	{
 		const char* e = getenv("WWHD_60FPS_CONVERT");
@@ -1290,7 +1291,20 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	}
 	bool converted = from != ~0u && wwhd::os::SwapCount() >= from && Converted(rd16(proc + 0x08));
 	if (rd16(proc + 0x08) == 168)
+	{
 		s_link = proc;
+		// WWHD_DEBUG_PLACE=tick:x,y,z (a test aid): Link's position set at that game frame, to reach an
+		// actor without steering a route there
+		static const std::array<float, 4> place = [] {
+			std::array<float, 4> p{ -1.0f, 0, 0, 0 };
+			if (const char* e = getenv("WWHD_DEBUG_PLACE"))
+				sscanf(e, "%f:%f,%f,%f", &p[0], &p[1], &p[2], &p[3]);
+			return p;
+		}();
+		if (place[0] >= 0 && !g_rtHalfTick && wwhd::rt::GameFrame(wwhd::os::SwapCount()) == (uint32)place[0])
+			for (uint32 i = 0; i < 3; i++)
+				wr32(proc + 0x314 + 4 * i, std::bit_cast<uint32>(place[1 + i]));
+	}
 	if (converted)
 	{
 		if (!g_rtHalfTick)

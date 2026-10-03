@@ -326,3 +326,28 @@
 02185D8C    *h@f12      fadds           kamome move: current.pos.z += speed.z
 02186254    whole       stw             kamome execute: the tick count (+0x3BC) + 1, before its uses
 02186458    whole       sthx            kamome execute: its six timers (+0x3F8) count down
+#
+# ---- step rules: Bokoblins (BK, process 189, d_a_bk.cpp) and the enemies' common per-tick update
+# (f_02041F94, the BK's at +0x49C). Found with the step-doubling trial on the owner's save (route bk).
+0209C600    whole       stw             bk execute: the tick count (+0x410) + 1, before its uses
+0209C614    whole       sthx            bk execute: its timers (+0x418) count down
+0209CB20    whole       sth             bk: a countdown (+0x3E4) - 1
+0209C554    whole       sth             bk execute: a counter (+0x1372) + 1
+0209C634    whole       sth             bk execute: a countdown (+0x42C) - 1
+0209C648    whole       sth             bk execute: a countdown (+0x42E) - 1
+0209D864    *h@f8       fadds           bk: +0x13A0 += +0x498 a tick
+0209DA70    *h@f8       fadds           bk: +0x13A0 += +0x498 a tick
+0209E13C    whole       sth             bk: a counter (+0x138E) + 1
+020A1D78    *h@f11      fadds           bk: a float timer (+0xCC4) + its rate
+02041FF0    whole       stw             enemy common update: its tick count (+0xC) + 1
+02042004    whole       sthx            enemy common update: its three timers (+0x60) count down
+02042030    whole       sth             enemy common update: a countdown (+0x66) - 1
+# the enemies' shared move (f_02043F34, from the common update; the actor at *r31): its position
+# takes speed * K plus the forward speed (+0x508, turned by the angle), then the knockback (+0x758);
+# speed.y loses gravity
+02044A60    *h@f0       fadds           enemy move: current.pos.x += speed.x K + forward.x
+02044A74    *h@f10      fmadds          enemy move: current.pos.y += speed.y K
+02044A90    *h@f11      fadds           enemy move: current.pos.z += speed.z K + forward.z
+02044AC4    *h@f6       fadds           enemy move: current.pos.x += knockback.x
+02044AD8    *h@f8       fadds           enemy move: current.pos.z += knockback.z
+02044B00    *h@f12      fsubs           enemy move: speed.y -= gravity

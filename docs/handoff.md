@@ -589,6 +589,19 @@ it in a window; D21 "Step 2"):**
     timers `whole`. They fly smoothly at 60 at the 30-tick run's speeds; their paths drift apart over
     time (integer angle approaches round differently by half steps, and they pick random targets), as
     any wandering actor's will.
+  - **Bokoblins** (BK 189, d_a_bk.cpp, with their sticks, BOKO 463) converted, a first pass: the
+    enemies' shared per-tick update (`f_02041F94`: a tick count and four timers, `whole`) and
+    shared move (`f_02043F34`: position += speed K + the forward speed, the knockback, gravity, all
+    `*h`) serve every enemy that uses them; the Bokoblin's own tick counts and countdowns `whole`
+    and two float accumulators `*h`. Fighting Link (placed beside them with `WWHD_DEBUG_PLACE=
+    1000:-1075,0,5700` on route `drc`) they cover 1734 and 1424 units in 290 ticks against 1605 and
+    1365 at 30 (their steering drifts); the trial has nothing left stepping twice but angles that
+    chase a moving Link. Not yet tried: getting hit and dying, picking the stick up.
+  - **Converting an actor**: `uv run tools/sixty/actor_rmw.py PROCESS` lists the type's
+    read-modify-write stores with suggested rules (review them: `+= 1` can be a state machine's next
+    step, not a tick count); `WWHD_DEBUG_PLACE=tick:x,y,z` puts Link beside it; the trial and a
+    30-against-60 track (compare half frame k of the 60 run with tick k of the 30: a converted
+    process reaches a tick's state at its half frame) decide.
   - Link turning at 60 ends up ~10 units ahead: an action that ends with its animation (the turn)
     can end on a half tick, so he starts walking a tick early (route `door`, ticks 1004-1006). Left
     as is: holding such switches to whole ticks would stall him half a tick each time.
@@ -600,7 +613,7 @@ it in a window; D21 "Step 2"):**
   uncapped. Tools: `tools/sixty/track.py` (fields tick by tick, half ticks too),
   `tools/sixty/camera.py` (the camera's view, 30 against 60).
 - Run converted: `WWHD_60FPS=1` (the checked conversions are the default now: camera 476, Link 168,
-  ship 165, sail 171, seagulls 194, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
+  ship 165, sail 171, seagulls 194, Bokoblins 189 and their sticks 463, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
   `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;
   the probe writes `particles.txt` (the particle census, every frame); for side-by-side runs copy the
