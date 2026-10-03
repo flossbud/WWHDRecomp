@@ -136,7 +136,7 @@ namespace
 		if (!on || !s_link || rd16(s_link + 0x08) != 168)
 			return false;
 		const uint32 action = rd32(s_link + 0x65F0);
-		return action == 4 || action == 6;
+		return action == 4 || action == 6 || action == 0x9A;
 	}
 	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0;
 	void StepStats()

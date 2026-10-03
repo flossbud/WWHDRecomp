@@ -353,4 +353,15 @@
 # step-doubling trial (WWHD_60FPS_TRIAL_PLANTS=1) along route plants (Outset's village).
 025CDD9C    split@r7    add             plants' sway (f_025CDCB4): a phase (+0x0) += its step
 025CDDB8    split@r0    add             plants' sway: a second phase += its step
+#
+# ---- step rules: Link conducting the Wind Waker (procTactPlay, f_0243A094; his action 0x9A, stepping
+# in its event). Its beat phase (+0x69F8) and three timers count 1.0 a tick (f31), a countdown (+0x6918)
+# whole ticks; the notes come from the stick, read on whole ticks.
+0243A148    whole       sth             procTactPlay: the countdown (+0x6918) - 1
+0243A1FC    whole       sth             procTactPlay: the countdown (+0x6918) + 1 (from below -1)
+0243A154    *h@f31      fadds           procTactPlay: the beat phase (+0x69F8) + 1
+0243A42C    *h@f31      fadds           procTactPlay: the beat phase (+0x69F8) + 1
+0243A22C    *h@f31      fsubs           procTactPlay: a timer (+0x6A04) - 1
+0243A564    *h@f31      fsubs           procTactPlay: a timer (+0x69FC) - 1
+0243A658    *h@f31      fsubs           procTactPlay: a timer (+0x6A00) - 1
 

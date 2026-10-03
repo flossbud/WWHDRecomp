@@ -583,8 +583,14 @@ it in a window; D21 "Step 2"):**
     tick, camera too. The Wind Waker (actions 0x9A-0x9C, `f_0243A094` procTactPlay: a beat phase
     +0x69F8 and timers +0x69FC/+0x6A00/+0x6A04 stepped 1 a tick, a countdown +0x6918, the notes from
     the stick) isn't converted: with it stepping the song failed, so its actions stay off the list
-    (the song still works, at 30). `WWHD_60FPS_EVENTS=0` turns event stepping off. Next: convert
-    the song's procs; door-opening and talking actions; cutscenes (dDemo's frame).
+    (the song still works, at 30). `WWHD_60FPS_EVENTS=0` turns event stepping off.
+    Then converted: conducting (0x9A, `f_0243A094`: the beat phase and three timers `*h`, the
+    countdown `whole`) now steps too; the camera follows the 30-tick run's exactly through the song,
+    the warp map comes up and the route ends as before; the song ends 2.5 ticks early (a beat lands
+    on the half tick it crosses). Next: door-opening and talking actions; cutscenes (dDemo's frame).
+  - Open: the warp route at 60 logs a burst of 30-40 sead asserts in one frame late in the route
+    (J3DDrawBuffer's `p_pkt->getEntryPtr() == 0`, from Link's draw), with nothing converted too;
+    none at 30. The half tick's draws: to look into (the same assert as the six at a boot at 60).
   - **Seagulls** (KAMOME, 194, d_a_kamome.cpp) converted: position adds `*h`, the tick count and six
     timers `whole`. They fly smoothly at 60 at the 30-tick run's speeds; their paths drift apart over
     time (integer angle approaches round differently by half steps, and they pick random targets), as
