@@ -47,3 +47,4 @@
 02524EA0    src/overrides/sixty.cpp            executeTree: dTree_packet_c's calc, the same (D21)
 02524FA0    src/overrides/sixty.cpp            executeWood: dWood_packet_c's calc (bushes), the same (D21)
 025250A0    src/overrides/sixty.cpp            executeFlower: dFlower_packet_c's calc, the same (D21)
+025B9100    src/overrides/sixty.cpp            dSv_memBit_c::isDungeonItem: item 3 (the boss beaten) is "no" under WWHD_DEBUG_BOSS=1, so a boss can be fought again from a finished save (a test aid)

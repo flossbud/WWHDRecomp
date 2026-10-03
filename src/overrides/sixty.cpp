@@ -65,9 +65,10 @@ namespace
 	// Roost's lava geysers (Obj_Ygush00), lava (Obj_Eayogn), Obj_Gryw00, flags (Tori_Flag), bomb flowers
 	// (296, d_a_bflower.cpp) and Obj_Ebomzo; push blocks (Obj_Movebox), chests (TBOX), doors (DOOR10) and the
 	// sky (VRBOX, VRBOX2), which match the 30-tick run with no rules (tools/sixty/actor_types.py); Chuchus
-	// (CC), Keese (KI), Moblins (MO2), Darknuts (TN), Kargarocs (BB) and ReDeads (RD).
+	// (CC), Keese (KI), Moblins (MO2), Darknuts (TN), Kargarocs (BB), ReDeads (RD), Gohma (BTD) and
+	// Valoo's tail in its room (DR2).
 	// WWHD_60FPS_CONVERT= (empty) converts none.
-	constexpr const char* kConvertedByDefault = "476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224";
+	constexpr const char* kConvertedByDefault = "476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223";
 	const char* ConvertList()
 	{
 		const char* e = getenv("WWHD_60FPS_CONVERT");
@@ -1272,6 +1273,21 @@ namespace
 			cemuLog_log(LogType::Force, "wwhd debug: spawned process {} param {:08x} at {} {} {}: id {:x}", w.proc, w.param, w.x, w.y, w.z, id);
 		}
 	}
+}
+
+// dSv_memBit_c::isDungeonItem(mem, item): item 3 is the stage's "boss beaten" (isStageBossEnemy and 44
+// call sites test it). A test aid: WWHD_DEBUG_BOSS=1 answers "no" for it, so a boss appears again in
+// its room on a finished save (with WWHD_DEBUG_STAGE to get there); nothing is written to the save.
+void orig_f_025B9100(PPCInterpreter_t* __restrict ctx);
+void f_025B9100(PPCInterpreter_t* __restrict ctx)
+{
+	static const bool on = [] { const char* e = getenv("WWHD_DEBUG_BOSS"); return e && *e == '1'; }();
+	if (on && ctx->gpr[4] == 3)
+	{
+		ctx->gpr[3] = 0;
+		return;
+	}
+	orig_f_025B9100(ctx);
 }
 
 // m_Do_main's frame body (see the top)

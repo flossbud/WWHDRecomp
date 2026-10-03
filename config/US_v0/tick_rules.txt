@@ -440,3 +440,17 @@
 # ---- step rules: a shared int countdown (f_0211D2F8: if (*t) --*t; return *t; 173 callers, a
 # cLib_calcTimer-like template). Found on ReDeads (RD, process 224), whose paths already matched.
 0211D308    whole       stw             countdown helper: *t - 1
+#
+# ---- step rules: Gohma (BTD, process 234, d_a_btd.cpp; execute f_020F1494). Found with the trial in
+# its room (WWHD_DEBUG_BOSS=1 on a finished save).
+020F1628    whole       sth             btd: a tick count (+0x40A) + 1
+020F163C    whole       sthx            btd: its timers (+0x414) count down
+020F2180    whole       sth             btd: a counter (+0x705E) + 1
+020F218C    whole       sth             btd: a counter (+0x705C) + 1
+
+#
+# ---- step rules: Valoo's tail in Gohma's room (DR2, process 223, d_a_dr2.cpp; execute f_0212B3D0).
+0212B43C    whole       sth             dr2: a tick count (+0x3D8) + 1
+0212B450    whole       sthx            dr2: its timers (+0x51C) count down
+0212B7DC    *h@f10      fadds           dr2: a sway (+0x510) += its step a tick
+0212B820    *h@f0       fadds           dr2: a sway (+0x514) += its step a tick

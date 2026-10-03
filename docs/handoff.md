@@ -631,6 +631,10 @@ it in a window; D21 "Step 2"):**
     `WWHD_DEBUG_SPAWN=tick:process,param,x,y,z[;...]` creates an actor there in Link's room
     (the creation record `f_025D5678`, then fpcM_Create `f_025E14A8` on the layer at *0x101F3AE8):
     a Bokoblin at `950:189,0,-201622,190,312600` stands on the Outset dock behind Link and acts.
+    `WWHD_DEBUG_BOSS=1` answers "no" to every stage's "boss beaten" (dSv_memBit_c::isDungeonItem
+    item 3, f_025B9100; isStageBossEnemy and 44 call sites read it), nothing written to the save:
+    with `920:M_DragB,0,0,-1` Gohma is back in its room on the finished test saves (all attached saves
+    are 100%), its fight started (no intro: that is the boss door's event). The start of a boss rush.
     Next: an in-game menu on top of these.
   - **Enemies by spawning** (`WWHD_DEBUG_SPAWN` on the Outset dock, the scratch script's steps: spawn,
     trial, 30 against 60 by half frame): Keese (KI 215: its fly's position += speed and a velocity,
@@ -666,7 +670,8 @@ it in a window; D21 "Step 2"):**
 - Run converted: `WWHD_60FPS=1` (the checked conversions are the default now: camera 476, Link 168,
   ship 165, sail 171, seagulls 194, Bokoblins 189 and their sticks 463, Dragon Roost's mountain
   actors 151, 154, 142, 175, 296, 162, push blocks 43, chests 292, doors 300, the sky 437/438,
-  Chuchus 206, Keese 215, Moblins 188, Darknuts 191, Kargarocs 181, ReDeads 224,
+  Chuchus 206, Keese 215, Moblins 188, Darknuts 191, Kargarocs 181, ReDeads 224, Gohma 234 and
+  Valoo's tail in its room 223 (counters, timers, two sways; tested idle in the fight),
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
   `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;
