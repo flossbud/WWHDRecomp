@@ -369,4 +369,42 @@
 # two phases advanced a tick, everything else computed from them
 0251C9A4    split@r0    add             cloth wave: a phase (+0x1B4) += its step (+0x1B6)
 0251C9AC    split@r4    add             cloth wave: a phase (+0x1B8) += its step (+0x1BA)
-
+#
+# ---- step rules: Chuchus (CC, process 206, d_a_cc.cpp). Found with the step-doubling trial on one
+# spawned on the Outset dock (WWHD_DEBUG_SPAWN=950:206,0,-201622,190,312700, route save).
+0210DF90    whole       sthx            cc execute: its timers count down
+#
+# ---- step rules: Keese (KI, process 215, d_a_ki.cpp). Found with the trial on one spawned on the dock.
+02199BE8    *h@f11      fadds           ki fly (f_02199A64): current.pos.x += speed.x
+02199BF0    *h@f13      fadds           ki fly: current.pos.y += speed.y
+02199BFC    *h@f10      fadds           ki fly: current.pos.z += speed.z
+0219C838    *h@f6       fadds           ki: current.pos.x += its velocity
+0219C848    *h@f9       fadds           ki: current.pos.y += its velocity
+0219C858    *h@f11      fadds           ki: current.pos.z += its velocity
+0219AEB0    whole       sth             ki execute: a tick count (+0x4D4) + 1
+#
+# ---- step rules: Magtails (MT, process 216, d_a_mt.cpp; execute f_021D87A0). Found with the trial on
+# one spawned on the dock.
+021D8B4C    whole       sth             mt: a countdown (+0x580) - 1
+021D8CF8    whole       sthx            mt: its timers count down
+021D8D6C    whole       sth             mt: a countdown (+0x5AA) - 1
+021D8D80    whole       sth             mt: a counter (+0x5AC) + 1
+021D8D88    whole       sth             mt: a counter (+0x586) + 1
+021D8DC8    whole       sth             mt: a counter (+0x586) + 1
+021D9860    whole       sth             mt: a countdown (+0x5AE) - 1
+021DBF34    split@r30   add             mt: +0x404 += its step a tick
+021DBFAC    split@r30   add             mt: +0x408 += its step a tick
+021DC040    split@r0    add             mt: a phase (+0x58A) += its step a tick
+021D9E2C    whole       sth             mt: a counter (+0x588) + 1
+021DB1C8    *h@f10      fadds           mt move (1): current.pos.x += speed.x
+021DB1BC    *h@f0       fadds           mt move (1): current.pos.y += speed.y
+021DB1E8    *h@f7       fadds           mt move (1): current.pos.z += speed.z
+021DB28C    *h@f10      fadds           mt move (2): current.pos.x += speed.x
+021DB2AC    *h@f0       fadds           mt move (2): current.pos.y += speed.y
+021DB2B4    *h@f7       fadds           mt move (2): current.pos.z += speed.z
+021DB388    *h@f10      fadds           mt move (3): current.pos.x += speed.x
+021DB390    *h@f0       fadds           mt move (3): current.pos.y += speed.y
+021DB398    *h@f7       fadds           mt move (3): current.pos.z += speed.z
+021DB418    *h@f10      fadds           mt move (4): current.pos.x += speed.x
+021DB43C    *h@f0       fadds           mt move (4): current.pos.y += speed.y
+021DB444    *h@f7       fadds           mt move (4): current.pos.z += speed.z

@@ -632,6 +632,16 @@ it in a window; D21 "Step 2"):**
     (the creation record `f_025D5678`, then fpcM_Create `f_025E14A8` on the layer at *0x101F3AE8):
     a Bokoblin at `950:189,0,-201622,190,312600` stands on the Outset dock behind Link and acts.
     Next: an in-game menu on top of these.
+  - **Enemies by spawning** (`WWHD_DEBUG_SPAWN` on the Outset dock, the scratch script's steps: spawn,
+    trial, 30 against 60 by half frame): Keese (KI 215: its fly's position += speed and a velocity,
+    `*h`; a tick count) now fly the 30-tick run's path within 7 units (8642 against 8637 units);
+    Chuchus (CC 206: its timers) walk it within 1-7 units, their jump a tick early. Both in the
+    defaults. Magtails (MT 216): counters, timers, phases and four move modes have rules, but on a
+    wooden dock it falls into the sea and the 60 run takes another branch: test in its lava, not in
+    the defaults. Spawned all at once (`actor_types.py`), every other enemy type differs at every
+    tick: each needs its pass (Moblin 188, Peahat 209, Octorok 227, ReDead 224, Stalfos 190, Darknut
+    191, Poe 212, Kargaroc 181, Wizzrobe 208, 184, 220). An enemy that makes random choices on half
+    steps takes the next tick's numbers: its path drifts from the 30-tick run's even when right.
   - **Converting an actor**: `uv run tools/sixty/actor_rmw.py PROCESS` lists the type's
     read-modify-write stores with suggested rules (review them: `+= 1` can be a state machine's next
     step, not a tick count); `WWHD_DEBUG_PLACE=tick:x,y,z` puts Link beside it; the trial and a
@@ -650,6 +660,7 @@ it in a window; D21 "Step 2"):**
 - Run converted: `WWHD_60FPS=1` (the checked conversions are the default now: camera 476, Link 168,
   ship 165, sail 171, seagulls 194, Bokoblins 189 and their sticks 463, Dragon Roost's mountain
   actors 151, 154, 142, 175, 296, 162, push blocks 43, chests 292, doors 300, the sky 437/438,
+  Chuchus 206, Keese 215,
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
   `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;
