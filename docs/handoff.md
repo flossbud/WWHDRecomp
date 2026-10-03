@@ -608,6 +608,20 @@ it in a window; D21 "Step 2"):**
     them to whole ticks): the trial along route `plants` found two sway phases a tick (`split`).
     `WWHD_60FPS_PLANTS=0` keeps them at 30; `WWHD_60FPS_TRIAL_PLANTS=1` (at 30) is their trial.
     Cutting a bush or a tree isn't tried yet.
+  - **Dragon Roost's mountain path** (route `door`, walking out of the dungeon): the lava geysers
+    (Obj_Ygush00 151), lava (Obj_Eayogn 154), Obj_Gryw00 (142), the flags (Tori_Flag 175, a cloth
+    wave: two phases `split`), bomb flowers (296, d_a_bflower.cpp) and Obj_Ebomzo (162) converted:
+    tracked at 60 they match the 30-tick run tick for tick (half frame k against tick k) but for
+    the sound source's listener-relative position, which follows the camera.
+  - **Which types need no rules**: `WWHD_STATE_TRACK=all WWHD_60FPS_CONVERT=all,-168` (every actor
+    converted but Link, so that what reads Link sees the 30-tick run's) and `python3
+    tools/sixty/actor_types.py OUT/30 OUT/60 --from 905 --names actor_names.tsv` rank every type by
+    the ticks it matches. On routes `door` and `bk`: push blocks, chests, doors, the sky and five
+    tags match at every tick (the visible ones are in the defaults now); the mountain set ~93%; stones
+    and the warp object differ only in colliders 3.75 units higher (a resting actor's speed.y is
+    -g h, not -g); torches (EP) in their light's flicker, drawn from the random stream a step (left
+    at 30: converted, it would jitter twice as often); pots, steam vents, Valoo, the Rito and idle
+    Bokoblins: to look into.
   - **Converting an actor**: `uv run tools/sixty/actor_rmw.py PROCESS` lists the type's
     read-modify-write stores with suggested rules (review them: `+= 1` can be a state machine's next
     step, not a tick count); `WWHD_DEBUG_PLACE=tick:x,y,z` puts Link beside it; the trial and a
@@ -624,7 +638,9 @@ it in a window; D21 "Step 2"):**
   uncapped. Tools: `tools/sixty/track.py` (fields tick by tick, half ticks too),
   `tools/sixty/camera.py` (the camera's view, 30 against 60).
 - Run converted: `WWHD_60FPS=1` (the checked conversions are the default now: camera 476, Link 168,
-  ship 165, sail 171, seagulls 194, Bokoblins 189 and their sticks 463, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
+  ship 165, sail 171, seagulls 194, Bokoblins 189 and their sticks 463, Dragon Roost's mountain
+  actors 151, 154, 142, 175, 296, 162, push blocks 43, chests 292, doors 300, the sky 437/438,
+  the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
   `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;
   the probe writes `particles.txt` (the particle census, every frame); for side-by-side runs copy the

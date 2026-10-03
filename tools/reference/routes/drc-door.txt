@@ -6,4 +6,5 @@
 540 A 5        # Controller Selection
 660 A 5        # File Selection
 780 A 5        # Start
-1000 LDOWN 120 # turn round and walk out through the entrance
+1000 LDOWN 120 # turn round and walk out through the entrance; then outside on the mountain path
+# (lava geysers Obj_Ygush00, the lava Obj_Eayogn, Obj_Gryw00, flags, bomb flowers) to f1700

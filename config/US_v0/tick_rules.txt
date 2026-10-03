@@ -364,4 +364,9 @@
 0243A22C    *h@f31      fsubs           procTactPlay: a timer (+0x6A04) - 1
 0243A564    *h@f31      fsubs           procTactPlay: a timer (+0x69FC) - 1
 0243A658    *h@f31      fsubs           procTactPlay: a timer (+0x6A00) - 1
+#
+# ---- step rules: a cloth's wave (f_0251C968, from f_0251CEC8 and f_0251D4EC: Dragon Roost's flags):
+# two phases advanced a tick, everything else computed from them
+0251C9A4    split@r0    add             cloth wave: a phase (+0x1B4) += its step (+0x1B6)
+0251C9AC    split@r4    add             cloth wave: a phase (+0x1B8) += its step (+0x1BA)
 

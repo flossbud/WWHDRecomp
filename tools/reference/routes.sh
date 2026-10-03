@@ -13,7 +13,7 @@ route_info() {
         drc)   route=drc-shield.txt    frames=1240  save=/wwhd/data/saves/owner_drc trace= ;;
         bow)   route=bow-100.txt       frames=1040  save=/wwhd/data/saves/wwhd_100 trace= ;;
         sidle) route=drc-sidle.txt     frames=1400  save=/wwhd/data/saves/owner_drc trace= ;;
-        door)  route=drc-door.txt      frames=1300  save=/wwhd/data/saves/owner_drc trace= ;;
+        door)  route=drc-door.txt      frames=1700  save=/wwhd/data/saves/owner_drc trace= ;;
         plants) route=plants-100.txt   frames=1520  save=/wwhd/data/saves/wwhd_100 trace= ;;
         bk)    route=drc-bk.txt        frames=1300  save=/wwhd/data/saves/owner_drc trace= ;;
         pot)   route=drc-pot.txt       frames=1440  save=/wwhd/data/saves/owner_drc trace= ;;

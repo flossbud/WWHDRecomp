@@ -61,9 +61,12 @@ namespace
 	// tick a frame is (0.5; the helpers in sixty_step.cpp read it), and its writes stand; every other
 	// process runs on whole ticks with a step of 1 (D21 step 3).
 	// The processes converted and checked so far (D21), when WWHD_60FPS_CONVERT isn't set: the
-	// camera, Link, the ship, its sail (GRID), the seagulls, Bokoblins and their sticks (BOKO).
+	// camera, Link, the ship, its sail (GRID), the seagulls, Bokoblins and their sticks (BOKO), Dragon
+	// Roost's lava geysers (Obj_Ygush00), lava (Obj_Eayogn), Obj_Gryw00, flags (Tori_Flag), bomb flowers
+	// (296, d_a_bflower.cpp) and Obj_Ebomzo; push blocks (Obj_Movebox), chests (TBOX), doors (DOOR10) and the
+	// sky (VRBOX, VRBOX2), which match the 30-tick run with no rules (tools/sixty/actor_types.py).
 	// WWHD_60FPS_CONVERT= (empty) converts none.
-	constexpr const char* kConvertedByDefault = "476,168,165,171,194,189,463";
+	constexpr const char* kConvertedByDefault = "476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438";
 	const char* ConvertList()
 	{
 		const char* e = getenv("WWHD_60FPS_CONVERT");
@@ -87,6 +90,27 @@ namespace
 			return v;
 		}();
 		return !names.empty() && std::find(names.begin(), names.end(), name) != names.end();
+	}
+	// WWHD_60FPS_CONVERT=all[,-n,-m...] (a test mode): every actor (a process seen in fopAc_Execute)
+	// but those named is converted, to find with a 30-against-60 track which types need no rules of
+	// their own (tools/sixty/actor_types.py, D21); -168 keeps Link to whole ticks, as at 30, so that
+	// actors reading him see the 30-tick run's Link
+	std::unordered_map<uint32, bool> s_knownActors;
+	bool ConvertAll()
+	{
+		static const bool all = [] { const char* e = getenv("WWHD_60FPS_CONVERT"); return e && strncmp(e, "all", 3) == 0; }();
+		return all;
+	}
+	bool ExcludedFromAll(uint16 name)
+	{
+		static const std::vector<uint16> out = [] {
+			std::vector<uint16> v;
+			if (const char* e = getenv("WWHD_60FPS_CONVERT"))
+				for (const char* p = strchr(e, '-'); p; p = strchr(p + 1, '-'))
+					v.push_back((uint16)atoi(p + 1));
+			return v;
+		}();
+		return std::find(out.begin(), out.end(), name) != out.end();
 	}
 	bool AnyConverted()
 	{
@@ -165,7 +189,8 @@ namespace
 				}
 			return v;
 		}();
-		return !names.empty() && std::find(names.begin(), names.end(), name) != names.end();
+		static const bool all = [] { const char* e = getenv("WWHD_STATE_TRACK"); return e && strcmp(e, "all") == 0; }();
+		return all || (!names.empty() && std::find(names.begin(), names.end(), name) != names.end());
 	}
 	std::vector<uint32> s_tracked;                  // tracked processes that executed this frame
 	bool s_firstDraw = true;                        // a frame's first draw is still to come (f_025DE2CC)
@@ -1289,7 +1314,8 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 		TrialExecute(ctx);
 		return;
 	}
-	bool converted = from != ~0u && wwhd::os::SwapCount() >= from && Converted(rd16(proc + 0x08));
+	bool converted = from != ~0u && wwhd::os::SwapCount() >= from &&
+		(Converted(rd16(proc + 0x08)) || (ConvertAll() && s_knownActors.count(proc) && !ExcludedFromAll(rd16(proc + 0x08))));
 	if (rd16(proc + 0x08) == 168)
 	{
 		s_link = proc;
@@ -1576,6 +1602,8 @@ void f_025D475C(PPCInterpreter_t* __restrict ctx)
 {
 	if ((Probe() || wwhd::rt::SixtyFrom() != ~0u) && !g_rtHalfTick && s_trialPhase != 1)
 		s_actors.push_back(GPR(3));
+	if (ConvertAll())
+		s_knownActors[GPR(3)] = true;
 	[[clang::musttail]] return orig_f_025D475C(ctx);
 }
 
