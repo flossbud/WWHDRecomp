@@ -35,6 +35,11 @@ def main():
     m = re.search(r'kConvertedByDefault = "([0-9,]*)"', read("src/overrides/sixty.cpp"))
     converted = [int(x) for x in m.group(1).split(",") if x] if m else []
     rules_text = read("config/US_v0/tick_rules.txt")
+    extra = os.path.join(ROOT, "config/US_v0/tick_rules")
+    if os.path.isdir(extra):
+        for f in sorted(os.listdir(extra)):
+            if f.endswith(".txt"):
+                rules_text += "\n" + read("config/US_v0/tick_rules/" + f)
     rules = [l for l in rules_text.splitlines() if l.strip() and not l.startswith("#")]
     with_rules = {int(x) for x in re.findall(r"(?i)process (\d+)", rules_text)}
     overrides = [l for l in read("config/US_v0/overrides.txt").splitlines() if re.match(r"[0-9A-F]{8}\s", l)]
@@ -67,6 +72,7 @@ def main():
         "title": plan["title"],
         "ticket": plan["ticket"],
         "milestones": plan["milestones"],
+        "queue": plan.get("queue", []),
         "known_issues": plan["known_issues"],
         "groups": groups,
         "counts": {

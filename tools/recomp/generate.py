@@ -190,7 +190,14 @@ class Program:
                     assert a in self.entries, f"overrides.txt: {a:08X} is not a function entry"
                     self.overrides.add(a)
         # D21: instructions that run only on whole ticks at 60 fps
+        # tick_rules.txt, then config/US_v0/tick_rules/*.txt (one file per actor type or area, so that
+        # parallel work doesn't edit the same file); an address may be ruled once in all of them
         self.tick_rules = self.load_tick_rules(CONFIG / "tick_rules.txt")
+        for extra in sorted((CONFIG / "tick_rules").glob("*.txt")):
+            more = self.load_tick_rules(extra)
+            twice = sorted(set(more) & set(self.tick_rules))
+            assert not twice, f"{extra.name}: {', '.join(f'{a:08X}' for a in twice)} already ruled"
+            self.tick_rules.update(more)
         self.synthetic = self.helper_entries()
         if self.synthetic:
             self.funcs = sorted(self.funcs + self.synthetic)

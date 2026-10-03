@@ -1,4 +1,4 @@
-# Handoff: WWHD recomp, state as of 2026-10-02 (WW-4 in progress)
+# Handoff: WWHD recomp, state as of 2026-10-03 (WW-4 in progress)
 
 Read this first, then `CLAUDE.md`, `docs/recompiler-design.md` (decisions D1–D21, milestones,
 status paragraphs) and the READMEs in `src/`, `tools/reference/`, `tools/recomp/`, `tools/worker/`.
@@ -10,6 +10,35 @@ Not interpolation: the game's own logic runs at 60 ticks a second and comes out 
 end at any rate. **The approach (the owner, 2026-10-02): mixed rate, verified** (D21's option 1):
 frames run at 60, everything not yet converted runs exactly as at 30 on whole ticks, and systems
 are converted one at a time against a measured baseline. "WW-4: 60 fps" below has where it stands.
+
+## Two parallel sessions (from 2026-10-03; the owner's setup)
+
+WW-4's actor conversion is split between two sessions working side by side:
+- **Session `top`**: worktree `/srv/projects/WWHDRecomp/.worktrees/ww-4-top`, branch `ww-4-top`,
+  worker checkout `/wwhd/WWHDRecomp-top`. Takes the work queue from the top down.
+- **Session `bottom`**: worktree `.worktrees/ww-4-bottom`, branch `ww-4-bottom`, worker checkout
+  `/wwhd/WWHDRecomp-bottom`. Takes the queue from the bottom up.
+- Each worktree has `.worker-dir` and `.session` (gitignored): `tools/worker/sync.sh`, `w` and `job`
+  use that worker checkout (its own `build/`), `job` prefixes job names with the session, and
+  `tools/sixty/tests/*` write to `/wwhd/data/m6/<checkout>/`. Never touch the other session's
+  worktree, worker checkout, jobs or outputs. One build at a time each: the worker is shared.
+- **The queue** is `tools/progress/plan.json` "queue" (areas in story order), shown on the progress
+  page (http://WORKER_ADDR:8765). Before starting an item: `tools/progress/publish.sh claim ID
+  "what"` (it refuses an item the other session holds); when its types are converted, checked and
+  integrated: `publish.sh done ID "summary"`. Stop when the next item is the other session's. At
+  each step `publish.sh now "TEXT"`; after each integration `publish.sh` (the numbers).
+- **Rules go in per-area files**, `config/US_v0/tick_rules/<area>.txt` (the generator reads them
+  after `tick_rules.txt`; an address may be ruled once in all of them), so the sessions never edit
+  the same rules file. Docs: append to your own subsection of "WW-4: 60 fps" below.
+- **Integration**: `ww-4` (on the `worker` remote) is the shared branch. To integrate a finished
+  step: commit on your branch, `git fetch worker && git rebase worker/ww-4`, resolve (the
+  default list `kConvertedByDefault` in `src/overrides/sixty.cpp` is one line both edit: keep the
+  union), rebuild, run `tools/sixty/tests/checks.sh NAME` (all must match) and, after shared changes
+  (helpers, shared rules), `tools/sixty/tests/regress.sh`; then `git push worker HEAD:ww-4` and
+  `git push worker HEAD:ww-4-<session> --force-with-lease`. If the push to ww-4 is refused, the
+  other session integrated first: fetch, rebase, check again.
+- Shared code (sixty.cpp, sixty_step.cpp, generate.py, ppc_ops.h, the helpers): change it only
+  when needed, say so in the commit, and rerun `regress.sh`: the other session's actors use it too.
 
 ## What the project is
 
@@ -676,6 +705,13 @@ it in a window; D21 "Step 2"):**
     time-step override; it has one now in `sixty_step.cpp`, and a circling point (f_02587128:
     angle += speed) gets `split`. `actor_types.py` now also skips +0x194 (listener-relative too:
     static signposts differ there).
+  - **Windfall** (`room_list.sh sea,0,11,-1`; `route_test.sh save PROC 1000 1500` with
+    `WWHD_DEBUG_STAGE=920:sea,0,11,-1`), measured, not converted yet: townsfolk NPC_PEOPLE (373 x16)
+    within 2.1 units (its trial shows only gravity and a turn: close); market stalls Obj_Roten (121)
+    match; the ferris wheel Obj_Ferris (123) has counters stepping twice (f_0233EDE0+0x148 +0x1A74,
+    +0x6C +0x1A6C a phase, f_0233E254+0x40 +0x1A76); the Killer Bees NPC_UK (368) drift up to 67
+    units (f_022F2C80 an approach on +0x380/+0x394, f_0259DDA0 head turns +0x7AA); KB (220, the pigs?)
+    drift far (counters f_02190CE0+0xEC/+0xA0/+0x514 step twice). The next session's first item.
   - **Doors**: on the door route at 60 every frame changes up to the black screen of the room load
     (captures of each swap, `/wwhd/data/m6/framediff.sh ROUTE FIRST LAST`); Link and the camera
     step on every half frame. The owner's "entrances drop to 30" wasn't reproduced there: ask which

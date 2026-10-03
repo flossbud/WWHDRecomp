@@ -16,3 +16,6 @@ ghidra/projects/
 *.rep/
 __pycache__/
 .venv/
+# a parallel session's worker checkout and name (tools/worker/sync.sh, tools/progress/publish.sh)
+/.worker-dir
+/.session

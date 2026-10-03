@@ -1,0 +1,3 @@
+# Step and tick rules by actor type or area (the format: ../tick_rules.txt and tools/recomp/generate.py).
+# One file per type or area (e.g. windfall_npcs.txt), so parallel sessions never edit the same
+# file. tools/recomp/generate.py reads them after tick_rules.txt; an address may appear only once.

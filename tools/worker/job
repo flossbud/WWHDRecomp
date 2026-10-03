@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # job - named, detached jobs in the WWHD worker container (run from the editing machine checkout).
-#   job start NAME CMD...      run CMD (from /wwhd/WWHDRecomp) in its own process group;
+#   job start NAME CMD...      run CMD (from the worker checkout: /wwhd/WWHDRecomp or .worker-dir's)
+#                              in its own process group;
 #                              log /wwhd/logs/NAME.log, last line EXIT=<code> when done
 #   job wait NAME [MINUTES] [STALL_MINUTES]
 #                              block until NAME finishes (default 60 min), print the log tail.
@@ -12,8 +13,12 @@
 #   job tail NAME [N]          last N log lines (default 20)
 # Why: ad-hoc pkill/pattern kills once matched the wrong job's wrapper and silently cancelled it.
 set -euo pipefail
+dir=$(cat "$(cd "$(dirname "$0")/../.." && pwd)/.worker-dir" 2>/dev/null || echo /wwhd/WWHDRecomp)
 cmd=${1:?usage: job start|wait|status|stop|tail NAME ...}; name=${2:?job name required}; shift 2
 case "$name" in *[!A-Za-z0-9._-]*) echo "job: bad name '$name'" >&2; exit 2 ;; esac
+# a parallel session's jobs carry its name (.session, gitignored), so two sessions' logs never meet
+sess=$(cat "$(cd "$(dirname "$0")/../.." && pwd)/.session" 2>/dev/null || true)
+[ -n "$sess" ] && case "$name" in "$sess"-*) ;; *) name=$sess-$name ;; esac
 log=/wwhd/logs/$name.log pid=/wwhd/logs/$name.pid
 # ssh joins its arguments into one string for the *remote* shell, so quote every word for it
 dx() { ssh -o BatchMode=yes worker "$(printf '%q ' docker exec "$@")"; }
@@ -28,7 +33,7 @@ start)
     [ $# -gt 0 ] || { echo "job start NAME CMD..." >&2; exit 2; }
     [ "$(status)" = running ] && { echo "job $name is already running" >&2; exit 1; }
     inner=$(printf '%q ' "$@")
-    dx -d -w /wwhd/WWHDRecomp wwhd-worker setsid bash -c \
+    dx -d -w "$dir" wwhd-worker setsid bash -c \
         "echo \$\$ > $pid; { $inner; } > $log 2>&1; echo EXIT=\$? >> $log"
     echo "started $name (log $log)" ;;
 wait)

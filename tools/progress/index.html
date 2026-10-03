@@ -75,6 +75,14 @@ ol.log time { color: var(--muted); font-size: .82rem; float: right; margin-left:
 .empty { color: var(--muted); font-style: italic; }
 #zoom { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 9; }
 #zoom img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+.now { display: flex; gap: 10px; align-items: center; padding: 4px 0; }
+.now + .now { border-top: 1px solid var(--line); }
+ol.queue { margin: 0; padding-left: 22px; }
+ol.queue li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+ol.queue li:last-child { border: 0; }
+.badge { font-size: .75rem; padding: 1px 8px; border-radius: 999px; margin-left: 6px; white-space: nowrap; border: 1px solid var(--line); color: var(--muted); }
+.badge.working { border-color: var(--warn); color: var(--warn); }
+.badge.done { border-color: var(--good); color: var(--good); }
 footer { color: var(--muted); font-size: .8rem; text-align: center; margin: 10px 0 24px; }
 @media (max-width: 520px) { main { padding: 12px 16px; } h1 { font-size: 1.3rem; } ol.log time { float: none; display: block; margin: 0; } }
 </style>
@@ -86,10 +94,7 @@ footer { color: var(--muted); font-size: .8rem; text-align: center; margin: 10px
     <span class="sub" id="ticket"></span>
   </header>
 
-  <section class="card now">
-    <span class="dot idle" id="dot"></span>
-    <div><b>Working on:</b> <span id="nowText" class="sub">…</span> <span class="sub" id="nowAgo"></span></div>
-  </section>
+  <section class="card" id="sessions"><p class="empty">No session has reported yet.</p></section>
 
   <div class="grid">
     <section class="card big">
@@ -105,6 +110,13 @@ footer { color: var(--muted); font-size: .8rem; text-align: center; margin: 10px
       <div id="groupBars"></div>
     </section>
   </div>
+
+  <section class="card">
+    <h2>Work queue</h2>
+    <p class="sub" id="queueNote"></p>
+    <ol class="queue" id="queue"></ol>
+    <p class="sub" id="later"></p>
+  </section>
 
   <section class="card">
     <h2>Numbers</h2>
@@ -140,7 +152,7 @@ footer { color: var(--muted); font-size: .8rem; text-align: center; margin: 10px
 <div id="zoom"><img alt=""></div>
 <script>
 const $ = id => document.getElementById(id);
-let data = null, tab = 0;
+let data = null, tab = 0, claims = null;
 const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
 function ago(t) {
   const s = Math.max(0, Date.now() / 1000 - t);
@@ -181,6 +193,14 @@ function render() {
   $("chips").innerHTML = d.groups[tab].actors.slice().sort((a, b) => order[a.status] - order[b.status] || a.id - b.id)
     .map(a => `<span class="chip ${a.status}" title="process ${a.id}${a.code ? " (" + esc(a.code) + ")" : ""}">${a.name ? esc(a.name) + " " : ""}<small>${a.id}</small></span>`).join("");
   $("log").innerHTML = d.commits.map(m => `<li><time>${ago(m.time)}</time><code>${m.hash}</code>${esc(m.subject.replace(/^WW-4: /, ""))}</li>`).join("");
+  const cl = claims || {};
+  $("queueNote").textContent = d.queue_note || "";
+  $("queue").innerHTML = (d.queue || []).map(q => {
+    const c = cl[q.id];
+    const badge = c ? `<span class="badge ${c.state}">${c.state === "done" ? "done" : "working"} · ${esc(c.session)}</span>` : `<span class="badge">open</span>`;
+    return `<li><b>${esc(q.id)}</b>${badge}<div class="sub">${esc(q.name)}</div>${c && c.note ? `<div class="sub">${esc(c.note)}</div>` : ""}</li>`;
+  }).join("");
+  $("later").textContent = d.later && d.later.length ? "Later: " + d.later.join(" · ") : "";
   $("issues").innerHTML = d.known_issues.map(i => `<li>${esc(i)}</li>`).join("");
   $("foot").textContent = "Data from " + ago(d.generated) + " · refreshes every 20 s";
 }
@@ -188,12 +208,11 @@ $("tabs").addEventListener("click", e => { const b = e.target.closest("button");
 $("shots").addEventListener("click", e => { if (e.target.tagName === "IMG") { $("zoom").querySelector("img").src = e.target.src; $("zoom").style.display = "flex"; } });
 $("zoom").addEventListener("click", () => $("zoom").style.display = "none");
 async function refresh() {
-  const [p, n, s] = await Promise.all([get("progress.json"), get("now.json"), get("shots.json")]);
+  const [p, n, s, c] = await Promise.all([get("progress.json"), get("sessions.json"), get("shots.json"), get("claims.json")]);
+  if (c) claims = c;
   if (p) { data = p; render(); }
-  if (n) {
-    $("nowText").textContent = n.text || "idle"; $("nowAgo").textContent = "· " + ago(n.time);
-    $("dot").className = "dot" + (Date.now() / 1000 - n.time > 3 * 3600 ? " idle" : "");
-  }
+  if (n && n.length) $("sessions").innerHTML = n.map(x => `<div class="now"><span class="dot${Date.now() / 1000 - x.time > 3 * 3600 ? " idle" : ""}"></span>
+    <div><b>${esc(x.session)}:</b> <span class="sub">${esc(x.text || "idle")} · ${ago(x.time)}</span></div></div>`).join("");
   if (s && s.length) $("shots").innerHTML = s.map(x => `<figure><img loading="lazy" src="${esc(x.file)}" alt="${esc(x.caption)}"><figcaption>${esc(x.caption)} · ${ago(x.time)}</figcaption></figure>`).join("");
 }
 refresh(); setInterval(refresh, 20000);

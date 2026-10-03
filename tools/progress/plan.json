@@ -161,5 +161,58 @@
     "435": "Grass",
     "453": "Pot",
     "454": "Stone"
-  }
+  },
+  "queue_note": "Two sessions: 'top' takes items from the top down, 'bottom' from the bottom up. Claim an item before starting it (tools/progress/publish.sh claim ID); stop where the other session's claims begin. Stage names under 'where' past Windfall and Outset are unverified guesses: confirm with tools/sixty/tests/room_list.sh.",
+  "queue": [
+    {
+      "id": "windfall",
+      "name": "Windfall Island: townsfolk (NPC_PEOPLE 373 x16, NPC_UK 368, NPC_MK 170, NPC_KK1 353, NPC_TT 364, NPC_GK1 374, NPC_RSH1 352), ferris wheel 123, market stalls 121, pigs? 220, flags 174",
+      "where": "sea,0,11,-1"
+    },
+    {
+      "id": "outset",
+      "name": "Outset Island: NPC_SO 118 (leaps higher at 60), the remaining townsfolk and interiors",
+      "where": "save route; sea room 44"
+    },
+    {
+      "id": "sea",
+      "name": "The Great Sea: Octoroks 227, Seahats, Gyorg 228, Big Octo 225/226, warships and cannons, sea platforms, the sea's other actors",
+      "where": "sea rooms"
+    },
+    {
+      "id": "forest",
+      "name": "Forest Haven & Forbidden Woods: Floormaster 204 (rules in, dashes end early), process 205 (rules in, moves 3/4), Mothulas, Morths, baba buds 213, Koroks and the Deku Tree, Kalle Demos",
+      "where": "Omori, kindan"
+    },
+    {
+      "id": "tower",
+      "name": "Tower of the Gods: Armos, Beamos 233 and beams 232, Yellow Chuchus, statues, Gohdan",
+      "where": "Siren"
+    },
+    {
+      "id": "fortress",
+      "name": "Forsaken Fortress: searchlights, guards, Helmaroc King, Phantom Ganon",
+      "where": "MajyuE, Majroom"
+    },
+    {
+      "id": "earth",
+      "name": "Earth Temple: Stalfos 190, Poes 212, Floormasters, mirrors and light, Jalhalla 211",
+      "where": "M_Dai"
+    },
+    {
+      "id": "wind",
+      "name": "Wind Temple: Wizzrobes 208, Armos Knights, fans and wind, Molgera 217/218",
+      "where": "kaze"
+    },
+    {
+      "id": "ganon",
+      "name": "Hyrule & Ganon's Tower: Hyrule Castle, Phantom Ganon, Puppet Ganon, Ganondorf",
+      "where": "Hyrule, GanonK, GTower"
+    }
+  ],
+  "later": [
+    "Cutscenes and talk events at 60 (needs the NPCs converted; scripted A presses don't trigger talking yet)",
+    "Uncapped frame rate (D21 step 4)",
+    "In-game debug menu / boss rush on the test aids"
+  ]
 }

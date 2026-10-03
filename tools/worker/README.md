@@ -16,7 +16,7 @@ SSH.
 | Container `wwhd-worker` | the worker Docker (`tools/worker/start.sh`) | 24 GB RAM with no swap, 10 of 12 CPU threads, 4096 processes |
 | GPU | Intel Intel iGPU via `/dev/dri` (host groups video 44, render 992) | shared |
 | Volume `/wwhd` | 250 GB sparse ext4 image `/var/lib/wwhd/wwhd.img`, loop-mounted (`/etc/fstab`, `nofail`) | hard 250 GB cap, so it can't fill the worker's root disk |
-| Repo checkout | `/wwhd/WWHDRecomp` (pushed by `sync.sh up`) | |
+| Repo checkout | `/wwhd/WWHDRecomp` (pushed by `sync.sh up`), or the path in the local checkout's `.worker-dir` (parallel sessions: one each, with its own `build/`) | |
 | Bare repo | `/wwhd/git/WWHDRecomp.git` (git remote `worker`) | |
 | Game dump | `/wwhd/data/rom/*.wua`, extracted to `/wwhd/data/orig` (never in git) | |
 | Tools | `/wwhd/opt`: Ghidra 12.0.4 + RPX loader, `cemu-src` (patched reference Cemu) | |
