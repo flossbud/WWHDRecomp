@@ -1643,6 +1643,11 @@ whose environment update asked for it (`f_0255E854`), held to whole ticks, so wh
 placeholder. The update now runs on half ticks as well; it changes only globals and the random
 stream, which a half tick's rollback puts back, so it reaches that frame's drawing and nothing else.
 Frame-level work the renderer depends on belongs on every frame when the rollback can undo it.
+What Link holds (his actor keeps: the arrow on the bow, a carried pot, bomb or rock) isn't
+converted, so its matrices stayed a half tick behind his hands: on a half tick each held actor's
+execute runs again as at 30 just before its draw, its changes put back right after that draw (and
+its draw's stores journaled), so it is drawn at his hands and the game's state is the 30-tick
+run's (checked: 0 state differences). A cheap pattern for anything attached to a converted process.
 
 **Foundation**
 

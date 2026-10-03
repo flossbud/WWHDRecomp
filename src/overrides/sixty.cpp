@@ -375,6 +375,7 @@ namespace
 
 	struct Saved { uint32 ea, size; uint8 bytes[32]; };
 	std::vector<Saved> s_saved;
+	bool s_attached = false;                         // an actor Link holds runs for a half tick's draw
 
 	void RollbackStore(uint32 ea, uint32 size)
 	{
@@ -387,7 +388,7 @@ namespace
 		const int level = RollbackLevel();
 		const bool global = level >= 2 ? (ea >= kGlobalsLow && ea < kGlobalsHigh) : (ea >= kGameInfo && ea < kGameInfo + kGameInfoSize);
 		const uint32 sp = s_frameThread->gpr[1];
-		const bool drawn = level >= 3 && s_drawing != 0 && !(ea + 0x10000 > sp && ea < sp + 0x10000);
+		const bool drawn = ((level >= 3 && s_drawing != 0) || s_attached) && !(ea + 0x10000 > sp && ea < sp + 0x10000);
 		if (!global && !drawn)
 		{
 			auto it = std::upper_bound(s_ranges.begin(), s_ranges.end(), ea, [](uint32 v, const ActorRange& r) { return v < r.low; });
@@ -576,7 +577,7 @@ namespace
 		}
 		if (!Rollback())
 			return;
-		if (!s_pagesSet.empty() && RollbackLevel() == 2)
+		if (!s_pagesSet.empty() && RollbackLevel() == 2 && !s_attached)
 			FilteredRollbackStore(ea, size);
 		else
 			RollbackStore(ea, size);
@@ -865,6 +866,72 @@ namespace
 		s_trialTicks++;
 	}
 
+	// What Link holds. A converted Link's half step moves his hands, but what he holds (his four
+	// daPy_actorKeep_c at +0x6590, an ID and the actor: the equipped item (the arrow on the bow), the
+	// thrown, the grabbed (a pot, a bomb, a rock) and the rope) runs its execute on whole ticks, so a
+	// half tick drew it where his hands had been (the owner's flickering pots, bombs, rocks and arrow).
+	// Link's half step notes them; on the half tick each one's execute runs again as at 30, a step of
+	// 1, just before its own draw, for that draw only: every store it makes but on the stack is
+	// journaled and put back after the frame. Before its draw rather than after Link's step: Link's
+	// draw (a converted process's, standing) reads what he holds and would keep what it saw (the bow's
+	// charge, Link +0x46B0, gained a tick).
+	std::vector<uint32> s_held;                     // the actors Link holds, this half tick
+
+	void NoteHeld(uint32 link)
+	{
+		s_held.clear();
+		for (uint32 o = 0x6590; o <= 0x65A8; o += 8)
+		{
+			const uint32 id = rd32(link + o), actor = rd32(link + o + 4);
+			if (id == ~0u || actor < 0x10000000u || actor >= 0x50000000u || rd32(actor + 4) != id || Converted(rd16(actor + 8)))
+				continue;
+			if (std::find(s_processes.begin(), s_processes.end(), actor) == s_processes.end())
+				continue;                                  // not in the last whole tick (no rollback for it)
+			s_held.push_back(actor);
+		}
+	}
+
+	// A half tick's draw of the process r3 (fn, fpcM_Draw): if Link holds it, its execute runs first,
+	// and what that execute changed is put back right after the draw, so no later draw sees it. The
+	// draw's stores are all journaled too (the arrow's draw sets the bow's charge in Link, whose
+	// memory, a converted process's, the journal otherwise leaves alone), and its saves of the
+	// execute's bytes get the bytes from before the execute: the frame's rollback puts back the tick's.
+	bool HeldDraw(PPCInterpreter_t* ctx, void (*fn)(PPCInterpreter_t*))
+	{
+		const uint32 proc = GPR(3);
+		auto it = std::find(s_held.begin(), s_held.end(), proc);
+		if (it == s_held.end())
+			return false;
+		s_held.erase(it);
+		Registers regs;
+		regs.Save(ctx);
+		const size_t mark = s_saved.size();
+		const int converting = s_converting;            // Link draws what he holds within his own draw,
+		s_converting = 0;                               // a converted process's (no journal there)
+		const float step = g_rtStep;
+		g_rtStep = 1.0f;
+		s_attached = true;
+		orig_f_025DE58C(ctx);
+		regs.Restore(ctx);
+		const size_t executed = s_saved.size();
+		fn(ctx);                                    // journaled whole too: its draw writes into Link
+		s_attached = false;                         // (the bow's charge, from the arrow's state)
+		g_rtStep = step;
+		s_converting = converting;
+		std::unordered_map<uint32, uint8> before;      // byte -> its value before the execute
+		for (size_t i = mark; i < executed; i++)
+			for (uint32 b = 0; b < s_saved[i].size; b++)
+				before.try_emplace(s_saved[i].ea + b, s_saved[i].bytes[b]);
+		for (size_t i = executed; i < s_saved.size(); i++)
+			for (uint32 b = 0; b < s_saved[i].size; b++)
+				if (auto f = before.find(s_saved[i].ea + b); f != before.end())
+					s_saved[i].bytes[b] = f->second;
+		for (size_t i = executed; i-- > mark;)
+			memcpy(memory_base + s_saved[i].ea, s_saved[i].bytes, s_saved[i].size);
+		s_saved.erase(s_saved.begin() + mark, s_saved.begin() + executed);
+		return true;
+	}
+
 	uint64 Hash(uint32 ea, uint32 size)
 	{
 		uint64 h = 0xcbf29ce484222325ull;
@@ -1055,6 +1122,7 @@ namespace wwhd::sixty
 void f_025F172C(PPCInterpreter_t* __restrict ctx)
 {
 	s_firstDraw = true;
+	s_held.clear();
 	if (g_rtHalfTick)
 	{
 		static const bool skip = [] { const char* e = getenv("WWHD_60FPS_HALF"); return e && strcmp(e, "none") == 0; }();
@@ -1233,6 +1301,9 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	orig_f_025DE58C(ctx);
 	s_converting--;
 	g_rtStep = step;
+	static const bool attached = [] { const char* e = getenv("WWHD_60FPS_ATTACHED"); return !(e && atoi(e) == 0); }();
+	if (g_rtHalfTick && attached && rd16(proc + 0x08) == 168 && Rollback())
+		NoteHeld(proc);
 }
 
 // dPa_control_c::calc3D (f_025A81A0; the play scene's draw calls it, f_025B019C): every 3D particle
@@ -1413,7 +1484,8 @@ void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
 	}
 	const uint32 outer = s_drawing;
 	s_drawing = GPR(3);
-	orig_f_025DE2CC(ctx);
+	if (!(g_rtHalfTick && !s_held.empty() && HeldDraw(ctx, orig_f_025DE2CC)))
+		orig_f_025DE2CC(ctx);
 	s_drawing = outer;
 }
 

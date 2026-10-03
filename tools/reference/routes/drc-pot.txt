@@ -1,0 +1,42 @@
+# Route: carrying a pot at 60 fps (WW-4: the owner saw carried pots, bombs and rocks flicker as Link
+# walks), from the owner's save in Dragon Roost Cavern (REF_SAVE=/wwhd/data/saves/owner_drc, on the
+# worker only): continue, walk to the jars by the stairs, lift one and walk with it. FRAME BUTTONS
+# [FRAMES_HELD]; frames are game frames (at 60 fps, every other swap). Found by looking at captures.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start
+1000 LUP 50    # toward the stairs
+1050 LUP+LRIGHT 14 # toward the jars on the right
+1082 LRIGHT 14 # to the jars
+1098 LUP+LLEFT 10 # toward the jars
+1112 A 5       # (a roll)
+1140 LLEFT 18  # along the jars, stopping by one ("Pick Up")
+1168 A 5       # (the hint shows, but A does nothing here)
+1200 LLEFT 30  # walk with it
+1240 LDOWN 20  # toward the camera: the HUD's A reads "Pick Up" by 1260
+1260 A 5       # (no lift)
+1290 LRIGHT 8  # to the jar: the HUD's A reads "Pick Up"
+1290 A 1       # lift it: A every other frame while the HUD offers it
+1292 A 1
+1294 A 1
+1296 A 1
+1298 A 1
+1300 A 1
+1302 A 1
+1304 A 1
+1306 A 1
+1308 A 1
+1310 A 1
+1312 A 1
+1314 A 1
+1316 A 1
+1318 A 1
+1320 A 1
+1322 A 1
+1324 A 1
+1326 A 1
+1328 A 1
+1330 A 1
+1340 LLEFT 30  # walk with it
+1380 LDOWN 30  # and toward the camera

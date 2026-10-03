@@ -1,0 +1,10 @@
+# Route: the arrow drawn on the bow at 60 fps (WW-4: the owner saw the arrow flicker as it moves while
+# the bow didn't), with the 100% save (REF_SAVE=/wwhd/data/saves/wwhd_100): continue-100.txt's inputs,
+# then on the Outset dock R (the Hero's Bow on this save) held, aiming round with the left stick.
+# FRAME BUTTONS [FRAMES_HELD]; frames are game frames (at 60 fps, every other swap).
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+900 R 120      # the bow out, an arrow drawn (first-person aim)
+930 LLEFT 40   # aim round to the left

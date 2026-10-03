@@ -566,6 +566,17 @@ it in a window; D21 "Step 2"):**
     changed in .data/.bss, `WWHD_60FPS_DRAWDIFF_OUT`), `WWHD_60FPS_FIND=swap:v,...` (where MEM2 holds
     those words, `find.txt`), `WWHD_60FPS_WATCH=addr,...` (words at each frame's first draw,
     `watch.txt`), both written in the binary's folder.
+  - **What Link holds follows his hands.** Carried pots, bombs, rocks and the arrow on the bow
+    were drawn on half ticks where his hands had been (their executes run on whole ticks). Link's
+    four actor keeps (+0x6590: ID, actor; equip (the arrow), throw, grab, rope) are noted after his
+    half step; each held actor's execute then runs again as at 30 just before its half-tick draw,
+    and what it changed is put back right after that draw; its draw's stores are journaled too
+    (the arrow's draw sets the bow's charge in Link, a converted process the journal otherwise
+    skips; Link draws what he holds inside his own draw, so the journal is switched on there).
+    Checked: the arrow stays on the string every frame as at 30 (route `bow`); the 60-fps run's
+    states are identical with it on and off (0 of 47005; `WWHD_60FPS_ATTACHED=0` turns it off).
+    Not checked on a pot: scripting a lift from the owner's save failed (route `pot` stops short:
+    A by the jar didn't lift; the owner's play will tell).
   - Also seen: Link turning at 60 ends up ~10 units off the 30-tick run after a walk (`land`):
     small, open.
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
