@@ -30,6 +30,10 @@ extern bool g_rtHalfTick;
 extern float g_rtStep;
 extern bool g_rtSixty;
 #define RT_WHOLE_TICK() (!g_rtHalfTick)
+// `late` tick rules: once a tick, at its end: the half tick when the code steps at 60 (g_rtStep
+// below 1 on both of its frames), the whole tick when it runs whole ticks (30 fps, an unconverted
+// process, a converted one in an event)
+#define RT_LATE_TICK() (g_rtHalfTick || g_rtStep == 1.0f)
 #define RT_SIXTY() (g_rtSixty)
 // Step rules (config/US_v0/tick_rules.txt, tools/recomp/generate.py) for code run with a time step
 #define RT_STEPPED() (g_rtStep != 1.0f)

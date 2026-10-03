@@ -64,18 +64,20 @@
 024F9B3C    whole       stw             updateMonitor: idle ticks (mMonitor +0x18) + 1
 024F9B40    whole       stfs            updateMonitor: mMonitor +0x1C = R - itself (flips each tick)
 024F9B5C    whole       stfs            updateMonitor: mMonitor +0x1C = R - itself (flips each tick)
-# Run (f_024FE3E8): tick counters, the forward-check cushion and the bank's damping
+# Run (f_024FE3E8): tick counters, the forward-check cushion and the bank's damping. The counters it
+# adds to after the engine are late: both frames of a tick see the tick's count, as the engine at 30
+# does (approaches by 1 / (N - m108) then go exactly as at 30, and timers fire on the same tick)
 024FE66C    whole       stw             Run: mForceLockTimer + 1
-024FEA54    whole       stw             Run: m07C + 1 (after the engine)
-024FEA60    whole       stw             Run: m11C + 1
-024FEA68    whole       stw             Run: m118 + 1
-024FEA70    whole       stw             Run: m080 + 1
-024FEA74    whole       stw             Run: m108 + 1 (the follow camera's ticks in its style)
-024FEAB8    whole       stw             Run: m07C + 1 (the other engine path)
-024FEAC0    whole       stw             Run: m11C + 1
-024FEAC8    whole       stw             Run: m118 + 1
-024FEACC    whole       stw             Run: m108 + 1
-024FEAD0    whole       stw             Run: m080 + 1
+024FEA54    late        stw             Run: m07C + 1 (after the engine)
+024FEA60    late        stw             Run: m11C + 1
+024FEA68    late        stw             Run: m118 + 1
+024FEA70    late        stw             Run: m080 + 1
+024FEA74    late        stw             Run: m108 + 1 (the follow camera's ticks in its style)
+024FEAB8    late        stw             Run: m07C + 1 (the other engine path)
+024FEAC0    late        stw             Run: m11C + 1
+024FEAC8    late        stw             Run: m118 + 1
+024FEACC    late        stw             Run: m108 + 1
+024FEAD0    late        stw             Run: m080 + 1
 024FE644    whole:r3=r4 bl 024fa410     Run: mNextType = nextType(mCurType) on whole ticks (requests come on them)
 024FE670    whole:r3=r4 bl 024fa410     Run: mNextType = nextType(mCurType) on whole ticks
 024FE89C    k@f1        bl 0200693c     Run: m148 += (forwardCheckAngle - m148) * FwdCushion (cSAngle *)
@@ -96,7 +98,7 @@
 02503564    k@f1        bl 0200693c     followCamera (style start): V += (V' - V) * fVar40
 025035BC    k@f1        bl 0200693c     followCamera (style start): U += (player's - U) * fVar40
 02503670    k@f31       fmadds          followCamera (style start): mFovy += fVar40 * (dVar31 - mFovy)
-02503688    whole       stfs            followCamera (style start): m380 -= m384 (the ramp's weight left)
+02503688    late        stfs            followCamera (style start): m380 -= m384 (the ramp's weight left; late with m108)
 02503768    keep:r6     addi            followCamera: m388 + 1 (0..80, the bezier ramp's tick)
 025037B0    k@f1        fmadds          followCamera: m394 += (fVar40 - m394) * bezier(m388 / 80)
 025038BC    k@f18       stfs            followCamera: mCenter's approach factors (m3EC, m3F0, m3EC): y
@@ -143,6 +145,20 @@
 02504ECC    k@f1        bl 0200693c     followCamera: mBank += (bank' - mBank) * ratio (flying)
 02504F24    *h@f1       fmadds          followCamera: mFovy += m07C * sin(m07C * 0x80) (flying)
 02504F5C    k@f1        bl 0200693c     followCamera: mBank += (bank' - mBank) * ratio (flying)
+# the first-person camera (f_025071FC: the Hero's Bow's aim, the telescope; its work area is tagged
+# 'SUBJ'): from where the camera was, eye, center, angles and fovy approach the first-person view by
+# 1 / (N - m108) a tick (N 10, or 7), arriving at m108 = N - 1
+02507570    k:f29       fdivs           subjectCamera: f29 = 1 / (N - m108), the approach's factor
+# the shield camera (f_02513E98: the shield up (ZR) or the sword out; its work area is tagged 'SHLD'):
+# on its first tick (m11C 0) N and the weight W (N(N+1)/2) come from how far it has to turn; then a
+# tick eye, angles and fovy approach by (N - m11C) / W and W loses N - m11C (late, as m11C: at 60 it
+# lost it on both frames, the factor passed 1 and the camera swung far past Link's back, the owner's
+# overshoot); once there, they follow by the style's factor
+02513F44    k:f31       lfs             shieldCamera: f31 = the style's follow factor
+02514198    whole       stw             shieldCamera: N + 1 (on its first tick)
+0251419C    whole       stfs            shieldCamera: W (on its first tick)
+02514230    k:f31       fdivs           shieldCamera: f31 = (N - m11C) / W, the approach's factor
+025144C8    late        stfs            shieldCamera: W -= N - m11C
 # the HD port's other follow engine (f_0250FDC8, through Run's engine table; no GameCube
 # counterpart: from WWHD's own code), its work area at r30 (dCamera +0x37C)
 02510550    *h@f1       bl 024f7df4     HD engine: work +0x20 += step (clamped; the stick's, per tick)

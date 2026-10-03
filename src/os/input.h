@@ -23,4 +23,6 @@ namespace wwhd::os::input
 	void SetLive(const Pad& pad);
 	// Called when the game starts or stops the controller's rumble.
 	void SetRumble(std::function<void(bool on)> rumble);
+	// The controller as the game last read it (the flight recorder, overrides/sixty.cpp).
+	Pad LastRead();
 }

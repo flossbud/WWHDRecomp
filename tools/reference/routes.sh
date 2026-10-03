@@ -6,10 +6,15 @@ route_info() {
         save)  route=continue-100.txt  frames=1800  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/save-det/a.zst ;;
         route) route=title-to-game.txt frames=10800 save=                          trace=/wwhd/data/traces/null-route.zst ;;
         tour)  route=tour-100.txt      frames=2190  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/tour-det/a.zst ;;
+        shield) route=shield-100.txt   frames=1320  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        ladder) route=ladder-100.txt   frames=1800  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        swing) route=swing-100.txt     frames=1260  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        land)  route=land-100.txt      frames=2080  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        drc)   route=drc-shield.txt    frames=1240  save=/wwhd/data/saves/owner_drc trace= ;;
         sail)  route=sail-100.txt      frames=2940  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/sail-det/a.zst ;;
         menus) route=menus-100.txt     frames=1920  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/menus-det/a.zst ;;
         warp)  route=warp-100.txt      frames=3780  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/warp-det/a.zst ;;
         *) return 1 ;;
     esac
 }
-route_names="save route tour sail menus warp"
+route_names="save route tour sail menus warp shield ladder swing land drc"

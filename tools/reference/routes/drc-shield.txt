@@ -1,0 +1,13 @@
+# Route: the owner's camera overshoot at 60 fps (WW-4), from the owner's save in Dragon Roost Cavern
+# (REF_SAVE=/wwhd/data/saves/owner_drc, on the worker only): continue the saved game, draw the sword
+# (B), turn round (the left stick held back) and raise the shield (ZR): the camera swings behind Link.
+# FRAME BUTTONS [FRAMES_HELD]; frames are game frames (at 60 fps, every other swap).
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start
+1000 B 5       # draw the sword
+1040 LDOWN 12  # turn round
+1060 ZR 60     # the shield up: the camera swings behind Link
+1140 LUP 12    # turn round again
+1160 ZR 60     # the shield

@@ -48,7 +48,10 @@ whole ticks when it runs 60 frames a second: its code is wrapped in `if (RT_WHOL
 is always true at 30 fps, so nothing changes there. A rule names the instruction it expects (a call:
 `bl TARGET` or `bctrl`; a store without update: its mnemonic), and a different instruction at that
 address is an error. `whole:r3=N` also sets r3 to N when a call is skipped, for callers that test
-its result, `whole:r3=rN` sets it to the register rN (a call's own argument: "unchanged"). Step
+its result, `whole:r3=rN` sets it to the register rN (a call's own argument: "unchanged"). `late`
+runs it once a tick at the tick's end instead: on the half tick while its process steps at 60 (a
+tick counter, so that both frames of a tick see the tick's count, as `1 / (N - count)` approaches
+need; RT_LATE_TICK), on the whole tick otherwise; it takes the same instructions and r3=. Step
 rules, for the code of processes that run every frame with a time step h
 (g_rtStep, src/overrides/sixty.cpp; nothing changes while it is 1, at 30 fps always):
   keep:SRC     on a half tick the instruction's destination gets SRC instead (a counter that
@@ -225,7 +228,7 @@ class Program:
                     assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
                     rules[ea] = (kind, value, expect, what)
                     continue
-                if kind == "whole":
+                if kind in ("whole", "late"):
                     value = None
                     if arg:
                         key, _, v = arg.partition("=")
@@ -245,7 +248,7 @@ class Program:
     def check_tick_rule(self, ea, i):
         """The instruction a tick rule expects at ea, or an error message."""
         kind, r3, expect, _ = self.tick_rules[ea]
-        if kind != "whole":
+        if kind not in ("whole", "late"):
             have = i.op
             if i.op == "b" and i.lk:
                 have = f"bl {self.rel24.get(ea, (ea + i.li) & 0xFFFFFFFF):08x}"
@@ -487,8 +490,9 @@ def reg_expr(reg):
 def apply_tick_rule(rule, i, lines):
     """An instruction's generated lines with its tick or step rule (see the docstring)."""
     kind, arg, _, what = rule
-    if kind == "whole":
-        out = [f"if (RT_WHOLE_TICK()) {{   // tick rule: {what}"] + ["\t" + l for l in lines] + ["}"]
+    if kind in ("whole", "late"):
+        test = "RT_WHOLE_TICK()" if kind == "whole" else "RT_LATE_TICK()"
+        out = [f"if ({test}) {{   // tick rule: {what}"] + ["\t" + l for l in lines] + ["}"]
         if arg is not None:
             out += ["else", f"\tGPR(3) = {reg_expr(arg) if isinstance(arg, str) else emit.hx(arg)};"]
         return out

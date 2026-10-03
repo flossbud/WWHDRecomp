@@ -1,0 +1,18 @@
+# Route: the camera swinging behind Link (WW-4: the owner saw it overshoot at 60 fps), with the 100%
+# save (REF_SAVE=/wwhd/data/saves/wwhd_100): continue-100.txt's inputs, then on the Outset dock the
+# camera is swung aside (right stick) and Link L-targets (ZL, L: which is it?), so the camera swings
+# back behind him; ZR is Crouch and R an item button (the Hero's Bow on this save, whose first-person
+# aim is tried last). FRAME BUTTONS [FRAMES_HELD]; frames
+# are game frames (at 60 fps, every other swap).
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870, Link at its end facing the sea
+900 RRIGHT 20  # swing the camera to Link's side
+930 ZL 40      # target: the camera swings back behind him
+1000 RLEFT 30  # swing the camera the other way, further
+1040 L 40      # target?
+1100 RRIGHT 50 # swing the camera round to face him
+1160 ZL 40     # target
+1220 RLEFT 20  # swing the camera aside
+1240 R 40      # the bow's first-person aim

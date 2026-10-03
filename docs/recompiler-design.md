@@ -403,7 +403,9 @@ worker), so batch them.
 **Tick rules** (D21, 2026-10-02) are the per-instruction counterpart: `config/US_v0/tick_rules.txt`
 lists calls and stores, by address, that run only on the game's whole ticks at 60 fps; the generator
 wraps each in `if (RT_WHOLE_TICK())` (`g_rtHalfTick`, set by the runtime per frame, never at 30 fps)
-and checks that the instruction at the address is the one the rule names. They change only the
+and checks that the instruction at the address is the one the rule names; `late` runs it once a
+tick at the tick's end instead (`RT_LATE_TICK()`: the half tick while its process steps at 60, the
+whole tick otherwise: a tick counter both frames of a tick should see unchanged). They change only the
 shards that contain them, so they rebuild in seconds, and they are how the generator's view of
 every call site reaches the 60 fps work. *Step rules* (the conversion) are the same for converted code:
 `keep:SRC` (a counter that counts whole ticks), and `OP:REG` / `OP@REG` (after the instruction, or
@@ -1622,6 +1624,20 @@ the boat's wake flickering, and a question whether the boat is too fast.
 ## Milestones
 
 There are two tracks. They meet at M4.
+
+**Step 3, the second round (2026-10-02/03).** The owner's camera overshoot (shield, sidling, ladders:
+the camera swung far past Link's back and came back) was the shield camera, `f_02513E98` ('SHLD'),
+an engine the routes had never reached: it approaches by (N - m11C) / W, W losing N - m11C a tick.
+With no rules W lost it on both frames, the factor passed 1, and the camera overshot. A camera
+engine's ramp reads tick counters (Run's, added to after the engine) and changes its weight in the
+same tick; with the counters on whole ticks a half frame saw the next tick's count, so
+`1 / (N - count)` ramps ran a frame ahead (the first-person camera's arrived a tick early,
+front-loaded). A new tick rule, `late` (`RT_LATE_TICK()`: the half tick while the process steps,
+the whole tick otherwise), puts such counters and weights at the tick's end; both frames of a tick
+see its count, and `k` on the factor makes two half frames one tick's approach exactly: at 60 the
+half frame lands on the 30-tick run's view. Counters added to before their use stay `whole`. Found
+with a flight recorder (`WWHD_FLIGHT`: the tracked processes and the pad, the last 20 s, F9 writes
+them) in the owner's play, then reproduced from the owner's save on the worker.
 
 **Foundation**
 

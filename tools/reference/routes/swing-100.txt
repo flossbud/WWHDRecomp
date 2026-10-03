@@ -1,0 +1,17 @@
+# Route: the camera's long swings (WW-4: the owner saw the camera overshoot at 60 fps whenever it had
+# far to go, with ZR or ZL, moving or not), with the 100% save (REF_SAVE=/wwhd/data/saves/wwhd_100):
+# continue-100.txt's inputs, then on the Outset dock Link turns round and runs toward the camera, and
+# ZL (lock-on: the camera swings behind him) or ZR (crouch, the shield up) comes while he runs and after
+# he stops. FRAME BUTTONS [FRAMES_HELD]; frames are game frames (at 60 fps, every other swap).
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870, Link at its end facing the sea
+900 LDOWN 40   # turn round and run toward the camera, along the dock
+925 ZL 30      # lock on while running: the camera swings 180 degrees behind him
+990 LUP 40     # turn round again, toward the camera
+1040 ZL 30     # lock on after stopping
+1100 LDOWN 30  # turn round, toward the camera
+1120 ZR 30     # crouch while running
+1170 LUP 20    # turn round, toward the camera
+1200 ZR 30     # crouch after stopping

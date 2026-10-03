@@ -532,6 +532,31 @@ it in a window; D21 "Step 2"):**
   only, so no press is lost to a half tick: checked with a probe). Booting at 60 logs six sead
   asserts (J3DDrawBuffer entries, from Link's title-screen draw, and one more), this morning's
   build too and with nothing converted; not at 30: open.
+- The owner's third try (2026-10-02/03, Steam closed: Steam Input had taken the controller). Their
+  list: the camera overshoots and snaps back whenever it has far to swing (shield, sidling, a
+  ladder); torches' flames flicker; carried things (pots, bombs, rocks, the arrow on the bow)
+  flicker as Link walks; trees and bushes being cut, seagulls, enemies and Dragon Roost's lava,
+  rocks and platforms move at 30; songs and doors drop to 30 (events: converted processes hold to
+  whole ticks there, by design so far). The owner's order: these bugs, then events at 60, then
+  actors.
+  - **The camera's overshoot, fixed.** The owner's recipe: sword out, turn round, ZR (the shield;
+    ZR is Crouch/Defend, R an item button, ZL lock-on). It's the shield camera (`f_02513E98`, work
+    area tagged 'SHLD'), an engine with no rules: a ramp by (N - m11C) / W whose weight W lost a
+    tick's share on both frames, so the factor passed 1 (at 60 the camera swung ~145 degrees past
+    Link's back, then came back). Rules in `tick_rules.txt`; at 60 the half frame now lands on the
+    30-tick run's view every tick (route `drc`, the owner's save `/wwhd/data/saves/owner_drc`, on
+    the worker only). The camera's tick counters (Run's m07C, m11C, m118, m080, m108, added to
+    after the engine) and the follow camera's ramp weight are now `late` (a new tick rule: once a
+    tick at its end, the half frame while stepping, so both frames see the tick's count), and the
+    first-person camera's ramp (`f_025071FC`, 'SUBJ': the bow, the telescope) is converted: it
+    went in front-loaded and a tick early, now evenly and on the 30-tick run's tick.
+  - **The flight recorder** found it: `WWHD_FLIGHT=path WWHD_STATE_TRACK=476,168` keeps the last
+    20 s (`WWHD_FLIGHT_FRAMES`) of the tracked processes and the controller in memory; F9 in the
+    window (and the exit) writes `path-TIME-N.bin` (track.bin's form; the pad as process 0xFFFF).
+    Copy to the worker, never keep on the editing machine. Routes made while looking: `shield`, `swing`,
+    `land`, `ladder` (unfinished: it doesn't reach the ladder), `drc`.
+  - Also seen: Link turning at 60 ends up ~10 units off the 30-tick run after a walk (`land`):
+    small, open.
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
   CPU, vsyncs missed; `tools/sixty/frames.py` summarises), `WWHD_PROFILE` (`tools/profile_report.py`
   on the worker with the same build). On the desktop, `~/wwhd-test` is ours to deploy to and run

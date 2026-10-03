@@ -26,13 +26,19 @@
 // (wwhd::rt::GameFrame: swap N at 30 fps, swap FROM + 2(N - FROM) at 60), as the route's input is.
 // The dumps are game memory: they stay on the worker.
 #include "override.h"
+#include "../os/input.h"
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <bit>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
+#include <deque>
 #include <set>
+#include <thread>
 #include <tuple>
 #include <unordered_map>
 #include <string>
@@ -138,6 +144,78 @@ namespace
 		return !names.empty() && std::find(names.begin(), names.end(), name) != names.end();
 	}
 	std::vector<uint32> s_tracked;                  // tracked processes that executed this frame
+
+	// ---- the flight recorder (WWHD_FLIGHT=path with WWHD_STATE_TRACK=n,m,...: real-time play) ------
+	// The tracked processes' bytes after every frame (whole and half ticks), and the controller as the
+	// game last read it, for the last WWHD_FLIGHT_FRAMES frames (default 1200: 20 s at 60 fps), kept
+	// in memory without the probe. F9 in the window, closing it, and an exit write them to path-TIME-N.bin as
+	// track.bin is written (tools/sixty/compare.py's load_track; the controller as process 0xFFFF, 28
+	// bytes: the swap, the buttons (os/input.h's), the four sticks as floats, the host clock in
+	// microseconds (its low word), all host order). The owner plays, sees something wrong, presses F9: the frames that led to
+	// it. Game memory: it goes off the desktop to the worker.
+	std::deque<std::vector<uint8>> s_flight;
+	std::atomic<int> s_flightAsk{ 0 };              // 1: write at the next frame; 2: written
+	uint32 s_flightDumps = 0;
+	void FlightWrite();
+	bool Flight()
+	{
+		static const bool on = [] {
+			const char* e = getenv("WWHD_FLIGHT");
+			if (!e || !*e)
+				return false;
+			atexit(FlightWrite);                       // headless runs end by exit() on the game's thread
+			at_quick_exit(FlightWrite);
+			return true;
+		}();
+		return on;
+	}
+
+	void FlightWrite()
+	{
+		static const std::string path = getenv("WWHD_FLIGHT");
+		static const long long started = (long long)time(nullptr);
+		const std::string name = path + "-" + std::to_string(started) + "-" + std::to_string(++s_flightDumps) + ".bin";
+		if (FILE* f = fopen(name.c_str(), "wb"))
+		{
+			for (const auto& frame : s_flight)
+				fwrite(frame.data(), 1, frame.size(), f);
+			fclose(f);
+			cemuLog_log(LogType::Force, "wwhd flight: {} frames to {}", s_flight.size(), name);
+		}
+	}
+
+	void FlightRecord(uint32 tick2)
+	{
+		static const size_t frames = [] { const char* e = getenv("WWHD_FLIGHT_FRAMES"); return e ? (size_t)atoi(e) : 1200u; }();
+		std::vector<uint8> rec;
+		auto put = [&](const void* p, size_t n) { rec.insert(rec.end(), (const uint8*)p, (const uint8*)p + n); };
+		for (uint32 proc : s_tracked)
+		{
+			const uint32 profile = rd32(proc + 0x10);
+			uint32 size = profile ? rd32(profile + 0x10) : 0;
+			if (size == 0 || size > 0x40000)
+				continue;
+			size = std::min(size, 0x8000u);
+			const uint32 head[4] = { tick2, rd16(proc + 0x08), proc, size };
+			put(head, sizeof(head));
+			put(memory_base + proc, size);
+		}
+		const wwhd::os::input::Pad pad = wwhd::os::input::LastRead();
+		const uint64 clock = (uint64)std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+		const uint32 head[4] = { tick2, 0xFFFFu, 0, 28 };
+		const uint32 body[7] = { wwhd::os::SwapCount(), pad.buttons, std::bit_cast<uint32>(pad.lx), std::bit_cast<uint32>(pad.ly),
+			std::bit_cast<uint32>(pad.rx), std::bit_cast<uint32>(pad.ry), (uint32)clock };   // the host clock (us), low word
+		put(head, sizeof(head));
+		put(body, sizeof(body));
+		s_flight.push_back(std::move(rec));
+		while (s_flight.size() > frames)
+			s_flight.pop_front();
+		if (s_flightAsk.load() == 1)
+		{
+			FlightWrite();
+			s_flightAsk.store(2);
+		}
+	}
 	std::vector<uint32> s_processes;               // every process that executed this whole tick
 	constexpr uint32 kGlobal = 0x474C4F42u;         // state.bin record tags: "GLOB", "ACTR"
 	constexpr uint32 kActor = 0x41435452u;
@@ -946,6 +1024,23 @@ namespace
 
 namespace wwhd::sixty
 {
+	// F9 in the window: the flight recorder's frames to a file, at the game's next frame
+	void FlightDump()
+	{
+		if (Flight())
+			s_flightAsk.store(1);
+	}
+
+	// the window closing: the same, waiting up to half a second for the game's thread to write them
+	void FlightFinal()
+	{
+		if (!Flight())
+			return;
+		s_flightAsk.store(1);
+		for (int i = 0; i < 50 && s_flightAsk.load() != 2; i++)
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+
 	// the half tick's journal since the last call: stores seen and saved (the frame log, pacing.cpp)
 	void TakeJournalCounts(uint64& seen, uint64& saved)
 	{
@@ -963,28 +1058,37 @@ void f_025F172C(PPCInterpreter_t* __restrict ctx)
 		static const bool skip = [] { const char* e = getenv("WWHD_60FPS_HALF"); return e && strcmp(e, "none") == 0; }();
 		if (skip)
 			return;
-		if (!Probe())
+		if (!Probe() && !Flight())
 			[[clang::musttail]] return orig_f_025F172C(ctx);   // the tick rules hold its logic to whole ticks
 		const uint32 swap = wwhd::os::SwapCount();
 		s_tracked.clear();
 		orig_f_025F172C(ctx);
-		DumpTracked(wwhd::rt::GameFrame(swap) * 2 + 1);
-		ParticleCensus(wwhd::rt::GameFrame(swap) * 2 + 1);
+		if (Flight())
+			FlightRecord(wwhd::rt::GameFrame(swap) * 2 + 1);
+		if (Probe())
+		{
+			DumpTracked(wwhd::rt::GameFrame(swap) * 2 + 1);
+			ParticleCensus(wwhd::rt::GameFrame(swap) * 2 + 1);
+		}
+		s_tracked.clear();
 		return;
 	}
-	if (!Probe() && wwhd::rt::SixtyFrom() == ~0u)
+	if (!Probe() && !Flight() && wwhd::rt::SixtyFrom() == ~0u)
 		[[clang::musttail]] return orig_f_025F172C(ctx);
 	const uint32 swap = wwhd::os::SwapCount();
 	s_actors.clear();
 	s_processes.clear();
 	s_tracked.clear();
 	orig_f_025F172C(ctx);
+	if (Flight())
+		FlightRecord(wwhd::rt::GameFrame(swap) * 2);
 	if (Probe())
 	{
 		Dump(wwhd::rt::GameFrame(swap));
 		DumpTracked(wwhd::rt::GameFrame(swap) * 2);
 		ParticleCensus(wwhd::rt::GameFrame(swap) * 2);
 	}
+	s_tracked.clear();
 	if (Census() || Rollback())
 	{
 		s_ranges.clear();
@@ -1077,7 +1181,15 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	if (from == ~0u && !Probe())
 		[[clang::musttail]] return orig_f_025DE58C(ctx);
 	const uint32 proc = GPR(3);
-	if (from == ~0u && s_trialPhase == 0 && Trial(rd16(proc + 0x08)))
+	// WWHD_60FPS_TRIAL_TICKS=a-b: the trial at those game frames only (one moment of a route)
+	static const std::pair<uint32, uint32> trialTicks = [] {
+		std::pair<uint32, uint32> r{ 0, ~0u };
+		if (const char* e = getenv("WWHD_60FPS_TRIAL_TICKS"))
+			sscanf(e, "%u-%u", &r.first, &r.second);
+		return r;
+	}();
+	const uint32 tickNow = wwhd::rt::GameFrame(wwhd::os::SwapCount());
+	if (from == ~0u && s_trialPhase == 0 && tickNow >= trialTicks.first && tickNow <= trialTicks.second && Trial(rd16(proc + 0x08)))
 	{
 		s_processes.push_back(proc);
 		TrialExecute(ctx);
@@ -1102,7 +1214,7 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 		}
 		converted = s_stepping[proc];
 	}
-	if (Probe() && Tracked(rd16(proc + 0x08)) && (!g_rtHalfTick || converted))
+	if ((Probe() || Flight()) && Tracked(rd16(proc + 0x08)) && (!g_rtHalfTick || converted))
 		s_tracked.push_back(proc);
 	if (!g_rtHalfTick)
 		s_processes.push_back(proc);

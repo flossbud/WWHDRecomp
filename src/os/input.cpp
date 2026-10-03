@@ -144,6 +144,7 @@ namespace wwhd::os::input
 
 		uint64 s_lastRead[kChannels] = {};
 		uint32 s_prevHold = 0;                              // channel 0's buttons at its last sample
+		Pad s_lastPad;                                      // and the whole of it
 		uint32 s_ringBuffer = 0, s_ringLength = 0;          // KPADInitEx's (only KPADGetUnifiedWpadStatus would use them)
 		bool s_kpadInitialized = false;
 
@@ -166,6 +167,8 @@ namespace wwhd::os::input
 	}
 
 	void SetRumble(std::function<void(bool)> rumble) { s_rumble = std::move(rumble); }
+
+	Pad LastRead() { return s_lastPad; }
 }
 
 using namespace wwhd::os;
@@ -191,6 +194,7 @@ WWHD_OS_FUNCTION(padscore, KPADReadEx)
 	s_lastRead[channel] = now;
 
 	Pad pad = Current();
+	s_lastPad = pad;
 	uint32 hold = 0;
 	for (auto [from, to] : kProButtons)
 		if (pad.buttons & from)

@@ -1,0 +1,12 @@
+# Route: the camera when Link climbs a ladder (WW-4: the owner saw it overshoot at 60 fps), with the
+# 100% save (REF_SAVE=/wwhd/data/saves/wwhd_100): tour-100.txt's walk from the Outset dock to the
+# lookout tower beside Link's house, then onto its ladder. FRAME BUTTONS [FRAMES_HELD]; frames are game
+# frames (at 60 fps, every other swap). Found by looking at captures.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+960 LDOWN 240  # walk back along the dock toward the village
+1230 RRIGHT 90 # swing the camera
+1350 LLEFT 150 # walk on, to the lookout tower
+1500 LLEFT 40  # on toward its ladder

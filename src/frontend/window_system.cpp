@@ -34,6 +34,11 @@
 
 void CemuCommonInit();          // main.cpp
 void LatteOverlay_init();
+namespace wwhd::sixty
+{
+	void FlightDump();          // overrides/sixty.cpp: the flight recorder (WWHD_FLIGHT)
+	void FlightFinal();
+}
 
 static WindowSystem::WindowInfo g_windowInfo{};
 
@@ -326,6 +331,7 @@ static void PrepareShaders(SDL_Window* window)
 		case SDL_EVENT_QUIT:
 		case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
 			cemuLog_log(LogType::Force, "wwhd: window closed");
+			wwhd::sixty::FlightFinal();
 			wwhd::gpu::SaveShaderCache();
 			_exit(0);   // like Cemu's own exit path mid-game: skip global destructors
 		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: StorePixelSize(window); break;
@@ -334,6 +340,8 @@ static void PrepareShaders(SDL_Window* window)
 		case SDL_EVENT_KEY_DOWN:
 			if (!ev.key.repeat && (ev.key.key == SDLK_F11 || (ev.key.key == SDLK_RETURN && (ev.key.mod & SDL_KMOD_ALT))))
 				SDL_SetWindowFullscreen(window, !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN));
+			else if (!ev.key.repeat && ev.key.key == SDLK_F9)
+				wwhd::sixty::FlightDump();         // the flight recorder's last frames (WWHD_FLIGHT)
 			else if (wwhd::os::swkbd::Current().open)
 			{
 				if (ev.key.key == SDLK_BACKSPACE)
