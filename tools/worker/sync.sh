@@ -14,7 +14,7 @@ case "${1:-up}" in
                 --exclude=/build/ --exclude=__pycache__ --exclude=/.worker-dir --exclude=/.session \
                 "$root/" "worker:$dir/"
           ssh worker "mkdir -p $dir/orig && ln -sfn /wwhd/data/orig/0005000010143500_v0 $dir/orig/0005000010143500_v0 &&
-              if [ ! -d $dir/ghidra/projects ] && [ $dir != /wwhd/WWHDRecomp ]; then cp -a /wwhd/WWHDRecomp/ghidra/projects $dir/ghidra/; fi" ;;
+              if [ ! -d $dir/ghidra/projects ] && [ $dir != /wwhd/WWHDRecomp ]; then mkdir -p $dir/ghidra && cp -a /wwhd/WWHDRecomp/ghidra/projects $dir/ghidra/; fi" ;;
     down) shift; for p in "$@"; do rsync -a "worker:$dir/$p" "$root/$p"; done ;;
     *)    echo "usage: sync.sh [up|down PATH...]" >&2; exit 2 ;;
 esac
