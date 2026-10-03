@@ -1349,6 +1349,45 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 		NoteHeld(proc);
 }
 
+// The play scene's plants (its execute, f_025AF8A0, calls each): the grass, trees, bushes (dWood) and
+// flowers are packets of the scene, not processes, whose calc sways them, cuts them and grows them
+// back. They ran on whole ticks (tick rules). At 60 they now run every frame with a time step of half a
+// tick (WWHD_60FPS_PLANTS=0: whole ticks only), their stores standing (config/US_v0/tick_rules.txt has their steps);
+// at 30 with the probe, WWHD_60FPS_TRIAL_PLANTS=1 runs them as the step-doubling trial.
+namespace
+{
+	void Plants(PPCInterpreter_t* ctx, void (*fn)(PPCInterpreter_t*))
+	{
+		static const bool converted = [] { const char* e = getenv("WWHD_60FPS_PLANTS"); return !e || atoi(e) == 1; }();   // on unless =0
+		const uint32 from = wwhd::rt::SixtyFrom();
+		if (from == ~0u)
+		{
+			static const bool trial = [] { const char* e = getenv("WWHD_60FPS_TRIAL_PLANTS"); return Probe() && e && atoi(e) == 1; }();
+			if (trial && s_trialPhase == 0)
+				TrialExecute(ctx, fn);
+			else
+				fn(ctx);
+			return;
+		}
+		if (!converted || wwhd::os::SwapCount() < from)
+		{
+			if (!g_rtHalfTick)
+				fn(ctx);                                // whole ticks only, as the game's logic
+			return;
+		}
+		const float step = g_rtStep;
+		g_rtStep = 0.5f;
+		s_converting++;
+		fn(ctx);
+		s_converting--;
+		g_rtStep = step;
+	}
+}
+void f_02524DA0(PPCInterpreter_t* __restrict ctx) { Plants(ctx, orig_f_02524DA0); }
+void f_02524EA0(PPCInterpreter_t* __restrict ctx) { Plants(ctx, orig_f_02524EA0); }
+void f_02524FA0(PPCInterpreter_t* __restrict ctx) { Plants(ctx, orig_f_02524FA0); }
+void f_025250A0(PPCInterpreter_t* __restrict ctx) { Plants(ctx, orig_f_025250A0); }
+
 // dPa_control_c::calc3D (f_025A81A0; the play scene's draw calls it, f_025B019C): every 3D particle
 // emitter's calc, JPAEmitterManager::calc (f_0282167C) on groups 0 to 6: emission, the particles'
 // motion and ageing, the emitters' callbacks (the ship's wake and splashes). At 60 fps it runs on

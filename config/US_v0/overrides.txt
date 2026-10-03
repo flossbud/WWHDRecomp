@@ -43,3 +43,7 @@
 023FCB9C    src/overrides/sixty_step.cpp       daPy_lk_c::posMoveFromFootPos: the feet's move measured over a whole tick (D21)
 024F9A48    src/overrides/sixty_step.cpp       dCamera_c::updateMonitor: the player's move measured over a whole tick (D21)
 0281F878    src/overrides/sixty_step.cpp       JPABaseEmitter::calcCreatePtcls: strips (the wake, bow waves) emit every frame when converted (D21)
+02524DA0    src/overrides/sixty.cpp            executeGrass: dGrass_packet_c's calc on whole ticks, or every frame with a time step (D21)
+02524EA0    src/overrides/sixty.cpp            executeTree: dTree_packet_c's calc, the same (D21)
+02524FA0    src/overrides/sixty.cpp            executeWood: dWood_packet_c's calc (bushes), the same (D21)
+025250A0    src/overrides/sixty.cpp            executeFlower: dFlower_packet_c's calc, the same (D21)

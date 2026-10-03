@@ -1,0 +1,18 @@
+# Route: the plants at 60 fps (WW-4: the owner saw cut trees and bushes animate at 30), with the 100%
+# save (REF_SAVE=/wwhd/data/saves/wwhd_100): tour-100.txt's walk from the Outset dock into the village,
+# past grass, bushes and trees, swinging the sword (B) along the way. FRAME BUTTONS [FRAMES_HELD];
+# frames are game frames (at 60 fps, every other swap).
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+960 LDOWN 240  # walk back along the dock toward the village
+1230 RRIGHT 90 # swing the camera
+1350 LLEFT 150 # walk on, past grass and trees
+1360 B 3       # swing the sword
+1380 B 3
+1400 B 3
+1420 B 3
+1440 B 3
+1460 B 3
+1480 B 3

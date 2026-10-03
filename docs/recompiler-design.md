@@ -1651,7 +1651,9 @@ run's (checked: 0 state differences). A cheap pattern for anything attached to a
 Events: converted processes held to whole ticks in every event (event code wasn't converted). Now
 they step at 60 in an event while Link's current action is on a list of actions checked in events
 (wait and move so far: an entrance's walk-out matches the 30-tick run); the rest (the Wind Waker's
-conducting, whose beat counts ticks) stay at 30 until converted, action by action.
+conducting, whose beat counts ticks) stay at 30 until converted, action by action. The scene's
+plants (grass, trees, bushes, flowers) are packets the play scene updates, not processes: their four
+updates are overrides now, running every frame with a half step as the particle calc does.
 
 **Foundation**
 

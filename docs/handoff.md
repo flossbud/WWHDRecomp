@@ -597,6 +597,11 @@ it in a window; D21 "Step 2"):**
     1000:-1075,0,5700` on route `drc`) they cover 1734 and 1424 units in 290 ticks against 1605 and
     1365 at 30 (their steering drifts); the trial has nothing left stepping twice but angles that
     chase a moving Link. Not yet tried: getting hit and dying, picking the stick up.
+  - **Plants** (the scene's grass, trees, bushes and flowers: packets the play scene updates, not
+    processes) run every frame at 60 now (`executeGrass/Tree/Wood/Flower` overrides; tick rules held
+    them to whole ticks): the trial along route `plants` found two sway phases a tick (`split`).
+    `WWHD_60FPS_PLANTS=0` keeps them at 30; `WWHD_60FPS_TRIAL_PLANTS=1` (at 30) is their trial.
+    Cutting a bush or a tree isn't tried yet.
   - **Converting an actor**: `uv run tools/sixty/actor_rmw.py PROCESS` lists the type's
     read-modify-write stores with suggested rules (review them: `+= 1` can be a state machine's next
     step, not a tick count); `WWHD_DEBUG_PLACE=tick:x,y,z` puts Link beside it; the trial and a

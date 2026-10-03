@@ -32,10 +32,7 @@
 025B00C0    whole       bl 025cbb90     vibration Run()
 025B00CC    whole       bl 02524ca0     executeMagma
 025B0124    whole       bl 02516e1c     dComIfG_Ccsp()->PrepareMass()
-025B0130    whole       bl 02524da0     executeGrass
-025B013C    whole       bl 02524ea0     executeTree
-025B0148    whole       bl 02524fa0     executeWood
-025B0154    whole       bl 025250a0     executeFlower
+# (executeGrass, executeTree, executeWood, executeFlower: overrides now, sixty.cpp's plants)
 025B0158    whole       bl 0256c8fc     dKyr_poison_light_colision
 025B0170    whole       bctrl           dComIfG_Bgsp()->Move(): moving collision
 025B0174    whole       bl 025be8dc     dSnap_Execute
@@ -351,3 +348,9 @@
 02044AC4    *h@f6       fadds           enemy move: current.pos.x += knockback.x
 02044AD8    *h@f8       fadds           enemy move: current.pos.z += knockback.z
 02044B00    *h@f12      fsubs           enemy move: speed.y -= gravity
+#
+# ---- step rules: the scene's plants (sixty.cpp's Plants, WWHD_60FPS_PLANTS=1). Found with the
+# step-doubling trial (WWHD_60FPS_TRIAL_PLANTS=1) along route plants (Outset's village).
+025CDD9C    split@r7    add             plants' sway (f_025CDCB4): a phase (+0x0) += its step
+025CDDB8    split@r0    add             plants' sway: a second phase += its step
+
