@@ -58,6 +58,8 @@ rules, for the code of processes that run every frame with a time step h
                counts whole ticks: `addi r0, r3, 1` with keep:r3)
   *h:REG /h:REG  after the instruction, REG times or divided by h (a per-tick amount; a distance
                per step that should read per tick)
+  *hh:REG      after it, REG times h squared (an acceleration a position-based step adds as a
+               displacement, x' = x + (x - x_old) + a: a cloth's or a chain's forces)
   k:REG        after it, REG = 1 - (1 - REG)^h (an exponential approach's factor)
   k75:REG      an approach whose result is then approached by 0.75 (k@ on that one): REG becomes
                approach(0.75 REG) / approach(0.75), so the two together approach as one tick does
@@ -204,7 +206,7 @@ class Program:
             self.entries |= {a for a, _, _ in self.synthetic}
 
     STEP_OPS = {"*h": "rt_step_mul", "/h": "rt_step_div", "k": "rt_step_approach", "d": "rt_step_damp",
-                "k75": "rt_step_approach75"}
+                "k75": "rt_step_approach75", "*hh": "rt_step_mul(rt_step_mul({}))"}
 
     def load_tick_rules(self, path):
         """address -> (rule, argument, expected instruction text, what): see the docstring. rule is
@@ -501,6 +503,12 @@ def reg_expr(reg):
     return f"GPR({reg[1:]})" if reg[0] == "r" else f"FPR({reg[1:]})"
 
 
+def step_call(op, x):
+    """A step operation on the expression x: a runtime function's name, or a template with {}."""
+    fn = Program.STEP_OPS[op]
+    return fn.format(x) if "{}" in fn else f"{fn}({x})"
+
+
 def apply_tick_rule(rule, i, lines):
     """An instruction's generated lines with its tick or step rule (see the docstring)."""
     kind, arg, _, what = rule
@@ -537,11 +545,11 @@ def apply_tick_rule(rule, i, lines):
     if op == "split":
         change = f"if (RT_STEPPED()) {reg} = rt_step_split({reg});"
     elif arg[0] == "f":
-        fn = Program.STEP_OPS[op]
-        change = f"if (RT_STEPPED()) {{ {reg}.fp0 = {fn}({reg}.fp0); {reg}.fp1 = {reg}.fp0; }}"
+        call = step_call(op, f"{reg}.fp0")
+        change = f"if (RT_STEPPED()) {{ {reg}.fp0 = {call}; {reg}.fp1 = {reg}.fp0; }}"
     else:
-        fn = Program.STEP_OPS[op]
-        change = f"if (RT_STEPPED()) {reg} = (uint32)(sint32){fn}((double)(sint32){reg});"
+        call = step_call(op, f"(double)(sint32){reg}")
+        change = f"if (RT_STEPPED()) {reg} = (uint32)(sint32){call};"
     if not kind.endswith("@"):
         return lines + [f"{change}   // step rule: {what}"]
     # for this instruction only: the register gets its value back unless the instruction wrote it

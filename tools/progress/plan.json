@@ -159,6 +159,11 @@
     "300": "Door",
     "43": "Push block",
     "435": "Grass",
+    "174": "Hyrule's flags",
+    "192": "Darknut / Phantom Ganon cape",
+    "193": "Moblin's lantern",
+    "243": "Puppet Ganon",
+    "246": "Ganondorf",
     "453": "Pot",
     "454": "Stone"
   },
@@ -207,7 +212,7 @@
     {
       "id": "ganon",
       "name": "Hyrule & Ganon's Tower: Hyrule Castle, Phantom Ganon, Puppet Ganon, Ganondorf",
-      "where": "Hyrule, GanonK, GTower"
+      "where": "Hyrule, Hyroom, kenroom; GanonA-N (GanonJ: the maze, GanonK: Puppet Ganon); GTower; Xboss0-3"
     }
   ],
   "later": [

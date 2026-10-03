@@ -67,9 +67,10 @@ namespace
 	// sky (VRBOX, VRBOX2), which match the 30-tick run with no rules (tools/sixty/actor_types.py); Chuchus
 	// (CC), Keese (KI), Moblins (MO2), Darknuts (TN), Kargarocs (BB), ReDeads (RD), Gohma (BTD) and
 	// Valoo's tail in its room (DR2), Magtails (MT), Peahats (PH), Boko Babas (BO), and Outset's
-	// NPC_YM2 and NPC_YW1.
+	// NPC_YM2 and NPC_YW1; Hyrule's flags (MAJUU_FLAG), the capes of Darknuts and Phantom Ganon (MANT)
+	// and the Moblins' lanterns (KANTERA).
 	// WWHD_60FPS_CONVERT= (empty) converts none.
-	constexpr const char* kConvertedByDefault = "476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317";
+	constexpr const char* kConvertedByDefault = "476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,174,192,193";
 	const char* ConvertList()
 	{
 		const char* e = getenv("WWHD_60FPS_CONVERT");
@@ -1210,16 +1211,17 @@ namespace
 	}
 }
 
-// WWHD_DEBUG_SPAWN=tick:process,param,x,y,z[;...] (a test aid): at those game frames an actor of that
-// process name (actor_names.tsv's numbers) and parameters (hex) is created at that position in
+// WWHD_DEBUG_SPAWN=tick:process,param,x,y,z[,anglex][;...] (a test aid): at those game frames an actor
+// of that process name (actor_names.tsv's numbers) and parameters (hex) is created at that position in
 // Link's room, as fopAcM_create does: the creation record (f_025D5678: parameters, position, room,
 // angle, scale, subtype, parent) and fpcM_Create (f_025E14A8: the layer, *0x101F3AE8, the process
-// name, no create function, the record)
+// name, no create function, the record). anglex (hex), the angle's x, is more parameters for some
+// actors (a Darknut's equipment is (anglex >> 5) & 7: 0x80 a shield and a cape)
 void f_025D5678(PPCInterpreter_t* __restrict ctx);
 void f_025E14A8(PPCInterpreter_t* __restrict ctx);
 namespace
 {
-	struct Spawn { int tick, proc; uint32 param; float x, y, z; };
+	struct Spawn { int tick, proc; uint32 param; float x, y, z; uint32 anglex; };
 	void DebugSpawn(PPCInterpreter_t* ctx)
 	{
 		static const std::vector<Spawn> spawns = [] {
@@ -1227,8 +1229,8 @@ namespace
 			if (const char* e = getenv("WWHD_DEBUG_SPAWN"))
 				for (const char* p = e; p && *p; p = strchr(p, ';') ? strchr(p, ';') + 1 : nullptr)
 				{
-					Spawn w{ -1, 0, 0, 0, 0, 0 };
-					if (sscanf(p, "%d:%d,%x,%f,%f,%f", &w.tick, &w.proc, &w.param, &w.x, &w.y, &w.z) == 6)
+					Spawn w{ -1, 0, 0, 0, 0, 0, 0 };
+					if (sscanf(p, "%d:%d,%x,%f,%f,%f,%x", &w.tick, &w.proc, &w.param, &w.x, &w.y, &w.z, &w.anglex) >= 6)
 						v.push_back(w);
 				}
 			return v;
@@ -1247,12 +1249,16 @@ namespace
 			wr32(pos, std::bit_cast<uint32>(w.x));
 			wr32(pos + 4, std::bit_cast<uint32>(w.y));
 			wr32(pos + 8, std::bit_cast<uint32>(w.z));
+			const uint32 angle = sp + 0x110;           // csXyz: x, y, z
+			wr16(angle, (uint16)w.anglex);
+			wr16(angle + 2, 0);
+			wr16(angle + 4, 0);
 			wr32(sp, ctx->gpr[1]);                     // a back chain
 			ctx->gpr[1] = sp;
 			ctx->gpr[3] = w.param;
 			ctx->gpr[4] = pos;
 			ctx->gpr[5] = (uint32)(sint32)(sint8)rd8(s_link + 0x326);   // Link's room
-			ctx->gpr[6] = 0;
+			ctx->gpr[6] = w.anglex ? angle : 0;
 			ctx->gpr[7] = 0;
 			ctx->gpr[8] = 0;
 			ctx->gpr[9] = ~0u;

@@ -732,6 +732,28 @@ it in a window; D21 "Step 2"):**
   - Link turning at 60 ends up ~10 units ahead: an action that ends with its animation (the turn)
     can end on a half tick, so he starts walking a tick early (route `door`, ticks 1004-1006). Left
     as is: holding such switches to whole ticks would stall him half a tick each time.
+- **Session bottom** (from 2026-10-03; the queue from the bottom: `ganon`, then `wind`, `earth`...;
+  rules in `config/US_v0/tick_rules/ganon.txt` etc.):
+  - **The Ganon area's stages** (room lists at f1095 after a warp at f920): `Hyrule` (the castle's
+    courtyard: 13 flags MAJUU_FLAG 174, 16 Lwood 407 (static: a counter only), Moblins, a Darknut,
+    Peahats, Keese, Chuchus), `Hyroom` (inside: Triforce boxes 44, torches, pots, the statue YLzou 145),
+    `kenroom` (the Master Sword's chamber), `GanonA`-`GanonN` (the tower's halls and its four trials:
+    Bubbles BL 207, Wizzrobe 208, Stalfos 190, Poes 212, Darknuts, Moblins...), `GanonJ` (Phantom
+    Ganon's maze, rooms 0-4, 6-11, 13), `GanonK` (Puppet Ganon: BGN 243, BGN2 244, BGN3 245),
+    `GTower` (Ganondorf GND 246, Zelda PZ 210: an event runs from the warp on), `Xboss0`-`3` (the
+    refights: Gohma, Kalle Demos BMD 235 with 236/237, Jalhalla, Molgera). Unmatched process numbers
+    were named from the decomp's draw priorities (`f_pc_draw_priority.h`; WWHD's are the GameCube's
+    minus 2-3 in this range; zeldaret/tww is cloned at `/wwhd/opt/tww` on the worker).
+  - **Converted**: Hyrule's flags (MAJUU_FLAG 174: a cloth of 21 points stepped with force, damping
+    and move per half step; they flap at the 30-tick run's speed (points move 5.7 a tick at 30, 6.1
+    at 60) but, being chaotic, drift apart in shape after a few seconds), the capes (MANT 192, for
+    Darknuts and Phantom Ganon: a position-based chain, so its forces take h^2 of themselves, the new
+    `*hh` step rule; on a caped Darknut spawned on the dock the cape's shape relative to its roots
+    stays within 10 units of the 30-tick run's on 60% of ticks, diverging when the Darknut itself
+    acts differently, and moves ~20% more), the Moblins' lanterns (KANTERA 193: no rules).
+  - Test aids: `WWHD_DEBUG_SPAWN=...,x,y,z,ANGLEX` (hex: a Darknut's equipment is (ANGLEX >> 5) & 7,
+    `80` a shield and a cape). `WWHD_DEBUG_BOSS=1` with a Darknut spawned on the Outset dock crashes
+    the game at f979 (at 30 too): keep it for boss rooms.
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
   CPU, vsyncs missed; `tools/sixty/frames.py` summarises), `WWHD_PROFILE` (`tools/profile_report.py`
   on the worker with the same build). On the desktop, `~/wwhd-test` is ours to deploy to and run
@@ -744,7 +766,8 @@ it in a window; D21 "Step 2"):**
   actors 151, 154, 142, 175, 296, 162, push blocks 43, chests 292, doors 300, the sky 437/438,
   Chuchus 206, Keese 215, Moblins 188, Darknuts 191, Kargarocs 181, ReDeads 224, Gohma 234 and
   Valoo's tail in its room 223 (counters, timers, two sways; tested idle in the fight), Magtails 216,
-  Peahats 209, Boko Babas 214, Outset's NPC_YM2 316 and NPC_YW1 317,
+  Peahats 209, Boko Babas 214, Outset's NPC_YM2 316 and NPC_YW1 317, Hyrule's flags 174, the
+  capes 192 and the Moblins' lanterns 193,
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
   `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;

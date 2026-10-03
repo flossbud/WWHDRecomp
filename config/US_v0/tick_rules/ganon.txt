@@ -1,0 +1,45 @@
+# Step and tick rules for the Ganon area (the work queue's "ganon": Hyrule Castle, Ganon's Tower, its
+# bosses; session bottom). Format: ../tick_rules.txt and tools/recomp/generate.py. Found with the
+# step-doubling trial (WWHD_60FPS_TRIAL) in the rooms where they live (WWHD_DEBUG_STAGE warps there),
+# matched with the decomp (zeldaret/tww) where it has the code, checked 30 against 60.
+#
+# ---- MAJUU_FLAG (174, daMajuu_Flag_c, d_a_majuu_flag.cpp: the flags of Hyrule, stage Hyrule; execute
+# f_021B9730). majuu_flag_move (f_021B92DC) is a cloth of 21 points stepped a tick at a time: the wave
+# phase mWave (+0x1DF4) += l_HIO.mWaveSpeed, then for each point speed += force (springs to its
+# neighbours, the wind on its normal, gravity), speed *= 0.85, pos += speed (PSVECAdd, PSVECScale; the
+# points at +0x16F0/+0x17EC by turns, the speeds at +0x1CD8). A half step takes half the force and half
+# the move, and 0.85^h of the damping. Two copies of the update: the two fixed points (15, 20), the rest.
+021B9364    split@r0    add             majuu flag move: mWave += l_HIO.mWaveSpeed a tick
+021B94DC    vec@r4      bl 028e8d88     majuu flag move (fixed points): speed += force
+021B94EC    d@f1        bl 028e8e64     majuu flag move (fixed points): speed *= 0.85
+021B94FC    vec@r4      bl 028e8d88     majuu flag move (fixed points): pos += speed
+021B966C    vec@r4      bl 028e8d88     majuu flag move: speed += force
+021B967C    d@f1        bl 028e8e64     majuu flag move: speed *= 0.85
+021B968C    vec@r4      bl 028e8d88     majuu flag move: pos += speed
+#
+# ---- MANT (192, mant_class, d_a_mant.cpp: the capes of Darknuts and Phantom Ganon; execute f_021BC3C4,
+# the decomp has no code for it). Nine strands of nine points, a chain stepped a tick at a time: each
+# point is put at the strand's length from the one before, along (where it is) + (its velocity, the
+# last step's move times m3648) + (the cape's bias, gravity m3654, the wind, a hit's push, a flutter),
+# and its velocity is its move times m3648. A position-based (Verlet) step: at a step h the forces
+# move h^2 of themselves (*hh) and the velocity, a move per step, keeps m3648^h of itself.
+021BC4D8    whole       stw             mant: a tick count (+0x2C94, the wind's phase) + 1
+021BC4E4    whole       sth             mant: the hit countdown (+0x4282) - 1
+021BD214    whole       sth             mant: the dying countdown (+0x4284) - 1
+021BD328    whole       sth             mant: the push countdown (+0x365A) - 1
+021BCB30    *hh@f15     fadds           mant: z + the cape's bias
+021BCB38    *hh@f16     fadds           mant: x + the cape's bias
+021BCB3C    *hh@f13     fadds           mant: y + m3654 (gravity)
+021BCB40    *hh@f22     fadds           mant: z + the wind
+021BCB44    *hh@f26     fadds           mant: x + the wind
+021BCB48    *hh@f21     fadds           mant: y + the wind
+021BCB4C    *hh@f24     fadds           mant: z + a hit's push
+021BCB50    *hh@f25     fadds           mant: x + a hit's push
+021BCB60    *hh@f7      fadds           mant: z + the flutter
+021BCB68    *hh@f12     fadds           mant: x + the flutter
+021BCC20    d@f6        fmuls           mant: velocity.x = move * m3648
+021BCC38    d@f11       fmuls           mant: velocity.y = move * m3648
+021BCC50    d@f0        fmuls           mant: velocity.z = move * m3648
+#
+# KANTERA (193, d_a_kantera.cpp: a Moblin's lantern) needs no rules: converted with its Moblin it matches
+# the 30-tick run (GanonL's three; fields that differ are constant ones left from the heap).
