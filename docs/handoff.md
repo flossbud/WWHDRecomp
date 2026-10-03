@@ -638,9 +638,15 @@ it in a window; D21 "Step 2"):**
     Chuchus (CC 206: its timers) walk it within 1-7 units, their jump a tick early. Both in the
     defaults. Magtails (MT 216): counters, timers, phases and four move modes have rules, but on a
     wooden dock it falls into the sea and the 60 run takes another branch: test in its lava, not in
-    the defaults. Spawned all at once (`actor_types.py`), every other enemy type differs at every
-    tick: each needs its pass (Moblin 188, Peahat 209, Octorok 227, ReDead 224, Stalfos 190, Darknut
-    191, Poe 212, Kargaroc 181, Wizzrobe 208, 184, 220). An enemy that makes random choices on half
+    the defaults. Moblins (MO2 188), Darknuts (TN 191) and ReDeads (RD 224) already walked 30's
+    path (their moves go through converted helpers): only their counters and timers needed rules,
+    one of them a shared countdown helper (f_0211D2F8, 173 callers). Kargarocs (BB 181): its mover
+    f_0205E638 (pos += speed; a timed rise) takes half steps; it flies 30's path within 7.5 units.
+    A trap found there: `pos.y += x` where x is a snap to a height above the ground, not a per-tick
+    amount (02061118): halving it made it sink. Check what is added before `*h`: a store whose
+    value at 30 moves once and then stays is a snap. All four in the defaults. Still to do: Stalfos
+    190 and Poe 212 (drift), Peahat 209 (did not move on the dock), Wizzrobe 208 (no trial data:
+    probably did not spawn with param 0), Octorok 227, 184, 220. An enemy that makes random choices on half
     steps takes the next tick's numbers: its path drifts from the 30-tick run's even when right.
   - **Converting an actor**: `uv run tools/sixty/actor_rmw.py PROCESS` lists the type's
     read-modify-write stores with suggested rules (review them: `+= 1` can be a state machine's next
@@ -660,7 +666,7 @@ it in a window; D21 "Step 2"):**
 - Run converted: `WWHD_60FPS=1` (the checked conversions are the default now: camera 476, Link 168,
   ship 165, sail 171, seagulls 194, Bokoblins 189 and their sticks 463, Dragon Roost's mountain
   actors 151, 154, 142, 175, 296, 162, push blocks 43, chests 292, doors 300, the sky 437/438,
-  Chuchus 206, Keese 215,
+  Chuchus 206, Keese 215, Moblins 188, Darknuts 191, Kargarocs 181, ReDeads 224,
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
   `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;

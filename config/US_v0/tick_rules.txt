@@ -408,3 +408,35 @@
 021DB418    *h@f10      fadds           mt move (4): current.pos.x += speed.x
 021DB43C    *h@f0       fadds           mt move (4): current.pos.y += speed.y
 021DB444    *h@f7       fadds           mt move (4): current.pos.z += speed.z
+#
+# ---- step rules: Moblins (MO2, process 188, d_a_mo2.cpp; execute f_021C9B1C). Found with the trial on
+# one spawned on the dock: its path already matched (its moves go through converted helpers).
+021CA0CC    whole       stw             mo2: a tick count (+0x840) + 1
+021CA0E0    whole       sthx            mo2: its timers (+0x848) count down
+021CA27C    whole       sth             mo2: a countdown (+0x45C) - 1
+021CC2F4    whole       sth             mo2: a counter (+0x2D4C) + 1
+#
+# ---- step rules: Darknuts (TN, process 191, d_a_tn.cpp). Found with the trial on one spawned on the
+# dock: its path already matched.
+024BD528    whole       stw             tn: a tick count (+0x4F0) + 1
+024BD53C    whole       sthx            tn: its timers (+0x4F8) count down
+024BC4E4    whole       sth             tn (f_024BC3EC): a part's counter + 1
+024BD2F0    whole       stb             tn: a countdown (+0x1670) - 1
+#
+# ---- step rules: Kargarocs (BB, process 181, d_a_bb.cpp; execute f_0205EA58).
+0205ED04    whole       sth             bb: a counter (+0x4C6) + 1
+0205EDA4    whole       sthx            bb: its timers (+0x48C) count down
+02061834    whole       sth             bb: a countdown (+0x44C) - 1
+0205E834    *h@f11      fadds           bb move (f_0205E638): current.pos.x += speed.x
+0205E83C    *h@f0       fadds           bb move: current.pos.y += speed.y
+0205E848    *h@f0       fadds           bb move: current.pos.z += speed.z
+0205E870    *h@f13      fadds           bb move: current.pos.y += a rise while +0x498 counts
+0205E874    whole       sth             bb move: that countdown (+0x498) - 1
+0205EE2C    *h@f12      fadds           bb fly: current.pos.x += its velocity, rotated to its heading
+0205EE38    *h@f6       fadds           bb fly: current.pos.y += its velocity
+0205EE50    *h@f9       fadds           bb fly: current.pos.z += its velocity
+
+#
+# ---- step rules: a shared int countdown (f_0211D2F8: if (*t) --*t; return *t; 173 callers, a
+# cLib_calcTimer-like template). Found on ReDeads (RD, process 224), whose paths already matched.
+0211D308    whole       stw             countdown helper: *t - 1
