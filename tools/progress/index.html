@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WWHD Recomp Progress</title>
+<style>
+:root {
+  --bg: #f4f6f8; --card: #ffffff; --ink: #18202a; --muted: #5d6b7a; --line: #dde3ea;
+  --accent: #1f7a8c; --good: #2e8b57; --warn: #c98a12; --todo: #aab4bf; --bar: #e6ebf0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1418; --card: #172028; --ink: #e6edf3; --muted: #93a1b0; --line: #26323d;
+    --accent: #4fb3c8; --good: #4cc38a; --warn: #e3b341; --todo: #4a5866; --bar: #22303b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1418; --card: #172028; --ink: #e6edf3; --muted: #93a1b0; --line: #26323d;
+  --accent: #4fb3c8; --good: #4cc38a; --warn: #e3b341; --todo: #4a5866; --bar: #22303b;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1080px; margin: 0 auto; padding: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 8px 0 14px; }
+h1 { font-size: 1.5rem; margin: 0; }
+h2 { font-size: 1.05rem; margin: 0 0 10px; }
+.sub { color: var(--muted); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+.now { display: flex; gap: 10px; align-items: center; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--good); flex: none;
+  box-shadow: 0 0 0 0 var(--good); animation: pulse 2s infinite; }
+.dot.idle { background: var(--todo); animation: none; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent); }
+  70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.bar { height: 12px; background: var(--bar); border-radius: 6px; overflow: hidden; display: flex; }
+.bar > span { display: block; height: 100%; }
+.bar .c { background: var(--good); } .bar .r { background: var(--warn); }
+.big .bar { height: 18px; border-radius: 9px; }
+.row { display: flex; justify-content: space-between; gap: 10px; margin: 10px 0 4px; }
+.row b { font-variant-numeric: tabular-nums; }
+.tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.tile { background: var(--bg); border-radius: 10px; padding: 10px 12px; }
+.tile b { display: block; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.tile span { color: var(--muted); font-size: .85rem; }
+ul.ms { list-style: none; margin: 0; padding: 0; }
+ul.ms li { display: flex; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+ul.ms li:last-child { border: 0; }
+.tick { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--todo); margin-top: 1px; }
+.tick.done { background: var(--good); border-color: var(--good); }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: .85rem; margin-bottom: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: .8rem; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); white-space: nowrap; }
+.chip.converted { border-color: var(--good); color: var(--good); }
+.chip.rules { border-color: var(--warn); color: var(--warn); }
+.chip.todo { color: var(--muted); }
+details summary { cursor: pointer; color: var(--accent); margin-top: 10px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.tabs button { font: inherit; font-size: .85rem; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); cursor: pointer; }
+.tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.shots { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.shots figure { margin: 0; }
+.shots img { width: 100%; border-radius: 8px; display: block; background: var(--bar); aspect-ratio: 16/9; object-fit: cover; cursor: zoom-in; }
+.shots figcaption { font-size: .82rem; color: var(--muted); margin-top: 4px; }
+ol.log { list-style: none; margin: 0; padding: 0; }
+ol.log li { padding: 7px 0; border-bottom: 1px solid var(--line); }
+ol.log li:last-child { border: 0; }
+ol.log code { color: var(--accent); font-size: .82rem; margin-right: 6px; }
+ol.log time { color: var(--muted); font-size: .82rem; float: right; margin-left: 8px; }
+.issues li { margin: 4px 0; }
+.empty { color: var(--muted); font-style: italic; }
+#zoom { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 9; }
+#zoom img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+footer { color: var(--muted); font-size: .8rem; text-align: center; margin: 10px 0 24px; }
+@media (max-width: 520px) { main { padding: 12px 16px; } h1 { font-size: 1.3rem; } ol.log time { float: none; display: block; margin: 0; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="title">WWHD Recomp</h1>
+    <span class="sub" id="ticket"></span>
+  </header>
+
+  <section class="card now">
+    <span class="dot idle" id="dot"></span>
+    <div><b>Working on:</b> <span id="nowText" class="sub">…</span> <span class="sub" id="nowAgo"></span></div>
+  </section>
+
+  <div class="grid">
+    <section class="card big">
+      <h2>60 fps milestones</h2>
+      <div class="row"><span id="msLabel"></span><b id="msPct"></b></div>
+      <div class="bar"><span class="c" id="msBar"></span></div>
+      <details><summary>Show milestones</summary><ul class="ms" id="msList"></ul></details>
+    </section>
+    <section class="card big">
+      <h2>Actor types running at 60</h2>
+      <div class="row"><span id="allLabel"></span><b id="allPct"></b></div>
+      <div class="bar"><span class="c" id="allBarC"></span><span class="r" id="allBarR"></span></div>
+      <div id="groupBars"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Numbers</h2>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section class="card">
+    <h2>Actor types</h2>
+    <div class="legend"><span><i style="background:var(--good)"></i>converted (runs at 60)</span>
+      <span><i style="background:var(--warn)"></i>rules written, not on by default</span>
+      <span><i style="background:var(--todo)"></i>to do (runs at 30)</span></div>
+    <div class="tabs" id="tabs"></div>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <section class="card">
+    <h2>Screenshots</h2>
+    <div class="shots" id="shots"><p class="empty">None yet.</p></div>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Recent work</h2>
+      <ol class="log" id="log"></ol>
+    </section>
+    <section class="card">
+      <h2>Known issues</h2>
+      <ul class="issues" id="issues"></ul>
+    </section>
+  </div>
+  <footer id="foot"></footer>
+</main>
+<div id="zoom"><img alt=""></div>
+<script>
+const $ = id => document.getElementById(id);
+let data = null, tab = 0;
+const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
+function ago(t) {
+  const s = Math.max(0, Date.now() / 1000 - t);
+  if (s < 90) return "just now";
+  if (s < 5400) return Math.round(s / 60) + " min ago";
+  if (s < 129600) return Math.round(s / 3600) + " h ago";
+  return Math.round(s / 86400) + " d ago";
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c])); }
+async function get(name) {
+  try { const r = await fetch(name + "?t=" + Date.now(), {cache: "no-store"}); return r.ok ? r.json() : null; }
+  catch (e) { return null; }
+}
+function render() {
+  const d = data; if (!d) return;
+  $("title").textContent = d.title; $("ticket").textContent = d.ticket;
+  const ms = d.milestones, done = ms.filter(m => m.done).length;
+  $("msLabel").textContent = done + " of " + ms.length + " done";
+  $("msPct").textContent = pct(done, ms.length) + "%";
+  $("msBar").style.width = pct(done, ms.length) + "%";
+  $("msList").innerHTML = ms.map(m => `<li><span class="tick ${m.done ? "done" : ""}"></span>${esc(m.name)}</li>`).join("");
+  const all = d.groups.flatMap(g => g.actors);
+  const c = all.filter(a => a.status === "converted").length, r = all.filter(a => a.status === "rules").length;
+  $("allLabel").textContent = `${c} converted, ${r} in progress, ${all.length - c - r} to do (of ${all.length})`;
+  $("allPct").textContent = pct(c, all.length) + "%";
+  $("allBarC").style.width = (100 * c / all.length) + "%"; $("allBarR").style.width = (100 * r / all.length) + "%";
+  $("groupBars").innerHTML = d.groups.map(g => {
+    const gc = g.actors.filter(a => a.status === "converted").length, gr = g.actors.filter(a => a.status === "rules").length, n = g.actors.length;
+    return `<div class="row"><span>${esc(g.name)}</span><b>${gc} / ${n}</b></div>
+      <div class="bar"><span class="c" style="width:${100 * gc / n}%"></span><span class="r" style="width:${100 * gr / n}%"></span></div>`;
+  }).join("");
+  const k = d.counts;
+  const tiles = [[k.converted, "types converted"], [k.types - k.converted, "types left at 30"], [k.with_rules, "types in progress"],
+    [k.tick_rules, "tick & step rules"], [k.overrides, "functions overridden"], [k.named_functions, "functions named"], [k.functions, "functions recompiled"]];
+  $("tiles").innerHTML = tiles.map(([v, l]) => `<div class="tile"><b>${Number(v).toLocaleString()}</b><span>${l}</span></div>`).join("");
+  $("tabs").innerHTML = d.groups.map((g, i) => `<button class="${i === tab ? "on" : ""}" data-i="${i}">${esc(g.name)} (${g.actors.length})</button>`).join("");
+  const order = {converted: 0, rules: 1, todo: 2};
+  $("chips").innerHTML = d.groups[tab].actors.slice().sort((a, b) => order[a.status] - order[b.status] || a.id - b.id)
+    .map(a => `<span class="chip ${a.status}" title="process ${a.id}">${a.name ? esc(a.name) + " " : ""}<small>${a.id}</small></span>`).join("");
+  $("log").innerHTML = d.commits.map(m => `<li><time>${ago(m.time)}</time><code>${m.hash}</code>${esc(m.subject.replace(/^WW-4: /, ""))}</li>`).join("");
+  $("issues").innerHTML = d.known_issues.map(i => `<li>${esc(i)}</li>`).join("");
+  $("foot").textContent = "Data from " + ago(d.generated) + " · refreshes every 20 s";
+}
+$("tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { tab = +b.dataset.i; render(); } });
+$("shots").addEventListener("click", e => { if (e.target.tagName === "IMG") { $("zoom").querySelector("img").src = e.target.src; $("zoom").style.display = "flex"; } });
+$("zoom").addEventListener("click", () => $("zoom").style.display = "none");
+async function refresh() {
+  const [p, n, s] = await Promise.all([get("progress.json"), get("now.json"), get("shots.json")]);
+  if (p) { data = p; render(); }
+  if (n) {
+    $("nowText").textContent = n.text || "idle"; $("nowAgo").textContent = "· " + ago(n.time);
+    $("dot").className = "dot" + (Date.now() / 1000 - n.time > 3 * 3600 ? " idle" : "");
+  }
+  if (s && s.length) $("shots").innerHTML = s.map(x => `<figure><img loading="lazy" src="${esc(x.file)}" alt="${esc(x.caption)}"><figcaption>${esc(x.caption)} · ${ago(x.time)}</figcaption></figure>`).join("");
+}
+refresh(); setInterval(refresh, 20000);
+</script>
+</body>
+</html>

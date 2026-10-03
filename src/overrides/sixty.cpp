@@ -66,9 +66,9 @@ namespace
 	// (296, d_a_bflower.cpp) and Obj_Ebomzo; push blocks (Obj_Movebox), chests (TBOX), doors (DOOR10) and the
 	// sky (VRBOX, VRBOX2), which match the 30-tick run with no rules (tools/sixty/actor_types.py); Chuchus
 	// (CC), Keese (KI), Moblins (MO2), Darknuts (TN), Kargarocs (BB), ReDeads (RD), Gohma (BTD) and
-	// Valoo's tail in its room (DR2).
+	// Valoo's tail in its room (DR2), Magtails (MT) and Peahats (PH).
 	// WWHD_60FPS_CONVERT= (empty) converts none.
-	constexpr const char* kConvertedByDefault = "476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223";
+	constexpr const char* kConvertedByDefault = "476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209";
 	const char* ConvertList()
 	{
 		const char* e = getenv("WWHD_60FPS_CONVERT");

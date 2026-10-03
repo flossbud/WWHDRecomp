@@ -160,4 +160,6 @@ address,name,evidence
 025D5678,fopAcM_createAppendFill,"WW-4 decompile: fills a creation record from fopAcM_GetAppend (f_025D5600): parameters, position, room (+0x21), angle, scale bytes scaled by 10, subtype, parent ID; called by fopAcM_createChild (f_025D5B20, its assert 'mother != (0)' at f_op_actor_mng.cpp:752) before fpcM_Create"
 025D5B20,fopAcM_createChild,"WW-4 decompile: assert f_op_actor_mng.cpp:752 'mother != (0)'; the parent's position and angle plus an offset, the creation record (f_025D5678), then fpcM_Create (f_025E14A8)"
 025E14A8,fpcM_Create,"WW-4 decompile: (layer, process name < 0x7FFF, create function, ?, append) -> a creation request (0x60 bytes, its fields +0x50 name, +0x54 append, +0x58 function), returns its process ID; 27 callers (actors creating actors)"
-
+0200ED84,cLib_addCalc2,"WW-4: the same arguments and arithmetic as the GC decomp's c_lib.cpp cLib_addCalc2 (f32* value, target, scale, maxStep: value += clamp((target - value) * scale, maxStep))"
+0200EDC8,cLib_addCalc0,"WW-4: the same arguments and arithmetic as the GC decomp's c_lib.cpp cLib_addCalc0 (f32* value, scale, maxStep: value -= clamp(value * scale, maxStep))"
+0200F428,cLib_addCalcAngleS2,"WW-4: the same arguments and arithmetic as the GC decomp's c_lib.cpp cLib_addCalcAngleS2 (s16* value, target, scale, maxStep: value += clamp((target - value) / scale, maxStep))"

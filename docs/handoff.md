@@ -649,9 +649,28 @@ it in a window; D21 "Step 2"):**
     A trap found there: `pos.y += x` where x is a snap to a height above the ground, not a per-tick
     amount (02061118): halving it made it sink. Check what is added before `*h`: a store whose
     value at 30 moves once and then stays is a snap. All four in the defaults. Still to do: Stalfos
-    190 and Poe 212 (drift), Peahat 209 (did not move on the dock), Wizzrobe 208 (no trial data:
-    probably did not spawn with param 0), Octorok 227, 184, 220. An enemy that makes random choices on half
-    steps takes the next tick's numbers: its path drifts from the 30-tick run's even when right.
+    190 and Poe 212 (drift), Wizzrobe 208 (no trial data: probably did not spawn with param 0),
+    Octorok 227, 184, 220. An enemy that makes random choices on half steps takes the next tick's
+    numbers: its path drifts from the 30-tick run's even when right.
+  - **Enemies in their own rooms** (`/wwhd/data/m6/stagetest.sh PROC STAGE,point,room,layer FROM TO`:
+    the warp at f920, the trial, 30 against 60). Rooms found by warping and listing processes:
+    Magtails in M_NewD2 rooms 8, 10, 12; the Forbidden Woods (stage `kindan`) room 9 has Peahats,
+    Boko Babas (BO 214, idle with Link far), 213 and process 204, room 11 has 27 of process 205.
+    Magtails track 30 in their lava within 10 units until a random wait ends differently: in the
+    defaults. Peahats (PH 209): their state timer +0x462 (21 sites) whole, the spin and wobble phases
+    `spliti` (new: an `addi`'s immediate split between the half ticks), height `*h`; they fly 30's
+    path within 7.8 units: in the defaults. 205 (rides a parent: pos += the parent's move, then
+    cLib_addCalc2 toward a target) moves ~3/4 as far at 60, and 204 differs: rules for their timers
+    only, not in the defaults.
+  - **Tried and reverted**: scaling the shared approach helpers (cLib_addCalc 0200ECD4, cLib_addCalc2
+    0200ED84, cLib_addCalc0 0200EDC8, cLib_addCalcAngleS2 0200F428; 2931 calls of cLib_addCalc2
+    alone) for converted callers made every converted enemy worse (Kargarocs 6.7 -> 405 units off,
+    Peahats stopped taking off). Their callers were matched with the helpers as they are: fix
+    helper calls per call site, where a trial shows one doubling.
+  - **Progress page** (the owner's request): `tools/progress/` (README there), served from the worker
+    on the tailnet at http://WORKER_ADDR:8765. After each step: `tools/progress/publish.sh`
+    (data) and `publish.sh now TEXT`; captures via `publish.sh shot PPM CAPTION` (they stay on
+    the worker). Keep `tools/progress/plan.json` (milestones, known issues) current.
   - **Converting an actor**: `uv run tools/sixty/actor_rmw.py PROCESS` lists the type's
     read-modify-write stores with suggested rules (review them: `+= 1` can be a state machine's next
     step, not a tick count); `WWHD_DEBUG_PLACE=tick:x,y,z` puts Link beside it; the trial and a
@@ -671,7 +690,8 @@ it in a window; D21 "Step 2"):**
   ship 165, sail 171, seagulls 194, Bokoblins 189 and their sticks 463, Dragon Roost's mountain
   actors 151, 154, 142, 175, 296, 162, push blocks 43, chests 292, doors 300, the sky 437/438,
   Chuchus 206, Keese 215, Moblins 188, Darknuts 191, Kargarocs 181, ReDeads 224, Gohma 234 and
-  Valoo's tail in its room 223 (counters, timers, two sways; tested idle in the fight),
+  Valoo's tail in its room 223 (counters, timers, two sways; tested idle in the fight), Magtails 216,
+  Peahats 209,
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
   `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;

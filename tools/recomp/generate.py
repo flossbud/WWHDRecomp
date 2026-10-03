@@ -62,8 +62,12 @@ rules, for the code of processes that run every frame with a time step h
   k75:REG      an approach whose result is then approached by 0.75 (k@ on that one): REG becomes
                approach(0.75 REG) / approach(0.75), so the two together approach as one tick does
   d:REG        after it, REG = REG^h (a damping factor)
+  kdiv:rN      after it, the integer divisor rN of an approach ((t - x) / rN a tick) becomes
+               1 / (1 - (1 - 1/rN)^h), rounded
   split:REG    after it, an integer per-tick amount split between the whole tick and the half tick
                (REG - REG/2, then REG/2: the two add up to the 30 Hz step exactly)
+  spliti       the same for an `addi rD, rA, IMM`'s immediate: rD = rA + (IMM - IMM/2), then
+               rA + IMM/2 (a phase that adds a constant a tick)
   OP@REG       the same, for this instruction only: REG has its value back afterwards (unless the
                instruction writes it), as in `x += (t - x) * k` with k@f2 on its fmadds
   note:REG     after the instruction, the float REG is noted (g_rtNote) for an arc@ later in the step
@@ -195,7 +199,7 @@ class Program:
             self.entries |= {a for a, _, _ in self.synthetic}
 
     STEP_OPS = {"*h": "rt_step_mul", "/h": "rt_step_div", "k": "rt_step_approach", "d": "rt_step_damp",
-                "k75": "rt_step_approach75"}
+                "k75": "rt_step_approach75", "kdiv": "rt_step_approach_div"}
 
     def load_tick_rules(self, path):
         """address -> (rule, argument, expected instruction text, what): see the docstring. rule is
@@ -228,7 +232,10 @@ class Program:
                     assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
                     rules[ea] = (kind, value, expect, what)
                     continue
-                if kind in ("whole", "late"):
+                if kind == "spliti":
+                    assert not arg, f"tick_rules.txt:{n}: spliti takes no argument"
+                    value = None
+                elif kind in ("whole", "late"):
                     value = None
                     if arg:
                         key, _, v = arg.partition("=")
@@ -256,6 +263,8 @@ class Program:
                 return f"{ea:08X}: step rules don't apply to branches ({i.op})"
             if have != expect.lower():
                 return f"{ea:08X}: step rule expects `{expect}`, the code has `{have}`"
+            if kind == "spliti" and (i.op != "addi" or i.rA == 0):
+                return f"{ea:08X}: spliti applies to addi rD, rA, IMM, not {i.op}"
             if kind == "keep" and i.op not in KEEP_OPS:
                 return f"{ea:08X}: keep applies to {', '.join(sorted(KEEP_OPS))}, not {i.op}"
             return None
@@ -504,6 +513,9 @@ def apply_tick_rule(rule, i, lines):
         d = reg_expr(dest)
         return lines + [f"if (RT_SIXTY()) {{ const uint32 w_ = rd32({ea}); float f_; memcpy(&f_, &w_, 4); "
                         f"{d}.fp0 = (double)f_; {d}.fp1 = {d}.fp0; }}   // step rule: {what}"]
+    if kind == "spliti":
+        imm = emit.hx(i.simm & 0xFFFFFFFF)
+        return lines + [f"if (RT_STEPPED()) GPR({i.rD}) = GPR({i.rD}) - {imm} + rt_step_split({imm});   // step rule: {what}"]
     if kind == "keep":
         dest = f"GPR({i.rD})" if i.op in ("addi", "addic", "add") else f"FPR({i.frD})"
         return ([f"if (RT_WHOLE_TICK()) {{   // step rule: {what}"] + ["\t" + l for l in lines]

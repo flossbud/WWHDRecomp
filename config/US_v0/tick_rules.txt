@@ -454,3 +454,59 @@
 0212B450    whole       sthx            dr2: its timers (+0x51C) count down
 0212B7DC    *h@f10      fadds           dr2: a sway (+0x510) += its step a tick
 0212B820    *h@f0       fadds           dr2: a sway (+0x514) += its step a tick
+#
+# ---- step rules: Forbidden Woods enemies, found with the trial in their rooms (stage kindan).
+# Process 205 (27 in room 11; execute f_021A7F94) and 204 (room 9; f_02151B98): names unmatched.
+021A8170    whole       sthx            205: its timers (+0x564) count down
+021A9B74    whole       sth             205: a counter (+0x57E) + 1, up to 7
+02152290    whole       sth             204: a counter (+0x3F8) + 1
+#
+# ---- step rules: Peahats (PH, process 209, d_a_ph.cpp; execute f_023CC070). Found with the trial in
+# the Forbidden Woods (kindan room 9) and tools/sixty/actor_rmw.py: its state timer (+0x462) counts
+# whole ticks; its spin (+0x32A) and wobble phases (+0x456, +0x472-0x47A) take split steps.
+023CC44C    whole       sth             ph: its state timer (+0x462) + 1
+023CC4C8    whole       sth             ph: its state timer (+0x462) + 1
+023CC55C    whole       sth             ph: its state timer (+0x462) + 1
+023CC5B0    whole       sth             ph: its state timer (+0x462) + 1
+023CC7D0    whole       sth             ph: its state timer (+0x462) + 1
+023CC854    whole       sth             ph: its state timer (+0x462) + 1
+023CC8FC    whole       sth             ph: its state timer (+0x462) + 1
+023CCA48    whole       sth             ph: its state timer (+0x462) + 1
+023CCAC0    whole       sth             ph: its state timer (+0x462) + 1
+023CCBD8    whole       sth             ph: its state timer (+0x462) + 1
+023CCE6C    whole       sth             ph: its state timer (+0x462) + 1
+023CD10C    whole       sth             ph: its state timer (+0x462) + 1
+023CD214    whole       sth             ph: its state timer (+0x462) + 1
+023CD468    whole       sth             ph: its state timer (+0x462) + 1
+023CD754    whole       sth             ph: its state timer (+0x462) + 1
+023CD804    whole       sth             ph: its state timer (+0x462) + 1
+023CDA54    whole       sth             ph: its state timer (+0x462) + 1
+023CDB04    whole       sth             ph: its state timer (+0x462) + 1
+023CE00C    whole       sth             ph: its state timer (+0x462) + 1
+023CE6C0    whole       sth             ph: its state timer (+0x462) + 1
+023CE774    whole       sth             ph: its state timer (+0x462) + 1
+023CE4EC    whole       sth             ph: a counter (+0x47A) + 1
+023CA7B8    whole       stb             ph: a counter (+0x45F) + 1
+023CA0EC    spliti      addi            ph: a wobble phase (+0x472) + a constant a tick
+023CA0E4    spliti      addi            ph: a wobble phase (+0x474) + a constant a tick
+023CA0FC    spliti      addi            ph: a wobble phase (+0x476) + a constant a tick
+023CA474    spliti      addi            ph: a wobble phase (+0x47A) + a constant a tick
+023CD8E4    spliti      addi            ph: a wobble phase (+0x472) + a constant a tick
+023CD8DC    spliti      addi            ph: a wobble phase (+0x474) + a constant a tick
+023CD900    spliti      addi            ph: a wobble phase (+0x476) + a constant a tick
+023CDBDC    spliti      addi            ph: a wobble phase (+0x472) + a constant a tick
+023CDBEC    spliti      addi            ph: a wobble phase (+0x474) + a constant a tick
+023CDC0C    spliti      addi            ph: a wobble phase (+0x476) + a constant a tick
+023CCE7C    spliti      addi            ph: its spin (+0x32A) + 0x500 a tick
+023CE3F4    spliti      addi            ph: its spin (+0x32A) + 0x500 a tick
+023CE578    spliti      addi            ph: its spin (+0x32A) + 0x500 a tick
+023CE070    split@r10   add             ph: its spin (+0x32A) += its speed (+0x46A) a tick
+023CA078    split@r0    add             ph: a phase (+0x456) += its speed (+0x464) a tick
+023C93D4    *h@f12      fadds           ph: current.pos.y += speed.y
+023CE96C    *h@f12      fadds           ph: +0x434 += +0x498 a tick
+# (Tried and reverted: scaling the shared approach helpers' arguments for converted callers,
+# cLib_addCalc 0200ECD4, cLib_addCalc2 0200ED84, cLib_addCalc0 0200EDC8, cLib_addCalcAngleS2 0200F428:
+# factor k, steps *h, the angle's divisor kdiv. Every converted enemy then drifted further from the
+# 30-tick run (Kargarocs 6.7 -> 405 units, Darknuts 16 -> 169, Peahats stopped taking off): their
+# callers' other per-tick code was matched with the helpers stepping as they do. Per call site only.)
+
