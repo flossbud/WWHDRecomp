@@ -1167,9 +1167,50 @@ namespace wwhd::sixty
 	}
 }
 
+// WWHD_DEBUG_STAGE=tick:NAME,point,room,layer[;tick:...] (a test aid): at those game frames, a stage
+// change as an exit asks for one: g_dComIfG_gameInfo's next stage (+0x5140: the name, 8 bytes; the
+// spawn point, s16; the room and layer, s8; then enabled and the wipe, as dStage_nextStage_c's), so a
+// route can start anywhere (e.g. 920:M_NewD2,0,0,-1: Dragon Roost Cavern's entrance)
+namespace
+{
+	struct StageWarp { int tick, point, room, layer; char name[9]; };
+	void DebugStage()
+	{
+		static const std::vector<StageWarp> warps = [] {
+			std::vector<StageWarp> v;
+			if (const char* e = getenv("WWHD_DEBUG_STAGE"))
+				for (const char* p = e; p && *p; p = strchr(p, ';') ? strchr(p, ';') + 1 : nullptr)
+				{
+					StageWarp w{ -1, 0, 0, -1, {} };
+					if (sscanf(p, "%d:%8[^,],%d,%d,%d", &w.tick, w.name, &w.point, &w.room, &w.layer) == 5)
+						v.push_back(w);
+				}
+			return v;
+		}();
+		if (warps.empty() || g_rtHalfTick)
+			return;
+		const int now = (int)wwhd::rt::GameFrame(wwhd::os::SwapCount());
+		for (const StageWarp& w : warps)
+		{
+			if (w.tick != now)
+				continue;
+			constexpr uint32 kNext = 0x1046F0B0u + 0x5140u;
+			for (uint32 i = 0; i < 8; i++)
+				wr8(kNext + i, (uint8)w.name[i]);
+			wr16(kNext + 8, (uint16)w.point);
+			wr8(kNext + 0xA, (uint8)w.room);
+			wr8(kNext + 0xB, (uint8)w.layer);
+			wr8(kNext + 0xC, 1);
+			wr8(kNext + 0xD, 0);
+			cemuLog_log(LogType::Force, "wwhd debug: next stage {} point {} room {} layer {}", w.name, w.point, w.room, w.layer);
+		}
+	}
+}
+
 // m_Do_main's frame body (see the top)
 void f_025F172C(PPCInterpreter_t* __restrict ctx)
 {
+	DebugStage();
 	s_firstDraw = true;
 	s_held.clear();
 	if (g_rtHalfTick)

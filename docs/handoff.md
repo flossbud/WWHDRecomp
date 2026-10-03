@@ -622,6 +622,13 @@ it in a window; D21 "Step 2"):**
     -g h, not -g); torches (EP) in their light's flicker, drawn from the random stream a step (left
     at 30: converted, it would jitter twice as often); pots, steam vents, Valoo, the Rito and idle
     Bokoblins: to look into.
+  - **Test aids (the owner's idea of a debug menu, its first pieces)**: `WWHD_DEBUG_STAGE=tick:NAME,
+    point,room,layer[;...]` changes stage at a game frame the way an exit does (g_dComIfG_gameInfo's
+    next stage at +0x5140: name[8], s16 point, s8 room, s8 layer, s8 enabled, u8 wipe; the current
+    stage's name is at +0x5134). From the Outset dock `920:M_NewD2,0,0,-1` lands in Dragon Roost
+    Cavern's entrance; rooms 1-4 of M_NewD2 with point 0 land in four other places (room 3 outdoors at
+    night: a layer?). `WWHD_DEBUG_PLACE=tick:x,y,z` moves Link within a stage. Next: spawning an
+    actor by process name (fopAcM_create), and an in-game menu on top of these.
   - **Converting an actor**: `uv run tools/sixty/actor_rmw.py PROCESS` lists the type's
     read-modify-write stores with suggested rules (review them: `+= 1` can be a state machine's next
     step, not a tick count); `WWHD_DEBUG_PLACE=tick:x,y,z` puts Link beside it; the trial and a
