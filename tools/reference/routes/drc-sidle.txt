@@ -1,0 +1,21 @@
+# Route: the camera when Link sidles along a wall at 60 fps (WW-4: the owner saw it overshoot and clip
+# behind the wall), from the owner's save in Dragon Roost Cavern (REF_SAVE=/wwhd/data/saves/owner_drc,
+# on the worker only): continue, walk past the jars by the stairs to the wall where the HUD offers
+# "Sidle" (~1290), sidle and move along it. FRAME BUTTONS [FRAMES_HELD]; frames are game frames (at 60
+# fps, every other swap). Found by looking at captures.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start
+1000 LUP 50    # toward the stairs
+1050 LUP+LRIGHT 14 # toward the jars on the right
+1082 LRIGHT 14 # past the jars
+1098 LUP+LLEFT 10 # toward them
+1140 LLEFT 20  # along them
+1162 A 5       # (nothing)
+1200 LLEFT 30  # on
+1240 LDOWN 30  # toward the camera
+1280 LRIGHT 30 # to the wall: "Sidle" from ~1290
+1292 A 5       # sidle: the camera swings round
+1310 LLEFT 30  # along the wall
+1350 LRIGHT 30 # and back

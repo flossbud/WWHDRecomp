@@ -1648,6 +1648,10 @@ converted, so its matrices stayed a half tick behind his hands: on a half tick e
 execute runs again as at 30 just before its draw, its changes put back right after that draw (and
 its draw's stores journaled), so it is drawn at his hands and the game's state is the 30-tick
 run's (checked: 0 state differences). A cheap pattern for anything attached to a converted process.
+Events: converted processes held to whole ticks in every event (event code wasn't converted). Now
+they step at 60 in an event while Link's current action is on a list of actions checked in events
+(wait and move so far: an entrance's walk-out matches the 30-tick run); the rest (the Wind Waker's
+conducting, whose beat counts ticks) stay at 30 until converted, action by action.
 
 **Foundation**
 

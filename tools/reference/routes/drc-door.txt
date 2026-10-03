@@ -1,0 +1,9 @@
+# Route: a doorway at 60 fps (WW-4: the owner saw the game drop to 30 while going through entrances,
+# an event), from the owner's save in Dragon Roost Cavern (REF_SAVE=/wwhd/data/saves/owner_drc, on the
+# worker only): continue, then walk back out of the dungeon's entrance (the stage changes ~f1200).
+# FRAME BUTTONS [FRAMES_HELD]; frames are game frames (at 60 fps, every other swap).
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start
+1000 LDOWN 120 # turn round and walk out through the entrance

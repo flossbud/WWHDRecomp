@@ -577,6 +577,14 @@ it in a window; D21 "Step 2"):**
     states are identical with it on and off (0 of 47005; `WWHD_60FPS_ATTACHED=0` turns it off).
     Not checked on a pot: scripting a lift from the owner's save failed (route `pot` stops short:
     A by the jar didn't lift; the owner's play will tell).
+  - **Events at 60, begun.** Converted processes now step at 60 in an event too while Link's
+    action (daPy_lk_c +0x65F0, its function at +0x65F8) is one checked in events: 4 wait, 6 move.
+    Walking out of an entrance (route `door`, the owner's save) then matches the 30-tick run per
+    tick, camera too. The Wind Waker (actions 0x9A-0x9C, `f_0243A094` procTactPlay: a beat phase
+    +0x69F8 and timers +0x69FC/+0x6A00/+0x6A04 stepped 1 a tick, a countdown +0x6918, the notes from
+    the stick) isn't converted: with it stepping the song failed, so its actions stay off the list
+    (the song still works, at 30). `WWHD_60FPS_EVENTS=0` turns event stepping off. Next: convert
+    the song's procs; door-opening and talking actions; cutscenes (dDemo's frame).
   - Also seen: Link turning at 60 ends up ~10 units off the 30-tick run after a walk (`land`):
     small, open.
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'

@@ -114,6 +114,21 @@ namespace
 		return (sint8)rd8(0x1046F0B0u + 0x5290u) > 0;
 	}
 	std::unordered_map<uint32, bool> s_stepping;    // process -> stepping at 60 this tick
+	std::unordered_map<uint32, bool> s_eventAtWhole;   // process -> an event ran at its whole step
+	// Converted processes step at 60 in an event too while Link's action is one checked in events
+	// (D21): his procedure's index (daPy_lk_c +0x65F0, the function at +0x65F8) in this list: 4 wait,
+	// 6 move (an entrance's walk out matches the 30-tick run, the camera too). Others (the Wind Waker's
+	// 0x9A-0x9C: its beat counts ticks) hold the event to whole ticks as before; so does the half tick
+	// after an event starts or is ordered. WWHD_60FPS_EVENTS=0: no stepping in events at all.
+	uint32 s_link = 0;                              // Link (168) as he last executed
+	bool StepInEvents()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_EVENTS"); return !(e && atoi(e) == 0); }();
+		if (!on || !s_link || rd16(s_link + 0x08) != 168)
+			return false;
+		const uint32 action = rd32(s_link + 0x65F0);
+		return action == 4 || action == 6;
+	}
 	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0;
 	void StepStats()
 	{
@@ -1266,15 +1281,21 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 		return;
 	}
 	bool converted = from != ~0u && wwhd::os::SwapCount() >= from && Converted(rd16(proc + 0x08));
+	if (rd16(proc + 0x08) == 168)
+		s_link = proc;
 	if (converted)
 	{
 		if (!g_rtHalfTick)
-			s_stepping[proc] = !EventRunning();
+		{
+			s_eventAtWhole[proc] = EventRunning();
+			s_stepping[proc] = StepInEvents() || !s_eventAtWhole[proc];
+		}
 		else if (s_stepping[proc])
 		{
 			static bool once = [] { atexit(StepStats); at_quick_exit(StepStats); return true; }();
 			(void)once;
-			const bool running = EventRunning(), ordered = !running && EventOrdered();
+			const bool running = EventRunning() && !(s_eventAtWhole[proc] && StepInEvents());
+			const bool ordered = !running && EventOrdered();
 			s_eventStops += running;
 			s_orderStops += ordered;
 			if (running || ordered)
