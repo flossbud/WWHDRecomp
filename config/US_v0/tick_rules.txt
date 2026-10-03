@@ -459,6 +459,20 @@
 # Process 205 (27 in room 11; execute f_021A7F94) and 204 (room 9; f_02151B98): names unmatched.
 021A8170    whole       sthx            205: its timers (+0x564) count down
 021A9B74    whole       sth             205: a counter (+0x57E) + 1, up to 7
+021A9C2C    *h@f11      fadds           205: speed.y += gravity (+0x374)
+021A8128    *h@f30      fadds           205: +0x59C += a step a tick
+021A85E0    spliti      addi            205: a phase (+0x56C) + 0x3E8 a tick
+021A8BB0    spliti      addi            205: a phase (+0x56C) + 0xBB8 a tick
+021A89FC    spliti      addi            205: its spin (shape angle z) + 0x500 a tick
+021A8B24    spliti      addi            205: its spin (shape angle z) + 0x500 a tick
+021A8BE8    spliti      addi            205: its spin (shape angle z) + 0x500 a tick
+021A8D58    split@r9    add             205: its spin += its speed (+0x56E) a tick
+021A7080    split@r0    add             205: a phase (+0x576) += its speed (+0x57A) a tick
+021A8DCC    whole       sth             205: a counter (+0x56C) + 1
+021A8DF4    whole       sth             205: a counter (+0x56C) + 1
+021A956C    whole       sth             205: a counter (+0x56C) + 1
+021A9288    whole       sth             205: a counter (+0x57C) - 1
+021A92CC    whole       sth             205: a counter (+0x57C) + 1
 # Process 204 is a Floormaster (d_a_fm.cpp: the hands that grab Link; tools/sixty/actor_rmw.py, the trial with
 # Link beside one in kindan room 9): its state timer (+0x3F8) and counters whole, speed.y += gravity
 # half steps, its spin speeds' ramps and the spins split.
@@ -567,3 +581,15 @@
 # ---- step rules: Boko Babas (BO, process 214, d_a_bo.cpp; execute f_020BCEC8), spawned beside Link in
 # the Forbidden Woods (kindan room 9: WWHD_DEBUG_SPAWN; the room's own wait for Link to come close).
 020BD02C    whole       sthx            bo: its timers (+0x482) count down
+#
+# ---- step rules: a shared s16 countdown (f_02055B64: if (*t) --*t; return *t; cLib_calcTimer<s16>, as
+# cLib_calcTimer<u8> 0207A9A0 is overridden). Found on Outset's NPC_YW1 (process 317).
+02055B78    whole       sth             countdown helper (s16): *t - 1
+#
+# ---- step rules: Outset's NPC_YM2 (process 316; f_022F7918).
+022F795C    whole       stb             ym2: a frame counter (+0x868) + 1
+
+#
+# ---- step rules: a circling point (f_02587128: its angle +0x20 += its speed +0x22, then the point is the
+# centre + the rotated offset). Found on Outset's NPC_SO (process 118), who walks toward it.
+02587160    split@r8    add             circling point: its angle += its speed a tick

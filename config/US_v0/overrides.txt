@@ -25,6 +25,7 @@
 0200F268    src/overrides/sixty_step.cpp       cLib_addCalcPosXZ2 (D21)
 0200F378    src/overrides/sixty_step.cpp       cLib_addCalcAngleS (D21)
 0200F428    src/overrides/sixty_step.cpp       cLib_addCalcAngleS2 (D21)
+0200F474    src/overrides/sixty_step.cpp       cLib_addCalcAngleL (D21)
 0200F4FC    src/overrides/sixty_step.cpp       cLib_chaseUC (D21)
 0200F564    src/overrides/sixty_step.cpp       cLib_chaseS (D21)
 0200F5C8    src/overrides/sixty_step.cpp       cLib_chaseF (D21)

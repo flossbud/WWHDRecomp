@@ -668,6 +668,18 @@ it in a window; D21 "Step 2"):**
     back at the spawn point). Measured by the head (eye point +0x390: `/wwhd/data/m6/eye.py`): its
     timers whole, the idle sway tracks 30 within 1-2 units, a lunge comes at another moment (its
     timing is random). In the defaults.
+  - **NPCs** (`/wwhd/data/m6/routetest.sh ROUTE PROC FROM TO`: trial, then 30 against 60 on top of
+    the defaults; Outset's tour route 950-2190). NPC_YM2 (316) matched; NPC_YW1 (317) needed only
+    the shared s16 countdown (cLib_calcTimer<s16> f_02055B64, now `whole`) and tracks within 9.7
+    units: both in the defaults. NPC_SO (118, the one leaping out of the sea) leaps higher at 60
+    from the first jump: to do. Found on the way: cLib_addCalcAngleL (f_0200F474, s32) had no
+    time-step override; it has one now in `sixty_step.cpp`, and a circling point (f_02587128:
+    angle += speed) gets `split`. `actor_types.py` now also skips +0x194 (listener-relative too:
+    static signposts differ there).
+  - **Doors**: on the door route at 60 every frame changes up to the black screen of the room load
+    (captures of each swap, `/wwhd/data/m6/framediff.sh ROUTE FIRST LAST`); Link and the camera
+    step on every half frame. The owner's "entrances drop to 30" wasn't reproduced there: ask which
+    entrance.
   - **Don't rule the shared helpers**: cLib_addCalc and kin, fopAcM_posMove, gravity, animation
     frames are already overrides with a time step for every converted process
     (`src/overrides/sixty_step.cpp`). Step rules on them scale twice (tried: every converted enemy
@@ -696,7 +708,7 @@ it in a window; D21 "Step 2"):**
   actors 151, 154, 142, 175, 296, 162, push blocks 43, chests 292, doors 300, the sky 437/438,
   Chuchus 206, Keese 215, Moblins 188, Darknuts 191, Kargarocs 181, ReDeads 224, Gohma 234 and
   Valoo's tail in its room 223 (counters, timers, two sways; tested idle in the fight), Magtails 216,
-  Peahats 209, Boko Babas 214,
+  Peahats 209, Boko Babas 214, Outset's NPC_YM2 316 and NPC_YW1 317,
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
   `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;

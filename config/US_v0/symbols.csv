@@ -163,3 +163,6 @@ address,name,evidence
 0200ED84,cLib_addCalc2,"WW-4: the same arguments and arithmetic as the GC decomp's c_lib.cpp cLib_addCalc2 (f32* value, target, scale, maxStep: value += clamp((target - value) * scale, maxStep))"
 0200EDC8,cLib_addCalc0,"WW-4: the same arguments and arithmetic as the GC decomp's c_lib.cpp cLib_addCalc0 (f32* value, scale, maxStep: value -= clamp(value * scale, maxStep))"
 0200F428,cLib_addCalcAngleS2,"WW-4: the same arguments and arithmetic as the GC decomp's c_lib.cpp cLib_addCalcAngleS2 (s16* value, target, scale, maxStep: value += clamp((target - value) / scale, maxStep))"
+0200F474,cLib_addCalcAngleL,"WW-4: the same arguments and arithmetic as the GC decomp's c_lib.cpp cLib_addCalcAngleL (s32* value, target, scale, maxStep, minStep: value += (target - value) / scale, within [minStep, maxStep]); next to cLib_addCalcAngleS2 (0200F428) as in the GameCube's file"
+0211D2F8,cLib_calcTimer<int>,"WW-4: if (*t) --*t; return *t: the GC decomp's c_lib.h template cLib_calcTimer, as cLib_calcTimer<u8> (0207A9A0, an override); 173 callers"
+02055B64,cLib_calcTimer<s16>,"WW-4: if (*t) --*t; return *t on an s16: the GC decomp's c_lib.h template cLib_calcTimer, as cLib_calcTimer<u8> (0207A9A0)"

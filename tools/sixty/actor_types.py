@@ -7,7 +7,7 @@ Usage (on the worker):
 A converted process reaches a tick's state at that tick's half frame, so tick k of the 30-tick run
 is compared with the half frame after tick k of the 60 run (D21). Per process type: its instances,
 the ticks compared, how many matched byte for byte, and the fields that differed most (offset:
-ticks). The sound source's listener-relative fields (fopAc +0x110-0x127, +0x198-0x19F,
+ticks). The sound source's listener-relative fields (fopAc +0x110-0x127, +0x194-0x19F,
 +0x1D0-0x1DB, written from the camera's position) are left out: they follow the camera, which isn't
 an actor. A type whose instances match at every tick needs no rules of its own; the rest are
 where tools/sixty/actor_rmw.py and the step-doubling trial come in. The dumps are game memory:
@@ -21,7 +21,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import compare  # noqa: E402
 
-IGNORED = [(0x110, 0x128), (0x198, 0x1A0), (0x1D0, 0x1DC)]
+IGNORED = [(0x110, 0x128), (0x194, 0x1A0), (0x1D0, 0x1DC)]
 
 
 def ignored(o):

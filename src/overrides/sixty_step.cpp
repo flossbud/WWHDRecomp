@@ -67,6 +67,21 @@ namespace
 		return (uint32)(sint32)r;
 	}
 
+	// the same for a 32-bit argument (cLib_addCalcAngleL's)
+	uint32 ScaledInt32(uint32 v, bool divisor)
+	{
+		const sint32 s = (sint32)v;
+		if (s == 0)
+			return v;
+		if (divisor)
+		{
+			const sint32 a = s < 0 ? -s : s;
+			const sint32 r = g_rtHalfTick ? 2 * a : 2 * a - 1;
+			return (uint32)(s < 0 ? -r : r);
+		}
+		return (uint32)(g_rtHalfTick ? s / 2 : s - s / 2);
+	}
+
 	// the same for an unsigned byte (cLib_chaseUC's step)
 	uint32 ScaledByte(uint32 v)
 	{
@@ -193,6 +208,18 @@ void f_0200F428(PPCInterpreter_t* __restrict ctx)
 		GPR(6) = ScaledInt(GPR(6), false);
 	}
 	[[clang::musttail]] return orig_f_0200F428(ctx);
+}
+
+// cLib_addCalcAngleL(s32* v r3, target r4, scale r5 (a divisor), maxStep r6, minStep r7)
+void f_0200F474(PPCInterpreter_t* __restrict ctx)
+{
+	if (Stepped())
+	{
+		GPR(5) = ScaledInt32(GPR(5), true);
+		GPR(6) = ScaledInt32(GPR(6), false);
+		GPR(7) = ScaledInt32(GPR(7), false);
+	}
+	[[clang::musttail]] return orig_f_0200F474(ctx);
 }
 
 // ---- c_lib: linear chases ------------------------------------------------------------------------
