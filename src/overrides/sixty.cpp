@@ -144,6 +144,7 @@ namespace
 		return !names.empty() && std::find(names.begin(), names.end(), name) != names.end();
 	}
 	std::vector<uint32> s_tracked;                  // tracked processes that executed this frame
+	bool s_firstDraw = true;                        // a frame's first draw is still to come (f_025DE2CC)
 
 	// ---- the flight recorder (WWHD_FLIGHT=path with WWHD_STATE_TRACK=n,m,...: real-time play) ------
 	// The tracked processes' bytes after every frame (whole and half ticks), and the controller as the
@@ -1053,6 +1054,7 @@ namespace wwhd::sixty
 // m_Do_main's frame body (see the top)
 void f_025F172C(PPCInterpreter_t* __restrict ctx)
 {
+	s_firstDraw = true;
 	if (g_rtHalfTick)
 	{
 		static const bool skip = [] { const char* e = getenv("WWHD_60FPS_HALF"); return e && strcmp(e, "none") == 0; }();
@@ -1311,8 +1313,72 @@ void f_0273CBD0(PPCInterpreter_t* __restrict ctx)
 // time); the HD port renders the HUD's layouts every frame anyway, so half ticks still show it.
 // WWHD_60FPS_SKIPDRAW=n,m,... (or "all") replaces that list of processes not drawn on half ticks
 // (a probe: which draws move state the rollback doesn't reach); WWHD_60FPS_SKIPDRAW= (empty) draws all.
+// WWHD_60FPS_DRAWDIFF=swap (a probe): .data and .bss at that swap's first draw, against the next
+// swap's first draw: the words the draw pass changed that a half tick's draws then see
+// (WWHD_60FPS_DRAWDIFF_OUT, default drawdiff.txt)
+namespace
+{
+	void DrawDiff()
+	{
+		static const uint32 at = [] { const char* e = getenv("WWHD_60FPS_DRAWDIFF"); return e ? (uint32)atoi(e) : 0u; }();
+		if (!at)
+			return;
+		static std::vector<uint8> snap;
+		const uint32 swap = wwhd::os::SwapCount();
+		if (swap == at)
+			snap.assign(memory_base + kGlobalsLow, memory_base + kGlobalsHigh);
+		else if (swap == at + 1 && !snap.empty())
+		{
+			const char* path = getenv("WWHD_60FPS_DRAWDIFF_OUT");
+			FILE* f = fopen(path ? path : "drawdiff.txt", "w");
+			if (!f)
+				return;
+			uint32 n = 0;
+			for (uint32 o = 0; o + 4 <= snap.size(); o += 4)
+				if (memcmp(&snap[o], memory_base + kGlobalsLow + o, 4) != 0 && n++ < 4000)
+					fprintf(f, "drawdiff %08x %08x -> %08x\n", kGlobalsLow + o, __builtin_bswap32(*(uint32*)&snap[o]),
+						__builtin_bswap32(*(uint32*)(memory_base + kGlobalsLow + o)));
+			fprintf(f, "drawdiff: %u words differ (swap %u, %s)\n", n, swap, g_rtHalfTick ? "half" : "whole");
+			fclose(f);
+		}
+	}
+}
+
 void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
 {
+	if (s_firstDraw)
+	{
+		s_firstDraw = false;
+		DrawDiff();
+		// WWHD_60FPS_WATCH=addr[,addr] (a probe): those words at each frame's first draw (watch.txt)
+		if (const char* e = getenv("WWHD_60FPS_WATCH"))
+		{
+			static FILE* f = fopen("watch.txt", "w");
+			fprintf(f, "%u %c", wwhd::os::SwapCount(), g_rtHalfTick ? 'h' : 'w');
+			for (const char* p = e; p && *p; p = strchr(p, ','))
+			{
+				if (*p == ',')
+					p++;
+				const uint32 ea = (uint32)strtoul(p, nullptr, 16);
+				fprintf(f, " %08x", rd32(ea));
+			}
+			fprintf(f, "\n");
+			fflush(f);
+		}
+		// WWHD_60FPS_FIND=swap:value[,value] (a probe): where in MEM2 those words are, at that swap's first draw
+		if (const char* e = getenv("WWHD_60FPS_FIND"); e && (uint32)atoi(e) == wwhd::os::SwapCount())
+			if (FILE* f = fopen("find.txt", "w"))
+			{
+				for (const char* p = strchr(e, ':'); p && *p; p = strchr(p + 1, ','))
+				{
+					const uint32 v = __builtin_bswap32((uint32)strtoul(p + 1, nullptr, 16));
+					for (uint32 ea = 0x10000000u; ea < 0x50000000u; ea += 4)
+						if (*(uint32*)(memory_base + ea) == v)
+							fprintf(f, "%08x at %08x\n", __builtin_bswap32(v), ea);
+				}
+				fclose(f);
+			}
+	}
 	if (g_rtHalfTick)
 	{
 		HideConvertedGlobals();                         // the draw pass sees the whole tick's globals
@@ -1358,3 +1424,4 @@ void f_025D475C(PPCInterpreter_t* __restrict ctx)
 		s_actors.push_back(GPR(3));
 	[[clang::musttail]] return orig_f_025D475C(ctx);
 }
+

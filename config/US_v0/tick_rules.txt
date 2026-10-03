@@ -52,7 +52,11 @@
 02035998    whole       bl 02617af4     the input manager (something_button_related)
 020359AC    whole       bl 02614f74     the HD UI's per-frame update (DAT_101f4ff0: menus' state machines, layouts)
 020359D8    whole       bl 0270870c     f_0270870C: f_025E1988(0x7070)
-020359DC    whole       bl 0255e854     the environment update: cLib_addCalc smoothing, a cM_rndF a frame
+# 020359DC, the environment update (f_0255E854: cLib_addCalc smoothing, a cM_rndF a frame), runs on
+# half ticks too: its globals and the random stream are put back after a half tick (the rollback), and
+# it asks for the frame's real-shadow pass, which a frame only draws when it was asked that frame
+# (held to whole ticks, every whole frame drew the actors' shadows with a 4x4 placeholder: the
+# owner's flickering torchlight in Dragon Roost Cavern)
 #
 # ---- step rules: the camera (dCamera_c, d_camera.cpp; WWHD keeps the GameCube's layout 4 bytes on:
 # the camera process holds it at +0x248). Converted with WWHD_60FPS_CONVERT=476; found with the

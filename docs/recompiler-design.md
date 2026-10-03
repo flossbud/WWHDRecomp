@@ -1637,7 +1637,12 @@ the whole tick otherwise), puts such counters and weights at the tick's end; bot
 see its count, and `k` on the factor makes two half frames one tick's approach exactly: at 60 the
 half frame lands on the 30-tick run's view. Counters added to before their use stay `whole`. Found
 with a flight recorder (`WWHD_FLIGHT`: the tracked processes and the pad, the last 20 s, F9 writes
-them) in the owner's play, then reproduced from the owner's save on the worker.
+them) in the owner's play, then reproduced from the owner's save on the worker. The owner's
+flickering torchlight was the real shadows: the HD renderer draws the shadow map only in a frame
+whose environment update asked for it (`f_0255E854`), held to whole ticks, so whole frames drew a
+placeholder. The update now runs on half ticks as well; it changes only globals and the random
+stream, which a half tick's rollback puts back, so it reaches that frame's drawing and nothing else.
+Frame-level work the renderer depends on belongs on every frame when the rollback can undo it.
 
 **Foundation**
 

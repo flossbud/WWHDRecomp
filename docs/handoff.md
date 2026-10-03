@@ -555,6 +555,17 @@ it in a window; D21 "Step 2"):**
     window (and the exit) writes `path-TIME-N.bin` (track.bin's form; the pad as process 0xFFFF).
     Copy to the worker, never keep on the editing machine. Routes made while looking: `shield`, `swing`,
     `land`, `ladder` (unfinished: it doesn't reach the ladder), `drc`.
+  - **The torches' flicker, fixed.** Not the flames: every other frame the room's walls and floor
+    were drawn without the actors' real shadows (a 4x4 placeholder for the shadow map, so the
+    torchlit wall's look flipped). The HD renderer draws that pass only in a frame that asked for
+    it, and the asking is in the environment update (`f_0255E854`), which a tick rule held to whole
+    ticks; it now runs on half ticks too (its globals and the random stream are put back after a
+    half tick; the 60-fps run's actor states are unchanged, 0 of 49589). Found with render traces
+    (`WWHD_RENDER_TRACE=F:0`, then the wall draw's textures) and by freeing frame-level tick rules
+    one by one. Probes added on the way: `WWHD_60FPS_DRAWDIFF=swap` (what a frame's draw pass
+    changed in .data/.bss, `WWHD_60FPS_DRAWDIFF_OUT`), `WWHD_60FPS_FIND=swap:v,...` (where MEM2 holds
+    those words, `find.txt`), `WWHD_60FPS_WATCH=addr,...` (words at each frame's first draw,
+    `watch.txt`), both written in the binary's folder.
   - Also seen: Link turning at 60 ends up ~10 units off the 30-tick run after a walk (`land`):
     small, open.
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
