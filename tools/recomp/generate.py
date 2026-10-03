@@ -62,8 +62,6 @@ rules, for the code of processes that run every frame with a time step h
   k75:REG      an approach whose result is then approached by 0.75 (k@ on that one): REG becomes
                approach(0.75 REG) / approach(0.75), so the two together approach as one tick does
   d:REG        after it, REG = REG^h (a damping factor)
-  kdiv:rN      after it, the integer divisor rN of an approach ((t - x) / rN a tick) becomes
-               1 / (1 - (1 - 1/rN)^h), rounded
   split:REG    after it, an integer per-tick amount split between the whole tick and the half tick
                (REG - REG/2, then REG/2: the two add up to the 30 Hz step exactly)
   spliti       the same for an `addi rD, rA, IMM`'s immediate: rD = rA + (IMM - IMM/2), then
@@ -199,7 +197,7 @@ class Program:
             self.entries |= {a for a, _, _ in self.synthetic}
 
     STEP_OPS = {"*h": "rt_step_mul", "/h": "rt_step_div", "k": "rt_step_approach", "d": "rt_step_damp",
-                "k75": "rt_step_approach75", "kdiv": "rt_step_approach_div"}
+                "k75": "rt_step_approach75"}
 
     def load_tick_rules(self, path):
         """address -> (rule, argument, expected instruction text, what): see the docstring. rule is

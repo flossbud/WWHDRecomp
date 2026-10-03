@@ -179,7 +179,7 @@ function render() {
   $("tabs").innerHTML = d.groups.map((g, i) => `<button class="${i === tab ? "on" : ""}" data-i="${i}">${esc(g.name)} (${g.actors.length})</button>`).join("");
   const order = {converted: 0, rules: 1, todo: 2};
   $("chips").innerHTML = d.groups[tab].actors.slice().sort((a, b) => order[a.status] - order[b.status] || a.id - b.id)
-    .map(a => `<span class="chip ${a.status}" title="process ${a.id}">${a.name ? esc(a.name) + " " : ""}<small>${a.id}</small></span>`).join("");
+    .map(a => `<span class="chip ${a.status}" title="process ${a.id}${a.code ? " (" + esc(a.code) + ")" : ""}">${a.name ? esc(a.name) + " " : ""}<small>${a.id}</small></span>`).join("");
   $("log").innerHTML = d.commits.map(m => `<li><time>${ago(m.time)}</time><code>${m.hash}</code>${esc(m.subject.replace(/^WW-4: /, ""))}</li>`).join("");
   $("issues").innerHTML = d.known_issues.map(i => `<li>${esc(i)}</li>`).join("");
   $("foot").textContent = "Data from " + ago(d.generated) + " · refreshes every 20 s";

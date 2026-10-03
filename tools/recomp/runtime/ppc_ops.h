@@ -50,14 +50,6 @@ static inline double rt_step_approach75(double k)
 	const double h = (double)g_rtStep;
 	return (double)(float)((1.0 - __builtin_pow(1.0 - 0.75 * k, h)) / (1.0 - __builtin_pow(0.25, h)));
 }
-// kdiv: an integer divisor s of an approach ((t - x) / s a tick): the one whose approach a step
-// takes, 1 / (1 - (1 - 1/s)^h), rounded
-static inline double rt_step_approach_div(double s)
-{
-	if (!(s >= 1.0))
-		return s;
-	return __builtin_round(1.0 / (1.0 - __builtin_pow(1.0 - 1.0 / s, (double)g_rtStep)));
-}
 static inline uint32 rt_step_split(uint32 v) { const sint32 s = (sint32)v; return (uint32)(g_rtHalfTick ? s / 2 : s - s / 2); }
 extern float g_rtNote;                 // a value noted by a step rule for a later one in the same step
 // vec@ / arc@: for one call, the vector (three floats) at ea is h of itself; for arc@ (a velocity)

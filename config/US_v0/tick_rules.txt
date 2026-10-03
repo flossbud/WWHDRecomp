@@ -459,7 +459,62 @@
 # Process 205 (27 in room 11; execute f_021A7F94) and 204 (room 9; f_02151B98): names unmatched.
 021A8170    whole       sthx            205: its timers (+0x564) count down
 021A9B74    whole       sth             205: a counter (+0x57E) + 1, up to 7
-02152290    whole       sth             204: a counter (+0x3F8) + 1
+# Process 204 is a Floormaster (d_a_fm.cpp: the hands that grab Link; tools/sixty/actor_rmw.py, the trial with
+# Link beside one in kindan room 9): its state timer (+0x3F8) and counters whole, speed.y += gravity
+# half steps, its spin speeds' ramps and the spins split.
+02152290    whole       sth             fm: its state timer (+0x3F8) + 1
+0214DBD8    whole       sth             fm: its state timer (+0x3F8) + 1
+0214DEF0    whole       sth             fm: its state timer (+0x3F8) + 1
+0214DF7C    whole       sth             fm: its state timer (+0x3F8) + 1
+0214E40C    whole       sth             fm: its state timer (+0x3F8) + 1
+0214E45C    whole       sth             fm: its state timer (+0x3F8) + 1
+0214E73C    whole       sth             fm: its state timer (+0x3F8) + 1
+0214E8BC    whole       sth             fm: its state timer (+0x3F8) + 1
+0214EC20    whole       sth             fm: its state timer (+0x3F8) + 1
+0214ECC4    whole       sth             fm: its state timer (+0x3F8) + 1
+0214EF48    whole       sth             fm: its state timer (+0x3F8) + 1
+0214F010    whole       sth             fm: its state timer (+0x3F8) + 1
+0214F660    whole       sth             fm: its state timer (+0x3F8) + 1
+0214C4E8    whole       stb             fm: a counter (+0x3F3) + 1
+0214D0FC    whole       sth             fm: a counter (+0x43A) + 1
+0214D290    whole       stb             fm: a counter (+0x3EF) + 1
+0214D2C8    whole       stb             fm: a counter (+0x3EF) + 1
+0214D318    whole       stb             fm: a counter (+0x3EF) + 1
+0214D354    whole       stb             fm: a counter (+0x3EF) + 1
+0214D4C4    whole       stb             fm: a counter (+0x3F0) + 1
+0214D504    whole       stb             fm: a counter (+0x3F0) + 1
+0214D554    whole       stb             fm: a counter (+0x3F0) + 1
+0214D590    whole       stb             fm: a counter (+0x3F0) + 1
+0214D780    whole       stb             fm: a counter (+0x3F1) + 1
+0214EF68    whole       sth             fm: a counter (+0x43E) + 1
+0214F050    whole       sth             fm: a counter (+0x3F6) + 1
+0214F0AC    whole       sth             fm: a counter (+0x3F6) + 1
+0214DA10    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214E298    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214E554    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214E5F0    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214E90C    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214EA64    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214ED84    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214F358    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214F498    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214F5E0    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214F848    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214F8BC    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214F930    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214F9A4    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214FA18    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214E0E4    spliti      addi            fm: a spin speed (+0x40C) ramps a constant a tick
+0214E7B0    spliti      addi            fm: a spin speed (+0x40C) ramps a constant a tick
+0214E7C4    spliti      addi            fm: a spin speed (+0x40E) ramps a constant a tick
+0214E7B8    spliti      addi            fm: a spin speed (+0x410) ramps a constant a tick
+0214E948    spliti      addi            fm: a spin speed (+0x40C) ramps a constant a tick
+0214E950    spliti      addi            fm: a spin speed (+0x40E) ramps a constant a tick
+0214E968    spliti      addi            fm: a spin speed (+0x410) ramps a constant a tick
+0214FE4C    spliti      addi            fm: a spin speed (+0x438) ramps a constant a tick
+0214E4F0    split@r6    add             fm: shape angle y += its spin speed (+0x40C)
+0214E500    split@r9    add             fm: shape angle x += its spin speed (+0x40E)
+0214E868    split@r0    add             fm: shape angle z += its spin speed (+0x412)
 #
 # ---- step rules: Peahats (PH, process 209, d_a_ph.cpp; execute f_023CC070). Found with the trial in
 # the Forbidden Woods (kindan room 9) and tools/sixty/actor_rmw.py: its state timer (+0x462) counts
@@ -504,9 +559,11 @@
 023CA078    split@r0    add             ph: a phase (+0x456) += its speed (+0x464) a tick
 023C93D4    *h@f12      fadds           ph: current.pos.y += speed.y
 023CE96C    *h@f12      fadds           ph: +0x434 += +0x498 a tick
-# (Tried and reverted: scaling the shared approach helpers' arguments for converted callers,
-# cLib_addCalc 0200ECD4, cLib_addCalc2 0200ED84, cLib_addCalc0 0200EDC8, cLib_addCalcAngleS2 0200F428:
-# factor k, steps *h, the angle's divisor kdiv. Every converted enemy then drifted further from the
-# 30-tick run (Kargarocs 6.7 -> 405 units, Darknuts 16 -> 169, Peahats stopped taking off): their
-# callers' other per-tick code was matched with the helpers stepping as they do. Per call site only.)
+# (Don't add step rules to the shared approach helpers, cLib_addCalc 0200ECD4 and kin: they are
+# already overrides with a time step for every converted process, src/overrides/sixty_step.cpp. Rules
+# on them scaled their arguments twice; every converted enemy drifted, Peahats stopped taking off.)
 
+#
+# ---- step rules: Boko Babas (BO, process 214, d_a_bo.cpp; execute f_020BCEC8), spawned beside Link in
+# the Forbidden Woods (kindan room 9: WWHD_DEBUG_SPAWN; the room's own wait for Link to come close).
+020BD02C    whole       sthx            bo: its timers (+0x482) count down

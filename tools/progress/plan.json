@@ -2,27 +2,123 @@
   "title": "WWHD Recomp",
   "ticket": "WW-4: native 60 fps, then uncapped",
   "milestones": [
-    {"name": "Link, camera, the sea and sailing at 60", "done": true},
-    {"name": "Effects, grass and plants at 60", "done": true},
-    {"name": "Camera overshoot, torch flicker, held items fixed", "done": true},
-    {"name": "Songs (Wind Waker) and events step at 60", "done": true},
-    {"name": "Dragon Roost: mountain actors, chests, doors, sky", "done": true},
-    {"name": "Test aids: stage warp, actor spawn, boss refight", "done": true},
-    {"name": "Enemies: Dragon Roost set (Bokoblin, Keese, Chuchu, Magtail, Moblin, Kargaroc)", "done": true},
-    {"name": "Bosses: Gohma", "done": true},
-    {"name": "Forbidden Woods enemies (Peahat, Boko Baba, Morth, Mothula)", "done": false},
-    {"name": "Remaining enemies", "done": false},
-    {"name": "Remaining bosses", "done": false},
-    {"name": "NPCs and town actors", "done": false},
-    {"name": "Cutscenes (demo frames) at 60", "done": false},
-    {"name": "Door and talk events at 60", "done": false},
-    {"name": "Uncapped frame rate", "done": false},
-    {"name": "In-game debug menu / boss rush", "done": false}
+    {
+      "name": "Link, camera, the sea and sailing at 60",
+      "done": true
+    },
+    {
+      "name": "Effects, grass and plants at 60",
+      "done": true
+    },
+    {
+      "name": "Camera overshoot, torch flicker, held items fixed",
+      "done": true
+    },
+    {
+      "name": "Songs (Wind Waker) and events step at 60",
+      "done": true
+    },
+    {
+      "name": "Dragon Roost: mountain actors, chests, doors, sky",
+      "done": true
+    },
+    {
+      "name": "Test aids: stage warp, actor spawn, boss refight",
+      "done": true
+    },
+    {
+      "name": "Enemies: Dragon Roost set (Bokoblin, Keese, Chuchu, Magtail, Moblin, Kargaroc)",
+      "done": true
+    },
+    {
+      "name": "Bosses: Gohma",
+      "done": true
+    },
+    {
+      "name": "Forbidden Woods enemies (Peahat, Boko Baba done; Floormaster, Morth to go)",
+      "done": false
+    },
+    {
+      "name": "Remaining enemies",
+      "done": false
+    },
+    {
+      "name": "Remaining bosses",
+      "done": false
+    },
+    {
+      "name": "NPCs and town actors",
+      "done": false
+    },
+    {
+      "name": "Cutscenes (demo frames) at 60",
+      "done": false
+    },
+    {
+      "name": "Door and talk events at 60",
+      "done": false
+    },
+    {
+      "name": "Uncapped frame rate",
+      "done": false
+    },
+    {
+      "name": "In-game debug menu / boss rush",
+      "done": false
+    }
   ],
   "groups": [
-    {"name": "Enemies", "ids": [181, 184, 187, 188, 189, 190, 191, 204, 205, 206, 207, 208, 209, 210, 212, 213, 214, 215, 216, 220, 224, 227, 228, 232, 233]},
-    {"name": "Bosses & minibosses", "ids": [217, 218, 211, 225, 234]},
-    {"name": "Link, camera & boat", "ids": [168, 476, 165, 171, 172, 169]}
+    {
+      "name": "Enemies",
+      "ids": [
+        181,
+        184,
+        187,
+        188,
+        189,
+        190,
+        191,
+        204,
+        205,
+        206,
+        207,
+        208,
+        209,
+        210,
+        212,
+        213,
+        214,
+        215,
+        216,
+        220,
+        224,
+        227,
+        228,
+        232,
+        233
+      ]
+    },
+    {
+      "name": "Bosses & minibosses",
+      "ids": [
+        217,
+        218,
+        211,
+        225,
+        234
+      ]
+    },
+    {
+      "name": "Link, camera & boat",
+      "ids": [
+        168,
+        476,
+        165,
+        171,
+        172,
+        169
+      ]
+    }
   ],
   "known_issues": [
     "Link can start walking a tick early; actions ending on an animation may end a tick early",
@@ -30,5 +126,40 @@
     "A burst of draw-buffer asserts late in the warp route at 60 (never at 30)",
     "Random-driven enemies (Magtail waits, Peahat flights) drift from the 30 fps run, as expected",
     "Pots, sidling and ladders still need a hands-on check"
-  ]
+  ],
+  "labels": {
+    "168": "Link",
+    "165": "King of Red Lions",
+    "181": "Kargaroc",
+    "188": "Moblin",
+    "189": "Bokoblin",
+    "190": "Stalfos",
+    "191": "Darknut",
+    "204": "Floormaster",
+    "206": "Chuchu",
+    "208": "Wizzrobe",
+    "209": "Peahat",
+    "212": "Poe",
+    "214": "Boko Baba",
+    "215": "Keese",
+    "216": "Magtail",
+    "224": "ReDead",
+    "227": "Octorok",
+    "228": "Gyorg",
+    "233": "Beamos",
+    "234": "Gohma",
+    "217": "Molgera",
+    "225": "Big Octo",
+    "211": "Jalhalla",
+    "223": "Valoo's tail",
+    "463": "Bokoblin's weapon",
+    "437": "Sky",
+    "438": "Sky (2)",
+    "292": "Treasure chest",
+    "300": "Door",
+    "43": "Push block",
+    "435": "Grass",
+    "453": "Pot",
+    "454": "Stone"
+  }
 }

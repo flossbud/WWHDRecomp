@@ -36,7 +36,7 @@ def main():
     converted = [int(x) for x in m.group(1).split(",") if x] if m else []
     rules_text = read("config/US_v0/tick_rules.txt")
     rules = [l for l in rules_text.splitlines() if l.strip() and not l.startswith("#")]
-    with_rules = {int(x) for x in re.findall(r"process (\d+)", rules_text)}
+    with_rules = {int(x) for x in re.findall(r"(?i)process (\d+)", rules_text)}
     overrides = [l for l in read("config/US_v0/overrides.txt").splitlines() if re.match(r"[0-9A-F]{8}\s", l)]
     symbols = sum(1 for r in csv.reader(read("config/US_v0/symbols.csv").splitlines()) if r and re.fullmatch(r"[0-9A-Fa-f]{8}", r[0]))
     functions = sum(1 for l in read("config/US_v0/functions.csv").splitlines() if re.match(r"[0-9A-F]{8},", l))
@@ -44,8 +44,10 @@ def main():
     def status(p):
         return "converted" if p in converted else "rules" if p in with_rules else "todo"
 
+    labels = plan.get("labels", {})
+
     def actor(p):
-        return {"id": p, "name": names.get(p, ""), "status": status(p)}
+        return {"id": p, "name": labels.get(str(p), names.get(p, "")), "code": names.get(p, ""), "status": status(p)}
 
     groups = []
     grouped = set()

@@ -660,13 +660,18 @@ it in a window; D21 "Step 2"):**
     defaults. Peahats (PH 209): their state timer +0x462 (21 sites) whole, the spin and wobble phases
     `spliti` (new: an `addi`'s immediate split between the half ticks), height `*h`; they fly 30's
     path within 7.8 units: in the defaults. 205 (rides a parent: pos += the parent's move, then
-    cLib_addCalc2 toward a target) moves ~3/4 as far at 60, and 204 differs: rules for their timers
-    only, not in the defaults.
-  - **Tried and reverted**: scaling the shared approach helpers (cLib_addCalc 0200ECD4, cLib_addCalc2
-    0200ED84, cLib_addCalc0 0200EDC8, cLib_addCalcAngleS2 0200F428; 2931 calls of cLib_addCalc2
-    alone) for converted callers made every converted enemy worse (Kargarocs 6.7 -> 405 units off,
-    Peahats stopped taking off). Their callers were matched with the helpers as they are: fix
-    helper calls per call site, where a trial shows one doubling.
+    cLib_addCalc2 toward a target) moves ~3/4 as far at 60: not in the defaults. 204 is a Floormaster
+    (d_a_fm.cpp): its state timer, counters, gravity and spins have rules; it dashes as at 30 but its
+    dashes end at other times (232 units apart on average): not in the defaults.
+    Boko Babas (BO 214): rooted; spawned beside Link (`WWHD_DEBUG_SPAWN=1000:214,0,-278,6052,-6700`
+    after the warp to kindan room 9; `WWHD_DEBUG_PLACE` doesn't hold there: Link's execute puts him
+    back at the spawn point). Measured by the head (eye point +0x390: `/wwhd/data/m6/eye.py`): its
+    timers whole, the idle sway tracks 30 within 1-2 units, a lunge comes at another moment (its
+    timing is random). In the defaults.
+  - **Don't rule the shared helpers**: cLib_addCalc and kin, fopAcM_posMove, gravity, animation
+    frames are already overrides with a time step for every converted process
+    (`src/overrides/sixty_step.cpp`). Step rules on them scale twice (tried: every converted enemy
+    drifted, Peahats stopped taking off). Rules belong in the actor's own code.
   - **Progress page** (the owner's request): `tools/progress/` (README there), served from the worker
     on the tailnet at http://WORKER_ADDR:8765. After each step: `tools/progress/publish.sh`
     (data) and `publish.sh now TEXT`; captures via `publish.sh shot PPM CAPTION` (they stay on
@@ -691,7 +696,7 @@ it in a window; D21 "Step 2"):**
   actors 151, 154, 142, 175, 296, 162, push blocks 43, chests 292, doors 300, the sky 437/438,
   Chuchus 206, Keese 215, Moblins 188, Darknuts 191, Kargarocs 181, ReDeads 224, Gohma 234 and
   Valoo's tail in its room 223 (counters, timers, two sways; tested idle in the fight), Magtails 216,
-  Peahats 209,
+  Peahats 209, Boko Babas 214,
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
   `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;

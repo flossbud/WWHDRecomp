@@ -66,9 +66,9 @@ namespace
 	// (296, d_a_bflower.cpp) and Obj_Ebomzo; push blocks (Obj_Movebox), chests (TBOX), doors (DOOR10) and the
 	// sky (VRBOX, VRBOX2), which match the 30-tick run with no rules (tools/sixty/actor_types.py); Chuchus
 	// (CC), Keese (KI), Moblins (MO2), Darknuts (TN), Kargarocs (BB), ReDeads (RD), Gohma (BTD) and
-	// Valoo's tail in its room (DR2), Magtails (MT) and Peahats (PH).
+	// Valoo's tail in its room (DR2), Magtails (MT), Peahats (PH) and Boko Babas (BO).
 	// WWHD_60FPS_CONVERT= (empty) converts none.
-	constexpr const char* kConvertedByDefault = "476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209";
+	constexpr const char* kConvertedByDefault = "476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214";
 	const char* ConvertList()
 	{
 		const char* e = getenv("WWHD_60FPS_CONVERT");
@@ -1422,9 +1422,32 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 {
 	const uint32 from = wwhd::rt::SixtyFrom();      // ~0 when 60 fps is off
+	const uint32 proc = GPR(3);
+	// Link's process: noted for the test aids at every rate (WWHD_DEBUG_SPAWN uses his room)
+	if (rd16(proc + 0x08) == 168)
+	{
+		s_link = proc;
+		// WWHD_DEBUG_PLACE=tick:x,y,z (a test aid): Link's position set at that game frame, to reach an
+		// actor without steering a route there
+		static const std::array<float, 4> place = [] {
+			std::array<float, 4> p{ -1.0f, 0, 0, 0 };
+			if (const char* e = getenv("WWHD_DEBUG_PLACE"))
+				sscanf(e, "%f:%f,%f,%f", &p[0], &p[1], &p[2], &p[3]);
+			return p;
+		}();
+		if (place[0] >= 0 && !g_rtHalfTick && wwhd::rt::GameFrame(wwhd::os::SwapCount()) == (uint32)place[0])
+		{
+			for (uint32 i = 0; i < 3; i++)
+			{
+				// current and old position: the ground check runs a line from the old one, which
+				// would stop Link at the first wall on the way
+				wr32(proc + 0x314 + 4 * i, std::bit_cast<uint32>(place[1 + i]));
+				wr32(proc + 0x300 + 4 * i, std::bit_cast<uint32>(place[1 + i]));
+			}
+		}
+	}
 	if (from == ~0u && !Probe())
 		[[clang::musttail]] return orig_f_025DE58C(ctx);
-	const uint32 proc = GPR(3);
 	// WWHD_60FPS_TRIAL_TICKS=a-b: the trial at those game frames only (one moment of a route)
 	static const std::pair<uint32, uint32> trialTicks = [] {
 		std::pair<uint32, uint32> r{ 0, ~0u };
@@ -1441,21 +1464,6 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	}
 	bool converted = from != ~0u && wwhd::os::SwapCount() >= from &&
 		(Converted(rd16(proc + 0x08)) || (ConvertAll() && s_knownActors.count(proc) && !ExcludedFromAll(rd16(proc + 0x08))));
-	if (rd16(proc + 0x08) == 168)
-	{
-		s_link = proc;
-		// WWHD_DEBUG_PLACE=tick:x,y,z (a test aid): Link's position set at that game frame, to reach an
-		// actor without steering a route there
-		static const std::array<float, 4> place = [] {
-			std::array<float, 4> p{ -1.0f, 0, 0, 0 };
-			if (const char* e = getenv("WWHD_DEBUG_PLACE"))
-				sscanf(e, "%f:%f,%f,%f", &p[0], &p[1], &p[2], &p[3]);
-			return p;
-		}();
-		if (place[0] >= 0 && !g_rtHalfTick && wwhd::rt::GameFrame(wwhd::os::SwapCount()) == (uint32)place[0])
-			for (uint32 i = 0; i < 3; i++)
-				wr32(proc + 0x314 + 4 * i, std::bit_cast<uint32>(place[1 + i]));
-	}
 	if (converted)
 	{
 		if (!g_rtHalfTick)
