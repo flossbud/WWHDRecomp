@@ -184,7 +184,20 @@
     "352": "Zunari",
     "121": "Market stall",
     "445": "Distant models",
-    "309": "Item stand"
+    "309": "Item stand",
+    "118": "Fishman",
+    "68": "Great Sea ships (Beedle)",
+    "73": "Palm tree",
+    "200": "Crab",
+    "255": "Item (rupee, heart)",
+    "71": "Grotto",
+    "67": "Mailbox",
+    "335": "Grandma",
+    "319": "Joel",
+    "320": "Zill",
+    "331": "Rose",
+    "461": "Dishes",
+    "45": "Shelf"
   },
   "queue_note": "Two sessions: 'top' takes items from the top down, 'bottom' from the bottom up. Claim an item before starting it (tools/progress/publish.sh claim ID); stop where the other session's claims begin. Stage names under 'where' past Windfall and Outset are unverified guesses: confirm with tools/sixty/tests/room_list.sh.",
   "queue": [
@@ -201,7 +214,7 @@
     {
       "id": "sea",
       "name": "The Great Sea: Octoroks 227, Seahats, Gyorg 228, Big Octo 225/226, warships and cannons, sea platforms, the sea's other actors",
-      "where": "sea rooms"
+      "where": "sea rooms (tools/stage_actors.py sea): Big Octo 6/17/20/36, Gyorg spawners 5/37/42/47, Octoroks 18/25/27/38/41/48, warships and cannons in ~17 rooms"
     },
     {
       "id": "forest",

@@ -754,9 +754,41 @@ it in a window; D21 "Step 2"):**
     gravity: a rule that hands posMove the gravity added by hand would make them exact). Also shared,
     found on Windfall: the light palette's start timer (setLight_palno_get,
     `config/US_v0/tick_rules/env_light.txt`), counted in every converted actor's draw, so twice a tick.
+  - **Outset, converted (session top, 2026-10-04; rules in `config/US_v0/tick_rules/outset.txt`)**:
+    `types_test.sh - 950 2190 tour` found 16 types matching at every tick; the rest with `area_test.sh`
+    outdoors and, after a warp, in Link's house (`LinkRM`) and Abe and Rose's (`Onobuta`; `Omasao` has
+    lamps, an item and a chest; `Pjavdou`, `A_mori` and `LinkUG` were listed too; `Ojhouse` didn't
+    load). Unnamed process numbers named from the decomp's process list (`f_pc_name.h`: WWHD's are the
+    GameCube's minus 1-3 here): 200 crabs KN, 255 items ITEM, 407 Lwood. In the defaults now:
+    - the fishman NPC_SO (118): its blink, and its pull toward the circling point (pos += (point - pos)
+      mB04: `k@f1` on cXyz operator*): the half steps had moved it 1.64 times as far. Its jumps were
+      not higher at 60 on the tour route (peaks 733-1078 against 860-1206 at 30: random speeds);
+    - Beedle's ship OBJ_IKADA (68): its bob, the lantern's spin, the rocking phases (`split`), WWHD's
+      own count (`whole`: its phase is the count x 0x900, an integer, so it steps once a tick); the
+      sea's rocking is the shared dLib_waveRot (`config/US_v0/tick_rules/dlib.txt`, two phases `spliti`);
+    - palm trees Obj_Lpalm (73): the trunk's slerp toward the wind (`k@f1` on C_QUATSlerp's t) and the
+      fronds' wave phases (wind x 0x800 plus a random jitter a tick: `split`);
+    - crabs KN (200): the timers at the execute's top (walks lasted half as long: paths 495 against
+      1047 units) and the hand-made gravity on three paths;
+    - items ITEM (255): timeCount's counters and changeDraw, the flashing before an item vanishes (a
+      toggle when m_timer % the cycle is 0, so `whole` on the call: both frames of a tick saw that
+      m_timer and toggled it back);
+    - the grotto OBJ_HOLE (71: a billboard to the camera) and the mailbox OBJ_TORIPOST (67): no rules;
+    - indoors: Grandma NPC_BA1 (335), Joel and Zill NPC_KO1/KO2 (319, 320), Rose NPC_OB1 (331)
+      (blinks, `keep`), the dishes Obj_Mshokki (461: damping, spins, a counter) and shelves Obj_Shelf
+      (45: the shake's timer and phases, the fall's speed, decay `k@`, wait).
+    Not converted: wall lamps (LAMP 186) and torches (EP): a random flicker target every step would
+    flicker twice as often (as the earlier note on torches); signs KANBAN (182: cut pieces' physics),
+    pots, stones; A_mori's 204/205 (the forest item's types).
   - **Tools (session top)**: `tools/sixty/tests/types_test.sh STAGE FROM TO` (an area's first pass),
     `area_test.sh STAGE FROM TO P,Q,...` (several types in one run), `capture.sh NAME STAGE SWAPS
-    [INPUTS]` (captures for the progress page at 60 on the worker's GPU: quick, not for comparisons).
+    [INPUTS]` (captures for the progress page at 60 on the worker's GPU: quick, not for comparisons);
+    `python3 tools/stage_actors.py STAGE [ROOM...] [--layers]` (worker) lists every room's placed actors
+    by WWHD process number from the game's files, all story layers (WWHD's stage and room archives are
+    SARC, some inside content/Common/Pack's packs, and embed the room.dzr / stage.dzs in their .bfres;
+    the names map through l_objectName, found in the RPX). The sea's: Big Octo DAIOCTA 225 in rooms 6,
+    17, 20, 36; Gyorg spawners GY_CTRLB 230 in 5, 37, 42, 47; Octoroks OQ 227 in 18, 25, 27, 38, 41, 48;
+    warships OSHIP 179 and cannons OBJ_CANON 63 in ~17 rooms each.
   - **Doors**: on the door route at 60 every frame changes up to the black screen of the room load
     (captures of each swap, `/wwhd/data/m6/framediff.sh ROUTE FIRST LAST`); Link and the camera
     step on every half frame. The owner's "entrances drop to 30" wasn't reproduced there: ask which
@@ -843,7 +875,8 @@ it in a window; D21 "Step 2"):**
   Peahats 209, Boko Babas 214, Outset's NPC_YM2 316 and NPC_YW1 317, Hyrule's flags 174, the
   capes 192, the Moblins' lanterns 193, Puppet Ganon 243-245, Ganondorf 246, Miniblins 247 and
   Bubbles 207 (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364, 373, 352, 121, 445,
-  309 (session top; `kConvertedByDefault` has a line per session),
+  309 and Outset's 118, 68, 73, 200, 255, 71, 67, 335, 319, 320, 331, 461, 45 (session top;
+  `kConvertedByDefault` has a line per session),
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
   `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;

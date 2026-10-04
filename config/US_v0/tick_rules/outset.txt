@@ -1,0 +1,77 @@
+# Outset Island (sea room 44, route tour), session top (docs/handoff.md "Two parallel sessions"). Found with
+# tools/sixty/tests/types_test.sh - 950 2190 tour and area_test.sh, actor_rmw.py and the GameCube decomp
+# (zeldaret/tww). The format: ../tick_rules.txt.
+#
+# ---- the fishman (NPC_SO, process 118, d_a_npc_so.cpp; WWHD's fields 0x178 on from the GameCube's). Its
+# blink (f_022DF6EC: m86C + 1, then past the end frame restarts it) and, in modeSwim and modeNearSwim, its
+# pull toward the circling point: pos += (point - pos) * mB04, an approach a tick (cXyz operator* on the
+# difference). The trial: the half steps moved it 1.64 times as far. Its jumps were not higher at 60 on
+# the tour route (peaks 733-1078 against 860-1206: random jump speeds).
+022DF884    keep:r12    addi            so blink (f_022DF6EC): m86C (+0x9E4) + 1, then > the end frame restarts it
+022E058C    k@f1        bl 0201ae48     so modeSwim: pos += (circling point - pos) * mB04 (+0xC7C), an approach a tick
+022E08FC    k@f1        bl 0201ae48     so modeNearSwim: the same
+#
+# ---- Beedle's ship (OBJ_IKADA, process 68, d_a_obj_ikada.cpp: the Great Sea's ships). Its bob (the
+# _execute's mWaveAnimTimer), the lantern's spin (mLightRotY/X), the rocking phases of its stop modes and
+# of Link riding (m115C, mLinkRideRockTimer), and WWHD's own count (+0x14BC, f_02360420), whose phase is
+# count x 0x900: an integer, so it steps once a tick. The sea's rocking: dlib.txt (dLib_waveRot).
+02362CA8    split@r9    add             ikada _execute: mWaveAnimTimer (+0x14C0) += 0x200 a tick (the bob)
+023609E4    spliti      addi            ikada: the lantern light's spin y (+0x646) += 0xD0 a tick
+023609EC    spliti      addi            ikada: the lantern light's spin x (+0x644) += 0x100 a tick
+023641E8    split@r0    add             ikada: a rocking phase (+0x14B8) += 0x1830 a tick
+02364320    split@r0    add             ikada: the same (another mode)
+023643F0    split@r8    add             ikada: the same (another mode)
+02360468    whole       sth             ikada (f_02360420): a count (+0x14BC) + 1, then its phase x 0x900
+#
+# ---- palm trees (Obj_Lpalm, process 73, d_a_obj_lpalm.cpp): the trunk tilts toward the wind by a
+# quaternion slerp of 0.25 a tick (C_QUATSlerp f_028E9BC0: k@ on its t) and the fronds' wave phases add
+# wind x 0x800 plus a random jitter a tick.
+0236CAC4    k@f1        bl 028e9bc0     lpalm execute: mBaseQuat slerps 0.25 a tick toward the wind's tilt
+0236CB6C    split@r8    add             lpalm execute: mAnimWave[i] (+0x3F4) += wind x 0x800 + a jitter a tick
+#
+# ---- crabs (KN, process 200, d_a_kn.cpp: "NPC - Crab"; named from the decomp's process list): the timers
+# at the top of the execute (walks lasted half as long, paths 495 against 1047 units) and the gravity
+# added by hand on three inlined paths.
+021A2438    whole       sthx            kn execute: the timers m2C2[4] (+0x3DE) count down
+021A27E4    *h@f8       fadds           kn execute: speed.y += gravity (+0x374)
+021A2AC0    *h@f8       fadds           kn execute: speed.y += gravity (another path)
+021A2D58    *h@f8       fadds           kn execute: speed.y += gravity (another path)
+#
+# ---- items on the ground (ITEM, process 255, d_a_item.cpp: rupees, hearts...): timeCount (f_0217E608,
+# at the execute's start: m_timer, m_get_timer, the wait and disappear timers), and the flashing before
+# an item vanishes: changeDraw (a toggle) when m_timer % the cycle is 0; at 60 both frames of a tick saw
+# that m_timer and toggled it back.
+0217E62C    whole       stw             item timeCount: m_timer (+0x748) + 1
+0217E638    whole       sth             item timeCount: m_get_timer (+0x74C) + 1, up to m_timer_max
+0217E690    whole       sth             item timeCount: mWaitTimer (+0x772) or mDisappearTimer (+0x774) - 1
+0217EB14    whole       bl 021842e4     item (f_0217EA1C): changeDraw when m_timer % the flash cycle is 0
+#
+# ---- Outset's interiors (stages LinkRM, Onobuta; area_test.sh after a warp). Grandma (NPC_BA1, process
+# 335, d_a_npc_ba1.cpp; fields 0x174 on): her blink, plyTexPttrnAnm and a second copy, frame + 1 then
+# compared with the pattern's length.
+021EF1A8    keep:r31    addi            ba1 plyTexPttrnAnm (f_021EF170): mBlinkFrame (+0x864) + 1, then >= the length
+021EFA38    keep:r31    addi            ba1 (f_021EF978): mBlinkFrame + 1, the same
+# Joel and Zill (NPC_KO1 319, NPC_KO2 320: one class, d_a_npc_ko1.cpp) and Rose (NPC_OB1 331): blinks of
+# the same form (the trial: frame + 1 twice).
+02274980    keep:r31    addi            ko1/ko2 blink (f_02274948): its frame (+0x8A0) + 1, then >= the length
+022A6B1C    keep:r31    addi            ob1 blink (f_022A6AE4): its frame (+0x864) + 1, then >= the length
+# dishes (Obj_Mshokki, process 461, d_a_obj_mshokki.cpp), knocked about: speedF's damping, the spins while
+# rolling and flying, and m614 (the trial: + 1 twice).
+0237D8D8    d@f0        fmuls           mshokki execute: speedF *= its damping a tick
+0237D920    spliti      addi            mshokki execute: shape_angle.x -= 0x80 a tick (rolling to rest)
+0237D928    spliti      addi            mshokki execute: shape_angle.y += 0x1000 a tick (rolling)
+0237D970    spliti      addi            mshokki execute: shape_angle.x -= 0xC00 a tick (in the air)
+0237D9AC    whole       stw             mshokki execute: m614 (+0x730) + 1
+0237DA58    whole       stw             mshokki execute: m614 + 1 (the other path)
+# shelves (Obj_Shelf, process 45, d_a_obj_shelf.cpp, in Abe and Rose's house), bumped: mode_vib (f_0238E3C8)
+# shakes for mTimer ticks (--mTimer, then <= 0 starts the fall) by three phases; mode_rot (f_0238E51C) waits
+# mTimer (checked at entry), then falls: speed += accel, speed -= speed decay (an approach to 0: k@),
+# shape_angle.x += speed. The bounces at the floor are events.
+0238E3D8    keep:r12    addi            shelf mode_vib: mTimer (+0x3F6) - 1, then <= 0 starts the fall
+0238E434    spliti      addi            shelf mode_vib: mVibY (+0x3F8) += 0x7530 a tick
+0238E450    spliti      addi            shelf mode_vib: mVibX (+0x3FA) += 0x7724 a tick
+0238E464    spliti      addi            shelf mode_vib: mVibZ (+0x3FC) += 0x7148 a tick
+0238E540    late        sth             shelf mode_rot: mTimer - 1 (checked at entry)
+0238E568    *h@f0       fadds           shelf mode_rot: mRotSpeed (+0x3F0) += mRotAccel a tick
+0238E570    k@f13       fnmsubs         shelf mode_rot: mRotSpeed -= mRotSpeed * mRotDecay
+0238E588    split@r0    add             shelf mode_rot: shape_angle.x += (s16)mRotSpeed a tick

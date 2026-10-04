@@ -1,0 +1,7 @@
+# Shared helpers of d_lib.cpp (every converted actor that calls them; session top found them on Outset;
+# shared: tools/sixty/tests/regress.sh after a change). The format: ../tick_rules.txt.
+#
+# dLib_waveRot (f_025872F4): a floating actor's rocking from the sea; its two wave phases add 400 and 430
+# a tick (Beedle's ship rocked twice as fast at 60, the trial: mRotX/mRotZ x2.2).
+02587424    spliti      addi            dLib_waveRot: mAnimX += 400 a tick
+02587448    spliti      addi            dLib_waveRot: mAnimZ += 430 a tick
