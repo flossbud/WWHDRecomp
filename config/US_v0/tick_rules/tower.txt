@@ -3,8 +3,25 @@
 # for room R; the point alone doesn't move Link), Gohdan's room is SirenB. Found with the step-doubling trial,
 # checked 30 against 60.
 #
-# ---- Bemos (233: Beamos; f_0232728C): its head's turn
+# ---- Bemos (233: Beamos, d_a_obj_bemos.cpp; f_0232728C): its head's turn; its eye's charge (m6AE +0x886
+# counts up to m6B0, then m6AC +0x884 to 5 and the beam fires; both count back down when Link leaves its
+# range), the red eye's search delay (m6B6 +0x88E) and the broken eye's count (++m6AC > 0): a call each.
+# At 60 the beam fired ~4 ticks early and its scorches came and went early (session top's report, a
+# Beamos spawned facing Link on the Outset dock: WWHD_DEBUG_SPAWN=950:233,00000002,-201622,168,311893).
+# keep on each add: the compare after it sees the tick's count on half ticks
 02327334    split@r10   add             bemos: its head's angle (+0x3B6) += its turn speed (+0x88A)
+023269D0    keep:r12    addi            bemos blue_eye_charge: ++m6AC (>= 5: the beam)
+02326AE0    keep:r11    addi            bemos blue_eye_charge: m6AE + 1 (charging)
+02326C3C    keep:r10    addi            bemos blue_eye_charge: m6AC - 1 (Link out of range)
+02326CCC    keep:r11    addi            bemos blue_eye_charge: m6AE - 1
+02327514    keep:r9     addi            bemos red_eye_charge: ++m6AC (>= 5: the beam)
+02327610    keep:r12    addi            bemos red_eye_charge: m6AE + 1
+02327754    keep:r8     addi            bemos red_eye_charge: m6AC - 1
+023277E4    keep:r12    addi            bemos red_eye_charge: m6AE - 1
+02327B80    keep:r8     addi            bemos red_eye_search: m6B6 - 1 (then it retargets Link)
+02328208    keep:r11    addi            bemos eye_break: ++m6AC (> 0: the break)
+02328268    keep:r11    addi            bemos eye_break: ++m6AC (another branch's copy)
+023282C4    keep:r11    addi            bemos eye_break: ++m6AC (another branch's copy)
 #
 # ---- Hmlif (40: the tower's lifts; f_02175E60): a count of ticks Link stands on it, 0 to 3
 02175E9C    keep:r10    addi            hmlif: the count + 1 (Link on it), on whole ticks
@@ -49,5 +66,13 @@
 020ED770    late        stfs            bst: speed.y -= its fall (once a tick)
 020ED8C8    late        stfs            bst: speed.y += its rise (once a tick)
 #
-# ---- Beam (232: a Beamos's beam; f_02326E4C)
-0232707C    *h@f29      fadds           beam: a count (+0x798, a float) + 1 a tick
+# ---- Beam (232: a Beamos's beam). The Beamos's eye searches (blue_eye_search f_02326E4C, red_eye_search
+# f_02327968) drive their beam's length m588 (+0x718: + 1 a call up to 5, then it's on, m5F4 +0x844) and,
+# once it's on, its end's count m5A8 (+0x798: + 1 a call up to 4, then off): at 60 the beam grew and
+# ended twice as fast. h of each + 1 (the Beamos's step: these run in its execute)
+0232707C    *h@f29      fadds           beam (blue search): m5A8 (+0x798) + 1 a tick
+02326F6C    *h@f29      fadds           beam (blue search): m588 (+0x718) + 1 a tick (its length)
+02327060    *h@f29      fadds           beam (blue search): m588 + 1 a tick (on, ending)
+02327AB0    *h@f30      fadds           beam (red search): m588 + 1 a tick
+02327BE8    *h@f30      fadds           beam (red search): m588 + 1 a tick (on, ending)
+02327C04    *h@f30      fadds           beam (red search): m5A8 + 1 a tick

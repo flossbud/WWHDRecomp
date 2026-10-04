@@ -186,7 +186,8 @@
 # (himo2_control and himo2_control2: 100 points placed in one pass from the hand and one from the hook,
 # each at a fixed length toward its last place) has no time step: at 60 it settles by two passes a tick
 # (the trial: 1.6 times a tick's change), not ruled (on whole ticks only it would come off the hand).
-# Thrown at nothing (the items route); a swing on it and a throw at a target are not tested.
+# Thrown at nothing (the items route), and at a stake (KUI 250) it wraps around, Link swinging from it
+# (the rope swing above): the throw, the wrap and the pull as at 30.
 0216E258    keep:r6     addi            himo2 execute: m02D8 (+0x3F4) + 1, a tick count
 0216F904    whole       sth             himo2 move: m0308 (+0x424) - 1
 0216F918    whole       sth             himo2 move: m02A2 (+0x3BE) - 1
@@ -206,3 +207,17 @@
 024C8C10    spliti      addi            tornado execute: mAngle2 (+0x6AE) + 250 a tick
 024C8F38    whole       sth             tornado execute: mPtclTimer (+0x6B2) - 1
 024C9030    *h@f11      fadds           tornado execute: mBrkFrame (+0x6BC) + 0.3 a tick (the roaming one's fade)
+#
+# ---- the bait (ESA, process 221, d_a_esa.cpp; execute f_021300C4, esa_1_move inlined): the pieces the
+# bait bag throws: two timers (+0x3DC, how long it stays; - 1 a call), its flight (pos += speed inline,
+# then speed.y - 3: position first, so the gravity's store is once a tick at its end), its bounces
+# (instantaneous, at landing, random), its bob on water (WWHD's: the wave's height + the sine of a phase,
+# +0x3E0, that adds 3000 a call; two copies). Thrown by putting all-purpose bait itself on a button
+# (item 0x82: WWHD_DEBUG_POKE=950:0,1046F0BA,1,b;950:0,10474C6C,1,82): Y throws it (procFoodThrow).
+02130138    whole       sthx            esa execute: mTimer[0..1] (+0x3DC) - 1
+021305C4    *h@f12      fadds           esa move: current.pos.x += speed.x
+021305CC    *h@f7       fadds           esa move: current.pos.y += speed.y
+021305D4    *h@f11      fadds           esa move: current.pos.z += speed.z
+021305F0    late        stfs            esa move: speed.y -= 3 (gravity, once a tick)
+02130B3C    spliti      addi            esa on water: m3E0 + 3000 a tick (its bob's phase)
+02130B7C    spliti      addi            esa on water: m3E0 + 3000 a tick (the other copy)

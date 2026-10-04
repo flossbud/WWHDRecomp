@@ -200,6 +200,30 @@
 02506798    k@f24       fmadds          lockonCamera: R += (R' - R) * 0.05
 025067FC    k@f8        fmadds          lockonCamera: mFovy += (LockonFovy - mFovy) * m028
 025068D8    k@f8        fmadds          lockonCamera: mFovy += (LockonFovy - mFovy) * m028
+# the grappling hook's swing camera (hungCamera f_0250EF98, work area tagged 'HUNG'; session bottom,
+# bug B2: a black screen once Link swings): as the shield camera, on its first tick (m11C 0) it sets
+# up its work area, N and the weight W ((n+1)(n+2)/2 from how far it has to go), then a tick it
+# approaches by (N - m11C) / W and W loses N - m11C. At 60 W lost it on both frames, reached 0, the
+# factor went infinite and eye, centre and fovy went NaN for good (from a stake swing's f1119.5). The
+# first tick's set-up whole (m11C is late: it ran on both frames), the factor k:, W's loss late
+0250F13C    whole       stw             hungCamera (first tick): work +0x38 = the centre x
+0250F144    whole       stw             hungCamera (first tick): work +0x3C = the centre y
+0250F14C    whole       stfs            hungCamera (first tick): work +0x18
+0250F150    whole       stw             hungCamera (first tick): work +0x40 = the centre z
+0250F158    whole       stw             hungCamera (first tick): work +0x10 = 0
+0250F16C    whole       stb             hungCamera (first tick): work +0x44 = 0
+0250F174    whole       stfs            hungCamera (first tick): work +0x1C
+0250F17C    whole       stfs            hungCamera (first tick): work +0x34
+0250F180    whole       stfs            hungCamera (first tick): work +0x4C
+0250F184    whole       stfs            hungCamera (first tick): work +0x48
+0250F188    whole       stfs            hungCamera (first tick): work +0x60
+0250F18C    whole       stfs            hungCamera (first tick): work +0x64
+0250F190    whole       stfs            hungCamera (first tick): work +0x2C
+0250F198    whole       stw             hungCamera (first tick): work +0x14 = 0
+0250F288    whole       stw             hungCamera (first tick): N (work +0x4) = n + 1
+0250F28C    whole       stfs            hungCamera (first tick): W (work +0x8) = (n+1)(n+2)/2
+0250F31C    k:f31       fdivs           hungCamera: f31 = (N - m11C) / W, the approach's factor
+0250F4F8    late        stfs            hungCamera: W -= N - m11C
 # the letterbox (f_024FF8A0: dCamera +0x5FC, GC's mTrimSize: 0 to 90 when Z-targeting, by its mode
 # m600): it approaches its size by 0.25 a call, or 0
 024FF940    k@f31       fmadds          trim: size += (size' (+0x7A8) - size) * 0.25

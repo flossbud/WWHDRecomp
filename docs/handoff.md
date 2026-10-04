@@ -1160,6 +1160,31 @@ it in a window; D21 "Step 2"):**
     hookshot pulling Link to a target, swinging on the rope, the bait bag (ESA 221 not converted). The
     Ballad of Gales' cyclone (TORNADO 443: texture frames, spin angles, a timer, a fade) too: in the warp
     (an event, where converted processes don't step) it still runs once a tick, as at 30.
+  - **Bug B2, the grappling hook's swing blacked the screen at 60, fixed (shared; regress.sh rerun)**:
+    hungCamera (f_0250EF98, work area 'HUNG'), like the shield camera, sets up N and a weight W on its
+    first tick (m11C 0) and then approaches by (N - m11C) / W while W loses N - m11C a call. At 60 W lost
+    it on both frames, reached 0, and the factor's division made eye, centre and fovy NaN for good (a
+    stake swing off the Outset dock: NaN from f1119.5; the HUD drew on black). As the shield camera's:
+    the first tick's set-up whole (m11C counts late, so it ran on both frames), k: on the factor, W's
+    loss late. After: the swing camera within ~20 units of 30's and the swing on screen (captures).
+    The other camera modes without rules (a survey of Run's engine table by their work tags):
+    talktoCamera 02508A60 ('TALK'), towerCamera 0250B30C ('TOWR'), rideCamera 0250D4E8 ('RIDE': sailing,
+    the sail route from f1045; its trial shows its approaches at ~1.9x a tick), crawlCamera 02511200
+    ('CRWL'), hookshotCamera 02511B5C ('HOOK'), tornadoCamera 025121E8 ('TRND'), vomitCamera 02513518
+    ('VMIT').
+  - **The bait (ESA 221), converted**: the pieces the bait bag throws (all-purpose bait itself on a
+    button: item 0x82, `WWHD_DEBUG_POKE=950:0,1046F0BA,1,b;950:0,10474C6C,1,82`; Y throws it,
+    procFoodThrow): its timers, its flight (pos += speed, then speed.y -= 3: late) and its bob on water
+    (WWHD's: the sine of a phase + 3000 a call). Thirteen pieces with random speeds: at 60 their flights
+    go as far and as high as at 30's (181-327 against 166-310 units, rises 34-76 against 31-75).
+  - **Beamos (Bemos 233) fired early at 60, fixed** (session top's report: a Beamos spawned facing Link
+    on the Outset dock, `WWHD_DEBUG_SPAWN=950:233,00000002,-201622,168,311893`; the beam hit ~4 ticks
+    early, its scorches came and went early): its eye's charge counts (m6AE to m6B0, then m6AC to 5),
+    the red eye's search delay and the broken eye's count went a call each, and its eye searches
+    (blue_eye_search f_02326E4C, red_eye_search f_02327968) grew and ended its beam (m588, m5A8) a call
+    each. keep on the counts, h of the beam's + 1s (tower.txt). After: the charge counts equal 30's on
+    every tick, the beam grows at 30's rate half a tick ahead (its aim crosses the threshold on a half
+    step) and ends ~1 tick early (was 4): the `< 5` check flips on the half step after the limit.
   - **The Z-target camera ran its approaches twice a tick at 60, fixed (shared; regress.sh rerun)**:
     lockonCamera (f_025052E8, work area tagged 'LOCK') had no rules. A ZL lock-on on a ChuChu spawned on
     the Outset dock: four ticks in, the eye's distance 281 against 241, the letterbox (dCamera +0x5FC,
