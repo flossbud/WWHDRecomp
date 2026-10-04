@@ -1,8 +1,9 @@
 # Sourced by the 60 fps test scripts (run on the worker, from a worker checkout): ROOT is the
 # checkout, OUT its scratch directory under /wwhd/data/m6 (one per checkout, so parallel sessions'
-# outputs never meet; game memory and captures: they stay on the worker).
+# outputs never meet; game memory and captures: they stay on the worker). Two tests of one checkout at
+# once need their own SIXTY_OUT and their own CEMU_BIN (a binary in a folder of its own: its emulator dir).
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
-OUT=/wwhd/data/m6/$(basename "$ROOT")
+OUT=${SIXTY_OUT:-/wwhd/data/m6/$(basename "$ROOT")}   # SIXTY_OUT=DIR: another, for a second test beside (with its own CEMU_BIN)
 mkdir -p "$OUT"
 cd "$ROOT"
 # defaults: the processes sixty.cpp converts by default

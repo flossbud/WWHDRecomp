@@ -1,0 +1,61 @@
+# Forest Haven and the Forbidden Woods (stages Omori, kindan, kinBOSS), session top (docs/handoff.md "Two
+# parallel sessions"). Rooms from tools/stage_actors.py; found with types_test.sh and area_test.sh after a
+# warp, actor_rmw.py and the GameCube decomp (zeldaret/tww). The format: ../tick_rules.txt. WWHD's fields
+# are 0x11C on from the GameCube's in these (fopAc_ac_c is 0x3AC bytes in WWHD).
+#
+# ---- fireflies (FF, process 187, d_a_ff.cpp: "Object - Firefly (not collectable)"; Forest Haven has 77):
+# the five timers counted down at the top of the execute (f_02133070, a loop), mLiveTimer + 1 a tick (the
+# glow's spin and the scale's wave), and the move pos += speed + mVelImpulse, a vector add.
+02133110    whole       sthx            ff execute: mTimers[i] (+0x424) - 1, read later from memory
+02133178    whole       sth             ff fire_fly_move: mLiveTimer (+0x42E) + 1
+02133914    vec@r4      bl 028e8d88     ff fire_fly_move: pos += speed + mVelImpulse (PSVECAdd of their sum)
+#
+# ---- forest fireflies, the collectable ones (NH, process 313, d_a_nh.cpp): speed.y moved toward
+# maxFallSpeed by gravity a tick in the execute, either way (then fopAcM_posMove).
+021E11E4    *h@f11      fsubs           nh execute: speed.y -= gravity (above maxFallSpeed)
+021E1208    *h@f12      fadds           nh execute: speed.y += gravity (below it)
+#
+# ---- lily pads (LEAF_LIFT, process 120, d_a_leaflift.cpp): the lifetime count (the tilt's wobble when
+# Link rides it), m43F's countdown (0 then sets m43E at once: keep), the slerp toward the target tilt
+# (0.25 a tick), and WWHD's ripple count (MoveDownLift: + 1 a tick; 200 ends the ripples).
+021B3D40    whole       sth             leaflift _execute: mActorLifetimeFrameCount (+0x560) + 1
+021B3D48    keep:r9     addi            leaflift _execute: m43F (+0x55B) - 1, then 0 sets m43E
+021B3EB8    k@f1        bl 028e9bc0     leaflift _execute: mDoMtx_quatSlerp(cur, target, 0.25)
+021B40C4    whole       stw             leaflift MoveDownLift (WWHD): mEmitterTimer (+0x5B8) + 1
+#
+# ---- baba buds (JBO, process 213, d_a_jbo.cpp): mFramesUntilJump counted down before jbo_move reads it
+# (70 ticks from Link's entering to the launch), the wobble's angle += mAnimationSpeed a tick (in
+# jbo_draw_SUB, from the execute), and the launch itself (player->onForceVomitJump: a flag on Link, set
+# while the count is 1, which both steps of the tick would see).
+0218474C    whole       sth             jbo execute: mFramesUntilJump (+0x3DA) - 1
+02184564    split@r0    add             jbo jbo_draw_SUB: mAnimRotation (+0x3DC) += mAnimationSpeed
+02184884    whole       stw             jbo jbo_move: onForceVomitJump, Link's flag (+0x3BC |= 0x10)
+#
+# ---- trees (Lwood, process 407, d_a_lwood.cpp: "Object - Normal tree"): mTimer + 1 a tick; WWHD sways
+# the tree by it (mTimer x 300, f_021B6C34; both set at random at creation).
+021B7250    whole       sth             lwood _execute: mTimer (+0x3EC) + 1
+#
+# ---- the Forbidden Woods (stage kindan): found with the trial in rooms 5 and 12 (area_test.sh).
+# Hanging vines (SK, process 101, "Turu", d_a_sk.cpp): m2BE + 1 a tick, the joints' sway (sines of it,
+# taken before the count: late, or the joints ran a tick ahead).
+02488834    late        sth             sk dousa_move: m2BE (+0x3DA) + 1, after the joints read it
+# Vines (SK2, process 102, "Turu2"/"Turu3", d_a_sk2.cpp): three counts; the joints' sines of +0x3E8, taken before it counts.
+02489408    whole       sth             sk2: a count (+0x3D6) + 1
+0248942C    whole       sth             sk2: a countdown (+0x3D8) - 1
+0248959C    late        sth             sk2: the joints' count (+0x3E8) + 1, after the joints read it
+# Fences (SAKU, process 398, "Ksaku"/"Dsaku"): a tick count.
+0246538C    whole       stw             saku: a count (+0x1004) + 1
+# Acorn leaves (ACORN_LEAF, process 297, "VigaH", d_a_acorn_leaf.cpp): unk_41C counts to 69 (then 70:
+# the leaf's animation starts), compared at once: keep.
+02047CC8    keep:r10    addi            acorn_leaf _execute: unk_41C (+0x5B4) + 1, then == 69
+# Mothulas (GM, process 204, "gmos"; their other rules are in ../tick_rules.txt, the "fm" ones): a count
+# + 1 then compared with its limit (+0x41A) at once (past it, state 70): keep. With it the trial is clean
+# and a Mothula in room 9 (walk route) flies 5669 units against 30's 5750 (its dashes are random).
+021522E4    keep:r7     addi            gm: a count (+0x410) + 1, then > its limit (+0x41A) goes to state 70
+# Not converted yet: the hanging flower platforms (KITA 97: their sway counter at 0219E040 and 0219FCD4
+# is whole, but floating in water they drift and turn a step a tick, not ruled), the hanging house
+# (KOKIIE 98: m298 + 1 at 021A5838; its fall when cut, speed.y by hand, not ruled), the ceiling
+# tentacles (SHAND 99: mExecuteCount + 1 at 0246FC14; each joint adds a pull and a wiggle to its
+# direction a tick), Octoroks (OQ 227: their bob's phase + 0x800 a tick, 023C11AC spliti; their
+# attacks untested), Morths (205: tick_rules.txt has their rules; the trial has f_024F2514, d_bg_w's
+# helper, moving them 1.63 times as far, and their hops are random).

@@ -2,6 +2,9 @@
 
 Run on the worker from a worker checkout (`tools/worker/job start NAME tools/sixty/tests/X.sh ...`).
 Outputs go to `/wwhd/data/m6/<checkout name>/` (game memory and captures: they stay on the worker).
+Two tests of one checkout at once need their own outputs and emulator dirs: `SIXTY_OUT=DIR` and
+`CEMU_BIN=` a copy of the binary in a folder of its own (two runs of one binary share its portable
+dir: its NAND, save and log; a test's `rm -rf` of its outputs would also hit the other's).
 
 - `spawn_test.sh PROC`: spawn an actor on the Outset dock, trial, 30 against 60.
 - `stage_test.sh PROC STAGE,point,room,layer FROM TO [SPAWN]`: the same after a stage warp

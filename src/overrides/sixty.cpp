@@ -82,14 +82,18 @@ namespace
 	// (Obj_Lpalm), crabs (KN), items (ITEM), the grotto (OBJ_HOLE), the mailbox (OBJ_TORIPOST), and indoors
 	// Grandma (NPC_BA1), Joel, Zill and Rose (NPC_KO1, NPC_KO2, NPC_OB1), dishes and shelves; the sea's
 	// cannons (OBJ_CANON), warships (OSHIP), Gyorg spawners (GY_CTRLB), Obj_Coming, lookout platforms
-	// (Obj_Aygr), wind tags, the ships' flags (Sie_Flag) and bombs (BOMB) (session top).
+	// (Obj_Aygr), wind tags, the ships' flags (Sie_Flag) and bombs (BOMB); Forest Haven's fireflies (FF), forest
+	// fireflies (NH), lily pads (LEAF_LIFT), baba buds (JBO), trees (Lwood), Obj_Ojtree, WARPFOUT, the Deku
+	// Tree (NPC_DE1), KYTAG00, TAG_HINT, BG and Tag_Attention (KUI is in session bottom's line); the Forbidden Woods' vines (SK, SK2),
+	// fences (SAKU), acorn leaves (ACORN_LEAF), warp pots (OBJ_WARPT), KDDOOR, leaf piles (Obj_Leaves),
+	// Obj_Mtest, ANDSW0 and the propeller switch's 430 (session top).
 	// One line each, so the parallel sessions' additions never meet (docs/handoff.md "Two parallel
 	// sessions"); keep a comma after each line's last.
 	// WWHD_60FPS_CONVERT= (empty) converts none.
 	constexpr const char* kConvertedByDefault =
 		"476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,"
 		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,"   // session bottom
-		"123,220,353,170,368,374,364,373,352,121,445,309,118,68,73,200,255,71,67,335,319,320,331,461,45,63,179,230,269,164,391,176,294";   // session top
+		"123,220,353,170,368,374,364,373,352,121,445,309,118,68,73,200,255,71,67,335,319,320,331,461,45,63,179,230,269,164,391,176,294,187,313,120,213,407,83,105,116,383,410,439,470,101,102,398,297,65,304,144,74,307,430";   // session top
 	const char* ConvertList()
 	{
 		const char* e = getenv("WWHD_60FPS_CONVERT");
@@ -635,10 +639,31 @@ namespace
 		s_convGlobalsHidden = false;
 	}
 
+	// Live structures: lists whose nodes are on the heap (which a half tick doesn't put back) and whose
+	// heads or links can be in .data and .bss. What their own code writes is neither put back after a
+	// half tick nor hidden from its draw pass, or heads and nodes part:
+	// - J3DDrawBuffer's lists (J3DDrawBuffer.cpp): frameInit (f_027F093C) takes every packet off its
+	//   buffer's list, the entries (f_027F0C14 to f_027F1088: entryImm and the sorted ones) put one on
+	//   and J3DPacket::clear (f_027F1508) unlinks it: a packet's slot (+0x94) and next (+0x10), the
+	//   lists' heads. A static packet (Link's eye packets, in .bss) that a half tick's frameInit took
+	//   off its list got its slot back from the rollback, and the next entryImm asserted
+	//   (J3DDrawBuffer.cpp 243; in the Forbidden Woods, 4 OSPanics at every warp there).
+	// - JAudio's JAI layer (f_02801444 to f_0280E03C: JAIAnimation.cpp to JAISoundTable.cpp): its
+	//   sound handles move between lists headed in .bss (JAISeMgr's at 0x104B5008, f_0280593C). A
+	//   converted Link's footstep started on a half tick had its heads hidden from the draw pass and
+	//   handed back after it: in the Forbidden Woods the next sound segfaulted (f_0280593C).
+	bool LiveStore(uint32 pc)
+	{
+		return (pc >= 0x027F093Cu && pc < 0x027F0A0Cu) || (pc >= 0x027F0C14u && pc < 0x027F1088u) ||
+			(pc >= 0x027F1508u && pc < 0x027F1518u) || (pc >= 0x02801444u && pc < 0x0280E03Cu);
+	}
+
 	void HalfTickStore(uint32 ea, uint32 size, uint32 pc)
 	{
 		if (Census())
 			CensusStore(ea, size, pc);
+		if (LiveStore(pc))
+			return;
 		if (s_converting && !s_convGlobalsHidden && size <= 32 && ea >= kGlobalsLow && ea < kGlobalsHigh &&
 			PPCInterpreter_getCurrentInstance() == s_frameThread)
 		{

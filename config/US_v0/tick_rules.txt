@@ -462,7 +462,9 @@
 0212B820    *h@f0       fadds           dr2: a sway (+0x514) += its step a tick
 #
 # ---- step rules: Forbidden Woods enemies, found with the trial in their rooms (stage kindan).
-# Process 205 (27 in room 11; execute f_021A7F94) and 204 (room 9; f_02151B98): names unmatched.
+# Process 205 (27 in room 11; execute f_021A7F94) and 204 (room 9; f_02151B98): Morths (KS, d_a_ks.cpp,
+# "kuro_s"/"kuro_t" in the room data) and a Mothula (GM, d_a_gm.cpp, "gmos"): the room data's names through
+# l_objectName (tools/stage_actors.py), GameCube processes 206 and 205.
 021A8170    whole       sthx            205: its timers (+0x564) count down
 021A9B74    whole       sth             205: a counter (+0x57E) + 1, up to 7
 021A9C2C    *h@f11      fadds           205: speed.y += gravity (+0x374)
@@ -479,8 +481,8 @@
 021A956C    whole       sth             205: a counter (+0x56C) + 1
 021A9288    whole       sth             205: a counter (+0x57C) - 1
 021A92CC    whole       sth             205: a counter (+0x57C) + 1
-# Process 204 is a Floormaster (d_a_fm.cpp: the hands that grab Link; tools/sixty/actor_rmw.py, the trial with
-# Link beside one in kindan room 9): its state timer (+0x3F8) and counters whole, speed.y += gravity
+# Process 204 is a Mothula (GM; not a Floormaster, FM is 119; the "fm" below are its rules; tools/sixty/actor_rmw.py,
+# the trial with Link beside one in kindan room 9): its state timer (+0x3F8) and counters whole, speed.y += gravity
 # half steps, its spin speeds' ramps and the spins split.
 02152290    whole       sth             fm: its state timer (+0x3F8) + 1
 0214DBD8    whole       sth             fm: its state timer (+0x3F8) + 1

@@ -223,7 +223,22 @@
     "164": "Lookout platform",
     "391": "Wind tag",
     "176": "Ship flag",
-    "294": "Bomb"
+    "294": "Bomb",
+    "187": "Firefly (Forest Haven)",
+    "313": "Forest firefly",
+    "120": "Lily pad",
+    "213": "Baba bud",
+    "407": "Tree (Lwood)",
+    "83": "Obj_Ojtree",
+    "105": "Warp out (WARPFOUT)",
+    "116": "Deku Tree",
+    "101": "Hanging vine (SK)",
+    "102": "Vine (SK2)",
+    "398": "Fence (SAKU)",
+    "297": "Acorn leaf",
+    "65": "Warp pot",
+    "304": "Forbidden Woods door (KDDOOR)",
+    "144": "Leaf pile"
   },
   "queue_note": "Two sessions: 'top' takes items from the top down, 'bottom' from the bottom up. Claim an item before starting it (tools/progress/publish.sh claim ID); stop where the other session's claims begin. Stage names under 'where' past Windfall and Outset are unverified guesses: confirm with tools/sixty/tests/room_list.sh.",
   "queue": [
@@ -244,7 +259,7 @@
     },
     {
       "id": "forest",
-      "name": "Forest Haven & Forbidden Woods: Floormaster 204 (rules in, dashes end early), process 205 (rules in, moves 3/4), Mothulas, Morths, baba buds 213, Koroks and the Deku Tree, Kalle Demos",
+      "name": "Forest Haven & Forbidden Woods: Mothula 204 (rules in, dashes end early), Morths 205 (rules in, moves 3/4), Mothulas, Morths, baba buds 213, Koroks and the Deku Tree, Kalle Demos",
       "where": "Omori, kindan"
     },
     {

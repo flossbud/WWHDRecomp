@@ -689,8 +689,8 @@ it in a window; D21 "Step 2"):**
     defaults. Peahats (PH 209): their state timer +0x462 (21 sites) whole, the spin and wobble phases
     `spliti` (new: an `addi`'s immediate split between the half ticks), height `*h`; they fly 30's
     path within 7.8 units: in the defaults. 205 (rides a parent: pos += the parent's move, then
-    cLib_addCalc2 toward a target) moves ~3/4 as far at 60: not in the defaults. 204 is a Floormaster
-    (d_a_fm.cpp): its state timer, counters, gravity and spins have rules; it dashes as at 30 but its
+    cLib_addCalc2 toward a target) moves ~3/4 as far at 60: not in the defaults. 204 is a Mothula
+    (GM, "gmos" in the room data; it was taken for a Floormaster, d_a_fm.cpp, at first): its state timer, counters, gravity and spins have rules; it dashes as at 30 but its
     dashes end at other times (232 units apart on average): not in the defaults.
     Boko Babas (BO 214): rooted; spawned beside Link (`WWHD_DEBUG_SPAWN=1000:214,0,-278,6052,-6700`
     after the warp to kindan room 9; `WWHD_DEBUG_PLACE` doesn't hold there: Link's execute puts him
@@ -797,6 +797,44 @@ it in a window; D21 "Step 2"):**
       bomb moves by daObj::posMoveF_grade (no time step).
     `trial.py` now reads integer fields' changes modulo their width: s16 phases that wrap (the cannon's,
     the spawner's) had come out as x-8.58 and x-326 and been filtered away as noise.
+  - **Forest Haven and the Forbidden Woods (session top, 2026-10-04; rules in `config/US_v0/tick_rules/forest.txt`)**:
+    rooms from `tools/stage_actors.py Omori` / `kindan` (it now reads layer tags like ACTa). On the 100%
+    save Forest Haven has no Koroks (they have left for the islands). In the defaults:
+    - Forest Haven: fireflies FF 187 (77 of them: the timers, the glow's phase, the move, a vector add:
+      `vec@`), forest fireflies NH 313 (speed.y moved toward maxFallSpeed by gravity: `*h`; paths 451/455
+      against 451/455 units, apart 0.3-0.6; were 469/473 and 6.8), lily pads LEAF_LIFT 120 (counts, the
+      tilt's slerp `k@`, WWHD's ripple count), baba buds JBO 213 (the launch countdown, the wobble `split`,
+      the launch flag on Link once a tick: buds poked into their wait, `WWHD_DEBUG_POKE=1000:213,3d8,1,1;
+      1000:213,3da,2,46`, count and wobble as at 30), trees Lwood 407 (WWHD sways them by a tick count),
+      and with no rules Obj_Ojtree 83, WARPFOUT 105, the Deku Tree NPC_DE1 116 (idle only), KUI 250 (in
+      session bottom's line: the tower's stakes), KYTAG00 383, TAG_HINT 410, BG 439, Tag_Attention 470;
+    - the Forbidden Woods: vines SK 101 and SK2 102 (their joints are sines of a count taken before it
+      counts: `late`; `whole` had them a tick ahead), fences SAKU 398, acorn leaves ACORN_LEAF 297 (`keep`:
+      counts to 69, compared at once), and with no rules warp pots OBJ_WARPT 65, KDDOOR 304, leaf piles
+      Obj_Leaves 144, Obj_Mtest 74, ANDSW0 307, 430.
+    Not converted (forest.txt has the sites found): hanging flower platforms KITA 97 (floating in water
+    they drift and turn a step a tick), the hanging house KOKIIE 98 (its fall), ceiling tentacles SHAND 99
+    (each joint adds a pull and a wiggle a tick), SSK 103 (joints a tick ahead as SK's were: `late` on its
+    count, +0x40C), Octoroks OQ 227 (the bob's phase `spliti` at 023C11AC; attacks untested), torches,
+    pots. Process 204 is a Mothula (GM, "gmos"), not a Floormaster: corrected in tick_rules.txt.
+  - **Two 60 fps crashes in the Forbidden Woods, fixed (session top; shared, `sixty.cpp` `LiveStore`)**: at
+    every warp there with Link converted (the defaults). Both came from half ticks putting back or hiding
+    words in .data/.bss that head lists whose nodes are on the heap (which a half tick never puts back):
+    - J3DDrawBuffer.cpp 243 (`p_pkt->getEntryPtr() == NULL`, 4 OSPanics): a half tick's frameInit took
+      Link's static eye packet (`l_offCupOnAupPacket`, .bss) off its list; the rollback gave the packet its
+      list slot back (+0x94); the next entryImm saw it entered. `WWHD_60FPS_ROLLBACK=0` had none;
+      `WWHD_60FPS_SKIPDRAW=all` had hundreds;
+    - then a segfault in JAISeMgr (f_0280593C, the game stopped at tick 1029): a converted Link's footstep
+      started on a half tick changed the sound lists' heads (0x104B5008), which the draw pass saw hidden
+      and got back after it. `WWHD_60FPS_HIDE=0` had none.
+    Now what J3DDrawBuffer's list code (frameInit, the entries, J3DPacket::clear) and JAudio's JAI layer
+    (f_02801444 to f_0280E03C) write is neither put back nor hidden: they are live like the heap. Rooms 5,
+    9, 11 and 12 run to the end at 60. Other lists headed in .data/.bss with heap nodes would fail the
+    same way (the census probe and `hidden.txt`, written by `WWHD_STATE_DUMP` runs at exit, list the
+    hidden words).
+  - **Link: two counters not ruled (session top found them, not changed: Link is shared)**: in the lily pad
+    test the trial had Link's +0x6980 (`023FBEE8 addi`, + 1 then compared to a virtual call's value:
+    `keep:r29`) and +0x424 (`023F2E30 sth`, a countdown: `whole`) twice as fast.
   - **Tools (session top)**: `tools/sixty/tests/types_test.sh STAGE FROM TO` (an area's first pass),
     `area_test.sh STAGE FROM TO P,Q,...` (several types in one run), `capture.sh NAME STAGE SWAPS
     [INPUTS]` (captures for the progress page at 60 on the worker's GPU: quick, not for comparisons);
@@ -805,7 +843,9 @@ it in a window; D21 "Step 2"):**
     SARC, some inside content/Common/Pack's packs, and embed the room.dzr / stage.dzs in their .bfres;
     the names map through l_objectName, found in the RPX). The sea's: Big Octo DAIOCTA 225 in rooms 6,
     17, 20, 36; Gyorg spawners GY_CTRLB 230 in 5, 37, 42, 47; Octoroks OQ 227 in 18, 25, 27, 38, 41, 48;
-    warships OSHIP 179 and cannons OBJ_CANON 63 in ~17 rooms each.
+    warships OSHIP 179 and cannons OBJ_CANON 63 in ~17 rooms each. `--pos PROC` prints a type's
+    placements (where to put Link with `WWHD_DEBUG_PLACE`). Two tests at once: `SIXTY_OUT=DIR` and a
+    `CEMU_BIN` copy in a folder of its own (one binary's runs share its emulator dir, NAND and log).
   - **Doors**: on the door route at 60 every frame changes up to the black screen of the room load
     (captures of each swap, `/wwhd/data/m6/framediff.sh ROUTE FIRST LAST`); Link and the camera
     step on every half frame. The owner's "entrances drop to 30" wasn't reproduced there: ask which
