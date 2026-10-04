@@ -7,8 +7,8 @@
 540 A 5        # Controller Selection
 660 A 5        # File Selection
 780 A 5        # Start; gameplay from ~f870 (the warp at f920)
-1000 ZL+LLEFT 80   # sidestep to the sailor
-1090 A 3       # talk
+1000 ZL+LLEFT 30   # sidestep to the sailor (17 units a tick: 80 frames took Link past him and off the dock)
+1040 A 3       # talk
 1120 A 3       # his lines
 1150 A 3
 1180 A 3

@@ -1386,6 +1386,37 @@ it in a window; D21 "Step 2"):**
     `WWHD_DEBUG_POKE`, a Bokoblin spawned behind Link, turn round and aim) with `WWHD_STATE_TRACK=168,169`:
     Link's lock flag (+0x58ED) changed 64 times in the aim at 60, 2 at 30; now 2, and its frame (+0x58EE)
     counts one a tick.
+  - **The hurricane spin (B9), fixed (`config/US_v0/tick_rules/link_qa.txt`, qa's own Link rules)**: the
+    owner's "over too quickly, the dizziness too short". procCutRoll (f_02441DC0) counts its time left
+    (Link +0x6916, 90 ticks) and turns the body 14000 a tick (+0x6934); procCutRollEnd (f_02442134) counts
+    the dizziness; procCutTurnMove (f_02442470) the 47-tick charge. Each ran a step: at 60 the spin lasted
+    45 ticks and turned 28000 a tick. Rules: `late` on the two counts tested at entry, `spliti` on the
+    turn, `keep` on the charge (its 0 is tested on the register at once). Route `spin` (turn round on the
+    Outset dock, B to draw, B held 110 frames, let go; `WWHD_DEBUG_POKE=1133:168,6916,2,1e` shortens the
+    spin to 30 ticks so the dizziness fits on the dock): spin 53 ticks and dizziness 61 at 30, 53 and 60 at
+    60 (before: the count lost 2 a tick). Link's procedure numbers are the decomp's daPyProc enum
+    (0x56 CUT_ROLL, 0x57 CUT_ROLL_END, 0x59 CUT_TURN_MOVE, 0x2C HANG_FALL_START, 0xAA talk).
+  - **Stairs (B12), fixed (`link_qa.txt`)**: setStepsOffset (f_023FF47C) looks a tick's move ahead
+    (`current.pos + speedF` along Link's angle) for a step up, lifts Link onto it and lowers the model by
+    0.7 of the step (Link +0x6A1C, eased back). A half step moves half as far: lifted early, Link was
+    still short of the step on the next frame, the ground check put him down again, and the step was taken
+    twice (the model dropped another 17.5: his eye height, +0x394, went 250, 237.6, 246.4 where 30 has 250,
+    258.8, 263.8: the owner's judder). The look ahead and the slope's allowance are a step's move now
+    (`*h` on the two loads of speedF). Dragon Roost Cavern's entrance stairs (route `walk` after
+    `WWHD_DEBUG_STAGE=920:M_NewD2,0,0,-1`): the eye rises every frame at 60 and passes 30's values (each
+    step is taken half a tick to a tick later: Link is nearer the step when lifted).
+  - **Bushes and small trees being cut (B6, B7), ruled (`config/US_v0/tick_rules/plants.txt`)**: only the
+    plants' sway was ruled; a cut bush's rise, fall, drift, pitch and fade (dWood::Anm_c::mode_cut,
+    f_025CD474), its push animations' counts and phases, a cut tree top's slide and fall and a shaken
+    tree's spring (dTree_data_c::animation, f_025C6D40) ran a step: twice as fast at 60. The plants'
+    trial (`WWHD_60FPS_TRIAL_PLANTS=1`, route `slash`, a bush `WWHD_DEBUG_SPAWN=950:266,0,-201622,138,312160`
+    or a tree `950:435,00000017,...` 80 units ahead of Link on the Outset dock) is clean after the rules but
+    for the tree top's last slide step (it lands on a half step: 1 unit short). Not looked at on screen.
+  - **Tools (session qa)**: `tools/sixty/tests/whole_only.py DIR PROC FROM TO` lists a tracked process's
+    words that change on whole ticks only in a 60 run (what moves at 30 inside a converted actor);
+    `capture.sh` with `CAPTURE_30=1`. A bug that shows as "X steps twice" is found fastest with the trial
+    over a route that does X (`WWHD_60FPS_TRIAL=168 WWHD_60FPS_TRIAL_TICKS=a-b`), then `grep` its output for
+    the field's values.
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
   CPU, vsyncs missed; `tools/sixty/frames.py` summarises), `WWHD_PROFILE` (`tools/profile_report.py`
   on the worker with the same build). On the desktop, `~/wwhd-test` is ours to deploy to and run

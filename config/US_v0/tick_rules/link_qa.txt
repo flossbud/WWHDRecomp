@@ -1,0 +1,23 @@
+# Link at 60 fps, from the owner's bug list (docs/recompiler-design.md D21; session qa). The same rules as
+# config/US_v0/tick_rules.txt; Link is process 168 (the decomp's d_a_player_main.cpp and its .inc files;
+# WWHD's mProcVar0.m34D0 is Link +0x6916 here, m34EC +0x6934, m35C4 +0x6A1C).
+#
+# ---- the hurricane spin (B9: "over too quickly, the dizziness too short"). procCutRoll (f_02441DC0)
+# spins while its time left (90 ticks) counts down, tested at entry and then decremented, and turns the
+# body by 14000 a tick plus the stick's turn; procCutRollEnd (f_02442134) stands dizzy while its own count
+# runs out; procCutTurnMove (f_02442470) counts the hurricane spin's charge, 47 ticks, with the 0 tested
+# on the register at once. Each ran a step: at 60 the spin lasted 45 ticks (the trial: 89 -> 87 / 88) and
+# turned 28000 a tick, the charge took 23.5.
+02441FC0    late        sth             procCutRoll: the spin's time left (+0x6916) - 1 (tested at entry)
+02441FB8    spliti      addi            procCutRoll: m34EC (+0x6934) -= 14000 a tick (+ the step's turn)
+02442164    late        sth             procCutRollEnd: the dizziness' time left (+0x6916) - 1 (tested at entry)
+024424C8    keep:r7     addi            procCutTurnMove: the hurricane spin's charge (+0x6916) - 1, its 0 tested at once
+#
+# ---- stairs (B12: "Link judders walking up stairs"). setStepsOffset (f_023FF47C) looks a tick's move
+# ahead (current.pos + speedF along his angle) for a step up, lifts Link onto it at once and lowers his
+# model by 0.7 of the step (m35C4, eased back to 0 by cLib_addCalc). A half step moves half as far: lifted
+# a tick's move before the step, Link was still short of it on the next frame, the ground check put him
+# back down, and the step was taken again: the model dropped another 0.7 of the step (his eye went 250,
+# 237.6, 246.4 where 30 has 250, 258.8, 263.8). The look ahead and the slope's allowance are a step's move.
+023FF514    *h:f7       lfs             setStepsOffset: speedF, the look ahead for a step (x and z)
+023FF57C    *h:f10      lfs             setStepsOffset: speedF, the slope's own rise over the move

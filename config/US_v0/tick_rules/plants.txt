@@ -1,0 +1,41 @@
+# The scene's plants at 60 fps: bushes and small trees being cut, pushed and shaken (docs/recompiler-design.md
+# D21; session qa, from the owner's bug list: B6 "cutting bushes: the animation feels too fast", B7 "cutting
+# trees feels off"). The plants' calcs run every frame with a time step (sixty.cpp's Plants); their sway
+# phases are in tick_rules.txt. Found with the plants' step-doubling trial (WWHD_60FPS_TRIAL_PLANTS=1) on
+# route slash, a bush (Obj_Wood 266) or a small tree (GRASS 435, params 00000017: swood5) spawned 80 units
+# ahead of Link on the Outset dock, and matched with the decomp's d_wood.cpp and d_tree.cpp.
+#
+# ---- bushes (dWood::Anm_c; WWHD: mCountdown +0x64, mForceDir +0x66, mPosOffsetY +0x6C, mPosOffsetZ +0x70,
+# mVelY +0x74, the phases from +0x78, mAlphaScale +0x8A). mode_cut (f_025CD474): the cut bush rises and
+# falls (mVelY += kCutYAccel, then mPosOffsetY += mVelY: the speed once a tick at its end, the position h of
+# it a step: 30's height at whole ticks), drifts (kCutZVel), pitches (200 a tick) and fades (14 a tick once
+# its count is under 20); the trial: two half steps moved each twice (0 -> 5 / 2.5, 1 -> 18 / 19).
+025CD4CC    late        stfs            wood mode_cut: mVelY += kCutYAccel (clamped at -40)
+025CD4C8    *h@f12      fadds           wood mode_cut: mPosOffsetY += mVelY
+025CD4D0    *h@f0       fadds           wood mode_cut: mPosOffsetZ += kCutZVel
+025CD4E0    spliti      addi            wood mode_cut: mPhaseX[0] -= 200 (the pitch)
+025CD554    whole       stb             wood mode_cut: mAlphaScale -= 14 (the fade)
+025CD568    late        sth             wood mode_cut: mCountdown - 1 (read above, for the fade's start)
+# pushed by Link: mode_push_into (f_025CD5E0) and mode_push_back (f_025CD958) count down (`--mCountdown <= 0`,
+# tested at once) and move their sway phases by a step a tick; mode_to_norm (f_025CDEE8) counts 20 ticks; the
+# unit's own count (+0xC, f_025CE5D0)
+025CD61C    keep:r11    addi            wood mode_push_into: --mCountdown, its <= 0 tested at once
+025CD6B0    split@r12   add             wood mode_push_into: mPhaseY[i] += phaseVelY
+025CD9A0    keep:r12    addi            wood mode_push_back: --mCountdown, its <= 0 tested at once
+025CDAD4    split@r11   add             wood mode_push_back: mPhaseY[i] += phaseVelY
+025CDAE8    split@r0    add             wood mode_push_back: mPhaseX[i] += phaseVelX
+025CE174    whole       sth             wood mode_to_norm: mCountdown - 1
+025CE620    whole       sth             wood unit (f_025CE5D0): its count (+0xC) - 1
+#
+# ---- small trees (dTree_data_c::animation, f_025C6D40; the anm's field_0x08 +0x8, mAnimTimer +0xC,
+# field_0x10 to field_0x20 the cut top's slide and fall). Cut: the top slides (field_0x10 along its angle a
+# tick) and falls (field_0x14 -= 2, then field_0x1c += field_0x14: as the bush). Shaken (hit or rolled
+# into): a spring, mAnimTimer = (mAnimTimer - field_0x08) x 0.9, field_0x08 += (s16)mAnimTimer: the pull h
+# of itself, the damping to the power h, the move split between the two frames of a tick.
+025C7084    late        stfs            tree animation (cut): field_0x14 += -2 (clamped at -40)
+025C7078    *h@f8       fadds           tree animation (cut): field_0x1c += field_0x14
+025C706C    *h@f10      fadds           tree animation (cut): field_0x18 += field_0x10 sin
+025C7080    *h@f13      fadds           tree animation (cut): field_0x20 += field_0x10 cos
+025C6E00    *h@f0       fadds           tree animation (shaken): mAnimTimer += -field_0x08
+025C6E08    d@f9        fmuls           tree animation (shaken): mAnimTimer *= 0.9
+025C6E1C    split@r0    add             tree animation (shaken): field_0x08 += (s16)mAnimTimer
