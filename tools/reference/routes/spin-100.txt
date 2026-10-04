@@ -1,0 +1,9 @@
+# Route: the hurricane spin (session qa, the owner's "over too quickly, the dizziness too short", B9): on
+# the Outset dock hold B until the sword is fully charged, let go: Link spins along (procCutRoll), then
+# stands dizzy (procCutRollEnd). Track Link (168): his procedure (+0x65F0) and how long each lasts.
+# FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+1000 B 100     # charge the spin fully, then let go
