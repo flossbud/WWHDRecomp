@@ -126,3 +126,45 @@
 02589EC8    whole       bctrl           dMagma_ballPath_c::calc: setup (a respawn) when the phase is below 0
 02589ED0    whole       sth             dMagma_ballPath_c::calc: the phase = 0 after it
 02589ED4    whole       stb             dMagma_ballPath_c::calc: the wait = 0 after it
+#
+# ---- the Tower of the Gods' light bridges (LIGHTBRIDGE 427, d_a_lbridge.cpp: "Gbrg00") and light stairs
+# (LIGHTSTAIR 428, d_a_lstair.cpp: "Gkai00"): their btk/bpk/brk and the emitter's fade (cLib_chaseUC,
+# cLib_calcTimer, the stair's rise cLib_addCalc) are stepped; their appear/disappear events are ordered
+# every tick until they start (late), and the stair's appear countdown (once its room's enemies are gone)
+# is a tick count both steps should see (late: it appears on the tick 30's does). In Siren room 2 their
+# frames matched 30's but lost half a frame at each event's start (a converted actor's tick there was
+# split: its whole-tick step ran, then the event began and its half step was skipped; shared, events).
+021B2DF4    late        bl 025d7a58     lbridge demo: fopAcM_orderOtherEventId (appear)
+021B2E60    late        bl 025d7a58     lbridge demo: fopAcM_orderOtherEventId (disappear)
+021B67D4    late        bl 025d7a58     lstair demoMove: fopAcM_orderOtherEventId
+021B66F4    late        stb             lstair checkAppear: the appear countdown (+0x659) - 1
+#
+# ---- eye switches (Hys 450, d_a_hys.cpp: the Tower of the Gods' eyes, shot with an arrow; its code sits among
+# d_a_ib.cpp's): the eye's texture pattern frame (+0x5D0, 0-3) opens by one a tick once hit and closes by
+# one a tick after: keep (discrete frames, on whole ticks as at 30).
+0217AD70    keep:r11    addi            hys mode_sw_on: the eye's frame + 1 while < 3
+0217AE74    keep:r10    addi            hys mode_wait: the eye's frame - 1 while > 0
+# Tested in Siren room 1 (its switch on in the 100% save: the eye open, frame 3), WWHD_DEBUG_POKE=1000:450,5c8,4,0
+# (mode wait) and 1000:450,5d0,1,3: it closes 3, 2, 1, 0 on the ticks 30's does, changing on whole ticks.
+#
+# ---- mailboxes (OBJ_TORIPOST 67, d_a_obj_toripost.cpp: "Tpost"): no rules (its animation, morph, posMoveF and
+# collider timer are stepped helpers; its talks and letters are events). Outset's two: trials clean,
+# 100% equal to 30's on route save, 98.2% on route tour (base fields at a few ticks as Link passes).
+#
+# ---- the hot floor (Hot_Floor 231, d_a_hot_floor.cpp: a Beamos beam's scorch): no rules. The beam (Beam 232)
+# hands it its hit point's matrix every step and it follows (its five-matrix history isn't drawn); its
+# fade (cLib_chaseF on a timer, to 60 while hit, down by 0.4 a tick after) is stepped. With a Beamos
+# spawned facing Link on the Outset dock (950:233,00000002,-201622,168,311893) its trial is clean; its
+# path and life differ from 30's as the beam's first hit and stop do (the beam fired 4 ticks earlier at 60).
+#
+# ---- item stands (STANDITEM 462, d_a_dai_item.cpp: the goods on shops' and Windfall's stalls; its code sits in
+# d_a_daiocta.cpp's range; fields at GC + 0x11C): an item's animation plays and rests by turns, two
+# countdowns (keep: a countdown at 0 starts the other one, so a half step never acts twice), and the
+# wind-blown ones sway with a phase (split) whose speed follows the wind's strength (*h@; its decay
+# cLib_addCalc is stepped). mTimer (+0x738) only counts, read by nothing. Some carry a cloth: the chains item.
+02117C0C    keep:r11    addi            standitem animTest: mBckPlayTimer (+0x744) - 1
+02117D58    keep:r12    addi            standitem animTest: mBckStopTimer (+0x746) - 1
+02118224    keep:r12    addi            standitem animTestForOneTime: mBckPlayTimer - 1
+02118178    keep:r12    addi            standitem animTestForOneTime: mBckStopTimer - 1
+02117FB0    *h@f0       fadds           standitem actionFobj06: the wind's strength (+0x7E0) += |the wind| a tick
+02118030    split@r10   add             standitem actionFobj06: the sway's phase (+0x7D0) += its speed (+0x7CE)

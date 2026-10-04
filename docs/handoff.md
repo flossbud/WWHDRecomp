@@ -938,6 +938,27 @@ it in a window; D21 "Step 2"):**
       1: clean but for the scroll's last place;
     - Not converted: the Hyoi seagull NPC_KAM 195 (idle, it matches; its flight with a Hyoi Pear isn't
       tested).
+  - **Round 2, objects (session top)**, in objects.txt and the defaults:
+    - the Tower of the Gods' light bridges and stairs (LIGHTBRIDGE 427, LIGHTSTAIR 428): their animations
+      and fades are stepped helpers; their events' orders `late`, the stair's appear countdown `late`.
+      Trials clean (Siren rooms 2, 4, 12, 16); the bridges equal 30's; the stairs' frames equal 30's but
+      lose half a frame at each event's start: a converted actor's tick there is split (its whole-tick
+      step runs, the event begins, its half step is cancelled). That's the shared event gating (sixty.cpp,
+      `f_025DE58C`); session top takes it after session qa's event-reset change;
+    - the hot floor (Hot_Floor 231, a Beamos beam's scorch): no rules, it follows the beam's hit point
+      and fades on stepped timers. With a Beamos spawned facing Link on the Outset dock its trial is
+      clean; its path and life follow the beam, which fires about 4 ticks earlier at 60 (session bottom's
+      Beam/Bemos, noted to it);
+    - eye switches (Hys 450): the eye's frame ±1 a tick `keep`; poked into its wait in Siren room 1 it
+      closes over the same three ticks as at 30;
+    - mailboxes (OBJ_TORIPOST 67): no rules; equal to 30's on routes save and tour.
+    - Not yet: door knobs (KNOB00 305: a door whose motion is its open event, which steps at 30; left for
+      the events item and session qa's door fixes), item stands (STANDITEM 462: four countdowns `keep`, a
+      wind phase `split`; some carry a cloth: the chains item), Windfall's night lights (128) and
+      shutters (259).
+    - B10 (Beedle's ships sail too fast; session qa handed it over): not reproduced. Outset's Beedle ship
+      tracked on route sail: speed 12.00/12.00 a tick, path 16132/16153 units over f900-2900, its bob
+      phase and height identical tick for tick.
   - **Two 60 fps crashes in the Forbidden Woods, fixed (session top; shared, `sixty.cpp` `LiveStore`)**: at
     every warp there with Link converted (the defaults). Both came from half ticks putting back or hiding
     words in .data/.bss that head lists whose nodes are on the heap (which a half tick never puts back):
