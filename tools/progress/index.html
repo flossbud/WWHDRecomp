@@ -241,8 +241,13 @@ async function refresh() {
   if (b && b.length) renderBugs(b);
   if (c) claims = c;
   if (p) { data = p; render(); }
-  if (n && n.length) $("sessions").innerHTML = n.map(x => `<div class="now"><span class="dot${Date.now() / 1000 - x.time > 3 * 3600 ? " idle" : ""}"></span>
-    <div><b>${esc(x.session)}:</b> <span class="sub">${esc(x.text || "idle")} · ${ago(x.time)}</span></div></div>`).join("");
+  // a session is active if its status line or its latest commit ("(session NAME)" in the subject) is recent
+  const lastCommit = name => Math.max(0, ...((data && data.commits) || []).filter(m => m.subject.includes("session " + name)).map(m => m.time));
+  if (n && n.length) $("sessions").innerHTML = n.map(x => {
+    const c = lastCommit(x.session), last = Math.max(x.time, c);
+    return `<div class="now"><span class="dot${Date.now() / 1000 - last > 3 * 3600 ? " idle" : ""}"></span>
+    <div><b>${esc(x.session)}:</b> <span class="sub">${esc(x.text || "idle")} · ${ago(x.time)}${c > x.time ? ` · last commit ${ago(c)}` : ""}</span></div></div>`;
+  }).join("");
   if (s && s.length) $("shots").innerHTML = s.map(x => `<figure><img loading="lazy" src="${esc(x.file)}" alt="${esc(x.caption)}"><figcaption>${esc(x.caption)} · ${ago(x.time)}</figcaption></figure>`).join("");
 }
 refresh(); setInterval(refresh, 20000);
