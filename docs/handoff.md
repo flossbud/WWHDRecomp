@@ -1075,6 +1075,12 @@ it in a window; D21 "Step 2"):**
     tap took Link from 12 to 536 a tick and off the dock in 20 ticks. setNormalSpeedF's least and most
     steps are divided by h at f_02416B70's two calls (the override takes h of them again: 30's steps a
     step); Link's path now matches 30 within a few units.
+  - **Joint callbacks run with every drawn frame's calc (a hazard)**: a converted process's model is
+    calculated each frame it is drawn (twice a tick), an unconverted one's once a tick, and the step is 1
+    there, so step rules don't apply: an increment in a joint callback (J3DNode calc callbacks, e.g.
+    the Wind Temple's wall fans' blades, FAN 299: `mFanAngle += mFanSpeed` in nodeCallBack) runs twice a
+    tick once the process is converted, and the step-doubling trial (execute only) doesn't see it. 30
+    against 60 does (the fans' +0x634 differed on every tick). FAN is left unconverted (wind.txt).
   - **Link's hat and his bob in water (shared; regress.sh rerun)**, from session top's swimming test: the
     hat (f_024022D0) leans away from its move since the last call and flutters by a phase that adds 1500 +
     4060 f a tick (f from the wind and that move's length). At 60 the move was a step's and the phase went

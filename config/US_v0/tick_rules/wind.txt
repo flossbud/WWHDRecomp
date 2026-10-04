@@ -79,3 +79,9 @@
 02144F44    *h@f0       fmadds          fm: +0x7DC += speed * direction
 02144FEC    *h@f13      fmadds          fm: +0x7E4 += speed * direction
 02145000    *h@f0       fmadds          fm: +0x7DC += speed * direction
+#
+# ---- the wall fans (FAN 299, d_a_fan.cpp: Hsen1 in room 11, on while their switch is off, so off on the
+# 100% save; Hsen3 in room 12, always on: kaze,12,0,-1). Not converted: their blades turn in the model's
+# joint callback (nodeCallBack f_02131FF8: mFanAngle += mFanSpeed, 0x1D4C a tick for Hsen3), which runs
+# in the model's calc when it is drawn, where the step is 1 (a rule there doesn't apply): converted, the
+# fan is drawn and calculated every frame and its blades turned twice as fast; unconverted, at 30's speed.
