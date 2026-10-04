@@ -1104,7 +1104,10 @@ it in a window; D21 "Step 2"):**
     stick's angle + that (m34E8, Link +0x6930, read from the camera's last frame), so from ~f1190 he
     swims another way. The view's eye-to-centre yaw stays within 0.1 degrees. followCamera's trial
     sites there are all ruled (k@ and k75@ on its approaches, the turn ramp m38C/30 counted on whole
-    ticks): the gap is likely the k75 approximation with a factor that changes every tick. Not fixed.
+    ticks): the gap is likely the k75 approximation with a factor that changes every tick. In a
+    sustained turn it isn't a rate: Link swimming in circles off the Outset dock (stick up-left, ~190
+    ticks) has the control angle turning +10496 against +10570 over 48 ticks, ~300 (1.6 degrees) behind
+    30's throughout; kindan's 16 ticks were the turn's start. Not changed.
   - **Link's own position adds, audited (session bottom)**: every VECAdd into Link's current.pos and
     every inline `pos += x` in his code (actor_rmw.py 168, 44 sites) is ruled, or adds a per-call
     measure (the animation's root motion since the last call, posMove; the hands' spread change,
