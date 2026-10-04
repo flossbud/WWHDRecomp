@@ -36,6 +36,16 @@
 020C6F38    d@f0        fmuls           bomb posMoveF: speed.y *= 0.9 in water
 020C6F3C    d@f0        fmuls           bomb posMoveF: speedF *= 0.9 in water
 020C487C    d@f1        bl 028e8e64     bomb set_wind_vec: mWindVec *= 0.95
+# Its collider enters the mass registration once a frame of g_Counter's (`mMassCounter != g_Counter.mCounter0`).
+# The counter steps once a tick, in the whole tick's draw, so a half step and the next whole step see the
+# same value: at 60 the half step's registration stamped the counter, and an explosion on the next whole
+# step (a bomb held until its fuse ends) skipped its blast's 200-unit attack sphere: Link wasn't knocked
+# back (session bottom's find). The stamp goes on whole ticks; the half step's Set and SetMass are dropped
+# by their overrides (once a tick) anyway.
+020C4FE8    whole       stw             bomb: mMassCounter (+0xB48) = g_Counter.mCounter0 after its registration
+020C62C4    whole       stw             bomb: mMassCounter = g_Counter.mCounter0 (another state's)
+020C7684    whole       stw             bomb: mMassCounter = g_Counter.mCounter0 (the explosion's, procExplode_init)
+020C7DA0    whole       stw             bomb: mMassCounter = g_Counter.mCounter0 (another state's)
 #
 # ---- Octoroks (OQ, process 227: "Oqw" at sea, "Oq" in the Forbidden Woods' pools; d_a_oq.cpp isn't
 # decompiled): their bob's phase (+0x800 a tick: the height they approach), their spin (shape_angle +=

@@ -970,6 +970,14 @@ it in a window; D21 "Step 2"):**
       the half tick: the sway moves every frame and is 30's at half ticks); the lift's fall `*h@`/`late`.
       M_NewD2 room 2: trials clean, the lift's path 5375 against 5435 units (6930 converted without
       rules); room 4's twelve vents: trial clean (their timers are random).
+    - Link's bombs (BOMB 294) held until they blow up didn't knock Link back at 60 (session bottom's find
+      while testing B19): the bomb registers its collider once per g_Counter.mCounter0 (`mMassCounter`),
+      which steps once a tick in the whole tick's draw, so a half step and the next whole step share a
+      value; the half step's registration stamped it and the blast on the next whole step skipped its
+      200-unit attack sphere. The stamps `whole` (sea.txt); the half step's Set and SetMass were dropped by
+      their overrides anyway. Now Link takes the hit (proc 0x68 from f1155.5, landing 0x69 at f1164;
+      30: f1156 and f1165, as hits resolve on whole ticks). Only the bombs guard on that counter (three
+      NPCs use it as a random bit).
     - Not yet: door knobs (KNOB00 305: a door whose motion is its open event, which steps at 30; left for
       the events item and session qa's door fixes), Windfall's night lights (Obj_Light 128: its decomp is
       stubs, and its phases run at night only) and shutters (SHUTTER 259: they move in their open/close
