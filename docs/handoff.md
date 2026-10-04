@@ -1153,8 +1153,10 @@ it in a window; D21 "Step 2"):**
     (kindan room 11 from session top; the items route), aiming the grappling hook and the boomerang while
     walking (items), his items (arrows, boomerang, hookshot, grappling hook), lifting and carrying a pot
     (carry: a pot spawned with Outset's own small pots' params, 707fff00; one of param 0 doesn't lift).
-    Not driven yet: climbing vines, pushing and pulling blocks, hiding in a barrel, swinging on the rope,
-    the hookshot's pull, the boomerang's lock-ons. Everywhere Link's camera-relative heading is ~1.5 degrees off 30's (the camera's
+    Not driven yet: climbing vines, pushing and pulling blocks, hiding in a barrel, swinging on the rope
+    (its phases and pump are ruled from the decomp: unruled, the swing ran at twice its frequency; a stake,
+    KUI 250, spawned above the Outset dock let the hook be thrown at it with ZL held, but the hook came
+    back instead of wrapping), the hookshot's pull, the boomerang's lock-ons. Everywhere Link's camera-relative heading is ~1.5 degrees off 30's (the camera's
     control angle, below), so long routes drift a little (a wall's corner reached later, then apart).
   - **Rope bridges (BRIDGE 89), ruled, not converted** (`earth.txt`): the most placed unconverted type that
     moves (a census of every stage's placements against the defaults: GRASS, tags, switches, static

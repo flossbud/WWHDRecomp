@@ -74,6 +74,16 @@
 # Outset dock's end, then along its edge: 20 units short in 40 ticks). The change reads per tick (/h).
 # (procClimbMoveSide adds its hands' change to his position itself: a step's both ways.)
 02428E54    /h:f13      fabs            link hang move: mNormalSpeed = the hands' spread change, per tick
+# Link swinging on a rope (procRopeSwing f_02435580, proc 0x78; the grappling hook's or a hanging rope): his
+# swing is the amplitude m34D4 times the sine of a phase (m35A8 x m35A4, the rope's own frequency; m35AC
+# the side swing's), and the phases add 1 + a little a tick: at 60 he swung twice as fast. The phases'
+# adds are h of themselves, and so is the pump the stick gives the amplitude a tick (m34D4 += 0x40
+# |cos|). From the decomp (no swing on a route yet).
+024356D8    *h@f9       fadds           link rope swing: m35A8 (+0x6A00) += 1, the swing's phase (a special rope)
+024356E0    *h@f9       fadds           link rope swing: m35AC (+0x6A04) += 1, the side swing's phase
+024357D8    *h@f9       fadds           link rope swing: m35A8 += 1 + f, the swing's phase
+024357EC    *h@f11      fadds           link rope swing: m35AC += 1 + f, the side swing's phase
+02435C14    *h@f7       fmadds          link rope swing: m34D4 (+0x691A) += 0x40 |cos|, the stick's pump a tick
 #
 # ---- arrows (ARROW, process 472, d_a_arrow.cpp; execute f_02052DB8). WWHD's fields are the GameCube's +
 # 0x11C up to field_0x604, + 0x118 after it. procMove (f_02054040): current.pos += speed (200 a tick; the
