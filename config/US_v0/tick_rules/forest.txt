@@ -88,12 +88,23 @@
 # pos.x/z += a rotated (m30C sin(phase), 0, 0) a tick.
 021A7B20    *h@f0       fadds           ks speed_keisan: pos.x += the wiggle
 021A7B30    *h@f13      fadds           ks speed_keisan: pos.z += the wiggle
+# A Morth landing on a half step would hop again on the next one, half a tick before 30's; the hops' impulse
+# (speed.y = 1, then + a random 0-5) and the hop's sound go on whole ticks only.
+021A83C8    whole       stfs            ks (mode 1): a hop's speed.y = 1
+021A83D4    whole       stfs            ks (mode 1): speed.y += a random 0-5
+021A861C    whole       bl 025e1a40     ks (mode 2): the hop's sound
+021A8634    whole       stfs            ks (mode 2): a hop's speed.y = 1
+021A8644    whole       stfs            ks (mode 2): speed.y = 1 + a random 0-5
+021A8954    whole       stfs            ks: a hop's speed.y = 1 (another state)
+021A896C    whole       stfs            ks: speed.y += a random 0-5 (the same)
 # The hanging platforms' water state and the house's fall aren't reached on the 100% save (the house lies
 # at its landing height, 1380, from the start; poking +0x3B6 and +0x494 to 1 only replays its landing):
 # their rules follow the code (and session bottom's check of *h@ plus late on an explicit step). Octoroks'
-# rules are in sea.txt (the pools' Octoroks here woke and match). Not converted: Morths (205: with the
-# wiggle and fall@ their trial is clean, but their paths part from the 30-tick run's, most staying put at
-# 60 where at 30 they chased; they react to Link, whose own walk differs at 60: retest after Link's fields).
+# rules are in sea.txt (the pools' Octoroks here woke and match). Morths (205): in the defaults since the
+# hop rules; on dry ground with Link going straight (rooms 6 and 16, route walk, f1000-1080) the trial has
+# only derived positions and the wall push-out (dBgW::positionWallCorrect, geometric), and their paths go
+# both ways around 30's (489/511, 568/677, 529/474: random hops and headings). In room 11 Link sinks and
+# swims, and the camera's swim turn differs at 60 (session bottom's handoff note), so they part there.
 #
 # ---- Kalle Demos (stage kinBOSS: BMD 235, the core; BMDFOOT 237, the floor tentacles; BMDHAND 236, the
 # ceiling tentacles; d_a_bmd.cpp, d_a_bmdfoot.cpp, d_a_bmdhand.cpp), fought after a warp to kinBOSS,0,0,-1

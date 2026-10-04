@@ -858,9 +858,12 @@ it in a window; D21 "Step 2"):**
     - hanging flower platforms KITA 97 and the hanging house KOKIIE 98, converted: their sways verified;
       the platforms' water drift and the house's fall aren't reached on the 100% save (the house lies
       at its landing height from the start), ruled from the code;
-    - not converted: Morths 205 (the sideways wiggle now `*h`, the inlined gravity `fall@`: trial clean,
-      but their paths part from 30's: most stay put at 60 where at 30 they chased; they react to Link,
-      whose own walk differs at 60 (session bottom's Link fields): retest after those);
+    - Morths 205, converted: the sideways wiggle `*h`, the inlined gravity `fall@`, and the hops' impulse
+      and sound on whole ticks (a Morth landing on a half step hopped again on the next one, half a tick
+      early). On dry ground with Link going straight (kindan rooms 6 and 16, route walk, f1000-1080) their
+      paths go both ways around 30's (489/511, 568/677, 529/474: random hops and headings); the trial has
+      only derived positions and the wall push-out. In room 11 Link sinks and swims, and the camera's swim
+      turn differs at 60 (session bottom's note), so the Morths there part from 30's;
     - Big Octo 225/226 and Gyorgs 228, converted, tested on the boat (route `sail`, aboard by f1095,
       sailing west-northwest from f1400): Big Octo's switch (0x0D) is set on the 100% save, so one is
       spawned ahead of the boat without it (`WWHD_DEBUG_SPAWN=1450:225,ffff2802,-216800,0,314300`): trial

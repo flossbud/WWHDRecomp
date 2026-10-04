@@ -261,7 +261,8 @@
     "182": "Sign",
     "225": "Big Octo",
     "226": "Big Octo eye",
-    "228": "Gyorg"
+    "228": "Gyorg",
+    "205": "Morth"
   },
   "queue_note": "Two sessions: 'top' takes items from the top down, 'bottom' from the bottom up. Claim an item before starting it (tools/progress/publish.sh claim ID); stop where the other session's claims begin. Stage names under 'where' past Windfall and Outset are unverified guesses: confirm with tools/sixty/tests/room_list.sh.",
   "queue": [
