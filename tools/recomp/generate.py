@@ -46,8 +46,8 @@ override of a function that isn't listed, as a missing or duplicate symbol.
 Tick rules (D21): an instruction listed in config/US_v0/tick_rules.txt runs only on the game's
 whole ticks when it runs 60 frames a second: its code is wrapped in `if (RT_WHOLE_TICK())`, which
 is always true at 30 fps, so nothing changes there. A rule names the instruction it expects (a call:
-`bl TARGET` or `bctrl`; a store without update: its mnemonic), and a different instruction at that
-address is an error. `whole:r3=N` also sets r3 to N when a call is skipped, for callers that test
+`bl TARGET` or `bctrl`; a store: its mnemonic; a skipped update form, `stfsu f1, D(rA)`, still updates
+its register), and a different instruction at that address is an error. `whole:r3=N` also sets r3 to N when a call is skipped, for callers that test
 its result, `whole:r3=rN` sets it to the register rN (a call's own argument: "unchanged"). `late`
 runs it once a tick at the tick's end instead: on the half tick while its process steps at 60 (a
 tick counter, so that both frames of a tick see the tick's count, as `1 / (N - count)` approaches
@@ -290,10 +290,11 @@ class Program:
             have = f"bl {target:08x}"
         elif i.op == "bcctr" and i.lk and (i.bo & 0x14) == 0x14:
             have = "bctrl"
-        elif i.op in STORES and not i.op.endswith(("u", "ux")) and i.op not in ("stwcx.", "stmw", "stswi"):
-            have = i.op
+        elif (i.op in STORES and not i.op.endswith("ux") and i.op not in ("stwcx.", "stmw", "stswi")
+              and not (i.op.endswith("u") and (i.rA == 1 or i.op.startswith("psq")))):
+            have = i.op                                # an update form's register is updated when skipped too
         else:
-            return f"{ea:08X}: tick rules apply to calls and plain stores, not {i.op}"
+            return f"{ea:08X}: tick rules apply to calls and stores (not indexed updates, not the stack's), not {i.op}"
         if have != expect.lower():
             return f"{ea:08X}: tick rule expects `{expect}`, the code has `{have}`"
         if r3 is not None and not have.startswith(("bl", "bctrl")):
@@ -525,6 +526,8 @@ def apply_tick_rule(rule, i, lines):
     if kind in ("whole", "late"):
         test = "RT_WHOLE_TICK()" if kind == "whole" else "RT_LATE_TICK()"
         out = [f"if ({test}) {{   // tick rule: {what}"] + ["\t" + l for l in lines] + ["}"]
+        if i.op in STORES and i.op.endswith("u"):
+            out += ["else", f"\tGPR({i.rA}) = GPR({i.rA}) + {emit.hx(i.d)};"]   # the update without the store
         if arg is not None:
             out += ["else", f"\tGPR(3) = {reg_expr(arg) if isinstance(arg, str) else emit.hx(arg)};"]
         return out

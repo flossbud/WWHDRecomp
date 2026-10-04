@@ -159,6 +159,23 @@
 02179314    *h@f1       bl 0201ae48     hookshot procShot: mMoveVec x 15 (the step out)
 02179CB0    *h:f1       fdivs           hookshot procReturn: 63 / the way's length (the step back)
 02179B24    *h@f1       bl 0201ae48     hookshot procPlayerPull: mMoveVec = the way x (chains x 7 / its length)
+# Its sight (session qa: the owner's flickering reticle, B21). While Link aims, the hookshot's wait state
+# (f_021789B4) clears the "hookable" flag, puts the sight's cross point back at the far point and enters
+# the sight's collider every step; the collision pass (whole ticks only) then sets the hit point through the collider's callback
+# and the flag (daHookshot_rockLineCallback). A half step's reset stayed until Link's next whole step,
+# which saw no hit and nothing hookable, while his half step saw the tick's: the lock and its sound came
+# on every other frame. The resets are the whole tick's now, as the collider's entry is (dCcS::Set's
+# override).
+02178A48    whole       stw             hookshot wait: mObjHookFlg = FALSE (the callback sets it again in the collision pass)
+02178D74    whole       stfsu           hookshot wait (aiming): mObjSightCrossPos.x = the far point
+02178D7C    whole       stfs            hookshot wait (aiming): mObjSightCrossPos.y
+02178D84    whole       stfs            hookshot wait (aiming): mObjSightCrossPos.z
+# The sight's lock (daPy_sightPacket_c, Link +0x58E8: the lock flag at +5, its frame at +6, 0 to 25, a
+# sound at 0), counted every step by setHookshotSight (f_02432D80) and the grappling hook's aim
+# (f_024350A0): a frame a tick, and the sound of a frame read as 0 once
+02432FF4    keep:r10    addi            setHookshotSight: the lock's frame + 1
+0243304C    whole       bl 025e1988     setHookshotSight: the lock's sound at frame 0 (a half step reads the tick's 0 again)
+02435250    whole       bl 025e1988     the rope's aim: the lock's sound at frame 0 (its frame count: 02435200, above)
 #
 # ---- the grappling hook's rope (HIMO2, process 446, d_a_himo2.cpp; execute f_0216E194, new_himo2_move
 # f_0216F7FC; WWHD's fields the GameCube's + 0x11C): its tick count (m02D8: the hook twirls in Link's hand
