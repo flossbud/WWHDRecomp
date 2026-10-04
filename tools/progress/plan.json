@@ -175,8 +175,10 @@
     "135": "Blade trap",
     "202": "Armos",
     "203": "Armos Knight",
-    "217": "Molgera",
     "254": "Moving platform (MACHINE)",
+    "119": "Floormaster",
+    "185": "Torch (EP)",
+    "367": "Medli (NPC_MD)",
     "453": "Pot",
     "454": "Stone",
     "123": "Windfall windmill wheel",
@@ -248,7 +250,7 @@
     {
       "id": "earth",
       "name": "Earth Temple: Stalfos 190, Poes 212, Floormasters, mirrors and light, Jalhalla 211",
-      "where": "M_Dai"
+      "where": "M_Dai with spawn points 0-18 (M_Dai,P,0,-1), M_DaiB (Jalhalla, with Medli), M_DaiMB, Edaichi"
     },
     {
       "id": "wind",

@@ -1,0 +1,131 @@
+# Step and tick rules for the Earth Temple (the work queue's "earth"; session bottom). Format: ../tick_rules.txt
+# and tools/recomp/generate.py. Stage M_Dai: its rooms are reached by spawn point (M_Dai,P,0,-1 for P 0-18),
+# Jalhalla's room is M_DaiB. Found with the step-doubling trial (WWHD_60FPS_TRIAL) in the rooms, checked 30
+# against 60.
+#
+# ---- ST (190, d_a_st.cpp: Stalfos; execute f_02493FB0; GameCube offsets + 0x11C). M_Dai,15's waits in a
+# coffin for a switch (param eaffffe3): WWHD_DEBUG_POKE=970:190,3e0,2,1 (its wait's state, m02C4) wakes it.
+02494304    whole       stw             st: its tick count (+0x404, m02E8) + 1
+02494318    whole       sthx            st: its timers (+0x408) count down
+02494338    whole       sth             st: a timer (+0x412) - 1
+02494348    whole       sth             st: a timer (+0x2024) - 1
+# speed_pos_calc (f_024961B8) moves it itself: pos += speed, then speed.y -= 5 (the explicit order: at 60
+# with gravity h of itself a step it would fall g/4 a tick too far). Gravity once a tick instead (late):
+# two half steps of h speed then add up to the 30 Hz step exactly.
+02496334    *h@f12      fadds           st speed_pos_calc: pos.x += speed.x
+0249633C    *h@f8       fadds           st speed_pos_calc: pos.y += speed.y
+02496360    late        stfs            st speed_pos_calc: speed.y -= 5, at least the fall's cap (once a tick)
+0249635C    *h@f0       fadds           st speed_pos_calc: pos.z += speed.z
+# its hair (ke_move f_02491458: three strands of ten segments, each a Verlet chain solved in one pass: a
+# segment goes to its last place + its velocity + a lift - gravity, then back to 17.5 from the one before)
+# and its loincloth (nun_move f_0249196C: one segment the same way). Run with half steps (forces h squared,
+# the damping h of a power) they swing wider and settle slower than at 30: in one pass a motion moves down
+# a segment a step, twice as fast at 60, and the projection's loss depends on the step (an offline model
+# of the loop shows the same). So they keep the 30 Hz step: the hair on whole ticks, the cloth's own state
+# on whole ticks (its anchor, and the mace that nun_move places, every step).
+024941CC    whole       bl 02491458     st: ke_move (its hair), on whole ticks
+024951B0    whole       bl 02491458     st: ke_move (its hair, another state), on whole ticks
+02491D80    whole       sth             st cloth: its angle y (m24[1].y)
+02491D8C    whole       sth             st cloth: its angle x (m24[1].x)
+02491D98    whole       stw             st cloth: its last place (x, kept in the velocity's slot)
+02491DA0    whole       stw             st cloth: (y)
+02491DA8    whole       stw             st cloth: (z)
+02491DBC    whole       stfs            st cloth: its place (x)
+02491DCC    whole       stfs            st cloth: (y)
+02491DD8    whole       stfs            st cloth: (z)
+02491DEC    whole       stfs            st cloth: its velocity (x)
+02491E00    whole       stfs            st cloth: (y)
+02491E10    whole       stfs            st cloth: (z)
+# its bones when it falls apart (part_move f_024925B8, part_posmove f_02492210: the same explicit order)
+0249266C    whole       sth             st part: a tick count (+0x3E) + 1
+0249267C    whole       stb             st part: its wait (+0x40) - 1
+024922E8    vec@r4      bl 028e8d88     st part: pos += velocity (VECAdd)
+0249230C    late        stfs            st part: velocity.y -= 5 (once a tick)
+02492328    whole       bl 0201a554     st part: its angles += its spin (csXyz +=, s16s: on whole ticks)
+#
+# ---- PW (212, d_a_pw.cpp: Poes; execute f_0244B3E4, its code 02449B54-02450C68; little of it is
+# decompiled; WWHD's fields are the GameCube's + 0x11C). Found with the trial in M_Dai,8 (two visible from
+# the start, param 02ffff00) and M_Dai,14 (three that appear, ffffff01), and actor_rmw.py over its code.
+# Not ruled: its mode (+0x484, mMode: += 1 is a step to the next mode, once), path point (+0x474), random
+# turns (+0x4A8 += rndFX), and the bob's subtract and add around its ground check (f_0244A768: net 0).
+0244B4EC    keep:r8     addi            pw: its timers (+0x494, m378...) - 1, on whole ticks
+0244D89C    fall@f6     fadds           pw: speed.y += gravity (an inlined calcSpeed)
+0244D91C    fall@f6     fadds           pw: speed.y += gravity (another state's)
+0244D990    fall@f6     fadds           pw: speed.y += gravity (another state's)
+# its alpha's sway (alpha_anime f_0244A9E4: phase + 0x400 a tick) and other phases a tick
+0244AA14    spliti      addi            pw: its alpha's sway phase (+0x4AA) + 0x400
+0244AAF4    spliti      addi            pw: a phase (+0x4AC) + 700
+0244AC20    spliti      addi            pw: a phase (+0x4AE) + 1000
+0244FF20    spliti      addi            pw: a phase (+0x4A0) + 700
+0244FF24    spliti      addi            pw: shape_angle.y + 1000
+0244B778    spliti      addi            pw: shape_angle.y + 0x1000 (it spins as it appears: mode 2)
+# its fade (+0x4B6, m39A) in and out a tick
+0244C314    spliti      addi            pw: its fade - 3
+0244D0BC    spliti      addi            pw: its fade + 5
+0244D68C    spliti      addi            pw: its fade - 8
+# its lantern's swing (kantera_calc f_0244F730: a phase += its speed, the lantern's angles from it)
+0244F8A8    split@r7    add             pw: its lantern's swing phase (+0x4B0) += its speed (+0x4B2)
+#
+# ---- KANTERA (193, d_a_kantera.cpp: the lanterns of Moblins and Poes; execute f_0218D3F8). In the defaults
+# since the ganon item (GanonL's Moblins held theirs still); here they swing, fall and have moths.
+0218D554    spliti      addi            kantera: a phase (+0x470) + 0x100
+0218D56C    whole       stw             kantera: its tick count (+0x478) + 1 (its swing is a sine of it)
+# dropped (pos += speed, then speed.y -= gravity: the explicit order, gravity once a tick), spinning
+0218D5E0    *h@f7       fadds           kantera fall: pos.x += speed.x
+0218D5FC    *h@f11      fadds           kantera fall: pos.y += speed.y
+0218D604    *h@f13      fadds           kantera fall: pos.z += speed.z
+0218D5EC    spliti      addi            kantera fall: angle.y + 500
+0218D610    spliti      addi            kantera fall: angle.x + 1300
+0218D630    late        stfs            kantera fall: speed.y -= gravity (once a tick)
+0218D994    *h@f7       fadds           kantera fall (another state): pos.x += speed.x
+0218D9B0    *h@f11      fadds           kantera fall: pos.y += speed.y
+0218D9B8    *h@f13      fadds           kantera fall: pos.z += speed.z
+0218D9A0    spliti      addi            kantera fall: angle.y + 500
+0218D9C4    spliti      addi            kantera fall: angle.x + 1300
+0218D9E4    late        stfs            kantera fall: speed.y -= gravity (once a tick)
+# its moths (ga_move inlined: each flies 10 a tick toward a target, and with the lantern's own move)
+0218E014    whole       stb             kantera moth: its wait - 1
+0218E110    *h@f10      fadds           kantera moth: pos.x += its flight (x)
+0218E120    *h@f0       fadds           kantera moth: (y)
+0218E13C    *h@f8       fadds           kantera moth: (z)
+0218E14C    spliti      addi            kantera moth: its wings' phase + 0x3E00
+#
+# ---- BPW (211, d_a_bpw.cpp: Jalhalla, stage M_DaiB with WWHD_DEBUG_BOSS=1; one class for its body, its
+# lantern, the damage ball and the Poes it carries; execute f_020D3464; WWHD's fields are the GameCube's
+# + 0x11C). Not ruled: mActionState (+0x562: += 1 is a step to the next state, once), mAttWaitTimer
+# (+0x568) and m462 (+0x57E), steps and indices.
+020D3514    keep:r9     addi            bpw: its ten timers (+0x56A, mSomeCountdownTimers) - 1, on whole ticks
+020D34F0    spliti      addi            bpw: m408 (+0x524) - 2 a tick
+020D1CB8    spliti      addi            bpw: alpha_anime's phase (+0x594, m478) + 0x400
+020D1D60    spliti      addi            bpw: fuwafuwa_calc's phase (+0x598, m47C) + 700
+020D52E4    spliti      addi            bpw: fuwafuwa's phase (+0x598) + 700 (another copy)
+020D3394    split@r0    add             bpw: kantera_calc: its lantern's swing (+0x59E, m482) += its speed (m484)
+020D35B8    fall@f12    fadds           bpw: speed.y += gravity (an inlined calcSpeed: the execute's, copied into each state)
+020D3624    fall@f12    fadds           bpw: speed.y += gravity (an inlined calcSpeed: the execute's, copied into each state)
+020D3D68    fall@f12    fadds           bpw: speed.y += gravity (an inlined calcSpeed: the execute's, copied into each state)
+020D3DFC    fall@f12    fadds           bpw: speed.y += gravity (an inlined calcSpeed: the execute's, copied into each state)
+020D44C4    fall@f12    fadds           bpw: speed.y += gravity (an inlined calcSpeed: the execute's, copied into each state)
+020D45F0    fall@f12    fadds           bpw: speed.y += gravity (an inlined calcSpeed: the execute's, copied into each state)
+020D48A0    fall@f12    fadds           bpw: speed.y += gravity (an inlined calcSpeed: the execute's, copied into each state)
+020D4B90    fall@f12    fadds           bpw: speed.y += gravity (an inlined calcSpeed: the execute's, copied into each state)
+020D4CD4    fall@f12    fadds           bpw: speed.y += gravity (an inlined calcSpeed: the execute's, copied into each state)
+020D4E5C    fall@f12    fadds           bpw: speed.y += gravity (an inlined calcSpeed: the execute's, copied into each state)
+020D4F6C    fall@f12    fadds           bpw: speed.y += gravity (an inlined calcSpeed: the execute's, copied into each state)
+020D506C    fall@f12    fadds           bpw: speed.y += gravity (an inlined calcSpeed: the execute's, copied into each state)
+020D5360    fall@f12    fadds           bpw: speed.y += gravity (an inlined calcSpeed: the execute's, copied into each state)
+020D4D74    keep:r5     addi            bpw: a random wait (+0x59A) - 1, on whole ticks
+# the skulls it pulls in and blows away (search_get_skull: their roll and lift a tick)
+020D2C68    split@r0    subf            bpw: a skull's roll: shape_angle.x -= (ID & 3) 0x300 + 0x1000 a tick
+020D2D30    spliti      addi            bpw: a skull's roll, blown away: shape_angle.x - 0x2000 a tick
+020D2CE8    *h@f8       fadds           bpw: a skull, blown away: speed.y += rnd(5) + 5 a tick
+# spins and phases a tick in its states (from the decomp: b_fire_1 case 11, case 0x16, torituki case 2,
+# the throw's roll)
+020D3FAC    split@r0    add             bpw: the fire's phase (+0x57E, m462) += 0x5DC
+020D38FC    split@r9    add             bpw: shape_angle.y += its spin (+0x580, approached to 0)
+020D4038    split@r0    add             bpw: shape_angle.y += 2000 sin(m462)
+020D4CF4    spliti      addi            bpw: shape_angle.y + 0x100
+020D5194    spliti      addi            bpw: shape_angle.y + 1000 (carrying a Poe)
+020D7DC4    spliti      addi            bpw: shape_angle.x + 0x1000 (thrown, rolling)
+020D7D84    spliti      addi            bpw: m3D6.x (+0x4F2) + 5000 (thrown, rolling)
+020D381C    spliti      addi            bpw: shape_angle.y + 0x1000 (a spin)
+020D81E8    spliti      addi            bpw: shape_angle.y + 0x1500 (a spin)

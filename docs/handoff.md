@@ -883,10 +883,43 @@ it in a window; D21 "Step 2"):**
     rules, 1455 against 1455 units), 252 (a wave from its tick count), Armos and Armos Knights (AM
     202, AM2 203, named by their code's place: within 0-4% of 30's distances), Molgera (BWD 217, BWDG
     219: tick counts, timers, a wobble's phase; her pace matches, the fight then diverges with
-    Link's hits). Not converted: Floormasters (FM 119; one matches 30 exactly, another chases at
-    half speed from the start: to look into; the forest item has them too; note that
-    tick_rules.txt's "fm" rules are process 204's, not FM's), Makar (NPC_CB1 334: moves twice as far
+    Link's hits). Floormasters (FM 119: rules here, converted with the Earth Temple: one matches 30
+    exactly, the other drifts with a random speed it draws, cM_rndF(9) + 1; tick_rules.txt's "fm"
+    rules are process 204's, not FM's). Not converted: Makar (NPC_CB1 334: moves twice as far
     converted), springboards (166: tiny), the propeller switch (430).
+  - **The Earth Temple** (`earth`; `config/US_v0/tick_rules/earth.txt`): stage `M_Dai` by spawn point
+    (`M_Dai,P,0,-1`, P 0-18), Jalhalla in `M_DaiB` (WWHD_DEBUG_BOSS=1). Most of these classes have
+    WWHD's fields at the GameCube's + 0x11C. Converted:
+    - Stalfos (ST 190): timers, its tick count, its own move (speed_pos_calc: pos += speed, then speed.y
+      -= 5: the explicit order, so gravity `late`, once a tick, and the two half steps of h speed add up
+      to the 30 Hz step), its bones (part_posmove the same way). M_Dai,15's waits in a coffin for a
+      switch: `WWHD_DEBUG_POKE=990:190,3e0,2,1` wakes it (WWHD_DEBUG_SPAWN of a Stalfos crashes). Its
+      body follows 30 within 7 units until a random wait ends differently. Its hair (three ten-segment
+      chains) and loincloth are Verlet chains solved in one pass: with half steps (forces h squared,
+      damping h of a power) they swung wider and settled slower, because in one pass a motion moves one
+      segment down a step (twice as fast at 60) and the projection's loss depends on the step; an
+      offline model of the loop showed the same. So they keep the 30 Hz step: the hair's
+      call on whole ticks, the cloth's own stores on whole ticks (its anchor and the mace every step).
+      Now the hair's droop and motion match 30 (tip 8.9 against 9.0 units a tick).
+    - Poes (PW 212; its code is mostly not decompiled): timers, inlined gravity (fall@, three
+      copies), its alpha's sway and other phases, its fade, its lantern's swing phase (kantera_calc
+      in the Poe). Paths within 3-8% of 30 (they turn at random).
+    - their lanterns (KANTERA 193, in the defaults since the ganon item): its tick count (the swing is
+      a sine of it), a dropped lantern's fall (explicit order: `late`), its moths: two lanterns match
+      30 exactly, two within 3%.
+    - Floormasters (FM 119; rules in wind.txt).
+    - Jalhalla (BPW 211, one class for the body, its lantern, the damage ball and the Poes it carries):
+      its ten timers, a decay, gravity (13 copies of the execute's calcSpeed), alpha_anime's and
+      fuwafuwa's phases, the lantern's swing, a random wait, spins and the skulls it pulls and blows
+      (from the decomp). Its body and lantern stay within 2-9% of 30's paths over 800 ticks; its fight
+      past the start was not exercised much (the test route only swings the sword).
+    Not ruled on purpose: mode/state numbers (PW's mMode +0x484, BPW's mActionState +0x562: `+= 1` is a
+    step to the next state, once; a `keep` there would drop a step taken on a half tick), path-point
+    indices and random turns: actor_rmw.py's `whole` suggestions include these, check each against the
+    decomp. Not converted: Medli (NPC_MD 367: her code moves positions a tick, but this save has no
+    companion Medli to test), torches (EP 185: a random flicker target each step, as session top found
+    for Outset), tapestries (289: a cloth), mirrors (272), coffins (159), the rope bridge (89),
+    light switches (30), pots.
   - **`fall@fREG`** (new step rule, shared: generate.py, sixty.cpp's `g_rtActor`, sixty_step.cpp's
     `rt_step_fall`): many executes inline fopAcM_calcSpeed's `speed.y += gravity` instead of calling
     it (a scan for `lfs fG,0x374(rA)` ... `fadds` ... `stfs 0x340(rA)` found 62 sites in ~25 types),
@@ -916,7 +949,8 @@ it in a window; D21 "Step 2"):**
   Peahats 209, Boko Babas 214, Outset's NPC_YM2 316 and NPC_YW1 317, Hyrule's flags 174, the
   capes 192, the Moblins' lanterns 193, Puppet Ganon 243-245, Ganondorf 246, Miniblins 247,
   Bubbles 207, the Wind Temple's fans 114, blade traps 135, Wizzrobes 208, platforms 254 and 252,
-  Armos 202/203 and Molgera 217/219 (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
+  Armos 202/203, Molgera 217/219, the Earth Temple's Stalfos 190, Poes 212, Floormasters 119 and
+  Jalhalla 211 (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
   373, 352, 121, 445, 309 and Outset's 118, 68, 73, 200, 255, 71, 67, 335, 319, 320, 331, 461, 45
   (session top; `kConvertedByDefault` has a line per session),
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,

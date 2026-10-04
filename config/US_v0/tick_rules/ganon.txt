@@ -41,8 +41,8 @@
 021BCC38    d@f11       fmuls           mant: velocity.y = move * m3648
 021BCC50    d@f0        fmuls           mant: velocity.z = move * m3648
 #
-# KANTERA (193, d_a_kantera.cpp: a Moblin's lantern) needs no rules: converted with its Moblin it matches
-# the 30-tick run (GanonL's three; fields that differ are constant ones left from the heap).
+# KANTERA (193, d_a_kantera.cpp: a Moblin's lantern): converted with its Moblin it matched the 30-tick run
+# (GanonL's three, held still); its rules for a swing, a fall and its moths are in earth.txt (the Poes').
 #
 # ---- BGN (243, bgn_class, d_a_bgn.cpp: Puppet Ganon, its first form; stage GanonK; execute f_0207E7B4).
 # WWHD's fields: the GameCube's + 0x876C from mC728 on (mC746 at +0x14EB2), + 0x1BC before. Found with
