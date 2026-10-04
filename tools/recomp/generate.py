@@ -60,6 +60,10 @@ rules, for the code of processes that run every frame with a time step h
                per step that should read per tick)
   *hh:REG      after it, REG times h squared (an acceleration a position-based step adds as a
                displacement, x' = x + (x - x_old) + a: a cloth's or a chain's forces)
+  fall@fREG    for an actor's own inlined fopAcM_calcSpeed (`fadds speed.y, speed.y, gravity`): the
+               gravity REG is h of itself for the instruction, and what it adds is noted for the
+               fopAcM_posMove override's arc correction (src/overrides/sixty_step.cpp), as the
+               calcSpeed override notes it: the hop's arc then lands on the 30 Hz one at whole ticks
   k:REG        after it, REG = 1 - (1 - REG)^h (an exponential approach's factor)
   k75:REG      an approach whose result is then approached by 0.75 (k@ on that one): REG becomes
                approach(0.75 REG) / approach(0.75), so the two together approach as one tick does
@@ -228,7 +232,8 @@ class Program:
                 kind, sep, arg = rule.partition(":")
                 if "@" in rule:
                     kind, sep, arg = rule.partition("@")
-                    assert kind in ("split", "vec", "arc") or kind in self.STEP_OPS, f"tick_rules.txt:{n}: {rule}: @ takes a step operation"
+                    assert kind in ("split", "vec", "arc", "fall") or kind in self.STEP_OPS, f"tick_rules.txt:{n}: {rule}: @ takes a step operation"
+                    assert kind != "fall" or arg[0] == "f", f"tick_rules.txt:{n}: {rule}: fall@ takes the gravity's float register"
                     assert kind not in ("vec", "arc") or (arg[0] == "r" and words[2] == "bl"), f"tick_rules.txt:{n}: {rule}: a call's pointer register"
                     kind += "@"
                 if kind == "reload":
@@ -249,7 +254,8 @@ class Program:
                         assert key == "r3", f"tick_rules.txt:{n}: unknown rule argument {arg}"
                         value = v if re.fullmatch(r"r([12]?[0-9]|3[01])", v) else int(v, 0)
                 else:
-                    assert kind.rstrip("@") in ("keep", "split", "note", "vec", "arc") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert kind.rstrip("@") in ("keep", "split", "note", "vec", "arc", "fall") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert kind != "fall", f"tick_rules.txt:{n}: fall takes @: fall@fREG"
                     assert kind != "note" or arg[0] == "f", f"tick_rules.txt:{n}: note takes a float register"
                     assert re.fullmatch(r"[rf]([12]?[0-9]|3[01])", arg), f"tick_rules.txt:{n}: {rule}: a register expected"
                     assert kind.rstrip("@") != "split" or arg[0] == "r", f"tick_rules.txt:{n}: split takes an integer register"
@@ -537,6 +543,17 @@ def apply_tick_rule(rule, i, lines):
     op = kind.rstrip("@")
     if op == "note":
         return lines + [f"if (RT_STEPPED()) g_rtNote = (float){reg}.fp0;   // step rule: {what}"]
+    if op == "fall":
+        # the gravity h of itself for the instruction (back afterwards unless written); what it adds is
+        # noted for the posMove override's arc correction (rt_step_fall, src/overrides/sixty_step.cpp)
+        out = [f"{{ const auto saved_ = {reg}; double fall_ = 0.0;   // step rule: {what}",
+               f"\tif (RT_STEPPED()) {{ {reg}.fp0 = rt_step_mul({reg}.fp0); {reg}.fp1 = {reg}.fp0; fall_ = {reg}.fp0; }}"]
+        out += ["\t" + l for l in lines]
+        out.append("\tif (RT_STEPPED()) { void rt_step_fall(double); rt_step_fall(fall_); }")
+        assign = re.compile(re.escape(reg) + r"(\.fp[01](int)?)?\s*=(?!=)")
+        if not any(assign.search(l) for l in lines):
+            out.append(f"\t{reg} = saved_;")
+        return out + ["}"]
     if op in ("vec", "arc"):
         arc = "true" if op == "arc" else "false"
         return ([f"{{ const uint32 vecEa_ = {reg}; float vecSaved_[3]; const bool vec_ = RT_STEPPED();   // step rule: {what}",

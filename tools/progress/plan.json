@@ -171,6 +171,12 @@
     "246": "Ganondorf",
     "247": "Miniblin",
     "207": "Bubble",
+    "114": "Wind Temple fan",
+    "135": "Blade trap",
+    "202": "Armos",
+    "203": "Armos Knight",
+    "217": "Molgera",
+    "254": "Moving platform (MACHINE)",
     "453": "Pot",
     "454": "Stone",
     "123": "Windfall windmill wheel",
@@ -238,8 +244,8 @@
     },
     {
       "id": "wind",
-      "name": "Wind Temple: Wizzrobes 208, Armos Knights, fans and wind, Molgera 217/218",
-      "where": "kaze"
+      "name": "Wind Temple: Wizzrobes 208, Armos 202/203, Floormasters 119, fans (WINDMILL 114), propellers, spikes, blade traps, springboards, Molgera 217-219",
+      "where": "kaze with spawn points 1-19 (kaze,P,0,-1: the room number alone doesn't move Link), kazeB (Molgera), kazeMB"
     },
     {
       "id": "ganon",

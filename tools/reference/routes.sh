@@ -17,6 +17,8 @@ route_info() {
         plants) route=plants-100.txt   frames=1520  save=/wwhd/data/saves/wwhd_100 trace= ;;
         bk)    route=drc-bk.txt        frames=1300  save=/wwhd/data/saves/owner_drc trace= ;;
         gtower) route=gtower-100.txt   frames=12000  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        kazeb) route=kazeb-100.txt     frames=6000  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        walk)  route=walk-100.txt      frames=3000  save=/wwhd/data/saves/wwhd_100 trace= ;;
         pot)   route=drc-pot.txt       frames=1440  save=/wwhd/data/saves/owner_drc trace= ;;
         sail)  route=sail-100.txt      frames=2940  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/sail-det/a.zst ;;
         menus) route=menus-100.txt     frames=1920  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/menus-det/a.zst ;;
@@ -24,4 +26,4 @@ route_info() {
         *) return 1 ;;
     esac
 }
-route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower"
+route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk"

@@ -1,0 +1,81 @@
+# Step and tick rules for the Wind Temple (the work queue's "wind"; session bottom). Format: ../tick_rules.txt
+# and tools/recomp/generate.py. Stage kaze: its rooms are reached by spawn point (kaze,P,0,-1 for P 1-19:
+# the room number alone doesn't move Link), Molgera's room is kazeB. Found with the step-doubling trial
+# (WWHD_60FPS_TRIAL) in the rooms, checked 30 against 60.
+#
+# ---- WINDMILL (114, d_a_windmill.cpp: the Wind Temple's fans; execute f_024E1C84). Its blades turn in a
+# joint callback of its model's calc (f_024E0CF4, run from the execute): the angle +0x1536 += its spin
+# speed +0x1538 (which approaches its target through cLib_addCalcAngleS's time step).
+024E0D3C    split@r12   add             windmill: the blades' angle += their spin a tick
+#
+# ---- Obj_Trap (135, d_a_obj_trap.cpp: blade traps; f_023A7FC0): two timers
+023A8468    whole       sth             trap: a timer (+0x5FC) - 1
+023A848C    whole       sth             trap: a timer (+0x5F6) - 1
+# its pause (+0x5F4) counts down and the count, not the stored value, decides when it moves again: keep
+023A851C    keep:r12    addi            trap: its pause - 1, on whole ticks
+#
+# ---- WZ (208, d_a_wz.cpp: Wizzrobes; f_024E398C): its timers, and its fade (+0x506) in and out by 8 a tick
+024E3D74    whole       sthx            wz: its timers count down
+024E3F40    spliti      addi            wz: its fade + 8 a tick (appearing)
+024E46BC    spliti      addi            wz: its fade - 8 a tick
+024E5A10    spliti      addi            wz: its fade - 8 a tick
+024E5FCC    fall@f8     fadds           wz: speed.y += gravity (an inlined calcSpeed)
+#
+# ---- 252 (unmatched: 10-12 in the Wind Temple's rooms, a wave of floats from its tick count; f_0248EEEC)
+0248EF10    whole       sth             252: its tick count (+0x3D8) + 1
+0248EF24    whole       sthx            252: its timers count down
+#
+# ---- BWD (217, d_a_bwd.cpp: Molgera, stage kazeB; execute f_020FA614): its tick count (its phases are
+# the count times a step: m18FE, m1900 in the decomp), counters and timers
+020FA9C8    whole       sth             bwd: its tick count (+0x1B30) + 1
+020FA9DC    whole       sthx            bwd: its timers (+0x1B50) count down
+020FA924    whole       stb             bwd: a timer (+0x187C) - 1
+020FA9FC    whole       sth             bwd: a timer (+0x1B5A) - 1
+020FAA0C    whole       sth             bwd: a timer (+0x1B74) - 1
+020FB008    whole       stb             bwd: a timer (+0x1E2B) - 1
+020FB238    whole       stb             bwd: a timer (+0x1E29) - 1
+020FB530    whole       stb             bwd: a timer (+0x1E2A) - 1
+020FC39C    whole       stb             bwd: a timer (+0x1AE8) - 1
+020FCB0C    keep:r4     addi            bwd: its segments' timers - 1, on whole ticks (the count decides at once)
+020FCEB0    whole       stb             bwd: a count (+0x1A48) - 1
+020FCF04    whole       stb             bwd: a timer (+0x3E8C) - 1
+020FC81C    whole       sthx            bwd: its segments' tick counts (+0x1A6A...) + 1
+# her fight (route kazeb: Link walks into the arena, she rises from ~f3200): a wobble's phase (+0x1B7A, the
+# body's z angle sways from it), two tick counts
+020FAB70    split@r6    add             bwd: a wobble's phase (+0x1B7A) += 1000 a tick
+0210378C    whole       sth             bwd: a tick count (+0x3E98) + 1
+02103794    whole       sth             bwd: a tick count (+0x3E9A) + 1
+#
+# ---- BWDG (219, d_a_bwdg.cpp: Molgera's sand; f_021043EC)
+02104444    whole       sth             bwdg: its tick count (+0x3D4) + 1
+#
+# ---- AM (202, d_a_am.cpp: Armos, the statues that hop at Link) and AM2 (203, d_a_am2.cpp: Armos Knights;
+# execute f_0204D3A4). Named by their code's place among the asserts' files (they have none). Their
+# execute inlines fopAcM_calcSpeed (speed.y += gravity +0x374, then the fall's cap) in every state
+# instead of calling it, so the helper's time step doesn't reach it: at 60 their hops fell twice as
+# fast and they went ~15% less far (the walk route in the Wind Temple: kaze,4,0,-1 wakes seven); with
+# only the gravity halved (*h) the arcs came out higher and they went ~10% too far. fall@ also hands
+# the step's gravity to posMove's arc correction.
+0204B250    fall@f0     fadds           am: speed.y += gravity (an inlined calcSpeed)
+0204D5C8    fall@f10    fadds           am2: speed.y += gravity (an inlined calcSpeed)
+0204DE58    fall@f10    fadds           am2: speed.y += gravity (an inlined calcSpeed)
+0204E054    fall@f10    fadds           am2: speed.y += gravity (an inlined calcSpeed)
+0204E0F8    fall@f10    fadds           am2: speed.y += gravity (an inlined calcSpeed)
+0204E1F0    fall@f10    fadds           am2: speed.y += gravity (an inlined calcSpeed)
+0204E328    fall@f10    fadds           am2: speed.y += gravity (an inlined calcSpeed)
+0204EAD0    fall@f10    fadds           am2: speed.y += gravity (an inlined calcSpeed)
+0204EB98    fall@f10    fadds           am2: speed.y += gravity (an inlined calcSpeed)
+0204ED54    fall@f10    fadds           am2: speed.y += gravity (an inlined calcSpeed)
+0204F4BC    fall@f10    fadds           am2: speed.y += gravity (an inlined calcSpeed)
+0204F6DC    fall@f10    fadds           am2: speed.y += gravity (an inlined calcSpeed)
+0204F770    fall@f10    fadds           am2: speed.y += gravity (an inlined calcSpeed)
+0204F7F8    fall@f10    fadds           am2: speed.y += gravity (an inlined calcSpeed)
+#
+# ---- FM (119, d_a_fm.cpp: Floormasters; code 0214023C-02149EE0. Note: tick_rules.txt's "fm" rules at
+# 0214C4E8-02152290 are process 204's, not this one's). A phase, its hand's offsets moved along a
+# direction a tick (the walk route: kaze,5,0,-1 wakes one)
+021405B0    split@r0    add             fm: a phase (+0x806) += 0x1830 a tick
+02144F30    *h@f13      fmadds          fm: +0x7E4 += speed * direction
+02144F44    *h@f0       fmadds          fm: +0x7DC += speed * direction
+02144FEC    *h@f13      fmadds          fm: +0x7E4 += speed * direction
+02145000    *h@f0       fmadds          fm: +0x7DC += speed * direction

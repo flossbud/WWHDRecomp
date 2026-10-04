@@ -69,7 +69,9 @@ namespace
 	// Valoo's tail in its room (DR2), Magtails (MT), Peahats (PH), Boko Babas (BO), and Outset's
 	// NPC_YM2 and NPC_YW1; Hyrule's flags (MAJUU_FLAG), the capes of Darknuts and Phantom Ganon (MANT),
 	// the Moblins' lanterns (KANTERA), Puppet Ganon's three forms (BGN, BGN2, BGN3), Ganondorf (GND),
-	// Miniblins (PT) and Bubbles (BL) (session bottom); Windfall's windmill wheel (Obj_Ferris), pigs (KB),
+	// Miniblins (PT) and Bubbles (BL), the Wind Temple's fans (WINDMILL), blade traps (Obj_Trap),
+	// Wizzrobes (WZ), moving platforms (MACHINE), 252, Armos (AM, AM2) and Molgera (BWD, BWDG) (session
+	// bottom); Windfall's windmill wheel (Obj_Ferris), pigs (KB),
 	// townsfolk (NPC_PEOPLE, NPC_KK1, NPC_MK, NPC_UK, NPC_GK1, NPC_TT, NPC_RSH1), market stalls (Obj_Roten),
 	// its distant models (445) and stands (DAI); Outset's fishman (NPC_SO), Beedle's ship (OBJ_IKADA), palms
 	// (Obj_Lpalm), crabs (KN), items (ITEM), the grotto (OBJ_HOLE), the mailbox (OBJ_TORIPOST), and indoors
@@ -79,7 +81,7 @@ namespace
 	// WWHD_60FPS_CONVERT= (empty) converts none.
 	constexpr const char* kConvertedByDefault =
 		"476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,"
-		"174,192,193,243,244,245,246,247,207,"   // session bottom
+		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,"   // session bottom
 		"123,220,353,170,368,374,364,373,352,121,445,309,118,68,73,200,255,71,67,335,319,320,331,461,45";   // session top
 	const char* ConvertList()
 	{
@@ -1436,10 +1438,13 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 
 // fpcM_Execute: every process's execute goes through it (fpcM_Management's execute pass, f_025DE788):
 // actors, the camera, the environment, the HUD and menus, scenes. Noted for the half ticks' rollback.
+uint32 g_rtActor = 0;                               // the process whose execute runs (rt_step_fall's)
+
 void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 {
 	const uint32 from = wwhd::rt::SixtyFrom();      // ~0 when 60 fps is off
 	const uint32 proc = GPR(3);
+	g_rtActor = proc;
 	// Link's process: noted for the test aids at every rate (WWHD_DEBUG_SPAWN uses his room)
 	if (rd16(proc + 0x08) == 168)
 	{

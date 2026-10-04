@@ -107,6 +107,18 @@ namespace
 	std::unordered_map<uint32, Fall> s_fall;
 }
 
+// The process whose execute runs (src/overrides/sixty.cpp's fpcM_Execute override sets it)
+extern uint32 g_rtActor;
+
+// fall@ step rules (tools/recomp/generate.py): an actor's execute that inlines fopAcM_calcSpeed's
+// `speed.y += gravity` (AM2's in each of its states) notes what this step's gravity added, as the
+// calcSpeed override does, so posMove's arc correction reaches it too
+void rt_step_fall(double dv)
+{
+	if (g_rtActor)
+		s_fall[g_rtActor] = { (float)dv, StepId() };
+}
+
 // ---- c_lib (c_lib.cpp): exponential approaches ------------------------------------------------------
 
 // cLib_addCalc(f32* v r3, target f1, scale f2, maxStep f3, minStep f4) -> |target - v| f1

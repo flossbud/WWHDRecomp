@@ -856,6 +856,30 @@ it in a window; D21 "Step 2"):**
   - **Doors' rattle** (f_0252B2D8, a helper of DOOR10, which the defaults convert, and DOOR12): its
     count doubled at 60 and the shutters of the tower's battle rooms ended their rattle 20 units off;
     it runs on whole ticks only now (a vibration a tick).
+  - **The Wind Temple** (`wind`; `config/US_v0/tick_rules/wind.txt`): stage `kaze` reaches its rooms
+    by spawn point (`kaze,P,0,-1`, P 1-19: the room number alone doesn't move Link), Molgera's arena
+    is `kazeB`. New routes: `walk` (walk about after a warp: wakes a room's enemies), `kazeb` (into
+    Molgera's arena; she rises ~f3200). Converted: the fans (WINDMILL 114: a joint callback adds the
+    spin to the blades' angle, `split`), blade traps (Obj_Trap 135: timers; their pause count needed
+    `keep`, as the count, not the stored value, decides when they move: move 33 / pause 11 ticks as
+    at 30), Wizzrobes (WZ 208: timers, the fade's +-8 `spliti`), moving platforms (MACHINE 254: no
+    rules, 1455 against 1455 units), 252 (a wave from its tick count), Armos and Armos Knights (AM
+    202, AM2 203, named by their code's place: within 0-4% of 30's distances), Molgera (BWD 217, BWDG
+    219: tick counts, timers, a wobble's phase; her pace matches, the fight then diverges with
+    Link's hits). Not converted: Floormasters (FM 119; one matches 30 exactly, another chases at
+    half speed from the start: to look into; the forest item has them too; note that
+    tick_rules.txt's "fm" rules are process 204's, not FM's), Makar (NPC_CB1 334: moves twice as far
+    converted), springboards (166: tiny), the propeller switch (430).
+  - **`fall@fREG`** (new step rule, shared: generate.py, sixty.cpp's `g_rtActor`, sixty_step.cpp's
+    `rt_step_fall`): many executes inline fopAcM_calcSpeed's `speed.y += gravity` instead of calling
+    it (a scan for `lfs fG,0x374(rA)` ... `fadds` ... `stfs 0x340(rA)` found 62 sites in ~25 types),
+    so the calcSpeed override's time step missed them: at 60 they fell twice as fast. `fall@` on the
+    fadds takes h of the gravity and hands it to posMove's arc correction, as the override does.
+    Applied to the Armos, Wizzrobes and, in `tick_rules/inlined_gravity.txt`, Chuchus, Peahats, Boko
+    Babas and Magtails (Chuchus' regress test: path 517 against 532, was 351). Left for their areas:
+    Jalhalla BPW 211 (13 sites), Poes 212, 204 (15), KANBAN 182 (10), Kalle Demos 235, 238, OQ 227,
+    NPCs NH 313, NPC_OS 314, NPC_FA1 360, NPC_MD 367, NPC_UK 368, OBJ_HAT 405 (the scan's output is
+    easy to redo: the pattern above over .text).
   - Found on the way, not changed: the tevStr's light-change count (+0x1C4 in many actors, from
     `f_025580FC` in settingTevStruct, up to 20 when an actor's light changes) counts steps, so a
     converted actor's light fades in twice as fast; a background helper (`f_024F2514`, d_bg_w.cpp's
@@ -873,10 +897,11 @@ it in a window; D21 "Step 2"):**
   Chuchus 206, Keese 215, Moblins 188, Darknuts 191, Kargarocs 181, ReDeads 224, Gohma 234 and
   Valoo's tail in its room 223 (counters, timers, two sways; tested idle in the fight), Magtails 216,
   Peahats 209, Boko Babas 214, Outset's NPC_YM2 316 and NPC_YW1 317, Hyrule's flags 174, the
-  capes 192, the Moblins' lanterns 193, Puppet Ganon 243-245, Ganondorf 246, Miniblins 247 and
-  Bubbles 207 (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364, 373, 352, 121, 445,
-  309 and Outset's 118, 68, 73, 200, 255, 71, 67, 335, 319, 320, 331, 461, 45 (session top;
-  `kConvertedByDefault` has a line per session),
+  capes 192, the Moblins' lanterns 193, Puppet Ganon 243-245, Ganondorf 246, Miniblins 247,
+  Bubbles 207, the Wind Temple's fans 114, blade traps 135, Wizzrobes 208, platforms 254 and 252,
+  Armos 202/203 and Molgera 217/219 (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
+  373, 352, 121, 445, 309 and Outset's 118, 68, 73, 200, 255, 71, 67, 335, 319, 320, 331, 461, 45
+  (session top; `kConvertedByDefault` has a line per session),
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
   `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;

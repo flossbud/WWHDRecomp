@@ -1,0 +1,14 @@
+# Inlined fopAcM_calcSpeed in already converted types (session bottom, 2026-10-04). Their executes add
+# gravity to speed.y themselves (`fadds speed.y, speed.y, gravity` after lfs gravity,0x374), which the
+# calcSpeed override's time step doesn't reach: at 60 they fell twice as fast. fall@ (tools/recomp/
+# generate.py) takes h of the gravity and hands it to posMove's arc correction, as the override does.
+# Found by a scan of the program for the pattern (lfs fG,0x374(rA); fadds ... fG; stfs ...,0x340(rA)):
+# 62 sites in ~25 types; the Armos's are in wind.txt, the rest wait for their areas. The Chuchu's
+# (021101B0, *h, session top) is in tick_rules.txt; its three others (0210FEF0, 0210FF64, 0211007C)
+# are left as they are: with all four ruled the spawn test went 517 against 532 units, with the one
+# 534.
+023CEA4C    fall@f13    fadds           ph (Peahats 209): speed.y += gravity
+020BF188    fall@f9     fadds           bo (Boko Babas 214): speed.y += gravity
+020BF22C    fall@f9     fadds           bo: speed.y += gravity
+020BF300    fall@f9     fadds           bo: speed.y += gravity
+021DB8CC    fall@f10    fadds           mt (Magtails 216): speed.y += gravity

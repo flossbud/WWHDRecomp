@@ -185,7 +185,7 @@
 # Found with the trial in Ganon's Tower (GanonN's five).
 02446494    whole       sth             pt: a tick count (+0x3EC) + 1
 02446540    whole       sthx            pt: its timers (+0x420) count down
-024466D0    whole       sth             pt: a timer (+0x3F2) - 1
+024466C4    keep:r9     addi            pt: a timer (+0x3F2) - 1, on whole ticks (the count decides at once)
 024465A0    *h@f9       fadds           pt: pos.x += its push (+0x644) a tick
 024465B0    *h@f11      fadds           pt: pos.y += its push
 024465C0    *h@f13      fadds           pt: pos.z += its push
