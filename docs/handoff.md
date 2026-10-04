@@ -1477,6 +1477,38 @@ it in a window; D21 "Step 2"):**
     `capture.sh` with `CAPTURE_30=1`. A bug that shows as "X steps twice" is found fastest with the trial
     over a route that does X (`WWHD_60FPS_TRIAL=168 WWHD_60FPS_TRIAL_TICKS=a-b`), then `grep` its output for
     the field's values.
+  - **Puppet Ganon's "black screen" (B5): the game's own scene, closed as not a bug**. On the 100% test
+    save Puppet Ganon was never beaten: event bit 3F10 (set by its death, read by its create: beaten, a
+    rope and a stake instead of the boss) is clear, 3B02 (Ganondorf's speech before the fight seen; while
+    clear the room loads layer 8) is set, 4002 (the tower top's first visit) clear. Walking into GanonK
+    starts the fight with no aid; `WWHD_DEBUG_BOSS` doesn't reach it (it answers the dungeons' "boss
+    beaten" bit, isDungeonItem item 3, only while set, and writes nothing). Its death sets 3F10 and loads
+    `GanonK` point 4 layer 9 (d_a_bgn.cpp): a cut to black, Link close up, a dark shot of Link raising
+    the Master Sword with Ganondorf's lines ("Yes, surely you are the Hero of Time, reborn..."),
+    Ganondorf with Zelda by the bed, a fade, Link free in the room. The same at 30, at 60 and on the
+    unmodified game (below). For a boss rush: a refight has to restore the flags its boss reads (here an
+    event bit, not the dungeon's bit) and expect the game's after-fight sequence to run for real.
+    **Every `WWHD_DEBUG_*` aid is off unless its variable is set**: normal play (`tools/play/play.sh`
+    sets none) never runs them.
+    The save's flags: the save data is on the heap (the pointer at 0x101F84DC; 0x145B7B60 on route
+    `save`), dSv_event_c at +0x644 (isEventBit f_025B8B94, onEventBit f_025B8B68: byte `flag >> 8`, mask
+    `flag & 0xFF`); `WWHD_60FPS_WATCH=addr,...` prints heap words each frame (watch.txt beside the binary).
+  - **The unmodified game with the same pokes: `tools/reference/refpoke.py`**. The reference Cemu has
+    none of the test aids (they are overrides of recompiled code), so an experiment made with them
+    couldn't be repeated on the original. refpoke writes the emulator's guest memory from outside
+    (/proc/PID/mem; it finds the guest's base by the game's code and times itself by the game's frame
+    counter and stage name): `refpoke.py PIDFILE "stage=sea+120:stage GanonK,0,0,-1" "stage=GanonK+180:p
+    243 14eb4 2 6;p 243 14eb6 2 0" "+900:p 244 602 2 6;p 244 604 2 0" "+400:p 245 11e66 2 3;p 245 11e68 2
+    0;p 245 11e90 2 2710"` beside `tools/reference/run.sh` (a copy of /wwhd/opt/cemu-src/bin in a folder
+    of its own as `CEMU_BIN`, `CEMU_SHOT_FRAMES=2400-5400/100`) is B5's run: warp, Puppet Ganon's three
+    forms, its death. Processes are found by name in the heap; they sat at the same addresses as in our
+    runs.
+  - **Open (session qa)**: B16 (Windfall's streaks: the colours of the man by the gate's clothes; not
+    reproduced from the dock in consecutive frames or after a talk); B11 (the glide: Link, leaf and camera
+    move evenly, but at 60 a bright halo flashes on the Mirror Shield on some frames, never at 30; no
+    field of Link's singles those frames out: the draw); B8 (the bow's pull at 30: Link's and the arrow's
+    fields all change on both kinds of frame while aiming; the pull's pose is elsewhere); B10 (Beedle's
+    ship measured the same at both rates: needs the owner's where and what).
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
   CPU, vsyncs missed; `tools/sixty/frames.py` summarises), `WWHD_PROFILE` (`tools/profile_report.py`
   on the worker with the same build). On the desktop, `~/wwhd-test` is ours to deploy to and run
