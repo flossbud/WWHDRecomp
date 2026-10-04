@@ -128,3 +128,14 @@
 0216F950    whole       sth             himo2 move: m02A0 (+0x3BC) - 1
 02170510    vec@r4      bl 028e8d88     himo2 move: current.pos += speed (the throw, state 2)
 021708BC    vec@r4      bl 028e8d88     himo2 move: current.pos += speed (state 3: at a target, after the twirl)
+#
+# ---- the Ballad of Gales' cyclone (TORNADO, process 443, d_a_tornado.cpp; execute f_024C8A58): its texture
+# frames (+ 1 a tick), its spin angles (mAngle1 + 500, mAngle2 + 250 a tick: its joints sway by them), the
+# roaming one's particle timer and its fade (mBrkFrame + 0.3 a tick). In the warp (an event, where
+# converted processes don't step) it still runs once a tick: the warp route's cyclones as at 30.
+024C8AD8    *h@f31      fadds           tornado execute: mBtkFrame (+0x6B4) + 1 a tick
+024C8B68    *h@f31      fadds           tornado execute: mBtkUnderFrame (+0x6B8) + 1 a tick
+024C8C08    spliti      addi            tornado execute: mAngle1 (+0x6AC) + 500 a tick
+024C8C10    spliti      addi            tornado execute: mAngle2 (+0x6AE) + 250 a tick
+024C8F38    whole       sth             tornado execute: mPtclTimer (+0x6B2) - 1
+024C9030    *h@f11      fadds           tornado execute: mBrkFrame (+0x6BC) + 0.3 a tick (the roaming one's fade)

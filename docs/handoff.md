@@ -1066,7 +1066,9 @@ it in a window; D21 "Step 2"):**
     (100 points placed in one pass from each end, no time step) settles faster at 60, not ruled. The
     magic arrows' glow (ARROW_LIGHTEFF 474) and the ice an ice arrow leaves (ARROW_ICEEFF 473, from the
     decomp: no arrow hits anything on the route). Not tested: the boomerang locking onto targets, the
-    hookshot pulling Link to a target, swinging on the rope, the bait bag (ESA 221 not converted).
+    hookshot pulling Link to a target, swinging on the rope, the bait bag (ESA 221 not converted). The
+    Ballad of Gales' cyclone (TORNADO 443: texture frames, spin angles, a timer, a fade) too: in the warp
+    (an event, where converted processes don't step) it still runs once a tick, as at 30.
   - **Link walking while he aims, fixed (shared; regress.sh rerun)**: WWHD lets Link walk while he aims
     the grappling hook or the boomerang (the GameCube's stands still). f_02416B70 takes mNormalSpeed toward
     the stick's speed with setNormalSpeedF, and those aims then multiply it by 1.2 (12 x 1.2 = 14.4); at
@@ -1135,8 +1137,8 @@ it in a window; D21 "Step 2"):**
   Jalhalla 211, the Forsaken Fortress's anchors 431, barrels 456, ropes 447 and Tetra 426, the
   Tower of the Gods' Beamos 233 and beams 232, lifts 40, balance lifts 111, statues 458, floor
   switches 29, its water 39, 136, 137, stakes 250, 150, Gohdan 240, rats 198, Helmaroc King 238, pots
-  453, stones 454, and Link's arrows 472, 473, 474, boomerang 432, hookshot 169 and grappling hook 446
-  (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
+  453, stones 454, and Link's arrows 472, 473, 474, boomerang 432, hookshot 169, grappling hook 446 and
+  the Ballad of Gales' cyclone 443 (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
   373, 352, 121, 445, 309 and Outset's 118, 68, 73, 200, 255, 71, 67, 335, 319, 320, 331, 461, 45
   (session top; `kConvertedByDefault` has a line per session),
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
