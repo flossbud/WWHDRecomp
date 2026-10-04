@@ -874,6 +874,34 @@ it in a window; D21 "Step 2"):**
     - `WWHD_DEBUG_PLACE` didn't hold at 30 in Forest Haven (Link stayed at the spawn at f1000 and f1050)
       though it did at 60: a test placing Link compares different scenes then; spawn the actor in front
       of Link instead (the spawn aid works at both rates).
+  - **More leftovers (session top; split with session bottom from its census of placed types: rope bridges
+    BRIDGE 89 are bottom's)**: converted, rules in sea.txt and objects.txt:
+    - floating barrels Obj_Barrel2 457 ("Ktarur", sea rooms 23 and 44): three damped springs, each
+      `v = (v + force) d; p += v` once a tick (the float's height, the drift home, the tilt toward the
+      water's normal; off the open sea the normal's own random sway). `keep` on the velocity's fmadds/fsubs
+      and fmuls (the generator's `keep` now takes the A-form multiplies too: shared, `generate.py`), `*h@`
+      on `p += v`: p is the 30 Hz one at half ticks. The bob's random phase `split`; the ram cooldown
+      `keep`; the explode and cutscene countdowns (`addic.` then a branch) `late`, and so are the
+      cutscenes' event orders: the boat's crash is seen on a half tick (collisions resolve on whole
+      ticks), and with the order held to whole ticks it was never made before the countdown gave up (the
+      barrel broke without its cutscene, 51 ticks early). Tests: sea room 23 (paths 251/247, 289/287,
+      365/363 units; trial clean), and barrels spawned in the sail route's way (the boat at
+      (-212612, 311604) by f1600): a type 1 the boat pushes (its dip and settling like 30's; the push
+      itself lands a little differently, as collisions see whole-tick positions), a type 0 it rams (the
+      break cutscene at both rates, deleted at f1646 and f1647; the boat ends within 12 units of 30's).
+      The spawned barrels sit at different heap addresses at 30 and 60, so paths.py can't pair them;
+    - the heat haze Ykgr 397 (Dragon Roost Cavern, Fire Mountain's cave): its strength's approaches are
+      stepped; its alpha (a static byte) fades a step a tick, `split`. Routes `door` and `drc` and Cave01
+      rooms 0 and 1: trials clean, fields equal to the last bits (it follows the camera's eye);
+    - floor switches Obj_Swpush 27 ("Kbota"): the top's spring as the barrels' (`keep`, `*h@`), counters
+      `keep`. A momentary one spawned under Link on route `save` (`950:27,0100ffff,-201622,138,312243`)
+      bounces through a 60-tick cycle with Link on it, height and speed equal to 30's at every tick;
+    - fires Fire 424 (Cave01 room 1's six) and warp lights WARPLIGHT 106 (Cave01 room 0): two countdowns
+      `keep` and the event orders `late` (made every tick until the event starts); 100% equal to 30's.
+    - Not converted: the Hyoi seagull NPC_KAM 195 (idle, it matches; its flight with a Hyoi Pear isn't
+      tested), and lava (434 makes a floor in the scene's dMagma_packet and deletes itself: no process; its
+      calc, `executeMagma`, is held to whole ticks by a frame-level rule, so the lava's scroll, color cycle
+      and bubbles step at 30; it would take an override like the plants').
   - **Two 60 fps crashes in the Forbidden Woods, fixed (session top; shared, `sixty.cpp` `LiveStore`)**: at
     every warp there with Link converted (the defaults). Both came from half ticks putting back or hiding
     words in .data/.bss that head lists whose nodes are on the heap (which a half tick never puts back):

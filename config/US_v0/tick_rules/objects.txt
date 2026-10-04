@@ -72,3 +72,42 @@
 0218C124    whole       sth             kanban mother: the same toggle (another path)
 0218C130    whole       stb             kanban mother: the same count (another path)
 0218C044    spliti      addi            kanban piece: shape_angle.x + 0x1000 a tick
+#
+# ---- the heat haze (Ykgr 397, d_a_ykgr.cpp: "YkgrON"/"YkgrOFF", Dragon Roost Cavern's lava rooms): a particle
+# emitter's strength (three cLib_addCalc2, stepped) and its alpha (a static byte shared by the haze's
+# actors), which fades by a step a tick toward on or off: split. (Its code sits among d_attention.cpp's.)
+024EABE4    split@r9    subf            ykgr: the alpha -= its step a tick
+024EAC1C    split@r9    add             ykgr: the alpha += its step a tick
+#
+# ---- floor switches (Obj_Swpush 27, d_a_obj_swpush.cpp: "Kbota_A/B", "KbotaC"; fields at GC + 0x17C): the top's
+# height a damped spring once a tick (speed keep on both fnmsubs, height += h speed), and counters that
+# count whole ticks (keep): the vibration's, the light and heavy push delays (up and down), the debounce
+# after a step on and the pressed demo's pause. m324 (+0x4A0) is no countdown: mode_upper sets it to 1 every
+# step and calc_top_pos takes it to 0 at once (m320 = m328 a step later), so it has no rule.
+02397C1C    keep:r12    addi            swpush set_push_flag: mVibTimer (+0x47F) - 1
+02397CD8    keep:r10    addi            swpush set_push_flag: --mMiniPushTimer (+0x482) <= 0
+02397D2C    keep:r12    addi            swpush set_push_flag: ++mMiniPushTimer >= the delay
+02397DC4    keep:r12    addi            swpush set_push_flag: --mPushTimer (+0x488) <= 0
+02397E20    keep:r7     addi            swpush set_push_flag: ++mPushTimer >= the delay
+02397F1C    keep:f0     fnmsubs         swpush calc_top_pos: speed (+0x494) -= (height - aim) * spring
+02397F28    keep:f9     fnmsubs         swpush calc_top_pos: speed -= speed * decay
+02397F34    *h@f9       fadds           swpush calc_top_pos: height (+0x490) += speed
+02398784    keep:r10    addi            swpush mode_upper: mDebounceTimer (+0x4B0) - 1
+02398E44    keep:r12    addi            swpush (pressed demo): mPauseTimer (+0x478) - 1
+#
+# ---- fires (Fire 424, d_a_fire.cpp; its code sits after d_a_fm.cpp's): flames that are particle emitters (the
+# particles step with their system), the wind's push on them (cLib_chaseF, stepped) and a room's enemies'
+# wait (cLib_calcTimer, stepped); two countdowns count whole ticks (keep), and the on/off events are
+# ordered every tick until they start: once a tick (late, as the barrels' are).
+0213FB14    keep:r12    addi            fire execute: a start delay (+0xA1D) - 1 while >= 0
+0213F2D8    keep:r10    addi            fire ctrlEffect: doused, off (+0x9EE) - 1 a tick
+0213F9A0    late        bl 025d7a58     fire eventOrder: fopAcM_orderOtherEventId (on)
+0213F9DC    late        bl 025d7a58     fire eventOrder: fopAcM_orderOtherEventId (off)
+#
+# ---- warp lights (WARPLIGHT 106, d_a_warpls.cpp: "Ysdls00", caves' and fairy fountains' ways out): their brk and
+# bck (J3DFrameCtrl::update, stepped); a startup delay counts whole ticks (keep) and the activation and
+# warp events are ordered every tick until they start: once a tick (late).
+024DCC10    keep:r10    addi            warpls execute: mStartupDelayTimer (+0x3D3) - 1 while > 0
+024DCA3C    late        bl 025d7a58     warpls eventOrder: fopAcM_orderOtherEventId (activation)
+024DCACC    late        bl 025d7a58     warpls eventOrder: fopAcM_orderOtherEventId (warp, the tower's)
+024DCB08    late        bl 025d7a58     warpls eventOrder: fopAcM_orderOtherEventId (warp)

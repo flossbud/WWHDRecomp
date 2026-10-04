@@ -55,7 +55,8 @@ need; RT_LATE_TICK), on the whole tick otherwise; it takes the same instructions
 rules, for the code of processes that run every frame with a time step h
 (g_rtStep, src/overrides/sixty.cpp; nothing changes while it is 1, at 30 fps always):
   keep:SRC     on a half tick the instruction's destination gets SRC instead (a counter that
-               counts whole ticks: `addi r0, r3, 1` with keep:r3)
+               counts whole ticks: `addi r0, r3, 1` with keep:r3; a damped spring's velocity,
+               `v = (v + f) d` once a tick, keep on its fmadds and fmuls, with *h@ on `p += v`)
   *h:REG /h:REG  after the instruction, REG times or divided by h (a per-tick amount; a distance
                per step that should read per tick)
   *hh:REG      after it, REG times h squared (an acceleration a position-based step adds as a
@@ -505,7 +506,7 @@ def emit_blocks(body, labels):
     return out
 
 
-KEEP_OPS = {"addi", "addic", "add", "fadds", "fsubs", "fadd", "fsub"}
+KEEP_OPS = {"addi", "addic", "add", "fadds", "fsubs", "fadd", "fsub", "fmuls", "fmadds", "fmsubs", "fnmadds", "fnmsubs"}
 
 
 def reg_expr(reg):

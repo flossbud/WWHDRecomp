@@ -408,7 +408,7 @@ tick at the tick's end instead (`RT_LATE_TICK()`: the half tick while its proces
 whole tick otherwise: a tick counter both frames of a tick should see unchanged). They change only the
 shards that contain them, so they rebuild in seconds, and they are how the generator's view of
 every call site reaches the 60 fps work. *Step rules* (the conversion) are the same for converted code:
-`keep:SRC` (a counter that counts whole ticks), and `OP:REG` / `OP@REG` (after the instruction, or
+`keep:SRC` (a counter that counts whole ticks, or a damped spring's velocity updated once a tick), and `OP:REG` / `OP@REG` (after the instruction, or
 for that instruction only) with OP `*h`, `/h`, `k` (an approach's factor, `1 - (1 - k)^h`), `d`
 (a damping factor, `d^h`) or `split` (an integer step split
 between the two half ticks; `spliti` for an `addi`'s immediate, as in a phase += 0x500 a tick); each is a

@@ -66,3 +66,60 @@
 # (whole ticks). Gyorgs: a type-B spawner (no switch) spawned ahead of the boat makes them,
 # WWHD_DEBUG_SPAWN=1450:230,ffff1441,-214000,0,312500; three attack, trial clean but for copies (a line
 # check's ends, the shape angle, a matrix result), paths within 2.5-4.5% of the 30-tick run's.
+#
+# ---- floating barrels (Obj_Barrel2 457, d_a_obj_barrel2.cpp: "Ktarur", sea rooms 23 and 44, the race items'
+# and the mines' barrels). Three damped springs, each `v = (v + force) * d; p += v` once a tick: v keeps its
+# value on the half tick (keep on the fmadds/fsubs and the fmuls) and p moves h of the new v each step, so p
+# is the 30 Hz one at half ticks: the float's height (+0x56C, velocity +0x570; kicked by the boat), the
+# drift back home (+0x530/+0x534 into pos.x/z, with the collision push: the push is a tick's, so h of it
+# each step), the sway (+0x55C-+0x568: the model's tilt toward the water's normal) and, off the open sea,
+# the normal's own random sway (+0x548-+0x554, set_water_pos). The bob's phase (+0x558) += a random step a
+# tick: split. Counters: the ram cooldown (+0x589) keep, the explode and cutscene countdowns (+0x580,
+# `addic.` then a branch on it) late, and the cutscenes' event orders late too: the boat's crash is seen on
+# a half tick (the collision resolves on whole ticks), and an order held to whole ticks was never made
+# before the countdown gave up (the barrel broke without its cutscene, 51 ticks early).
+02321394    keep:f7     fadds           barrel2 afl_sway: vx (+0x564) += the pull
+023213A0    *h@f9       fadds           barrel2 afl_sway: +0x55C += vx
+023213A8    keep:f13    fadds           barrel2 afl_sway: vz (+0x568) += the pull
+023213B4    *h@f11      fadds           barrel2 afl_sway: +0x560 += vz
+023215E4    keep:f10    fmuls           barrel2 mode_afl (coming): v (+0x570) = (v + p c) * 0.92
+023215EC    *h@f12      fadds           barrel2 mode_afl (coming): p (+0x56C) += v
+02321680    keep:f10    fmuls           barrel2 mode_afl: v = (v + p c) * d
+02321688    *h@f12      fadds           barrel2 mode_afl: p += v
+02321784    split@r0    add             barrel2 mode_afl: the bob's phase (+0x558) += m58 (random + 1)
+023217C0    keep:f7     fmadds          barrel2 mode_afl: vz (+0x534) += (pos.z - home) * -0.002
+023217C8    keep:f8     fmadds          barrel2 mode_afl: vx (+0x530) += (pos.x - home) * -0.002
+023217CC    keep:f7     fmuls           barrel2 mode_afl: vz *= 0.9
+023217D4    keep:f8     fmuls           barrel2 mode_afl: vx *= 0.9
+023217E8    *h@f10      fadds           barrel2 mode_afl: pos.x += vx + the collision push
+023217F0    *h@f13      fadds           barrel2 mode_afl: pos.z += vz + the collision push
+02321868    keep:f0     fsubs           barrel2 mode_exit_v: v -= 5
+02321870    keep:f13    fmuls           barrel2 mode_exit_v: v *= 0.96
+02321878    *h@f13      fadds           barrel2 mode_exit_v: p += v
+02321A04    keep:f0     fsubs           barrel2 mode_exit_h: v -= 5
+02321A0C    keep:f13    fmuls           barrel2 mode_exit_h: v *= 0.94
+02321A14    *h@f13      fadds           barrel2 mode_exit_h: p += v
+02321BA0    keep:f13    fsubs           barrel2 mode_exit_mine: v -= 5
+02321BA8    keep:f13    fmuls           barrel2 mode_exit_mine: v *= 0.94
+02321BB0    *h@f13      fadds           barrel2 mode_exit_mine: p += v
+02321D88    late        stw             barrel2 mode_explode: --countdown (+0x580) >= 0
+02321DAC    keep:f10    fmuls           barrel2 mode_explode: v = (v + p c) * 0.94
+02321DB4    *h@f0       fadds           barrel2 mode_explode: p += v
+02321EB8    split@r0    add             barrel2 mode_explode: the bob's phase += m58 (random + 1)
+02321FC4    late        stw             barrel2 mode_demo_break0: --countdown >= 0
+02321FE0    late        bl 025d77dc     barrel2 mode_demo_break0: fopAcM_orderOtherEvent, once a tick
+0232210C    late        stw             barrel2 mode_demo_explode0: --countdown
+0232212C    late        bl 025d77dc     barrel2 mode_demo_explode0: fopAcM_orderOtherEvent, once a tick
+02320C00    keep:r10    addi            barrel2 execute_sub: the ram cooldown (+0x589) - 1
+0231EC68    keep:f7     fadds           barrel2 set_water_pos (off the sea): vx (+0x550) += -0.2 px + a jitter
+0231EC78    keep:f7     fmuls           barrel2 set_water_pos: vx *= 0.99
+0231EC84    keep:f10    fadds           barrel2 set_water_pos: vz (+0x554) += -0.2 pz + a jitter
+0231EC8C    *h@f7       fadds           barrel2 set_water_pos: px (+0x548) += vx
+0231EC94    keep:f10    fmuls           barrel2 set_water_pos: vz *= 0.99
+0231ECA0    *h@f13      fadds           barrel2 set_water_pos: pz (+0x54C) += vz
+0231ED00    keep:f7     fadds           barrel2 set_water_pos (its second copy): vx += -0.2 px + a jitter
+0231ED08    keep:f7     fmuls           barrel2 set_water_pos: vx *= 0.99
+0231ED1C    *h@f7       fadds           barrel2 set_water_pos: px += vx
+0231ED24    keep:f10    fadds           barrel2 set_water_pos: vz += -0.2 pz + a jitter
+0231ED30    keep:f10    fmuls           barrel2 set_water_pos: vz *= 0.99
+0231ED3C    *h@f13      fadds           barrel2 set_water_pos: pz += vz
