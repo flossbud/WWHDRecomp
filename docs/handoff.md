@@ -1087,6 +1087,14 @@ it in a window; D21 "Step 2"):**
     drains a point at 0: its store, the drain and the reset whole) are ruled; on a new route, `leaf`
     (`tools/reference/routes/leaf-100.txt`: off the Outset dock's end with the leaf opened in the air),
     the glide at 60 keeps within ~10 units of 30's to the water.
+  - **Open: the follow camera turns ~13% slower at 60 while Link swims and turns** (session bottom, from
+    session top's kindan room 11 drop with the walk route): after the water-lift fix Link's dive matches,
+    but over a 16-tick turn (f1152-1168) the camera's control angle (camera process +0x2B4, mAngleY:
+    `mDirection.U().Inv()`) turns 3109 at 60 against 3583 at 30, and Link's target heading is the
+    stick's angle + that (m34E8, Link +0x6930, read from the camera's last frame), so from ~f1190 he
+    swims another way. The view's eye-to-centre yaw stays within 0.1 degrees. followCamera's trial
+    sites there are all ruled (k@ and k75@ on its approaches, the turn ramp m38C/30 counted on whole
+    ticks): the gap is likely the k75 approximation with a factor that changes every tick. Not fixed.
   - **Link's own position adds, audited (session bottom)**: every VECAdd into Link's current.pos and
     every inline `pos += x` in his code (actor_rmw.py 168, 44 sites) is ruled, or adds a per-call
     measure (the animation's root motion since the last call, posMove; the hands' spread change,
