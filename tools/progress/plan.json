@@ -269,7 +269,10 @@
     "450": "eye switch",
     "67": "mailbox",
     "462": "item stand",
-    "295": "bomb flower bomb"
+    "295": "bomb flower bomb",
+    "423": "steam vent",
+    "91": "flame lift",
+    "90": "swinging platform"
   },
   "queue_note": "Round 2 (2026-10-04; round 1's nine areas are done). 'top' takes items from the top down, 'bottom' from the bottom up; claim before starting (tools/progress/publish.sh claim ID) and stop where the other session's claims begin. The owner's bugs are session qa's (the Bugs list): where an item touches one (named in it), leave the bug to qa or agree with qa first (SendMessage). Stage names are to be confirmed with tools/sixty/tests/room_list.sh.",
   "queue": [

@@ -411,7 +411,8 @@ every call site reaches the 60 fps work. *Step rules* (the conversion) are the s
 `keep:SRC` (a counter that counts whole ticks, or a damped spring's velocity updated once a tick), and `OP:REG` / `OP@REG` (after the instruction, or
 for that instruction only) with OP `*h`, `/h`, `k` (an approach's factor, `1 - (1 - k)^h`), `d`
 (a damping factor, `d^h`) or `split` (an integer step split
-between the two half ticks; `spliti` for an `addi`'s immediate, as in a phase += 0x500 a tick); each is a
+between the two half ticks; `spliti` for an `addi`'s immediate, as in a phase += 0x500 a tick; `lagi` for a
+`mulli` of a tick count kept to whole ticks, a phase count x IMM lagging IMM/2 on the whole tick's step); each is a
 no-op while `g_rtStep` is 1 (`RT_STEPPED()`). `reload:fD=rB+O[+O2]` is for code that truncates a
 frame count kept as a float (drawing too): at 60 (`g_rtSixty`) the float is read back. Every generated store also names its instruction to
 the store journal (`rt_journal_store(ea, size, pc)`, only on the journaling path), so the 60 fps

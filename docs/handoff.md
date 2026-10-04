@@ -962,6 +962,14 @@ it in a window; D21 "Step 2"):**
       particle speeds come from the points' per-tick differences). Tested with session qa's setup: route
       `carry` with `WWHD_DEBUG_SPAWN=950:296,0000ff00,-201660,190,312465` (a bomb flower where the pot
       was; Link pulls the bomb at f1000).
+    - Dragon Roost Cavern's steam vents (SteamTag 423), flame lifts (MFLFT 91) and swinging platforms (MSW
+      90), session qa's B13 ("the big lava geysers and the platforms they lift look 30 fps"): the vents'
+      on/off countdowns `keep`; the lift and the platforms sway by a tick count, sin(count x K): the count
+      `keep` and each phase a new step rule, `lagi` (shared, `generate.py`: on a `mulli` of a tick count,
+      the whole tick's step lags by IMM/2, so the phase is (count - 1/2) x IMM there and count x IMM at
+      the half tick: the sway moves every frame and is 30's at half ticks); the lift's fall `*h@`/`late`.
+      M_NewD2 room 2: trials clean, the lift's path 5375 against 5435 units (6930 converted without
+      rules); room 4's twelve vents: trial clean (their timers are random).
     - Not yet: door knobs (KNOB00 305: a door whose motion is its open event, which steps at 30; left for
       the events item and session qa's door fixes), Windfall's night lights (Obj_Light 128: its decomp is
       stubs, and its phases run at night only) and shutters (SHUTTER 259: they move in their open/close

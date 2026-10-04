@@ -73,6 +73,9 @@ rules, for the code of processes that run every frame with a time step h
                (REG - REG/2, then REG/2: the two add up to the 30 Hz step exactly)
   spliti       the same for an `addi rD, rA, IMM`'s immediate: rD = rA + (IMM - IMM/2), then
                rA + IMM/2 (a phase that adds a constant a tick)
+  lagi         for a `mulli rD, rA, IMM` of a tick count (a phase as count x IMM, the count kept to whole
+               ticks): on the whole tick's step rD lags by IMM/2, (count - 1/2) x IMM, so the phase
+               moves every frame and is 30's at half ticks
   OP@REG       the same, for this instruction only: REG has its value back afterwards (unless the
                instruction writes it), as in `x += (t - x) * k` with k@f2 on its fmadds
   note:REG     after the instruction, the float REG is noted (g_rtNote) for an arc@ later in the step
@@ -247,8 +250,8 @@ class Program:
                     assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
                     rules[ea] = (kind, value, expect, what)
                     continue
-                if kind == "spliti":
-                    assert not arg, f"tick_rules.txt:{n}: spliti takes no argument"
+                if kind in ("spliti", "lagi"):
+                    assert not arg, f"tick_rules.txt:{n}: {kind} takes no argument"
                     value = None
                 elif kind in ("whole", "late"):
                     value = None
@@ -282,6 +285,8 @@ class Program:
                 return f"{ea:08X}: step rule expects `{expect}`, the code has `{have}`"
             if kind == "spliti" and (i.op != "addi" or i.rA == 0):
                 return f"{ea:08X}: spliti applies to addi rD, rA, IMM, not {i.op}"
+            if kind == "lagi" and i.op != "mulli":
+                return f"{ea:08X}: lagi applies to mulli rD, rA, IMM, not {i.op}"
             if kind == "keep" and i.op not in KEEP_OPS:
                 return f"{ea:08X}: keep applies to {', '.join(sorted(KEEP_OPS))}, not {i.op}"
             return None
@@ -542,6 +547,9 @@ def apply_tick_rule(rule, i, lines):
     if kind == "spliti":
         imm = emit.hx(i.simm & 0xFFFFFFFF)
         return lines + [f"if (RT_STEPPED()) GPR({i.rD}) = GPR({i.rD}) - {imm} + rt_step_split({imm});   // step rule: {what}"]
+    if kind == "lagi":
+        half = emit.hx((int(i.simm / 2)) & 0xFFFFFFFF)
+        return lines + [f"if (RT_STEPPED() && RT_WHOLE_TICK()) GPR({i.rD}) = GPR({i.rD}) - {half};   // step rule: {what}"]
     if kind == "keep":
         dest = f"GPR({i.rD})" if i.op in ("addi", "addic", "add") else f"FPR({i.frD})"
         return ([f"if (RT_WHOLE_TICK()) {{   // step rule: {what}"] + ["\t" + l for l in lines]

@@ -192,3 +192,32 @@
 020C9B8C    keep:f11    fmuls           bomb2 vib_proc: v2 *= 1 - damping
 020C9B98    *h@f7       fadds           bomb2 vib_proc: p2 (+0x98C) += v2
 020C9BAC    keep:r12    addi            bomb2 vib_proc: field_0x7A8 (+0x9A4) - 1
+#
+# ---- Dragon Roost Cavern's steam vents, flame lifts and swinging platforms (session qa's B13: "the big lava
+# geysers and the platforms they lift look 30 fps"). The steam vents (SteamTag 423, d_a_steam_tag.cpp:
+# "Ystm0/1") are a particle emitter's on/off countdowns (keep: one at 0 starts the other). The flame lift
+# (MFLFT 91, d_a_mflft.cpp: a platform on a lava plume, hung by ropes) and the swinging platforms (MSW 90,
+# d_a_msw.cpp: "Mswing", hung by chains) sway by a tick count, sin(count x K): the count keep (whole
+# ticks) and each phase `lagi` (count - 1/2 on the whole tick's step: the sway moves every frame, 30's at
+# half ticks). The lift's fall once its ropes are cut: pos.y += speed.y *h@, then speed.y -= 5 late.
+0249A3D0    keep:r9     addi            steamtag execute: mCreateTimer (+0x3B4) - 1
+0249A4AC    keep:r12    addi            steamtag execute: mEmitTimer (+0x3B2) - 1
+021C27D8    keep:r10    addi            mflft: a countdown (+0x3EA) - 1
+021C2AA4    keep:r12    addi            mflft_move: m6F5 (+0x811) - 1
+021C2844    keep:r6     addi            mflft_move: the tick count (+0x3B4) + 1
+021C28C8    keep:r6     addi            mflft_move: the tick count + 1 (its other path)
+021C2BA8    lagi        mulli           mflft_move: a sway's phase, count x 1500
+021C2BC0    lagi        mulli           mflft_move: count x 1300
+021C2C48    lagi        mulli           mflft_move: count x 750
+021C2C54    lagi        mulli           mflft_move: count x 900
+021C2DE8    lagi        mulli           mflft_move (falling): count x 800
+021C2E00    lagi        mulli           mflft_move (falling): count x 700
+021C2EA8    *h@f8       fadds           mflft_move (falling): pos.y += speed.y
+021C2ED8    late        stfs            mflft_move (falling): speed.y -= 5, at least -300
+021D68DC    keep:r10    addi            msw_move: the tick count (+0x3B4) + 1
+021D6908    lagi        mulli           msw_move: a sway's phase, count x 1500
+021D6928    lagi        mulli           msw_move: count x 1300
+021D69B8    lagi        mulli           msw_move: count x 750
+021D69C8    lagi        mulli           msw_move: count x 900
+021D6BE0    keep:r11    addi            msw execute: m844 (+0x960) - 1
+021D6C20    keep:r8     addi            msw execute: a chain's hit shake (m83C[i]) - 1
