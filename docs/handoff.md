@@ -1104,7 +1104,11 @@ it in a window; D21 "Step 2"):**
     procClimbMoveSide), or a one-shot amount cleared after use (the collision push and m3644, posMove), or
     is a procedure's one-time setup (swim in and out, climb-down start, hang-fall start; setGrabItemPos
     places the carried actor). The glide's wind drift (an approached state added a call) was the one
-    runaway. Not driven by a route yet: climbing, crawling, hanging, carrying, pushing blocks, the barrel.
+    runaway. Hanging from a ledge (a new route, `crawl`: crawling off the Outset dock's end, then along
+    its edge) went half as far at 60: procHangMove takes mNormalSpeed from the hands' spread change since
+    the last call, which posMove then uses as a speed a tick; that change reads per tick now (/h) and the
+    shimmy matches 30's path. Crawling itself matched. Not driven by a route yet: climbing, carrying,
+    pushing blocks, the barrel.
   - **Joint callbacks run with every drawn frame's calc (a hazard)**: a converted process's model is
     calculated each frame it is drawn (twice a tick), an unconverted one's once a tick, and the step is 1
     there, so step rules don't apply: an increment in a joint callback (J3DNode calc callbacks, e.g.

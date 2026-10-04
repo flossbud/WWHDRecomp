@@ -68,6 +68,12 @@
 # cleared by posMove itself); procHookshotFly adds the hookshot's mMoveVec (a step's: the hookshot's
 # rules). The rope's is ruled from the decomp (no rope target on the routes).
 02435410    vec@r4      bl 028e8d88     link rope ready: current.pos += toward the rope's point, m35A0 a tick
+# Link hanging from a ledge and moving along it (procHangMove f_02428CB4, proc 0x2F): mNormalSpeed is the
+# hands' spread change since the last call (|d - m35A0|), and posMove then moves him by it as a speed a
+# tick (h of it a step): at 60 the change is a step's, so he went half as far (the crawl route: off the
+# Outset dock's end, then along its edge: 20 units short in 40 ticks). The change reads per tick (/h).
+# (procClimbMoveSide adds its hands' change to his position itself: a step's both ways.)
+02428E54    /h:f13      fabs            link hang move: mNormalSpeed = the hands' spread change, per tick
 #
 # ---- arrows (ARROW, process 472, d_a_arrow.cpp; execute f_02052DB8). WWHD's fields are the GameCube's +
 # 0x11C up to field_0x604, + 0x118 after it. procMove (f_02054040): current.pos += speed (200 a tick; the

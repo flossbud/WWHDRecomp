@@ -1,0 +1,12 @@
+# Route: Link crawling on the Outset dock (WW-4: Link's crawl at 60 fps), with the 100% save
+# (REF_SAVE=/wwhd/data/saves/wwhd_100): continue-100.txt's inputs, then ZR held (crouch) and the left stick
+# forward (he crawls toward the dock's end), left, then forward again; ZR let go at the end.
+# FRAME BUTTONS [FRAMES_HELD]; frames are game frames (at 60 fps, every other swap).
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+920 ZR 260     # crouch, held
+940 LUP 60     # crawl forward
+1010 LLEFT 50  # crawl left
+1070 LUP 40    # forward again
