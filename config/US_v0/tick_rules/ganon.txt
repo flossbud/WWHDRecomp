@@ -119,7 +119,7 @@
 0208B90C    whole       sth             bgn2 execute: m033A - 1
 0208B920    whole       sth             bgn2 execute: m033C - 1
 0208B930    whole       sth             bgn2 execute: m2ED2 - 1
-0208DE48    whole       sth             bgn2 execute: m0358 - 1 (the head's shake)
+0208DE40    keep:r10    addi            bgn2 execute: m0358 - 1 (the head's shake; keep: the shake reads the count at once)
 0208B59C    *h@f13      fadds           bgn2 pos_move: m0340.x += speed.x
 0208B5A8    *h@f11      fadds           bgn2 pos_move: m0340.z += speed.z
 # its fall and jumps (execute inlines its actions: one pair per copy): pos.y += speed.y, speed.y +=
@@ -193,7 +193,7 @@
 02448B50    *h@f10      fsubs           pt: speed.y -= gravity
 02449A04    *h@f8       fadds           pt: +0x430 += its speed (+0x434)
 02449A08    *h@f31      fsubs           pt: +0x434 -= a step a tick
-02449A38    whole       stb             pt: a countdown (+0x8D8) - 1
+02449A30    keep:r9     addi            pt: a countdown (+0x8D8) - 1 (keep: extsb. then a branch on it)
 #
 # ---- BL (207, d_a_bl.cpp: Bubbles, the flying skulls; f_020AAC08 their hover). Found in GanonB's four.
 020AAC4C    spliti      addi            bl: the hover's phase (+0x420) + 1000 a tick

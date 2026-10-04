@@ -29,7 +29,7 @@
 # the count times a step: m18FE, m1900 in the decomp), counters and timers
 020FA9C8    whole       sth             bwd: its tick count (+0x1B30) + 1
 020FA9DC    whole       sthx            bwd: its timers (+0x1B50) count down
-020FA924    whole       stb             bwd: a timer (+0x187C) - 1
+020FA91C    keep:r5     addi            bwd: a timer (+0x187C) - 1 (keep: compared at once)
 020FA9FC    whole       sth             bwd: a timer (+0x1B5A) - 1
 020FAA0C    whole       sth             bwd: a timer (+0x1B74) - 1
 020FB008    whole       stb             bwd: a timer (+0x1E2B) - 1
@@ -44,7 +44,7 @@
 # body's z angle sways from it), two tick counts
 020FAB70    split@r6    add             bwd: a wobble's phase (+0x1B7A) += 1000 a tick
 0210378C    whole       sth             bwd: a tick count (+0x3E98) + 1
-02103794    whole       sth             bwd: a tick count (+0x3E9A) + 1
+0210377C    keep:r12    addi            bwd: a tick count (+0x3E9A) + 1 (keep: compared at once)
 #
 # ---- BWDG (219, d_a_bwdg.cpp: Molgera's sand; f_021043EC)
 02104444    whole       sth             bwdg: its tick count (+0x3D4) + 1

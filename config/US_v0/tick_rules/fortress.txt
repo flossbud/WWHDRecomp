@@ -73,3 +73,14 @@
 0206E168    d@f6        fmuls           bdk: speed.z *= its damping
 0206E198    d@f6        fmuls           bdk: speed.x *= its damping
 0206906C    keep:r5     addi            bdk: four countdowns (+0x6174) - 1, on whole ticks
+# the things it carries and sheds: three helpers' pos.y += speed.y, then a fall (late: once a tick), a bob
+# added to a position, and a feather's sway (the effects' functions 02061DEC-02065620)
+02061F4C    *h@f8       fadds           bdk: pos.y += a move a tick
+02062CC4    *h@f13      fadds           bdk: pos.y += speed.y
+02062CF0    late        stfs            bdk: speed.y -= its fall (once a tick)
+02063A88    *h@f13      fadds           bdk: pos.y += speed.y
+02063AB4    late        stfs            bdk: speed.y -= its fall (once a tick)
+020641D8    *h@f13      fadds           bdk: pos.y += speed.y
+02064204    late        stfs            bdk: speed.y -= its fall (once a tick)
+0206540C    *h@f1       fadds           bdk feather: z += its sway a tick
+02065420    *h@f1       fadds           bdk feather: y += its sway a tick
