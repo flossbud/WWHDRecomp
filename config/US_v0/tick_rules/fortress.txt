@@ -25,3 +25,51 @@
 0230C100    keep:r6     addi            nz: its timers (+0x3F0...) - 1, on whole ticks
 # its tail (tail_control f_0230A3C0): a chain solved in one pass, as the Stalfos' hair: its 30 Hz step
 0230BF9C    whole       bl 0230a3c0     nz: tail_control, on whole ticks
+#
+# ---- BDK (238, d_a_bdk.cpp: Helmaroc King, M2tower layer 3; reached by its spawn points 16, 22 (the
+# arena) or 30 (M2tower,22,0,3; its other points load to a black screen), WWHD_DEBUG_BOSS=1; execute
+# f_02066A38, its fields at the GameCube's + 0x114). Its timers and tick count:
+02066B64    keep:r4     addi            bdk: its tick count (+0x3D8, m2C4) + 1 (the wings' and feathers' phases)
+02066B80    keep:r10    addi            bdk: its timers (m2EC[5]) - 1, on whole ticks
+02066BA0    keep:r10    addi            bdk: m2F8 - 1
+02066BB0    keep:r9     addi            bdk: m2FA - 1
+02066BC4    keep:r8     addi            bdk: m1138 - 1
+# its tail feathers (tail_control, inlined: chains solved in one pass, as the Stalfos' hair): their state's
+# stores on whole ticks only (the 30 Hz step; their roots follow the body every step)
+02068160    whole       sth             bdk tail: a segment's angle y
+02068168    whole       sth             bdk tail: its angle x
+020681C0    whole       stw             bdk tail: its last place (x, kept in the velocity's slot)
+020681C8    whole       stw             bdk tail: (y)
+020681D0    whole       stw             bdk tail: (z)
+020681E4    whole       stfs            bdk tail: its place (x)
+020681F4    whole       stfs            bdk tail: (y)
+02068200    whole       stfs            bdk tail: (z)
+02068214    whole       stfs            bdk tail: its velocity (x)
+02068228    whole       stfs            bdk tail: (y)
+0206824C    whole       stfs            bdk tail: (z)
+# its moves: pos_move (f_02066634: pos += speed, then speed.y += gravity) and its states' own pos.y +=
+# speed.y with a fall or rise (both orders): the position takes h of the speed a step, the speed changes
+# once a tick (late): two half steps then add up to the 30 Hz step in either order
+020666F0    vec@r4      bl 028e8d88     bdk pos_move: pos += speed
+0206670C    late        stfs            bdk pos_move: speed.y += gravity (once a tick)
+0206AB6C    *h@f10      fadds           bdk: pos.y += speed.y
+0206ABDC    late        stfs            bdk: speed.y -= its fall (once a tick)
+0206AC64    *h@f9       fadds           bdk: pos.y += speed.y (the new one: speed first)
+0206AC68    late        stfs            bdk: speed.y += its rise (once a tick)
+0206B8C4    *h@f0       fadds           bdk: pos.y += speed.y
+0206B8EC    late        stfs            bdk: speed.y -= its fall (once a tick)
+0206B950    *h@f11      fadds           bdk: pos.y += speed.y
+0206B968    late        stfs            bdk: speed.y -= its fall (once a tick)
+0206C9AC    *h@f7       fadds           bdk: pos.y += speed.y
+0206C9C4    late        stfs            bdk: speed.y -= its fall (once a tick)
+0206CBAC    *h@f10      fadds           bdk: pos.y += speed.y
+0206CBC0    late        stfs            bdk: speed.y -= its fall (once a tick)
+0206D44C    *h@f7       fadds           bdk: pos.y += speed.y
+0206D460    late        stfs            bdk: speed.y -= its fall (once a tick)
+0206E178    *h@f8       fadds           bdk: pos.y += speed.y
+0206E194    late        stfs            bdk: speed.y += gravity (once a tick)
+0206E188    *h@f13      fadds           bdk: pos.x += speed.x
+0206E190    *h@f7       fadds           bdk: pos.z += speed.z
+0206E168    d@f6        fmuls           bdk: speed.z *= its damping
+0206E198    d@f6        fmuls           bdk: speed.x *= its damping
+0206906C    keep:r5     addi            bdk: four countdowns (+0x6174) - 1, on whole ticks

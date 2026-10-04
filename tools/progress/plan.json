@@ -187,6 +187,7 @@
     "111": "Balance lift",
     "458": "Statue (Obj_Try)",
     "240": "Gohdan",
+    "238": "Helmaroc King",
     "185": "Torch (EP)",
     "367": "Medli (NPC_MD)",
     "453": "Pot",
@@ -270,7 +271,7 @@
     {
       "id": "fortress",
       "name": "Forsaken Fortress: searchlights, guards, Helmaroc King, Phantom Ganon",
-      "where": "MajyuE (spawn points 0-6), majroom (rooms 0-4), M2ganon; M2tower/Mjtower (Helmaroc King) don't load by warp"
+      "where": "MajyuE (spawn points 0-6), majroom (rooms 0-4), M2ganon; M2tower,22,0,3 (Helmaroc King's arena: points 16/22/30 load)"
     },
     {
       "id": "earth",

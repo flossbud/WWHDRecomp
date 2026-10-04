@@ -972,8 +972,14 @@ it in a window; D21 "Step 2"):**
     solver can't take half steps). Rats (NZ 198, not decompiled; here and in the tower) are converted
     since: they run 20 a tick at both rates; their timers (keep) and their tail (a one-pass chain: its
     call on whole ticks) were what made them run 44-69% farther; they still differ by the random waits
-    they draw. Helmaroc King (BDK 238, M2tower layer 3): M2tower and Mjtower
-    load to a black screen through WWHD_DEBUG_STAGE (their PLYR points exist; any point and layer).
+    they draw. Helmaroc King (BDK 238): M2tower layer 3, reached by its spawn
+    points 16, 22 (the arena: `M2tower,22,0,3`) or 30; its other points (0-15, 17...) load to a black
+    screen. Converted since: its timers and tick count, its tail feathers (a one-pass chain: their
+    stores on whole ticks), pos_move and its states' pos.y += speed.y with a fall or rise (the position
+    takes h of the speed, the speed changes `late`, once a tick: exact for both orders, speed first or
+    position first), damping d@: mean 2.2 units from 30's path (was 15), tail motion 15.4 against 15.7
+    a tick. Not converted: its arena's debris (BDKOBJ 239: fragments with their own physics when broken)
+    and 248.
     Phantom Ganon (FGANON 241, GanonC/J/M): absent on the finished save even with WWHD_DEBUG_BOSS=1, and a
     WWHD_DEBUG_SPAWN of it is created and gone; its code's many `+= 1` sites at +0x5BC are mode steps.
   - **The Tower of the Gods** (`tower`; `config/US_v0/tick_rules/tower.txt`): stage `Siren`, each room
@@ -1023,7 +1029,8 @@ it in a window; D21 "Step 2"):**
   Armos 202/203, Molgera 217/219, the Earth Temple's Stalfos 190, Poes 212, Floormasters 119 and
   Jalhalla 211, the Forsaken Fortress's anchors 431, barrels 456, ropes 447 and Tetra 426, the
   Tower of the Gods' Beamos 233 and beams 232, lifts 40, balance lifts 111, statues 458, floor
-  switches 29, its water 39, 136, 137, stakes 250, 150, Gohdan 240 and rats 198 (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
+  switches 29, its water 39, 136, 137, stakes 250, 150, Gohdan 240, rats 198 and Helmaroc King 238
+  (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
   373, 352, 121, 445, 309 and Outset's 118, 68, 73, 200, 255, 71, 67, 335, 319, 320, 331, 461, 45
   (session top; `kConvertedByDefault` has a line per session),
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
