@@ -129,3 +129,31 @@
 020D7D84    spliti      addi            bpw: m3D6.x (+0x4F2) + 5000 (thrown, rolling)
 020D381C    spliti      addi            bpw: shape_angle.y + 0x1000 (a spin)
 020D81E8    spliti      addi            bpw: shape_angle.y + 0x1500 (a spin)
+#
+# ---- rope bridges (BRIDGE 89, d_a_bridge.cpp; execute f_020E11E8 with bridge_move and the planks' chain
+# inlined; the bridge's fields the GameCube's + 0x268, its planks (br_s) 0x680 apart): in the Earth Temple
+# (room 9), Dragon Roost Cavern, Ganon's Tower and on the sea. NOT in the defaults yet: ruled from the
+# decomp and the trial in M_Dai room 9 (warp M_Dai,12,0,-1: the stage's spawn list's 13th entry, point
+# 0x0A, at the bridge's far end), where Link never got onto it; converted, it settled from its start in
+# fewer ticks (its planks' chain, placed in a pass from each end with no time step, relaxes twice a tick)
+# and rested where 30's did. Wanted before converting: Link walking across one (outdoors, for the sway). Its sway's and
+# bob's phases (+= 0x578 and 3000 a tick), the shake's phase (+ 3000 a tick, + 4000 once cut), a tick
+# count (a phase x 0x578 for the ropes), the stress count (+ 2 a tick while Link stands on a weak plank,
+# the bridge breaks past 100; - 1 a tick), a shake's push on the planks' tilt, and countdowns. The planks
+# and the ropes are chains placed in a pass from each end, the planks' sag and tilt approach by
+# cLib_addCalc2 and cLib_addCalcAngleS2 (time-stepped).
+020E1308    whole       stb             bridge execute: m033C (+0x5A4) - 1
+020E1340    keep:r6     addi            bridge execute: m0302 (+0x56A) + 1, a tick count
+020E1540    spliti      addi            bridge move: m0300 (+0x568) + 3000 a tick, the shake's phase
+020E15E0    split@r5    add             bridge control1: m02EC (+0x554) += m02F0 (0x578), the sway's phase
+020E15EC    split@r7    add             bridge control1: m02EE (+0x556) += m02F2 (3000), the bob's phase
+020E1D1C    keep:r5     addi            bridge move: m0308 (+0x570) + 2 (Link on a weak plank), then > 100
+020E1E88    split@r4    add             bridge move: a plank's tilt m404 += the shake's push a tick
+020E1EB8    whole       stb             bridge move: a plank's m406 - 1 (it was stepped on)
+020E1F44    whole       stw             bridge move: m0308 - 1
+020E213C    whole       sth             bridge move (cut): m0312 (+0x57A) - 1
+020E2140    spliti      addi            bridge move (cut): m0300 + 4000 a tick
+020E2724    whole       sth             bridge execute: a plank's m418 - 1
+020E2D38    whole       sth             bridge execute: a plank's m3C0 - 1
+020E2ED4    whole       sth             bridge execute: a plank's m3C2 - 1
+020E3054    whole       sthx            bridge execute: a plank's hit timers m3A0[i] - 1

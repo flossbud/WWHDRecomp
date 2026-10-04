@@ -1090,6 +1090,13 @@ it in a window; D21 "Step 2"):**
     drains a point at 0: its store, the drain and the reset whole) are ruled; on a new route, `leaf`
     (`tools/reference/routes/leaf-100.txt`: off the Outset dock's end with the leaf opened in the air),
     the glide at 60 keeps within ~10 units of 30's to the water.
+  - **Rope bridges (BRIDGE 89), ruled, not converted** (`earth.txt`): the most placed unconverted type that
+    moves (a census of every stage's placements against the defaults: GRASS, tags, switches, static
+    models come first; then bridges 32 in 7 stages, fires 424, WARPLIGHT 106, magma 434, Obj_Barrel2 457,
+    the Hyoi seagulls 195, Kbota 27, Ykgr 397, which session top took). Its phases, stress count and
+    countdowns are ruled; its planks are a chain with no time step. Link never got onto the one tested
+    (M_Dai room 9; `WWHD_DEBUG_STAGE` points index the stage's spawn list: M_Dai,12 is point 0x0A), so
+    it waits for a test with Link crossing one (DRC's, or one outdoors for the wind's sway).
   - **Open: the follow camera turns ~13% slower at 60 while Link swims and turns** (session bottom, from
     session top's kindan room 11 drop with the walk route): after the water-lift fix Link's dive matches,
     but over a 16-tick turn (f1152-1168) the camera's control angle (camera process +0x2B4, mAngleY:
