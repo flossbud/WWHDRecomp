@@ -41,9 +41,18 @@ def show(kind, x):
     return f'{x:.6g}' if kind in 'fd' else str(x)
 
 
-def verdict(kind, a, b, c):
+def wrapped(kind, size, d):
+    """An integer field's change modulo its width (a phase that wraps: 32400 -> -32736 is +600 in s16)."""
+    if kind in 'fd':
+        return d
+    bits = 8 * min(size, 8)
+    d &= (1 << bits) - 1
+    return d - (1 << bits) if d >> (bits - 1) else d
+
+
+def verdict(kind, a, b, c, size=4):
     """a before the tick, b after the half steps, c after the game's step."""
-    dh, dr = b - a, c - a
+    dh, dr = wrapped(kind, size, b - a), wrapped(kind, size, c - a)
     if dr == 0:
         return 'only half'
     if dh == 0:
@@ -108,7 +117,7 @@ def main():
         who = of.name(pc) + (' (game\'s step only)' if ref_only else '')
         print(f'{n:6d} {100 * n / max(ticks, 1):5.1f}%  {who:28s} {target:28s} {kind}{size}  '
               f'worst {show(kind, worst)} at {tick}: {show(kind, a)} -> {show(kind, b)} / {show(kind, c)}  '
-              f'{verdict(kind, a, b, c)}')
+              f'{verdict(kind, a, b, c, size)}')
     print('\nby function (stores that differed):')
     for fn, k in by_fn.most_common(30):
         print(f'  {k:5d}  {fn}')

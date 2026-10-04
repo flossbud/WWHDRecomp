@@ -1,0 +1,38 @@
+# The Great Sea (stage sea), session top (docs/handoff.md "Two parallel sessions"). Rooms from
+# tools/stage_actors.py sea; found with types_test.sh and area_test.sh after a warp to sea rooms 25 and 37
+# (cannons, warships, Bokoblin platforms, Gyorg spawners), actor_rmw.py and the GameCube decomp
+# (zeldaret/tww). The format: ../tick_rules.txt. The sea's rocking of floating actors: dlib.txt.
+#
+# ---- cannons (OBJ_CANON, process 63, d_a_obj_canon.cpp): the barrel's sway, a phase += 0x1830 a tick in
+# the joint callback (f_0232FDF0, run by the execute's model calc), and field_0x488, counted while the
+# boat's cannon fires. (trial.py now reads wrapping s16 phases as such: it had shown x-8.58.)
+0232FEBC    split@r0    add             canon joint callback: the sway (+0x584) += 0x1830 a tick
+02330DCC    whole       stw             canon modeWait: field_0x488 (+0x5A4) + 1 while the ship's cannon fires
+#
+# ---- warships (OSHIP, process 179, d_a_oship.cpp): the attack sway's phase (mAttackSwayTimer) on two paths.
+023C7790    split@r0    add             oship: mAttackSwayTimer (+0xE9C) += 0x1830 a tick
+023C7804    split@r0    add             oship: the same (the other path)
+#
+# ---- Gyorg spawners (GY_CTRLB, process 230, d_a_gy_ctrl.cpp; named from the decomp's process list): a
+# phase += a table's step a tick on two paths (f_0216BDD4).
+0216BE54    split@r0    add             gy_ctrlb: a phase (+0x468) += its step a tick
+0216BE98    split@r0    add             gy_ctrlb: the same (the other path)
+#
+# ---- Obj_Coming (process 269, d_a_obj_coming.cpp): its entries' countdowns (f_02331C94).
+02331D18    whole       stw             obj_coming: an entry's countdown - 1
+#
+# ---- bombs (BOMB, process 294, d_a_bomb.cpp / d_a_bomb3.inc: Link's bombs and the cannonballs; named from the
+# decomp's process list; WWHD's fields 0x380 on from the GameCube's here). The fuse (checkExplodeTimer:
+# --mRestTime, then 0 explodes on the register), the no-gravity time and the shadow's timer (checked at the
+# call's entry), the collider's mass time, a counter; per tick in water speed and speedF x 0.9 and the
+# float toward the surface (x 0.8 or 0.2 of the gap), and the wind vector's 0.95. Bounces are events; a
+# wind-pushed bomb moves by daObj::posMoveF_grade, which has no time step yet.
+020C6CFC    keep:r11    addi            bomb checkExplodeTimer: mRestTime (+0xA7C) - 1, then 0 explodes
+020C705C    late        sth             bomb posMoveF: mNoGravityTime (+0xA80) - 1 (checked at entry)
+020C7638    whole       sth             bomb (f_020C74A0): field_0x6FE (+0xA7E) - 1, the collider's mass time
+020C4BD0    late        stw             bomb set_real_shadow_flag: field_0x7C8 (+0xB4C) - 1 (checked first)
+020C5040    whole       stw             bomb execute: field_0x784 (+0xB08) + 1 while field_0x782
+020C6E9C    k@f13       fmadds          bomb water_tention: pos.y += (surface - pos.y) x 0.8 or 0.2, an approach
+020C6F38    d@f0        fmuls           bomb posMoveF: speed.y *= 0.9 in water
+020C6F3C    d@f0        fmuls           bomb posMoveF: speedF *= 0.9 in water
+020C487C    d@f1        bl 028e8e64     bomb set_wind_vec: mWindVec *= 0.95

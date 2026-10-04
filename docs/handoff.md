@@ -780,6 +780,23 @@ it in a window; D21 "Step 2"):**
     Not converted: wall lamps (LAMP 186) and torches (EP): a random flicker target every step would
     flicker twice as often (as the earlier note on torches); signs KANBAN (182: cut pieces' physics),
     pots, stones; A_mori's 204/205 (the forest item's types).
+  - **The Great Sea, converted (session top, 2026-10-04; rules in `config/US_v0/tick_rules/sea.txt`)**: rooms
+    from `tools/stage_actors.py sea` (the room data: placements by process number, all story layers);
+    `types_test.sh` and `area_test.sh` after warps to rooms 25 and 37 (cannon rocks, warships, Bokoblin
+    platforms, Gyorg waters), Link placed beside an Octorok (room 18) and a Gyorg spawner (37) with
+    `WWHD_DEBUG_PLACE` (positions from `stage_actors.py --pos`). In the defaults now:
+    - cannons OBJ_CANON (63): the barrel's sway (a phase in the joint callback, `split`) and a counter
+      while the boat's cannon fires: 99.7% of ticks equal the 30-tick run's (0% before);
+    - warships OSHIP (179): the attack sway's phase on two paths; within 8 units;
+    - Gyorg spawners GY_CTRLB (230): a phase on two paths (100% after, 0% before);
+    - Obj_Coming (269): its entries' countdowns; lookout platforms Obj_Aygr (164), wind tags (391) and the
+      ships' flags Sie_Flag (176: a dCloth, its fixed values set at creation): no rules;
+    - bombs BOMB (294: Link's bombs and the cannonballs): the fuse (`keep`), the no-gravity and shadow
+      timers (`late`), the collider's mass time, a counter, water damping and floating, the wind's
+      damping. A bomb spawned on the dock lives the same 93 ticks at both rates. Not yet: a wind-pushed
+      bomb moves by daObj::posMoveF_grade (no time step).
+    `trial.py` now reads integer fields' changes modulo their width: s16 phases that wrap (the cannon's,
+    the spawner's) had come out as x-8.58 and x-326 and been filtered away as noise.
   - **Tools (session top)**: `tools/sixty/tests/types_test.sh STAGE FROM TO` (an area's first pass),
     `area_test.sh STAGE FROM TO P,Q,...` (several types in one run), `capture.sh NAME STAGE SWAPS
     [INPUTS]` (captures for the progress page at 60 on the worker's GPU: quick, not for comparisons);

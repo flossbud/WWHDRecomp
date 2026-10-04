@@ -69,7 +69,7 @@
 # (f_022F1D14), gravity added by hand (f_022F1F98), and a sidestep from an actor running by
 # (f_022F4DA0: speed.xz += a perpendicular a tick while near it; the trial: twice).
 022F1DCC    late        stb             uk blink (f_022F1D14): its frame (+0x434) + 1
-022F21D8    *h@f7       fadds           uk (f_022F1F98): speed.y += gravity (+0x374)
+022F21D8    fall@f7     fadds           uk (f_022F1F98): speed.y += gravity (+0x374)
 022F4E98    *h@f13      fmadds          uk (f_022F4DA0): speed.x += a sidestep a tick
 022F4EB0    *h@f13      fmadds          uk (f_022F4DA0): speed.z += a sidestep a tick
 022F4EEC    *h@f13      fmadds          uk (f_022F4DA0): speed.x += a sidestep a tick (the other side)

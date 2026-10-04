@@ -203,7 +203,15 @@
     "320": "Zill",
     "331": "Rose",
     "461": "Dishes",
-    "45": "Shelf"
+    "45": "Shelf",
+    "63": "Sea cannon",
+    "179": "Warship",
+    "230": "Gyorg spawner",
+    "269": "Sea barrel spawner (Obj_Coming)",
+    "164": "Lookout platform",
+    "391": "Wind tag",
+    "176": "Ship flag",
+    "294": "Bomb"
   },
   "queue_note": "Two sessions: 'top' takes items from the top down, 'bottom' from the bottom up. Claim an item before starting it (tools/progress/publish.sh claim ID); stop where the other session's claims begin. Stage names under 'where' past Windfall and Outset are unverified guesses: confirm with tools/sixty/tests/room_list.sh.",
   "queue": [

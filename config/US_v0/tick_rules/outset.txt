@@ -31,11 +31,11 @@
 #
 # ---- crabs (KN, process 200, d_a_kn.cpp: "NPC - Crab"; named from the decomp's process list): the timers
 # at the top of the execute (walks lasted half as long, paths 495 against 1047 units) and the gravity
-# added by hand on three inlined paths.
+# added by hand on three inlined paths (fall@: h of it, handed to posMove's arc, session bottom's rule).
 021A2438    whole       sthx            kn execute: the timers m2C2[4] (+0x3DE) count down
-021A27E4    *h@f8       fadds           kn execute: speed.y += gravity (+0x374)
-021A2AC0    *h@f8       fadds           kn execute: speed.y += gravity (another path)
-021A2D58    *h@f8       fadds           kn execute: speed.y += gravity (another path)
+021A27E4    fall@f8     fadds           kn execute: speed.y += gravity (+0x374)
+021A2AC0    fall@f8     fadds           kn execute: speed.y += gravity (another path)
+021A2D58    fall@f8     fadds           kn execute: speed.y += gravity (another path)
 #
 # ---- items on the ground (ITEM, process 255, d_a_item.cpp: rupees, hearts...): timeCount (f_0217E608,
 # at the execute's start: m_timer, m_get_timer, the wait and disappear timers), and the flashing before

@@ -1,7 +1,7 @@
 """Which actors a stage's rooms place: the rooms' actor lists, by WWHD process number (for 60 fps work).
 
 Usage (on the worker; reads the game's files, so its output stays there):
-    python3 tools/stage_actors.py STAGE [ROOM...] [--names NAMES.tsv] [--layers]
+    python3 tools/stage_actors.py STAGE [ROOM...] [--names NAMES.tsv] [--layers] [--pos PROC]
 
 STAGE is a stage name (sea, M_NewD2, kindan...): content/Common/Stage/STAGE_Stage.szs and STAGE_RoomN.szs
 (Yaz0-compressed SARC archives in WWHD, RARC on the GameCube; some, e.g. sea rooms 11 and 44, are inside
@@ -11,7 +11,8 @@ each entry naming the actor by an 8-byte name. dStage_searchName's table (l_obje
 {name[8], s16 process, s8 argument, s8 gba}) maps the names to process numbers; WWHD's copy is found in
 the RPX's data by its first two names. Prints, per room, the process numbers present with their counts,
 profile names (NAMES.tsv, default /wwhd/data/ghidra-out/actor_names.tsv) and stage names. ROOM limits
-the rooms (numbers; "stage" for the stage file).
+the rooms (numbers; "stage" for the stage file). --pos PROC prints that process's placements instead
+(name, parameters, position, angle y): where to put Link (WWHD_DEBUG_PLACE) or spawn one.
 """
 import argparse
 import collections
@@ -132,7 +133,7 @@ def stage_files(stage):
 def embedded_dz(blob):
     """The room.dzr / stage.dzs files WWHD embeds in a room's or stage's .bfres, found by their chunk table
     (u32 count, then count entries of tag[4], u32 count, u32 offset; offsets from the table's start)."""
-    tag_ok = lambda b: len(b) == 4 and all(48 <= c <= 57 or 65 <= c <= 90 for c in b)
+    tag_ok = lambda b: len(b) == 4 and all(48 <= c <= 57 or 65 <= c <= 90 or 97 <= c <= 122 for c in b)   # ACTa, ACTb
     found = []
     for key in (b"ACTR", b"SCOB", b"TRES", b"PLYR"):
         at = blob.find(key)
@@ -148,8 +149,8 @@ def embedded_dz(blob):
     return [blob[start:] for start in found]
 
 
-def actor_chunks(dz):
-    """(tag, name) for every actor-placing entry of a dzr/dzs file."""
+def actor_chunks(dz, full=False):
+    """(tag, name) for every actor-placing entry of a dzr/dzs file (with full, also params, x, y, z, angle y)."""
     n = struct.unpack(">I", dz[0:4])[0]
     for k in range(n):
         tag, count, off = struct.unpack(">4sII", dz[4 + 12 * k:16 + 12 * k])
@@ -161,7 +162,12 @@ def actor_chunks(dz):
         for j in range(count):
             e = off + size * j
             name = dz[e:e + 8].split(b"\0")[0].decode("ascii", "replace")
-            yield tag, name
+            if full:
+                prm, x, y, z = struct.unpack(">Ifff", dz[e + 8:e + 0x18])
+                ay = struct.unpack(">h", dz[e + 0x1A:e + 0x1C])[0]
+                yield tag, name, prm, x, y, z, ay
+            else:
+                yield tag, name
 
 
 def object_names():
@@ -195,6 +201,7 @@ def main():
     ap.add_argument("rooms", nargs="*")
     ap.add_argument("--names", default="/wwhd/data/ghidra-out/actor_names.tsv")
     ap.add_argument("--layers", action="store_true")
+    ap.add_argument("--pos", type=int, help="print this process's placements")
     args = ap.parse_args()
     names = {}
     if os.path.exists(args.names):
@@ -216,6 +223,12 @@ def main():
         groups = collections.defaultdict(collections.Counter)
         for fname, blob in files.items():
             tables = [blob] if fname.endswith((".dzr", ".dzs")) else embedded_dz(blob) if fname.endswith(".bfres") else []
+            if args.pos is not None:
+                for dz in tables:
+                    for tag, name, prm, x, y, z, ay in actor_chunks(dz, full=True):
+                        if table.get(name, (-1, 0))[0] == args.pos:
+                            print(f"{args.stage} room {room} {tag} {name} params {prm:08x} at {x:.0f},{y:.0f},{z:.0f} angle {ay}")
+                continue
             for dz in tables:
                 for tag, name in actor_chunks(dz):
                     groups[tag if args.layers else "all"][name] += 1
