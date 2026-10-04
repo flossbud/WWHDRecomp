@@ -934,6 +934,21 @@ it in a window; D21 "Step 2"):**
     load to a black screen through WWHD_DEBUG_STAGE (their PLYR points exist; any point and layer).
     Phantom Ganon (FGANON 241, GanonC/J/M): absent on the finished save even with WWHD_DEBUG_BOSS=1, and a
     WWHD_DEBUG_SPAWN of it is created and gone; its code's many `+= 1` sites at +0x5BC are mode steps.
+  - **The Tower of the Gods** (`tower`; `config/US_v0/tick_rules/tower.txt`): stage `Siren`, each room
+    by its own spawn point 0 (`Siren,0,R,-1`; `Siren,P,0,-1` always lands at the entrance), Gohdan in
+    `SirenB` (WWHD_DEBUG_BOSS=1). Most of its enemies were converted before (Armos, Chuchus, Bubbles,
+    Wizzrobes, Keese, Kargarocs, a Darknut). Converted here: Beamos (Bemos 233: its head's turn, split:
+    angles equal to 30's at whole ticks; its beam 232: a count), lifts (Hmlif 40: a count of ticks Link
+    stands on it, keep; they run 30's speed exactly, and drift only where Link steps on one at another
+    moment), balance lifts (111: a damped spring: its pull vec@, damping d@ on VECScale, its point vec@,
+    two QUATSlerps k@ on t: the trial's half steps then equal the tick), Gohdan (BST 240, head and hands:
+    WWHD's fields + 0x234; its timers, pos_move's pos += speed, a recoil, its collision push added by hand
+    (a push a tick: *h), the hands' slams and rises (explicit order: speed changes `late`): its hands ran
+    four times as far before, 5-22% off 30 now; mDamage (+0x130E) is a state step, not ruled), and with
+    no rules, matching: statues (Obj_Try 458, 4 units higher at rest), floor switches (Obj_Swflat 29),
+    its water (Obj_Tide 39), Obj_Hha 136, Obj_Htetu1 137, stakes (KUI 250), Obj_Hcbh 150. Not converted:
+    the light bridges (427, 428: their animation frames drift from 30's), Hys (450), the hot floor
+    (231: a Beamos's scorch, its path doubled), rats (198: see the fortress).
   - **`fall@fREG`** (new step rule, shared: generate.py, sixty.cpp's `g_rtActor`, sixty_step.cpp's
     `rt_step_fall`): many executes inline fopAcM_calcSpeed's `speed.y += gravity` instead of calling
     it (a scan for `lfs fG,0x374(rA)` ... `fadds` ... `stfs 0x340(rA)` found 62 sites in ~25 types),
@@ -964,8 +979,9 @@ it in a window; D21 "Step 2"):**
   capes 192, the Moblins' lanterns 193, Puppet Ganon 243-245, Ganondorf 246, Miniblins 247,
   Bubbles 207, the Wind Temple's fans 114, blade traps 135, Wizzrobes 208, platforms 254 and 252,
   Armos 202/203, Molgera 217/219, the Earth Temple's Stalfos 190, Poes 212, Floormasters 119 and
-  Jalhalla 211, the Forsaken Fortress's anchors 431, barrels 456, ropes 447 and Tetra 426 (session
-  bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
+  Jalhalla 211, the Forsaken Fortress's anchors 431, barrels 456, ropes 447 and Tetra 426, the
+  Tower of the Gods' Beamos 233 and beams 232, lifts 40, balance lifts 111, statues 458, floor
+  switches 29, its water 39, 136, 137, stakes 250, 150 and Gohdan 240 (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
   373, 352, 121, 445, 309 and Outset's 118, 68, 73, 200, 255, 71, 67, 335, 319, 320, 331, 461, 45
   (session top; `kConvertedByDefault` has a line per session),
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,

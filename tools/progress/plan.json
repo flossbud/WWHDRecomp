@@ -182,6 +182,11 @@
     "447": "Rope (HIMO3)",
     "426": "Tetra (NPC_ZL1)",
     "198": "Rat (NZ)",
+    "232": "Beamos beam",
+    "40": "Tower lift (Hmlif)",
+    "111": "Balance lift",
+    "458": "Statue (Obj_Try)",
+    "240": "Gohdan",
     "185": "Torch (EP)",
     "367": "Medli (NPC_MD)",
     "453": "Pot",
@@ -245,7 +250,7 @@
     {
       "id": "tower",
       "name": "Tower of the Gods: Armos, Beamos 233 and beams 232, Yellow Chuchus, statues, Gohdan",
-      "where": "Siren"
+      "where": "Siren by room (Siren,0,R,-1: each room has its own point 0), SirenB (Gohdan)"
     },
     {
       "id": "fortress",

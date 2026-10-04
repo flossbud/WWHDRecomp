@@ -1,0 +1,53 @@
+# Step and tick rules for the Tower of the Gods (the work queue's "tower"; session bottom). Format:
+# ../tick_rules.txt and tools/recomp/generate.py. Stage Siren: each room has its spawn point 0 (Siren,0,R,-1
+# for room R; the point alone doesn't move Link), Gohdan's room is SirenB. Found with the step-doubling trial,
+# checked 30 against 60.
+#
+# ---- Bemos (233: Beamos; f_0232728C): its head's turn
+02327334    split@r10   add             bemos: its head's angle (+0x3B6) += its turn speed (+0x88A)
+#
+# ---- Hmlif (40: the tower's lifts; f_02175E60): a count of ticks Link stands on it, 0 to 3
+02175E9C    keep:r10    addi            hmlif: the count + 1 (Link on it), on whole ticks
+02175EB4    keep:r10    addi            hmlif: the count - 1 (Link off it), on whole ticks
+#
+# ---- Balancelift (111: the tower's tilting lifts; f_0231BB1C, its tilt as a damped spring: velocity
+# (+0x414) += a pull a tick, then times a damping, its point (+0x408) += velocity; its rotations slerp
+# toward the tilt by a factor a tick)
+0231BBA0    vec@r4      bl 028e8d88     balancelift: velocity += its pull (per tick: h of it)
+0231BBB0    d@f1        bl 028e8e64     balancelift: velocity *= its damping (VECScale)
+0231BBC0    vec@r4      bl 028e8d88     balancelift: its point += velocity
+0231BC50    k@f1        bl 028e9bc0     balancelift: a rotation slerps toward the tilt (QUATSlerp's t)
+0231BCA8    k@f1        bl 028e9bc0     balancelift: the other rotation's slerp
+#
+# ---- BST (240, d_a_bst.cpp: Gohdan's head and hands, stage SirenB with WWHD_DEBUG_BOSS=1; execute
+# f_020E54A0; WWHD's fields are the GameCube's + 0x234). Not ruled: mDamage (+0x130E: its `++` steps the
+# attacks' states, once).
+020E5520    keep:r11    addi            bst: its tick count (+0x1308, mUpdateLastFacingDirIfMultipleOf32) + 1
+020E5550    keep:r6     addi            bst: its timers (m10FC[5]) - 1, on whole ticks
+020E5570    keep:r11    addi            bst: mState (+0x133C) - 1 (a countdown)
+020E5584    keep:r12    addi            bst: a countdown (+0x133A) - 1
+020E5598    keep:r10    addi            bst: a countdown (+0x135C) - 1
+020E55AC    keep:r9     addi            bst: a countdown (+0x135E) - 1
+020E55C0    keep:r8     addi            bst: a countdown (+0x1360) - 1
+020E55D0    keep:r4     addi            bst: a countdown (+0x133E) - 1
+020E5690    keep:r5     addi            bst head: mBombArrowDropTimer (+0x30B8) - 1
+020E56B4    keep:r7     addi            bst head: its timers (m2E7E[3]) - 1
+# its moves: pos_move's pos += speed, a recoil, and the collision's push applied by hand (a push a tick)
+020E4E24    vec@r4      bl 028e8d88     bst pos_move: pos += speed
+020EDC3C    vec@r4      bl 028e8d88     bst: pos += its recoil (mHeadHurtSpeed along its angles)
+020EDBBC    *h@f0       fadds           bst: pos.x += its collision push (mStts's move, by hand)
+020EDBCC    *h@f8       fadds           bst: pos.y += the push
+020EDBDC    *h@f10      fadds           bst: pos.z += the push
+# a hand's slam and rise (down_attack and the like: pos.y += speed.y, then speed.y -= 60 or += 0.5: the
+# explicit order, so the speed changes once a tick)
+020E96D8    *h@f11      fadds           bst slam: pos.y += speed.y
+020E9740    late        stfs            bst slam: speed.y -= 60 (once a tick)
+020E98A0    late        stfs            bst slam: speed.y += 0.5 rising (once a tick)
+020EC884    *h@f10      fadds           bst: pos.y += speed.y
+020EC89C    late        stfs            bst: speed.y -= its fall (once a tick)
+020ED734    *h@f7       fadds           bst: pos.y += speed.y
+020ED770    late        stfs            bst: speed.y -= its fall (once a tick)
+020ED8C8    late        stfs            bst: speed.y += its rise (once a tick)
+#
+# ---- Beam (232: a Beamos's beam; f_02326E4C)
+0232707C    *h@f29      fadds           beam: a count (+0x798, a float) + 1 a tick
