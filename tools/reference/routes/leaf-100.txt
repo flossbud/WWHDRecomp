@@ -1,0 +1,11 @@
+# Route: Link gliding with the Deku Leaf off the Outset dock (WW-4: Link's glide at 60 fps), with the 100%
+# save (REF_SAVE=/wwhd/data/saves/wwhd_100: the Deku Leaf on X): continue-100.txt's inputs, then the left
+# stick held forward (Link walks to the dock's end and jumps off) and X in the air (the leaf opens: he
+# glides out over the sea while the stick stays forward). FRAME BUTTONS [FRAMES_HELD]; frames are game
+# frames (at 60 fps, every other swap).
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+920 LUP 240    # forward: off the dock's end (~f946)
+952 X 3        # the Deku Leaf, in the air: a glide

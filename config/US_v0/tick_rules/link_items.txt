@@ -42,6 +42,21 @@
 # trail's, f_0240CDD0), colliders' centres (f_02018428) and his place before the move (posMove).
 02417B84    keep:r11    addi            link wait: +0x6918 - 1, the countdown to an idle
 0242F5E8    split@r10   add             link swim: the bob's phase (+0x691A) += a random step a tick
+# Link gliding with the Deku Leaf (procFanGlide f_02438E78, proc 0x93): the wind's push m3730 (approached
+# by cLib_addCalc, time-stepped) is added to his position by the glide itself (not posMove's adds): at 60
+# he drifted sideways twice as far (the leaf route: 861 against 349 units in 46 ticks) and landed
+# elsewhere. Its turn (shape_angle.y += m34D4) and its bank's carried turns a tick, and its countdowns:
+# the magic's timer is a subic. (its record form tests the result): its store, the magic's - 1 and the
+# timer's reset are all on whole ticks, so a half tick that sees the 0 changes nothing.
+02438EE8    whole       sth             link glide: m34D2 (+0x6918) - 1, the wait before he can close the leaf
+02439118    whole       sth             link glide: m34DA (+0x6920) - 1, the splash sound's wait
+024391A8    whole       stw             link glide: the magic's timer (m3574, +0x69C4) - 1 (subic.: see above)
+024391D0    whole       sth             link glide: the magic - 1 when the timer reaches 0
+024391D4    whole       stw             link glide: the magic's timer = 40 again
+02439704    vec@r4      bl 028e8d88     link glide: current.pos += m3730, the wind's push (its own add)
+02439710    split@r0    add             link glide: shape_angle.y += m34D4 (+0x691A), the stick's turn a tick
+02439838    split@r7    add             link glide: m34E0 (+0x6928) += m34D6, its bank's carried turn
+024399FC    split@r12   add             link glide: m34E2 (+0x692C) += m34D8, the other axis's
 #
 # ---- arrows (ARROW, process 472, d_a_arrow.cpp; execute f_02052DB8). WWHD's fields are the GameCube's +
 # 0x11C up to field_0x604, + 0x118 after it. procMove (f_02054040): current.pos += speed (200 a tick; the

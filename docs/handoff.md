@@ -1077,6 +1077,13 @@ it in a window; D21 "Step 2"):**
     tap took Link from 12 to 536 a tick and off the dock in 20 ticks. setNormalSpeedF's least and most
     steps are divided by h at f_02416B70's two calls (the override takes h of them again: 30's steps a
     step); Link's path now matches 30 within a few units.
+  - **Link gliding with the Deku Leaf, fixed (shared; regress.sh rerun)**: procFanGlide (f_02438E78) adds
+    the wind's push (m3730) to his position itself, besides posMove's ruled adds; at 60 he drifted
+    sideways twice as far (861 against 349 units in 46 ticks) and landed somewhere else. That add (vec@),
+    the glide's turn and its bank's carried turns (split), its countdowns and its magic drain (a timer that
+    drains a point at 0: its store, the drain and the reset whole) are ruled; on a new route, `leaf`
+    (`tools/reference/routes/leaf-100.txt`: off the Outset dock's end with the leaf opened in the air),
+    the glide at 60 keeps within ~10 units of 30's to the water.
   - **Joint callbacks run with every drawn frame's calc (a hazard)**: a converted process's model is
     calculated each frame it is drawn (twice a tick), an unconverted one's once a tick, and the step is 1
     there, so step rules don't apply: an increment in a joint callback (J3DNode calc callbacks, e.g.
