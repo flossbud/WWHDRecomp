@@ -1,0 +1,107 @@
+# Link's items: the actors his items make (session bottom, agreed with session top once the queue was done:
+# arrows, the boomerang, the hookshot, the grappling hook's rope, the Deku Leaf's gust, bait), and two of
+# Link's own counters. Found with the step-doubling trial (tools/sixty/tests/route_test.sh on the items
+# route, tools/reference/routes/items-100.txt) and the GameCube decomp. The format: ../tick_rules.txt.
+#
+# ---- Link (168): two counters session top found running twice as fast in its lily pad test
+023FBEE8    keep:r29    addi            link: +0x6980 + 1 (when nonzero), then compared to a virtual call's value
+023F2E30    whole       sth             link: his cutscene move's timer (+0x424, demo type 4 mode 0xE) - 1
+# Link walking while he aims an item (WWHD's own; the GameCube's Link stands still): f_02416B70 takes
+# mNormalSpeed toward the stick's speed with setNormalSpeedF (an acceleration up to the stick's cap, or
+# down by cLib_addCalc: half the way, at least 4 and at most 7.5 a tick), and the grappling hook's and the
+# boomerang's aims then multiply it by 1.2 (f_024350A0, f_024376D8, f_024379C0, f_02437C0C: the cap 12 x
+# 1.2 = 14.4). At 30 the next tick's least step (4) takes 14.4 back to 12 at once; at 60 a step's least is
+# 2 (cLib_addCalc's override), short of the 2.4, and x 1.2 a step ran away (12 to 536 in 20 ticks: Link
+# off the Outset dock on the items route). With setNormalSpeedF's least and most steps divided by h (the
+# override then takes h of them: 30's steps a step) the 2.4 goes at once again: 14.4 a step, as at 30.
+02416C08    /h:f4       lfs             link aim walk: setNormalSpeedF's least step (4), a step's at 30's
+02416C28    /h:f3       lfs             link aim walk: setNormalSpeedF's most step (7.5)
+02416C48    /h:f4       lfs             link aim walk (no stick): the least step
+02416C54    /h:f3       lfs             link aim walk (no stick): the most step
+02435200    keep:r8     addi            link rope aim: the sight's lock frame (+0x58EE) + 1, a sound at 26
+#
+# ---- arrows (ARROW, process 472, d_a_arrow.cpp; execute f_02052DB8). WWHD's fields are the GameCube's +
+# 0x11C up to field_0x604, + 0x118 after it. procMove (f_02054040): current.pos += speed (200 a tick; the
+# line check from old.pos to pos + speed / 4 and the collider from pos to pos + 1.25 speed still cover each
+# step), the blur's spin, and past 25000 units speed.y -= 2 (capped at -100: one store) after the move:
+# late, so two half steps of the tick's speed add up to the 30 Hz step.
+02054090    vec@r4      bl 028e8d88     arrow procMove: current.pos += speed
+0205411C    spliti      addi            arrow procMove: mBlurAngle.z (+0x79C) + 0x889 a tick
+02054E40    late        stfs            arrow procMove: speed.y -= 2 past 25000 units (once a tick, after the move)
+# procReturn (f_02055450), bounced off a wall or a shield: speed.y -= 2 before current.pos += speed (the
+# add reads speed from memory: gravity on the whole tick, then both half steps add the tick's speed), and
+# its tumble (shape_angle.x += field_0x69c, halved and reversed on a bounce)
+0205549C    whole       stfs            arrow procReturn: speed.y -= 2 (once a tick, before the move)
+020554A0    vec@r4      bl 028e8d88     arrow procReturn: current.pos += speed
+020554B8    split@r0    add             arrow procReturn: shape_angle.x += field_0x69c (+0x7B4)
+# stuck in a wall (procStop_BG f_02054FE0): the wobble's count (field_0x604, +0x720: the angle is a sine of
+# it), the time left before it goes (field_0x6A0, +0x7B8: it blinks the last 60 ticks, by odd and even);
+# in water (procWater f_02055734) its time left; a light arrow's sparkle (mSparkleTimer, +0x724; read again
+# after); the glint (mBtkFrame, +0x77C: a texture frame + 1 a tick while it plays, started at random)
+02055044    keep:r11    addi            arrow procStop_BG: field_0x604 - 1, the wobble's angle from it
+020552EC    keep:r12    addi            arrow procStop_BG: field_0x6A0 - 1, then < 60 and odd or even
+0205575C    whole       stw             arrow procWater: mInWaterTimer (+0x7BC) - 1 (checked first)
+02052E60    whole       sth             arrow execute: mSparkleTimer - 1
+0205305C    *h@f31      fadds           arrow execute: mBtkFrame + 1 while it plays
+020530D0    whole       stfs            arrow execute: mBtkFrame = 1 (a 2% start a tick)
+# Not ruled: setBlur's alpha - 50 a tick (f_02053628, a subic.: the blur behind a stopped arrow fades in
+# 2.5 ticks instead of 5).
+# The arrows' effects: the glow of a fire, ice or light arrow (ARROW_LIGHTEFF, process 474,
+# d_a_arrow_lighteff.cpp; execute f_02057930): its texture's frame (field_0x2E0: + 1 a tick to its end, or
+# toward 5 in first person), its growth in flight (field_0x2A8: z + 1 a tick up to 20, x - 0.025 down to
+# 0.5) and its time after a hit (field_0x2E4: 60 ticks); ice where an ice arrow hits (ARROW_ICEEFF, 473,
+# d_a_arrow_iceeff.cpp; execute f_020564D0): its frame (+ 1 a tick) and its tick count (60 ticks on the
+# ground; 300 on water, with events at 35 and 40). Their animations go through J3DFrameCtrl::update
+# (time-stepped). The ice is ruled from the decomp (no arrow on the route hits anything).
+020579EC    *h@f31      fadds           lighteff brk_play: field_0x2E0 + 1 a tick
+02057A1C    *h@f31      fsubs           lighteff brk_play: field_0x2E0 - 1 (toward 5)
+02057A38    *h@f31      fadds           lighteff brk_play: field_0x2E0 + 1 (toward 5)
+02057B78    *h@f13      fadd            lighteff execute: field_0x2A8.z + 1 a tick in flight
+02057BA4    *h@f0       fsubs           lighteff execute: field_0x2A8.x - 0.025 a tick in flight
+02057C4C    keep:r12    addi            lighteff execute: field_0x2E4 + 1 after a hit, gone at 60
+0205663C    *h@f31      fadds           iceeff execute: field_0xA34 + 1 a tick (on the ground)
+020566A8    keep:r8     addi            iceeff execute: field_0xA30 + 1 (on the ground: gone at 60)
+02056810    *h@f31      fadds           iceeff execute: field_0xA34 + 1 a tick (on water)
+0205687C    keep:r8     addi            iceeff execute: field_0xA30 + 1 (on water: events at 35 and 40, gone at 300)
+#
+# ---- the boomerang (BOOMERANG, process 432, d_a_boomerang.cpp; procMove f_020CEE10; its own fields from
+# + 0x26244): its spin, the homing turn (clamped to a limit a tick; split, while the bank still sees the
+# tick's turn: the register is put back), its flight (speedF, 60, a tick along its angles: three inline
+# adds); the bank's approach is cLib_addCalcAngleS's (time-stepped). Its blur trail shifts by
+# SEGMENTS_PER_STEP a call (copyBlur f_020CE7E8): at 60 it holds half as many ticks, half as long (not
+# ruled: on whole ticks only, it would trail the boomerang by half a tick every other frame).
+020CEEAC    spliti      addi            boomerang procMove: mModelRotY (+0x2627A) - 0x1F00 a tick
+020CF200    split@r31   add             boomerang procMove: current.angle.y += the turn (at the limit)
+020CF21C    split@r31   add             boomerang procMove: current.angle.y += the turn
+020CF288    *h@f11      fmadds          boomerang procMove: current.pos.x += speedF cos(x) sin(y)
+020CF2A0    *h@f12      fnmsubs         boomerang procMove: current.pos.y -= speedF sin(x)
+020CF2C0    *h@f10      fmadds          boomerang procMove: current.pos.z += speedF cos(x) cos(y)
+#
+# ---- the hookshot (HOOKSHOT, process 169, d_a_hookshot.cpp; execute f_02176D98): its tip's step out
+# (procShot f_02178DDC: current.pos + mMoveVec x 15, mMoveVec 7 long: 105 a tick), back (procReturn
+# f_02179B98: 63 a tick toward Link's hand: current.pos -= the way x 63 / its length) and Link's pull toward
+# a target it holds (procPlayerPull f_02179888: mMoveVec, 63 a tick, which Link's procHookshotFly adds to
+# his position each step): h of each a step. The pull's last tick takes the rest of the way at 30, half of
+# it at 60; Link's x and z are then set from the tip, as at 30, his y not (not tested: no target here).
+02179314    *h@f1       bl 0201ae48     hookshot procShot: mMoveVec x 15 (the step out)
+02179CB0    *h:f1       fdivs           hookshot procReturn: 63 / the way's length (the step back)
+02179B24    *h@f1       bl 0201ae48     hookshot procPlayerPull: mMoveVec = the way x (chains x 7 / its length)
+#
+# ---- the grappling hook's rope (HIMO2, process 446, d_a_himo2.cpp; execute f_0216E194, new_himo2_move
+# f_0216F7FC; WWHD's fields the GameCube's + 0x11C): its tick count (m02D8: the hook twirls in Link's hand
+# by 0x2000 of it a tick, and a throw at a target waits for the twirl's angle), the move's five countdowns
+# (m0308, the throw's time left, and m029C to m02A2), the throw (states 2 and 3: a speed of 20 along its
+# angles, current.pos += speed; pl_pos_add then moves it by Link's own step, a step's already). The way
+# back (state 0) approaches the hand by cLib_addCalc2 (time-stepped), its cap's ramp too. The rope
+# (himo2_control and himo2_control2: 100 points placed in one pass from the hand and one from the hook,
+# each at a fixed length toward its last place) has no time step: at 60 it settles by two passes a tick
+# (the trial: 1.6 times a tick's change), not ruled (on whole ticks only it would come off the hand).
+# Thrown at nothing (the items route); a swing on it and a throw at a target are not tested.
+0216E258    keep:r6     addi            himo2 execute: m02D8 (+0x3F4) + 1, a tick count
+0216F904    whole       sth             himo2 move: m0308 (+0x424) - 1
+0216F918    whole       sth             himo2 move: m02A2 (+0x3BE) - 1
+0216F92C    whole       sth             himo2 move: m029C (+0x3B8) - 1
+0216F940    whole       sth             himo2 move: m029E (+0x3BA) - 1
+0216F950    whole       sth             himo2 move: m02A0 (+0x3BC) - 1
+02170510    vec@r4      bl 028e8d88     himo2 move: current.pos += speed (the throw, state 2)
+021708BC    vec@r4      bl 028e8d88     himo2 move: current.pos += speed (state 3: at a target, after the twirl)

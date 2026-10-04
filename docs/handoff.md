@@ -872,9 +872,9 @@ it in a window; D21 "Step 2"):**
     9, 11 and 12 run to the end at 60. Other lists headed in .data/.bss with heap nodes would fail the
     same way (the census probe and `hidden.txt`, written by `WWHD_STATE_DUMP` runs at exit, list the
     hidden words).
-  - **Link: two counters not ruled (session top found them, not changed: Link is shared)**: in the lily pad
-    test the trial had Link's +0x6980 (`023FBEE8 addi`, + 1 then compared to a virtual call's value:
-    `keep:r29`) and +0x424 (`023F2E30 sth`, a countdown: `whole`) twice as fast.
+  - **Link: two counters (session top found them in the lily pad test)**: Link's +0x6980 (`023FBEE8 addi`,
+    + 1 then compared to a virtual call's value) and +0x424 (`023F2E30 sth`, his cutscene move's timer)
+    ran twice as fast; ruled now (`keep:r29`, `whole`) in `config/US_v0/tick_rules/link_items.txt`.
   - **Tools (session top)**: `tools/sixty/tests/types_test.sh STAGE FROM TO` (an area's first pass),
     `area_test.sh STAGE FROM TO P,Q,...` (several types in one run), `capture.sh NAME STAGE SWAPS
     [INPUTS]` (captures for the progress page at 60 on the worker's GPU: quick, not for comparisons);
@@ -936,7 +936,10 @@ it in a window; D21 "Step 2"):**
     tick. Not tested (the fight with Link): cut strings, damage, its own attacks after a cut.
   - Test aids: `WWHD_DEBUG_SPAWN=...,x,y,z,ANGLEX` (hex: a Darknut's equipment is (ANGLEX >> 5) & 7,
     `80` a shield and a cape). `WWHD_DEBUG_POKE=tick:proc,offset,size,value[;...]` (offset and value
-    hex) writes a process's field before it executes: e.g. `1100:243,14eb4,2,6;1100:243,14eb6,2,0`
+    hex) writes a process's field before it executes (process 0: the offset is an address, written once
+    that frame; `900:0,1046f0b9,1,5;900:0,10474c6b,1,2d` puts the boomerang on X, `900:0,1046f0ba,1,13;
+    900:0,10474c6c,1,2f` the hookshot on Y: the save's inventory slot and the play's item number on the
+    button, which Link reads; the items route's header has more): e.g. `1100:243,14eb4,2,6;1100:243,14eb6,2,0`
     sends Puppet Ganon into its change (the spider ~f1740), `2000:244,602,2,6;2000:244,604,2,0` the
     spider into the snake (~f2250). `WWHD_DEBUG_BOSS=1` with a Darknut spawned on the Outset dock
     crashes the game at f979 (at 30 too): keep it for boss rooms.
@@ -1037,6 +1040,30 @@ it in a window; D21 "Step 2"):**
     its water (Obj_Tide 39), Obj_Hha 136, Obj_Htetu1 137, stakes (KUI 250), Obj_Hcbh 150. Not converted:
     the light bridges (427, 428: their animation frames drift from 30's), Hys (450), the hot floor
     (231: a Beamos's scorch, its path doubled).
+  - **Link's items** (agreed with session top once the queue was done; `config/US_v0/tick_rules/link_items.txt`,
+    tested on a new route, `items` (`tools/reference/routes/items-100.txt`: on the Outset dock an arrow, X and
+    Y twice each, then the bow with fire, ice and light arrows nocked by turns and a light arrow shot; the
+    100% save has the Deku Leaf on X and the grappling hook on Y, `WWHD_DEBUG_POKE` puts others there).
+    Arrows (ARROW 472: the move a VECAdd of 200 a tick, `vec@r4`; the fall past 25000 `late`, a bounce's
+    gravity, which comes before the move, `whole`; counts): 30's flight exactly (25027 against 25027
+    units). The boomerang (BOOMERANG 432: its spin, homing turn `split@` with the bank still seeing the
+    tick's turn, its flight, three inline adds): 17.6 apart on average (it was 700). Its blur trail
+    shifts a fixed amount a call, so at 60 it is half as long (not ruled: on whole ticks it would trail
+    the boomerang by half a tick every other frame). The hookshot (HOOKSHOT 169: the tip's step out,
+    back, and Link's pull, `*h@f1` on cXyz::operator*'s scalar): 34 apart (was 188). The grappling hook's
+    rope (HIMO2 446: its throw `vec@r4`, five countdowns, a tick count): 12.7 apart (was 96); its rope
+    (100 points placed in one pass from each end, no time step) settles faster at 60, not ruled. The
+    magic arrows' glow (ARROW_LIGHTEFF 474) and the ice an ice arrow leaves (ARROW_ICEEFF 473, from the
+    decomp: no arrow hits anything on the route). Not tested: the boomerang locking onto targets, the
+    hookshot pulling Link to a target, swinging on the rope, the bait bag (ESA 221 not converted).
+  - **Link walking while he aims, fixed (shared; regress.sh rerun)**: WWHD lets Link walk while he aims
+    the grappling hook or the boomerang (the GameCube's stands still). f_02416B70 takes mNormalSpeed toward
+    the stick's speed with setNormalSpeedF, and those aims then multiply it by 1.2 (12 x 1.2 = 14.4); at
+    30 the next tick's least deceleration step (4) takes 14.4 back to 12 at once. At 60 cLib_addCalc's
+    override made that step 2, short of 2.4, and x 1.2 a step ran away: on the items route a short stick
+    tap took Link from 12 to 536 a tick and off the dock in 20 ticks. setNormalSpeedF's least and most
+    steps are divided by h at f_02416B70's two calls (the override takes h of them again: 30's steps a
+    step); Link's path now matches 30 within a few units.
   - **Pots and stones** (TSUBO 453, STONE 454; agreed with session top, not in the queue;
     `config/US_v0/tick_rules/carried.txt`). Shared: **daObj::posMoveF_grade** (f_023121C4, also behind
     daObj::posMoveF_stream: the move of what is thrown, rolls or floats: pots, stones, barrels, bombs)
@@ -1084,7 +1111,8 @@ it in a window; D21 "Step 2"):**
   Jalhalla 211, the Forsaken Fortress's anchors 431, barrels 456, ropes 447 and Tetra 426, the
   Tower of the Gods' Beamos 233 and beams 232, lifts 40, balance lifts 111, statues 458, floor
   switches 29, its water 39, 136, 137, stakes 250, 150, Gohdan 240, rats 198, Helmaroc King 238, pots
-  453 and stones 454 (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
+  453, stones 454, and Link's arrows 472, 473, 474, boomerang 432, hookshot 169 and grappling hook 446
+  (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
   373, 352, 121, 445, 309 and Outset's 118, 68, 73, 200, 255, 71, 67, 335, 319, 320, 331, 461, 45
   (session top; `kConvertedByDefault` has a line per session),
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,

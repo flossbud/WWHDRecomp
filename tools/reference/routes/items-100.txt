@@ -1,0 +1,24 @@
+# Route: Link's items on the Outset dock (WW-4: the item actors at 60 fps), with the 100% save
+# (REF_SAVE=/wwhd/data/saves/wwhd_100: X the Deku Leaf, Y the grappling hook, R the bow): continue-100.txt's
+# inputs, then an arrow shot, the items on X and Y used twice each, and the bow again with its arrows
+# swapped (ZR while aiming: fire, ice, then light), facing the island: an ice arrow and a light arrow shot. WWHD_DEBUG_POKE puts other items on X
+# and Y (process 0, an address: the save's inventory slots on X and Y at 0x1046F0B9 and 0x1046F0BA, and
+# the play's items on them at 0x10474C6B and 0x10474C6C: the boomerang slot 5 item 2D, the hookshot slot
+# 13 item 2F, the bait bag slot B item 2C). FRAME BUTTONS [FRAMES_HELD]; frames are game frames (at 60
+# fps, every other swap).
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+920 R 40       # the bow out, an arrow drawn, released: it flies
+1000 X 3       # the item on X
+1060 X 3
+1150 Y 3       # the item on Y
+1210 Y 3
+1250 LDOWN 12   # turn round, toward the island
+1300 R 140     # the bow again, held
+1340 ZR 3      # fire arrows
+1380 ZR 3      # ice arrows; R released at 1440: an ice arrow hits the island (ARROW_ICEEFF)
+1500 R 100     # again, an ice arrow nocked
+1540 ZR 3      # light arrows; R released at 1600: a light arrow flies
+1660 B 3       # put away

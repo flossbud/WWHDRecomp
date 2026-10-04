@@ -75,7 +75,8 @@ namespace
 	// anchors (IKARI), barrels (Obj_Barrel), ropes and their lanterns' moths (HIMO3) and Tetra (NPC_ZL1),
 	// the Tower of the Gods' Beamos (Bemos, Beam), lifts (Hmlif), balance lifts, statues (Obj_Try), floor
 	// switches (Obj_Swflat), its water (Obj_Tide), Obj_Hha, Obj_Htetu1, stakes (KUI), Obj_Hcbh and Gohdan
-	// (BST), rats (NZ), Helmaroc King (BDK), pots (TSUBO) and stones (STONE) (session bottom); Windfall's
+	// (BST), rats (NZ), Helmaroc King (BDK), pots (TSUBO), stones (STONE), and Link's arrows (ARROW, ARROW_ICEEFF,
+	// ARROW_LIGHTEFF), boomerang (BOOMERANG), hookshot (HOOKSHOT) and grappling hook (HIMO2) (session bottom); Windfall's
 	// windmill wheel (Obj_Ferris), pigs (KB),
 	// townsfolk (NPC_PEOPLE, NPC_KK1, NPC_MK, NPC_UK, NPC_GK1, NPC_TT, NPC_RSH1), market stalls (Obj_Roten),
 	// its distant models (445) and stands (DAI); Outset's fishman (NPC_SO), Beedle's ship (OBJ_IKADA), palms
@@ -93,7 +94,7 @@ namespace
 	// WWHD_60FPS_CONVERT= (empty) converts none.
 	constexpr const char* kConvertedByDefault =
 		"476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,"
-		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,"   // session bottom
+		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,"   // session bottom
 		"123,220,353,170,368,374,364,373,352,121,445,309,118,68,73,200,255,71,67,335,319,320,331,461,45,63,179,230,269,164,391,176,294,187,313,120,213,407,83,105,116,383,410,439,470,101,102,398,297,65,304,144,74,307,430,99,103,204,235,236,237,185,186";   // session top
 	const char* ConvertList()
 	{
@@ -1503,7 +1504,11 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	}
 	// WWHD_DEBUG_POKE=tick:process,offset,size,value[;...] (a test aid; offset and value hex, size 1, 2
 	// or 4): at that game frame, before each process of that name executes, the value is written at
-	// its offset: a boss's state or health, to reach a later phase of its fight in a test
+	// its offset: a boss's state or health, to reach a later phase of its fight in a test. Process 0:
+	// the offset is an address, written once that frame. The game info (0x1046F0B0) starts with the
+	// save's dSv_player_status_a_c (+9, +A, +B: the inventory slots on X, Y and R), and its play part
+	// has the items on them (+0x5BBB, +0x5BBC, +0x5BBD: item numbers, the GameCube's mSelectItem at play
+	// +0x4933), which Link reads: an item goes on a button with both
 	{
 		struct Poke { int tick, proc; uint32 offset, size, value; };
 		static const std::vector<Poke> pokes = [] {
@@ -1517,20 +1522,25 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 				}
 			return v;
 		}();
+		static std::vector<bool> pokedAt(pokes.size());
 		if (!pokes.empty() && !g_rtHalfTick)
 		{
 			const int now = (int)wwhd::rt::GameFrame(wwhd::os::SwapCount());
-			for (const Poke& w : pokes)
-				if (w.tick == now && w.proc == (int)rd16(proc + 0x08))
-				{
-					if (w.size == 1)
-						wr8(proc + w.offset, (uint8)w.value);
-					else if (w.size == 2)
-						wr16(proc + w.offset, (uint16)w.value);
-					else
-						wr32(proc + w.offset, w.value);
-					cemuLog_log(LogType::Force, "wwhd debug: poked process {} +{:x} ({} bytes) = {:x}", w.proc, w.offset, w.size, w.value);
-				}
+			for (size_t i = 0; i < pokes.size(); i++)
+			{
+				const Poke& w = pokes[i];
+				if (w.tick != now || (w.proc == 0 ? pokedAt[i] : w.proc != (int)rd16(proc + 0x08)))
+					continue;
+				const uint32 at = w.proc == 0 ? w.offset : proc + w.offset;
+				pokedAt[i] = true;
+				if (w.size == 1)
+					wr8(at, (uint8)w.value);
+				else if (w.size == 2)
+					wr16(at, (uint16)w.value);
+				else
+					wr32(at, w.value);
+				cemuLog_log(LogType::Force, "wwhd debug: poked process {} +{:x} ({} bytes) = {:x}", w.proc, w.offset, w.size, w.value);
+			}
 		}
 	}
 	if (from == ~0u && !Probe())
