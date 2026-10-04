@@ -1090,6 +1090,16 @@ it in a window; D21 "Step 2"):**
     drains a point at 0: its store, the drain and the reset whole) are ruled; on a new route, `leaf`
     (`tools/reference/routes/leaf-100.txt`: off the Outset dock's end with the leaf opened in the air),
     the glide at 60 keeps within ~10 units of 30's to the water.
+  - **Link at 60, what is checked (session bottom, 2026-10-04)**: each by tracking Link at 30 and 60 on a
+    route (his position, procedure, speeds): walking and turning (walk, ladder, land), rolling (A while
+    running: same speeds 26/25.5/21.9, the rolls end within half a tick), crawling and hanging from a
+    ledge and moving along it (crawl), gliding with the Deku Leaf (leaf), swimming, diving and coming up
+    (kindan room 11 from session top; the items route), aiming the grappling hook and the boomerang while
+    walking (items), his items (arrows, boomerang, hookshot, grappling hook). Not driven yet: climbing
+    vines, pushing and pulling blocks, carrying (the spawned pot didn't lift; Outset's own pots need a
+    placement that doesn't void out), hiding in a barrel, swinging on the rope, the hookshot's pull, the
+    boomerang's lock-ons. Everywhere Link's camera-relative heading is ~1.5 degrees off 30's (the camera's
+    control angle, below), so long routes drift a little (a wall's corner reached later, then apart).
   - **Rope bridges (BRIDGE 89), ruled, not converted** (`earth.txt`): the most placed unconverted type that
     moves (a census of every stage's placements against the defaults: GRASS, tags, switches, static
     models come first; then bridges 32 in 7 stages, fires 424, WARPLIGHT 106, magma 434, Obj_Barrel2 457,
