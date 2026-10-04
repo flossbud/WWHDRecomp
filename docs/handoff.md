@@ -11,7 +11,7 @@ end at any rate. **The approach (the owner, 2026-10-02): mixed rate, verified** 
 frames run at 60, everything not yet converted runs exactly as at 30 on whole ticks, and systems
 are converted one at a time against a measured baseline. "WW-4: 60 fps" below has where it stands.
 
-## Two parallel sessions (from 2026-10-03; the owner's setup)
+## Parallel sessions (from 2026-10-03; the owner's setup)
 
 WW-4's actor conversion is split between two sessions working side by side:
 - **Session `top`**: worktree `/srv/projects/WWHDRecomp/.worktrees/ww-4-top`, branch `ww-4-top`,
@@ -39,6 +39,34 @@ WW-4's actor conversion is split between two sessions working side by side:
   other session integrated first: fetch, rebase, check again.
 - Shared code (sixty.cpp, sixty_step.cpp, generate.py, ppc_ops.h, the helpers): change it only
   when needed, say so in the commit, and rerun `regress.sh`: the other session's actors use it too.
+
+### Session `qa` (from 2026-10-04): the owner's bugs
+
+A third session fixes the bugs the owner finds when playing, while `top` and `bottom` carry on:
+worktree `.worktrees/ww-4-qa`, branch `ww-4-qa`, worker checkout `/wwhd/WWHDRecomp-qa`, session
+name `qa` (same `.worker-dir`/`.session` mechanism, same integration into `ww-4`).
+- **The bug list** is on the progress page, kept with `tools/progress/publish.sh bug ...`: `bug add
+  TITLE [DETAILS]` (one per problem the owner reports; it prints B1, B2...), `bug start ID` before
+  working on it, `bug note ID TEXT` for findings (the cause, the commit that brought it in),
+  `bug fixed ID "commit, how"` once the fix is in `ww-4` and deployed, `bug verified ID` when the
+  owner confirms, `bug reopen ID` if not, `bug wontfix ID "why"`. `bug list` prints them.
+- **The owner's copy**: from now on only `qa` deploys to `~/wwhd-play` on the desktop
+  (`tools/play/deploy.sh owner@DESKTOP_ADDR`, after a build of the current `ww-4` tip with the
+  checks passing), so what the owner plays is always the integrated state; say in the bug notes
+  which commit is deployed. `top` and `bottom` deploy only to `~/wwhd-test` (headless). Don't
+  touch the owner's saves or shader cache; open a window only when they ask.
+- **Finding a cause**: the switch-off checks prove 30 is unchanged, so a bug at 60 comes from a
+  conversion, a rule or shared 60 fps code. Narrow it with `WWHD_60FPS_CONVERT` (the default list
+  minus a type, or empty), `WWHD_60FPS=0`, `WWHD_60FPS_EVENTS=0`, `WWHD_60FPS_ATTACHED=0`,
+  `WWHD_60FPS_PLANTS=0`; `git log -S`/`git log -- config/US_v0/tick_rules/<area>.txt` names the
+  commit and session. Reproduce headless on the worker (routes, `WWHD_DEBUG_STAGE`/`SPAWN`/`BOSS`,
+  `tools/sixty/tests/*`, captures with `shots.sh`, `framediff.sh` for 30-looking stretches) or on
+  the desktop's `~/wwhd-test`. For what only happens in hands-on play, ask the owner for an F9
+  flight recording: deploy with `WWHD_FLIGHT=$HOME/wwhd-play/flight/f WWHD_STATE_TRACK=<types>` in
+  its `play.sh` environment (see "The flight recorder" below); copy recordings to the worker.
+- A fix in a type's rules goes in the rules file that holds them (whichever session's); a fix in
+  shared code needs `regress.sh` and a note in the commit, as for the others. Tell the owner in a
+  short line which bugs are ready to retest.
 
 ## What the project is
 

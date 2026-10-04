@@ -7,6 +7,13 @@
 #                           the work queue (plan.json "queue"): claim an item before starting it, so
 #                           parallel sessions never take the same one; done when it's converted and
 #                           committed; release to hand it back
+#   publish.sh bug add TITLE [DETAILS]       record a bug the owner reported (prints its id, B1...)
+#   publish.sh bug start|fixed|verified|wontfix|reopen ID [NOTE]
+#                           its state: open -> working (by this session) -> fixed (in ww-4 and
+#                           deployed, waiting for the owner's retest) -> verified (the owner
+#                           confirmed); wontfix with the reason; reopen if the retest fails
+#   publish.sh bug note ID TEXT              add a finding to it
+#   publish.sh bug list                      the bugs, newest first (also on the page)
 #   publish.sh shot PPM CAPTION
 #                           add a capture: PPM is a path on the worker (/wwhd/...); it becomes a JPEG
 #                           on the worker, never on the editing machine or in git (captures are game data)
@@ -41,11 +48,52 @@ print(f"{item}: {op} ({session})")
 PY
 }
 
+# bugs.json on the host, changed under the claims' lock: [{id, title, details, state, session, notes, reported, time}]
+bugs() {
+	ssh $host "mkdir -p $dir && flock $dir/.claims.lock python3 - $dir/bugs.json $(printf %q "$1") $(printf %q "$(json_str "${2:-}")") $(printf %q "$(json_str "${3:-}")") $(printf %q "$session") $(date +%s)" <<'PY'
+import json, os, sys, time
+path, op, a, b, session, t = sys.argv[1], sys.argv[2], json.loads(sys.argv[3]), json.loads(sys.argv[4]), sys.argv[5], int(sys.argv[6])
+bugs = json.load(open(path)) if os.path.exists(path) else []
+def find(i):
+    for x in bugs:
+        if x["id"].lower() == i.lower():
+            return x
+    sys.exit(f"no bug {i}")
+if op == "add":
+    n = max([int(x["id"][1:]) for x in bugs] or [0]) + 1
+    bugs.append({"id": f"B{n}", "title": a, "details": b, "state": "open", "session": "", "notes": [], "reported": t, "time": t})
+    print(f"B{n}: {a}")
+elif op == "list":
+    for x in sorted(bugs, key=lambda x: -x["time"]):
+        print(f"{x['id']:5} {x['state']:9} {x['session'] or '-':7} {x['title']}" + (f"  [{x['notes'][-1]['text']}]" if x["notes"] else ""))
+    sys.exit(0)
+else:
+    x = find(a)
+    if op == "note":
+        x["notes"].append({"text": b, "session": session, "time": t})
+    else:
+        state = {"start": "working", "fixed": "fixed", "verified": "verified", "wontfix": "wontfix", "reopen": "open"}.get(op)
+        if not state:
+            sys.exit(f"unknown bug command {op}")
+        x["state"] = state
+        if op == "start":
+            x["session"] = session
+        if b:
+            x["notes"].append({"text": f"{state}: {b}", "session": session, "time": t})
+    x["time"] = t
+    print(f"{x['id']}: {x['state']} ({session})")
+json.dump(bugs, open(path + ".tmp", "w"), indent=1); os.replace(path + ".tmp", path)
+PY
+}
+
 case "${1:-}" in
 	now)
 		t=$(json_str "${2:-}")
 		echo "{\"session\":\"$session\",\"text\":$t,\"time\":$(date +%s)}" | ssh $host "mkdir -p $dir/now && cat > $dir/now/$session.json.tmp && mv $dir/now/$session.json.tmp $dir/now/$session.json &&
 			cd $dir/now && python3 -c 'import json,glob; json.dump([json.load(open(f)) for f in sorted(glob.glob(\"*.json\"))], open(\"../sessions.json.tmp\",\"w\"))' && mv ../sessions.json.tmp ../sessions.json"
+		;;
+	bug)
+		bugs "${2:?bug add|start|fixed|verified|wontfix|reopen|note|list}" "${3:-}" "${4:-}"
 		;;
 	claim|done|release)
 		claims "$1" "${2:?item id}" "${3:-}"
@@ -80,5 +128,5 @@ EOF
 		rm -f "$names"
 		ssh $host "cat > $dir/index.html" < "$here/index.html"
 		;;
-	*) echo "usage: publish.sh [now TEXT | claim|done|release ID [NOTE] | shot PPM CAPTION | serve]" >&2; exit 2 ;;
+	*) echo "usage: publish.sh [now TEXT | claim|done|release ID [NOTE] | bug ... | shot PPM CAPTION | serve]" >&2; exit 2 ;;
 esac

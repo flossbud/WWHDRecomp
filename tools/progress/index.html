@@ -78,6 +78,10 @@ ol.log time { color: var(--muted); font-size: .82rem; float: right; margin-left:
 .now { display: flex; gap: 10px; align-items: center; padding: 4px 0; }
 .now + .now { border-top: 1px solid var(--line); }
 ol.queue { margin: 0; padding-left: 22px; }
+ol.bugs { list-style: none; padding-left: 0; }
+.badge.open { border-color: #d9534f; color: #d9534f; }
+.badge.fixed { border-color: var(--accent); color: var(--accent); }
+.badge.verified { border-color: var(--good); color: var(--good); }
 ol.queue li { padding: 6px 0; border-bottom: 1px solid var(--line); }
 ol.queue li:last-child { border: 0; }
 .badge { font-size: .75rem; padding: 1px 8px; border-radius: 999px; margin-left: 6px; white-space: nowrap; border: 1px solid var(--line); color: var(--muted); }
@@ -110,6 +114,12 @@ footer { color: var(--muted); font-size: .8rem; text-align: center; margin: 10px
       <div id="groupBars"></div>
     </section>
   </div>
+
+  <section class="card">
+    <h2>Bugs <span class="sub" id="bugCounts"></span></h2>
+    <ol class="queue bugs" id="bugs"><li class="empty">None reported yet.</li></ol>
+    <details id="bugsClosedWrap" hidden><summary id="bugsClosedSum"></summary><ol class="queue bugs" id="bugsClosed"></ol></details>
+  </section>
 
   <section class="card">
     <h2>Work queue</h2>
@@ -207,8 +217,27 @@ function render() {
 $("tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { tab = +b.dataset.i; render(); } });
 $("shots").addEventListener("click", e => { if (e.target.tagName === "IMG") { $("zoom").querySelector("img").src = e.target.src; $("zoom").style.display = "flex"; } });
 $("zoom").addEventListener("click", () => $("zoom").style.display = "none");
+function renderBugs(b) {
+  const label = {open: "open", working: "working", fixed: "fixed · retest", verified: "verified", wontfix: "won't fix"};
+  const item = x => {
+    const last = x.notes && x.notes.length ? x.notes[x.notes.length - 1] : null;
+    return `<li><b>${esc(x.id)}</b> ${esc(x.title)}<span class="badge ${x.state}">${label[x.state] || x.state}${x.session ? " · " + esc(x.session) : ""}</span>
+      ${x.details ? `<div class="sub">${esc(x.details)}</div>` : ""}${last ? `<div class="sub">${esc(last.text)} · ${ago(last.time)}</div>` : ""}</li>`;
+  };
+  const order = {working: 0, open: 1, fixed: 2, verified: 3, wontfix: 4};
+  const sorted = b.slice().sort((x, y) => order[x.state] - order[y.state] || y.time - x.time);
+  const live = sorted.filter(x => x.state === "open" || x.state === "working" || x.state === "fixed");
+  const closed = sorted.filter(x => x.state === "verified" || x.state === "wontfix");
+  const count = st => b.filter(x => x.state === st).length;
+  $("bugCounts").textContent = `${count("open")} open · ${count("working")} working · ${count("fixed")} to retest · ${count("verified")} verified`;
+  $("bugs").innerHTML = live.length ? live.map(item).join("") : `<li class="empty">Nothing open.</li>`;
+  $("bugsClosedWrap").hidden = !closed.length;
+  $("bugsClosedSum").textContent = `Closed (${closed.length})`;
+  $("bugsClosed").innerHTML = closed.map(item).join("");
+}
 async function refresh() {
-  const [p, n, s, c] = await Promise.all([get("progress.json"), get("sessions.json"), get("shots.json"), get("claims.json")]);
+  const [p, n, s, c, b] = await Promise.all([get("progress.json"), get("sessions.json"), get("shots.json"), get("claims.json"), get("bugs.json")]);
+  if (b && b.length) renderBugs(b);
   if (c) claims = c;
   if (p) { data = p; render(); }
   if (n && n.length) $("sessions").innerHTML = n.map(x => `<div class="now"><span class="dot${Date.now() / 1000 - x.time > 3 * 3600 ? " idle" : ""}"></span>
