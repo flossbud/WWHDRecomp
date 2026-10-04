@@ -1494,6 +1494,85 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		wr32(input + kPressed, pressed);
 }
 
+// Link's reset flags (daPy_py_c::mResetFlg0, WWHD's Link +0x3C0: the GameCube's 0x2A4 + 0x11C; procTactWait
+// sets its 0x01000000, "a note was judged", at 0243A7F0): what happened in his last step, cleared in the
+// middle of his execute and read by others until his next (the Wind Waker's note display, a tree he
+// rolls into, what a hammer blow shakes: checkTactInput, checkFrontRollCrash, checkHammerQuake...). With
+// Link stepping at 60, a process that runs on whole ticks saw only the step just before it: the flags of
+// his whole step were gone for those that execute before him (the note display never lit: the owner's
+// Wind Waker), the flags of his half step for those after him. Now a whole-tick process sees both steps
+// since it last looked (the last whole step's and the last half step's flags together), and Link and the
+// other processes stepping at 60 see his last step's alone, as the game has it (his own tests before the
+// clear must not see a flag twice: "not attacking" would end a cut begun in between).
+// WWHD_60FPS_RESETFLAGS=0 (a probe): as before.
+namespace
+{
+	constexpr uint32 kLinkResetFlags = 0x3C0u;
+	uint32 s_rfLink = 0;                            // the Link they belong to
+	uint32 s_rfWhole = 0, s_rfHalf = 0;             // what his last whole step and his last half step left
+	uint32 s_rfHalfTerm = 0;                        // the half step's part for this whole tick's processes
+	uint32 s_rfLast = 0;                            // what his last step left
+	bool s_rfHalfRan = false;                       // he took a half step since the last whole tick began
+	uint32 s_rfTickSwap = ~0u, s_rfLinkSwap = 0;    // the whole tick prepared; his last execute
+
+	bool ResetFlagRules()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_RESETFLAGS"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	// the Link the flags belong to still exists (a deleted process's type word is 0) and ran lately
+	bool ResetFlagsLink()
+	{
+		return s_rfLink && rd32(s_rfLink) != 0 && rd16(s_rfLink + 0x08) == 168 && wwhd::os::SwapCount() - s_rfLinkSwap <= 2;
+	}
+	void ResetFlagsExpose()
+	{
+		if (ResetFlagsLink())
+			wr32(s_rfLink + kLinkResetFlags, s_rfWhole | (s_rfHalfRan ? s_rfHalf : s_rfHalfTerm));
+	}
+	// before a process's execute: stepping says it runs every frame (Link, a converted process)
+	void ResetFlagsBefore(uint32 proc, bool link, bool stepping)
+	{
+		const uint32 swap = wwhd::os::SwapCount();
+		if (!g_rtHalfTick && swap != s_rfTickSwap)
+		{
+			s_rfTickSwap = swap;                          // a whole tick begins
+			s_rfHalfTerm = s_rfHalfRan ? s_rfHalf : 0;
+			s_rfHalfRan = false;
+			ResetFlagsExpose();
+		}
+		if (link)
+		{
+			if (proc != s_rfLink)
+			{
+				s_rfLink = proc;                             // a new Link: nothing carried over
+				s_rfWhole = s_rfHalf = s_rfHalfTerm = 0;
+				s_rfHalfRan = false;
+				s_rfLast = rd32(proc + kLinkResetFlags);
+			}
+			s_rfLinkSwap = swap;
+		}
+		if (stepping && ResetFlagsLink())
+			wr32(s_rfLink + kLinkResetFlags, s_rfLast);
+	}
+	void ResetFlagsAfter(uint32 proc, bool link, bool stepping)
+	{
+		if (link && proc == s_rfLink)
+		{
+			s_rfLast = rd32(proc + kLinkResetFlags);
+			if (g_rtHalfTick)
+			{
+				s_rfHalf = s_rfLast;
+				s_rfHalfRan = true;
+			}
+			else
+				s_rfWhole = s_rfLast;
+		}
+		if (stepping)
+			ResetFlagsExpose();
+	}
+}
+
 // fpcM_Execute: every process's execute goes through it (fpcM_Management's execute pass, f_025DE788):
 // actors, the camera, the environment, the HUD and menus, scenes. Noted for the half ticks' rollback.
 uint32 g_rtActor = 0;                               // the process whose execute runs (rt_step_fall's)
@@ -1618,14 +1697,27 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 		GPR(3) = 1;                                   // a half tick: only converted processes run
 		return;
 	}
+	// Link's reset flags, as a whole-tick process or one stepping at 60 sees them (above)
+	const bool link = rd16(proc + 0x08) == 168;
+	const bool resetFlags = from != ~0u && wwhd::os::SwapCount() >= from && ResetFlagRules();
+	if (resetFlags)
+		ResetFlagsBefore(proc, link, link || converted);
 	if (!converted)
-		[[clang::musttail]] return orig_f_025DE58C(ctx);
+	{
+		if (!(resetFlags && link))
+			[[clang::musttail]] return orig_f_025DE58C(ctx);
+		orig_f_025DE58C(ctx);                           // Link on whole ticks only (an event)
+		ResetFlagsAfter(proc, true, true);
+		return;
+	}
 	const float step = g_rtStep;
 	g_rtStep = 0.5f;
 	s_converting++;
 	orig_f_025DE58C(ctx);
 	s_converting--;
 	g_rtStep = step;
+	if (resetFlags)
+		ResetFlagsAfter(proc, link, true);
 	static const bool attached = [] { const char* e = getenv("WWHD_60FPS_ATTACHED"); return !(e && atoi(e) == 0); }();
 	if (g_rtHalfTick && attached && rd16(proc + 0x08) == 168 && Rollback())
 		NoteHeld(proc);

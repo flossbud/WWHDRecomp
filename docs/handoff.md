@@ -1318,6 +1318,33 @@ it in a window; D21 "Step 2"):**
     A door's rooms are in its x angle (front room `& 0x3F`, back room `>> 6 & 0x3F`; the stage file's
     TGDR chunk: M_NewD2's rat room 14 has two doors to the outside, room 3). `WWHD_DEBUG_PLACE` stops at
     the first wall on the way (the ground check's line from the old position): place Link within a room.
+  - **Link's reset flags (B15: the Wind Waker's notes), fixed (shared: `sixty.cpp`)**: the note display
+    (dMetronome_c::melodyShow) lights a diamond when `checkTactInput()` is set: bit 0x01000000 of Link's
+    reset flags (daPy_py_c::mResetFlg0, WWHD's Link +0x3C0), "what happened in his last step", cleared in
+    the middle of each of his executes. With Link stepping at 60 a process that runs on whole ticks saw
+    one step only: those executing before him his half step's flags (the display never saw the note,
+    judged on whole ticks), those after him his whole step's (a roll into a tree, a hammer blow, an arrow
+    shot landing on a half step would be missed the same way: checkFrontRollCrash, checkHammerQuake...).
+    fpcM_Execute's override now shows a whole-tick process both steps since it last looked (the last
+    whole step's flags and the last half step's together) and gives Link and every process stepping at 60
+    his last step's alone (his own tests before the clear must not see a flag twice). The word in his
+    memory, and so in a track of him, is the combined one between executes.
+    `WWHD_60FPS_RESETFLAGS=0` turns it off. Test: the warp route's song, captures at f1420-1505 at 30 and
+    60 (`CAPTURE_30=1 tools/sixty/tests/capture.sh`): before, the diamonds at 60 showed none, none, then
+    one note in the first place; now 1, 2, 3 notes as at 30.
+  - **The hookshot's reticle (B21), fixed (`link_items.txt`; shared: `generate.py`)**: aimed at an actor,
+    the yellow lock came on and went off every other frame, its sound with it. The hookshot's wait state
+    (f_021789B4) clears its "hookable" flag, puts the sight's cross point back at the far point and enters
+    the sight's collider every step; the collision pass (whole ticks) sets the hit point and the flag
+    again through the collider's callback. The converted hookshot's half step did the resets without a
+    collision pass after it, so Link's whole step saw nothing hookable and his half step the tick's hit.
+    The resets are `whole` now (02178A48, 02178D74/7C/84), the lock's frame count (26 a cycle, a sound
+    at 0) `keep` in setHookshotSight (f_02432D80), and the frame-0 sound `whole` there and in the rope's
+    aim. For 02178D74, a `stfsu`, `whole` and `late` now take update-form stores (`generate.py`: the
+    skipped store still updates its register). Test: route `hook` (the hookshot on Y by
+    `WWHD_DEBUG_POKE`, a Bokoblin spawned behind Link, turn round and aim) with `WWHD_STATE_TRACK=168,169`:
+    Link's lock flag (+0x58ED) changed 64 times in the aim at 60, 2 at 30; now 2, and its frame (+0x58EE)
+    counts one a tick.
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
   CPU, vsyncs missed; `tools/sixty/frames.py` summarises), `WWHD_PROFILE` (`tools/profile_report.py`
   on the worker with the same build). On the desktop, `~/wwhd-test` is ours to deploy to and run
