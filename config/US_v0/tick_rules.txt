@@ -150,6 +150,14 @@
 # 'SUBJ'): from where the camera was, eye, center, angles and fovy approach the first-person view by
 # 1 / (N - m108) a tick (N 10, or 7), arriving at m108 = N - 1
 02507570    k:f29       fdivs           subjectCamera: f29 = 1 / (N - m108), the approach's factor
+# the first-person view's stick (CalcSubjectAngle f_02506964, called by Link's setBodyAngleToCamera on
+# each of his steps): the pitch's fraction m388 adds the stick's y times a rate a call, and the yaw's
+# m384 is the stick's x times it, which Link turns by a call: at 60 the view pitched and turned twice as
+# fast (a grappling hook aimed with 12 frames of right stick went to 67 degrees, not 33.5)
+02506FBC    *h@f20      fmuls           CalcSubjectAngle: m384 = -stick x * rate, the yaw a call (the telescope's)
+02506FC8    *h@f21      fmadds          CalcSubjectAngle: m388 += stick y * rate, the pitch (the telescope's)
+02506FE0    *h@f20      fmuls           CalcSubjectAngle: m384 = -stick x * rate, the yaw a call
+02506FEC    *h@f21      fmadds          CalcSubjectAngle: m388 += stick y * rate, the pitch
 # the shield camera (f_02513E98: the shield up (ZR) or the sword out; its work area is tagged 'SHLD'):
 # on its first tick (m11C 0) N and the weight W (N(N+1)/2) come from how far it has to turn; then a
 # tick eye, angles and fovy approach by (N - m11C) / W and W loses N - m11C (late, as m11C: at 60 it

@@ -685,8 +685,9 @@ it in a window; D21 "Step 2"):**
     stage's name is at +0x5134). From the Outset dock `920:M_NewD2,0,0,-1` lands in Dragon Roost
     Cavern's entrance; rooms 1-4 of M_NewD2 with point 0 land in four other places (room 3 outdoors at
     night: a layer?). `WWHD_DEBUG_PLACE=tick:x,y,z` moves Link within a stage.
-    `WWHD_DEBUG_SPAWN=tick:process,param,x,y,z[;...]` creates an actor there in Link's room
-    (the creation record `f_025D5678`, then fpcM_Create `f_025E14A8` on the layer at *0x101F3AE8):
+    `WWHD_DEBUG_SPAWN=tick:process,param,x,y,z[,anglex[,angley]][;...]` creates an actor there in
+    Link's room (the creation record `f_025D5678`, then fpcM_Create `f_025E14A8` on the layer at
+    *0x101F3AE8), its angle's x and y in hex if given (x is more parameters for some, y its heading):
     a Bokoblin at `950:189,0,-201622,190,312600` stands on the Outset dock behind Link and acts.
     `WWHD_DEBUG_BOSS=1` answers "no" to every stage's "boss beaten" (dSv_memBit_c::isDungeonItem
     item 3, f_025B9100; isStageBossEnemy and 44 call sites read it), nothing written to the save:
@@ -1138,6 +1139,16 @@ it in a window; D21 "Step 2"):**
     hookshot pulling Link to a target, swinging on the rope, the bait bag (ESA 221 not converted). The
     Ballad of Gales' cyclone (TORNADO 443: texture frames, spin angles, a timer, a fade) too: in the warp
     (an event, where converted processes don't step) it still runs once a tick, as at 30.
+  - **First-person views turned twice as fast at 60, fixed (shared; regress.sh rerun)**:
+    dCamera_c::CalcSubjectAngle (f_02506964), which Link's setBodyAngleToCamera (f_02416E90) calls on
+    each of his steps, adds the right stick's y times a rate to the view's pitch fraction m388 and sets
+    the yaw's m384 from its x, which Link then turns by. At 60 the bow's, hookshot's, grappling hook's
+    and telescope's views pitched and turned twice as fast: 12 frames of right stick up gave 67.1
+    degrees against 33.55, and a grappling hook thrown at a stake flew over it. *h@ on the stick's
+    factor at its four sites (tick_rules.txt, beside subjectCamera). After: the pitch 33.48 against
+    33.54, Link's heading after 10 frames of right stick left within 10 units. Found with a stake
+    (KUI 250, `ffff0400` like the stages' own) spawned over the sea off the Outset dock on Link's
+    first-person sight line; the camera process's view is +0x264 eye, +0x258 centre.
   - **Link walking while he aims, fixed (shared; regress.sh rerun)**: WWHD lets Link walk while he aims
     the grappling hook or the boomerang (the GameCube's stands still). f_02416B70 takes mNormalSpeed toward
     the stick's speed with setNormalSpeedF, and those aims then multiply it by 1.2 (12 x 1.2 = 14.4); at
@@ -1177,7 +1188,9 @@ it in a window; D21 "Step 2"):**
     but over a 16-tick turn (f1152-1168) the camera's control angle (camera process +0x2B4, mAngleY:
     `mDirection.U().Inv()`) turns 3109 at 60 against 3583 at 30, and Link's target heading is the
     stick's angle + that (m34E8, Link +0x6930, read from the camera's last frame), so from ~f1190 he
-    swims another way. The view's eye-to-centre yaw stays within 0.1 degrees. followCamera's trial
+    swims another way. The view turns with it: its eye-to-centre yaw (camera process +0x264 eye, +0x258
+    centre; an earlier reading of +0x268/+0x25C took the wrong fields) is behind 30's by the same amount
+    as the control angle, e.g. 1.68 degrees and 306 units when the swim circle ends. followCamera's trial
     sites there are all ruled (k@ and k75@ on its approaches, the turn ramp m38C/30 counted on whole
     ticks): the gap is likely the k75 approximation with a factor that changes every tick. In a
     sustained turn it isn't a rate: Link swimming in circles off the Outset dock (stick up-left, ~190

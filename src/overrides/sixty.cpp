@@ -1261,17 +1261,18 @@ namespace
 	}
 }
 
-// WWHD_DEBUG_SPAWN=tick:process,param,x,y,z[,anglex][;...] (a test aid): at those game frames an actor
-// of that process name (actor_names.tsv's numbers) and parameters (hex) is created at that position in
-// Link's room, as fopAcM_create does: the creation record (f_025D5678: parameters, position, room,
+// WWHD_DEBUG_SPAWN=tick:process,param,x,y,z[,anglex[,angley]][;...] (a test aid): at those game frames an
+// actor of that process name (actor_names.tsv's numbers) and parameters (hex) is created at that position
+// in Link's room, as fopAcM_create does: the creation record (f_025D5678: parameters, position, room,
 // angle, scale, subtype, parent) and fpcM_Create (f_025E14A8: the layer, *0x101F3AE8, the process
 // name, no create function, the record). anglex (hex), the angle's x, is more parameters for some
-// actors (a Darknut's equipment is (anglex >> 5) & 7: 0x80 a shield and a cape)
+// actors (a Darknut's equipment is (anglex >> 5) & 7: 0x80 a shield and a cape); angley (hex) is its
+// heading (a grappling hook's stake, KUI, takes the hook only from across its axis)
 void f_025D5678(PPCInterpreter_t* __restrict ctx);
 void f_025E14A8(PPCInterpreter_t* __restrict ctx);
 namespace
 {
-	struct Spawn { int tick, proc; uint32 param; float x, y, z; uint32 anglex; };
+	struct Spawn { int tick, proc; uint32 param; float x, y, z; uint32 anglex, angley; };
 	void DebugSpawn(PPCInterpreter_t* ctx)
 	{
 		static const std::vector<Spawn> spawns = [] {
@@ -1279,8 +1280,8 @@ namespace
 			if (const char* e = getenv("WWHD_DEBUG_SPAWN"))
 				for (const char* p = e; p && *p; p = strchr(p, ';') ? strchr(p, ';') + 1 : nullptr)
 				{
-					Spawn w{ -1, 0, 0, 0, 0, 0, 0 };
-					if (sscanf(p, "%d:%d,%x,%f,%f,%f,%x", &w.tick, &w.proc, &w.param, &w.x, &w.y, &w.z, &w.anglex) >= 6)
+					Spawn w{ -1, 0, 0, 0, 0, 0, 0, 0 };
+					if (sscanf(p, "%d:%d,%x,%f,%f,%f,%x,%x", &w.tick, &w.proc, &w.param, &w.x, &w.y, &w.z, &w.anglex, &w.angley) >= 6)
 						v.push_back(w);
 				}
 			return v;
@@ -1301,14 +1302,14 @@ namespace
 			wr32(pos + 8, std::bit_cast<uint32>(w.z));
 			const uint32 angle = sp + 0x110;           // csXyz: x, y, z
 			wr16(angle, (uint16)w.anglex);
-			wr16(angle + 2, 0);
+			wr16(angle + 2, (uint16)w.angley);
 			wr16(angle + 4, 0);
 			wr32(sp, ctx->gpr[1]);                     // a back chain
 			ctx->gpr[1] = sp;
 			ctx->gpr[3] = w.param;
 			ctx->gpr[4] = pos;
 			ctx->gpr[5] = (uint32)(sint32)(sint8)rd8(s_link + 0x326);   // Link's room
-			ctx->gpr[6] = w.anglex ? angle : 0;
+			ctx->gpr[6] = w.anglex || w.angley ? angle : 0;
 			ctx->gpr[7] = 0;
 			ctx->gpr[8] = 0;
 			ctx->gpr[9] = ~0u;
