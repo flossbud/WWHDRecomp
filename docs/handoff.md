@@ -751,9 +751,24 @@ it in a window; D21 "Step 2"):**
     `*hh` step rule; on a caped Darknut spawned on the dock the cape's shape relative to its roots
     stays within 10 units of the 30-tick run's on 60% of ticks, diverging when the Darknut itself
     acts differently, and moves ~20% more), the Moblins' lanterns (KANTERA 193: no rules).
+  - **Puppet Ganon** (GanonK; BGN 243, BGN2 244 the spider, BGN3 245 the snake; ~110 rules: timers
+    and tick counts whole, wobble phases and spins split, the strings' and limbs' chains pulled h a
+    step, the snake's body a Verlet chain like the capes, the jumps' arcs, the Keese/Morths it calls
+    in once a tick). Its first form with Link standing in the room: entrance, dances and both punches
+    on the 30-tick run's ticks (its random dance targets differ). The spider (reached with
+    `WWHD_DEBUG_POKE`, below): the same actions on the same ticks, jumps within a few hundred units of
+    30's arcs. The snake: moves at 30's speed (49,650 against 49,891 units in 1000 ticks), its chase
+    turns elsewhere after ~5 s. The ropes' waves come from its tick count (whole): they move once a
+    tick. Not tested (the fight with Link): cut strings, damage, its own attacks after a cut.
   - Test aids: `WWHD_DEBUG_SPAWN=...,x,y,z,ANGLEX` (hex: a Darknut's equipment is (ANGLEX >> 5) & 7,
-    `80` a shield and a cape). `WWHD_DEBUG_BOSS=1` with a Darknut spawned on the Outset dock crashes
-    the game at f979 (at 30 too): keep it for boss rooms.
+    `80` a shield and a cape). `WWHD_DEBUG_POKE=tick:proc,offset,size,value[;...]` (offset and value
+    hex) writes a process's field before it executes: e.g. `1100:243,14eb4,2,6;1100:243,14eb6,2,0`
+    sends Puppet Ganon into its change (the spider ~f1740), `2000:244,602,2,6;2000:244,604,2,0` the
+    spider into the snake (~f2250). `WWHD_DEBUG_BOSS=1` with a Darknut spawned on the Outset dock
+    crashes the game at f979 (at 30 too): keep it for boss rooms.
+  - Ganondorf (GTower, GND 246, decomp stubs only): an event starts as the room loads (layer -1: its
+    cutscene; layers 0/1 skip it but another event starts ~34 ticks in): it needs a route through the
+    talk. Phantom Ganon (FGANON 241?) appears in no room listed at f1095 (GanonJ's maze, M2ganon).
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
   CPU, vsyncs missed; `tools/sixty/frames.py` summarises), `WWHD_PROFILE` (`tools/profile_report.py`
   on the worker with the same build). On the desktop, `~/wwhd-test` is ours to deploy to and run
@@ -767,7 +782,7 @@ it in a window; D21 "Step 2"):**
   Chuchus 206, Keese 215, Moblins 188, Darknuts 191, Kargarocs 181, ReDeads 224, Gohma 234 and
   Valoo's tail in its room 223 (counters, timers, two sways; tested idle in the fight), Magtails 216,
   Peahats 209, Boko Babas 214, Outset's NPC_YM2 316 and NPC_YW1 317, Hyrule's flags 174, the
-  capes 192 and the Moblins' lanterns 193,
+  capes 192, the Moblins' lanterns 193 and Puppet Ganon 243-245,
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
   `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;

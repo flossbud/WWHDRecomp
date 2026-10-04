@@ -43,3 +43,140 @@
 #
 # KANTERA (193, d_a_kantera.cpp: a Moblin's lantern) needs no rules: converted with its Moblin it matches
 # the 30-tick run (GanonL's three; fields that differ are constant ones left from the heap).
+#
+# ---- BGN (243, bgn_class, d_a_bgn.cpp: Puppet Ganon, its first form; stage GanonK; execute f_0207E7B4).
+# WWHD's fields: the GameCube's + 0x876C from mC728 on (mC746 at +0x14EB2), + 0x1BC before. Found with
+# the step-doubling trial while Link stands in the room (its entrance, its dances and punches: states 7,
+# 0 and 1) and actor_rmw.py, matched with the decomp. The ropes' waves and other phases taken from mC746
+# (a tick count, whole) move once a tick; the approaches go through cLib_addCalc's time step.
+# daBgn_Execute: the tick count, the timers, the Keese it calls in
+0207E8DC    whole       sth             bgn execute: mC746 + 1 (the fight's tick count)
+0207E8F8    whole       sth             bgn execute: mC7AC[0..4] count down
+0207E918    whole       sth             bgn execute: mC7B6 - 1
+0207E928    whole       sth             bgn execute: mC7B8 - 1
+0207E940    whole       sth             bgn execute: mArrowHitFlashTimer - 1
+0207E954    whole       sth             bgn execute: m0304 - 1
+0207E974    whole       sth             bgn execute: m0302 + 1 (to 100)
+0207FB3C    whole       sth             bgn demo_camera: its tick count (mCSCounter) + 1
+0207FB54    whole       stb             bgn execute: mKeeseSpawnNum - 1
+0207FBC8    whole       bl 025d5834     bgn execute: a Keese called in (fopAcM_create), once a tick
+# action_s (f_02085630, f_020859AC), each of the eight strings' move_s: timers, two wobble phases, and
+# himo_control's chain (each point is pulled down a step before the chain is put back to length)
+0208566C    whole       sth             bgn action_s: m2F8 - 1
+020856CC    split@r0    add             bgn action_s: m2FA += 2600 + 3 i (a phase)
+020856E8    split@r0    add             bgn action_s: m2FC += 2300 + 3 i (a phase)
+0208579C    split@r0    add             bgn action_s: m2FA += 2600 + 3 i (the other path)
+020857B8    split@r0    add             bgn action_s: m2FC += 2300 + 3 i (the other path)
+020857CC    whole       sth             bgn action_s: m2FE - 1
+02085E00    whole       sth             bgn action_s: m300 - 1
+02085B20    *h@f30      fsubs           bgn himo_control: a point's y - the pull a step
+02085B30    *h@f11      fadds           bgn himo_control: + l_HIO's lift a step
+02085CE8    whole       bl 025a8d40     bgn himo_control: a ripple where a point touches the water (every 8 ticks)
+# action_main (f_02086130): dance_A's spin, punch_LR's fists flying (mC77C += mC794, mC788 += mC7A0)
+02086B44    split@r8    add             bgn dance_A: mC750 += mC752 (the spin)
+02087028    vec@r4      bl 028e8d88     bgn punch_LR: mC77C += mC794 (a fist's flight)
+02087040    vec@r4      bl 028e8d88     bgn punch_LR: mC788 += mC7A0
+0208709C    vec@r4      bl 028e8d88     bgn punch_LR: mC77C += mC794
+020870FC    vec@r4      bl 028e8d88     bgn punch_LR: mC788 += mC7A0
+02087298    vec@r4      bl 028e8d88     bgn punch_LR: mC788 += mC7A0
+02087544    vec@r4      bl 028e8d88     bgn punch_LR: mC77C += mC794
+020878B4    vec@r4      bl 028e8d88     bgn punch_LR: mC77C += mC794
+020878CC    vec@r4      bl 028e8d88     bgn punch_LR: mC788 += mC7A0
+# part_control_0 (f_0207D858) and part_control_0Z (in move, f_0208857C): the limbs' chains, pulled a step
+0207DAD8    *h@f31      fadds           bgn part_control_0: a part's y + the pull (l_HIO.m16C/m170, -40)
+0208A8F4    *h@f28      fadds           bgn part_control_0Z: a part's y + l_HIO.m170
+0208A964    whole       bl 025a8d40     bgn part_control_0Z: a ripple where the tail touches the water (every 8 ticks)
+# the actions the first test doesn't reach (body_attack, tail_attack, damage, hensin: f_02084804,
+# f_02084B90, f_02084D6C, f_02086130): the height mC728.y (+0x14E98) += speed.y, speed.y -= 10 (each
+# inlined copy), the spins
+020848B0    *h@f13      fadds           bgn: mC728.y += speed.y
+020848C8    *h@f0       fsubs           bgn: speed.y -= 10 + REG0_F(4)
+02084960    *h@f13      fadds           bgn: mC728.y += speed.y
+02084978    *h@f0       fsubs           bgn: speed.y -= 10
+020849C8    *h@f0       fsubs           bgn: speed.y -= 10
+02084A34    *h@f13      fadds           bgn: mC728.y += speed.y
+02084A4C    *h@f0       fsubs           bgn: speed.y -= 10
+02084AB8    *h@f0       fsubs           bgn: speed.y -= 10
+02084EA0    *h@f9       fadds           bgn: mC728.y += speed.y
+02084EB8    *h@f10      fsubs           bgn: speed.y -= 10
+02088094    *h@f13      fadds           bgn: mC728.y += speed.y
+020880AC    *h@f0       fsubs           bgn: speed.y -= 10
+02088214    *h@f8       fadds           bgn: mC728.y += speed.y
+0208822C    *h@f9       fsubs           bgn: speed.y -= 10
+02084C50    spliti      addi            bgn: shape_angle.y + 0x200 a tick
+02084D0C    spliti      addi            bgn: shape_angle.y - 0x400 a tick
+02084688    split@r12   add             bgn tail_attack: shape_angle.y += mC764 (its spin)
+# shape_calc (in move): a hit's shake and the arrow's effect count down
+020897E0    whole       sth             bgn shape_calc: mC770 - 1 (a hit's shake)
+02089A00    whole       sth             bgn shape_calc: mArrowHitEffectTimer - 1
+#
+# ---- BGN2 (244, bgn2_class, d_a_bgn2.cpp: Puppet Ganon's spider form; execute f_0208B6A4). WWHD's fields:
+# the GameCube's + 0x2F0 (m0310 at +0x600). Tested by sending the first form into its change
+# (WWHD_DEBUG_POKE=1100:243,14eb4,2,6;1100:243,14eb6,2,0): the trial while it hunts a Link standing
+# still, its jumps and its rushes.
+0208B8D8    whole       sth             bgn2 execute: m0310 + 1 (its tick count)
+0208B8EC    whole       sthx            bgn2 execute: m0330[0..4] count down
+0208B90C    whole       sth             bgn2 execute: m033A - 1
+0208B920    whole       sth             bgn2 execute: m033C - 1
+0208B930    whole       sth             bgn2 execute: m2ED2 - 1
+0208DE48    whole       sth             bgn2 execute: m0358 - 1 (the head's shake)
+0208B59C    *h@f13      fadds           bgn2 pos_move: m0340.x += speed.x
+0208B5A8    *h@f11      fadds           bgn2 pos_move: m0340.z += speed.z
+# its fall and jumps (execute inlines its actions: one pair per copy): pos.y += speed.y, speed.y +=
+# l_HIO.m14 (gravity); plesattack's hover takes the gravity back while a timer runs
+0208BD20    *h@f6       fadds           bgn2: pos.y += speed.y
+0208BD30    *h@f8       fadds           bgn2: speed.y += gravity
+0208BE90    *h@f6       fadds           bgn2: pos.y += speed.y
+0208BEA0    *h@f8       fadds           bgn2: speed.y += gravity
+0208BFA8    *h@f8       fsubs           bgn2 plesattack: speed.y -= gravity (the hover)
+0208C2B0    *h@f6       fadds           bgn2: pos.y += speed.y
+0208C2C0    *h@f8       fadds           bgn2: speed.y += gravity
+0208C3E4    *h@f6       fadds           bgn2: pos.y += speed.y
+0208C3F4    *h@f8       fadds           bgn2: speed.y += gravity
+0208C47C    *h@f6       fadds           bgn2: pos.y += speed.y
+0208C48C    *h@f8       fadds           bgn2: speed.y += gravity
+0208C5A4    *h@f6       fadds           bgn2: pos.y += speed.y
+0208C5B4    *h@f8       fadds           bgn2: speed.y += gravity
+0208C6B8    *h@f6       fadds           bgn2: pos.y += speed.y
+0208C6C8    *h@f8       fadds           bgn2: speed.y += gravity
+0208CB64    *h@f0       fadds           bgn2: pos.y += speed.y
+0208CB7C    *h@f6       fsubs           bgn2: speed.y -= gravity
+0208D33C    *h@f10      fadds           bgn2: pos.y += speed.y
+0208D348    *h@f12      fadds           bgn2: speed.y += gravity
+0208D444    *h@f10      fadds           bgn2: pos.y += speed.y
+0208D454    *h@f12      fadds           bgn2: speed.y += gravity
+0208D544    *h@f12      fadds           bgn2: speed.y = 0 + gravity
+0208D6A4    *h@f10      fadds           bgn2: pos.y += speed.y
+0208D6B0    *h@f12      fadds           bgn2: speed.y += gravity
+0208D7B4    *h@f10      fadds           bgn2: pos.y += speed.y
+0208D7C0    *h@f12      fadds           bgn2: speed.y += gravity
+0208D9E8    *h@f10      fadds           bgn2: pos.y += speed.y
+0208D9F8    *h@f12      fadds           bgn2: speed.y += gravity
+0208C72C    split@r0    add             bgn2 move: shape_angle.y += m2E80 (its spin)
+#
+# ---- BGN3 (245, bgn3_class, d_a_bgn3.cpp: Puppet Ganon's snake form; execute f_02090680). Tested by
+# sending the spider into its change too (WWHD_DEBUG_POKE=...;2000:244,602,2,6;2000:244,604,2,0).
+020907B4    whole       sth             bgn3 execute: m0FD88 + 1 (its tick count)
+020907D8    whole       sth             bgn3 execute: m0FDAA[0..4] count down
+020907F4    whole       sth             bgn3 execute: m0FDB4 - 1
+0209080C    whole       sth             bgn3 execute: m0FDB6 - 1
+02090820    whole       sth             bgn3 execute: m0FD94 - 1
+02090830    whole       sth             bgn3 execute: mArrowHitFlashTimer - 1
+02090858    whole       stw             bgn3 execute: m100AC - 1 (the Morths it calls in)
+020908D4    whole       bl 025d5834     bgn3 execute: a Morth called in (fopAcM_create KS), once a tick
+020918F4    whole       sth             bgn3 move0: a countdown - 1
+02091A70    split@r0    add             bgn3 move0: current.angle.y += its turn a tick
+# pos_move (f_020903xx): current.pos += speed, speed.y += -5
+020903E8    vec@r4      bl 028e8d88     bgn3 pos_move: current.pos += speed
+02090404    *h@f0       fadds           bgn3 pos_move: speed.y += gravity
+# part_control: the body's chain, a position-based (Verlet) step as the capes': its forces (the pull
+# down m0FDBC... -5, the pull behind) take h^2, its velocity (the move times m0FDB8) m0FDB8^h
+020933D8    *hh@f24     fadds           bgn3 part_control: a part's y + the pull down
+02093424    *hh@f13     fadds           bgn3 part_control: x + the pull behind
+02093428    *hh@f7      fadds           bgn3 part_control: z + the pull behind
+020934E8    d@f25       fmuls           bgn3 part_control: velocity.x = move * m0FDB8
+02093504    d@f25       fmuls           bgn3 part_control: velocity.y = move * m0FDB8
+0209350C    d@f25       fmuls           bgn3 part_control: velocity.z = move * m0FDB8
+# ke_control: the 40 hairs, chains pulled a step toward their direction and up (no velocity)
+020904EC    *h:f7       fmuls           bgn3 ke_control: a hair point's pull toward its direction, a step
+02090504    *h@f11      fadds           bgn3 ke_control: + l_HIO.m4C (up) a step

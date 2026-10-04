@@ -67,10 +67,10 @@ namespace
 	// sky (VRBOX, VRBOX2), which match the 30-tick run with no rules (tools/sixty/actor_types.py); Chuchus
 	// (CC), Keese (KI), Moblins (MO2), Darknuts (TN), Kargarocs (BB), ReDeads (RD), Gohma (BTD) and
 	// Valoo's tail in its room (DR2), Magtails (MT), Peahats (PH), Boko Babas (BO), and Outset's
-	// NPC_YM2 and NPC_YW1; Hyrule's flags (MAJUU_FLAG), the capes of Darknuts and Phantom Ganon (MANT)
-	// and the Moblins' lanterns (KANTERA).
+	// NPC_YM2 and NPC_YW1; Hyrule's flags (MAJUU_FLAG), the capes of Darknuts and Phantom Ganon (MANT),
+	// the Moblins' lanterns (KANTERA) and Puppet Ganon's three forms (BGN, BGN2, BGN3).
 	// WWHD_60FPS_CONVERT= (empty) converts none.
-	constexpr const char* kConvertedByDefault = "476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,174,192,193";
+	constexpr const char* kConvertedByDefault = "476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,174,192,193,243,244,245";
 	const char* ConvertList()
 	{
 		const char* e = getenv("WWHD_60FPS_CONVERT");
@@ -1451,6 +1451,38 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 				wr32(proc + 0x314 + 4 * i, std::bit_cast<uint32>(place[1 + i]));
 				wr32(proc + 0x300 + 4 * i, std::bit_cast<uint32>(place[1 + i]));
 			}
+		}
+	}
+	// WWHD_DEBUG_POKE=tick:process,offset,size,value[;...] (a test aid; offset and value hex, size 1, 2
+	// or 4): at that game frame, before each process of that name executes, the value is written at
+	// its offset: a boss's state or health, to reach a later phase of its fight in a test
+	{
+		struct Poke { int tick, proc; uint32 offset, size, value; };
+		static const std::vector<Poke> pokes = [] {
+			std::vector<Poke> v;
+			if (const char* e = getenv("WWHD_DEBUG_POKE"))
+				for (const char* p = e; p && *p; p = strchr(p, ';') ? strchr(p, ';') + 1 : nullptr)
+				{
+					Poke w{ -1, 0, 0, 0, 0 };
+					if (sscanf(p, "%d:%d,%x,%u,%x", &w.tick, &w.proc, &w.offset, &w.size, &w.value) == 5)
+						v.push_back(w);
+				}
+			return v;
+		}();
+		if (!pokes.empty() && !g_rtHalfTick)
+		{
+			const int now = (int)wwhd::rt::GameFrame(wwhd::os::SwapCount());
+			for (const Poke& w : pokes)
+				if (w.tick == now && w.proc == (int)rd16(proc + 0x08))
+				{
+					if (w.size == 1)
+						wr8(proc + w.offset, (uint8)w.value);
+					else if (w.size == 2)
+						wr16(proc + w.offset, (uint16)w.value);
+					else
+						wr32(proc + w.offset, w.value);
+					cemuLog_log(LogType::Force, "wwhd debug: poked process {} +{:x} ({} bytes) = {:x}", w.proc, w.offset, w.size, w.value);
+				}
 		}
 	}
 	if (from == ~0u && !Probe())
