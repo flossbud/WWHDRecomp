@@ -1004,6 +1004,15 @@ it in a window; D21 "Step 2"):**
     - B10 (Beedle's ships sail too fast; session qa handed it over): not reproduced. Outset's Beedle ship
       tracked on route sail: speed 12.00/12.00 a tick, path 16132/16153 units over f900-2900, its bob
       phase and height identical tick for tick.
+  - **Round 2, rito (session top; `config/US_v0/tick_rules/rito.txt`)**: the Rito Aerie (stage Atorizk) and
+    the mountain path (Adanmae, most of it session bottom's from round 1). Converted: post boxes
+    (Obj_Ospbox 84: no rules, equal to 30's), the Rito (NPC_BM1-5, 326-330: their blink's frame `keep`),
+    the mail sorter (NPC_BMSW 348) and Komali (NPC_ZK1 371) (blinks, `keep`), Valoo (DR 222: three
+    countdowns `keep`). Trials clean (Atorizk,0,0,-1 and Adanmae,0,0,-1, f1000-1500); the walking Rito's
+    paths equal 30's (1996/1996, 1999/1998 units); blinks, idle choices and Valoo's moods differ from 30's
+    in phase (their random waits draw differently at 60). Not present on the 100% save there, so not
+    converted: Medli (NPC_MD 367), Obj_Rcloud (141), Obj_Eskban (160); the chieftain (NPC_BM1) shares the
+    Rito's code and rule.
   - **Two 60 fps crashes in the Forbidden Woods, fixed (session top; shared, `sixty.cpp` `LiveStore`)**: at
     every warp there with Link converted (the defaults). Both came from half ticks putting back or hiding
     words in .data/.bss that head lists whose nodes are on the heap (which a half tick never puts back):

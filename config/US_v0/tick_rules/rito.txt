@@ -1,0 +1,15 @@
+# Dragon Roost Island's village (the Rito Aerie, stage Atorizk; the mountain path, Adanmae), session top, round 2
+# (docs/handoff.md "Two parallel sessions"). Found with tools/sixty/tests/area_test.sh after a warp
+# (Atorizk,0,0,-1 at f920 on route save; the trial and 30 against 60 over f1000-1500), actor_rmw.py and the
+# GameCube decomp (zeldaret/tww). The format: ../tick_rules.txt.
+#
+# ---- blinks: the eye's texture-pattern frame + 1 a tick to the pattern's end, then a wait (the shared
+# countdown helper f_02055B64, already counting whole ticks): keep. The Rito (NPC_BM1-5, 326-330,
+# d_a_npc_bm1.cpp, one function for all five), the mail sorter (NPC_BMSW 348) and Komali (NPC_ZK1 371).
+021FCE48    keep:r31    addi            npc_bm: the blink's frame (+0x87C) + 1
+0220ECA8    keep:r12    addi            npc_bmsw: the blink's frame (+0xA9C) + 1
+023003D8    keep:r12    addi            npc_zk1: the blink's frame (+0x860) + 1
+#
+# ---- Valoo (DR 222, d_a_dr.cpp: the dragon on the peak, stage Adanmae): three countdowns (+0x3D6, +0x3D8,
+# +0x3DA, a loop), then its mode (+0x3D4) acts on them: keep.
+0212A058    keep:r8     addi            dr: its timers (+0x3D6 + 2i) - 1 while > 0
