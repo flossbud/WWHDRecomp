@@ -180,3 +180,59 @@
 # ke_control: the 40 hairs, chains pulled a step toward their direction and up (no velocity)
 020904EC    *h:f7       fmuls           bgn3 ke_control: a hair point's pull toward its direction, a step
 02090504    *h@f11      fadds           bgn3 ke_control: + l_HIO.m4C (up) a step
+#
+# ---- PT (247, d_a_pt.cpp: Miniblins; the decomp has no code; execute f_02446374, actions f_02447300).
+# Found with the trial in Ganon's Tower (GanonN's five).
+02446494    whole       sth             pt: a tick count (+0x3EC) + 1
+02446540    whole       sthx            pt: its timers (+0x420) count down
+024466D0    whole       sth             pt: a timer (+0x3F2) - 1
+024465A0    *h@f9       fadds           pt: pos.x += its push (+0x644) a tick
+024465B0    *h@f11      fadds           pt: pos.y += its push
+024465C0    *h@f13      fadds           pt: pos.z += its push
+02448B48    *h@f6       fadds           pt: pos.y += speed.y
+02448B50    *h@f10      fsubs           pt: speed.y -= gravity
+02449A04    *h@f8       fadds           pt: +0x430 += its speed (+0x434)
+02449A08    *h@f31      fsubs           pt: +0x434 -= a step a tick
+02449A38    whole       stb             pt: a countdown (+0x8D8) - 1
+#
+# ---- BL (207, d_a_bl.cpp: Bubbles, the flying skulls; f_020AAC08 their hover). Found in GanonB's four.
+020AAC4C    spliti      addi            bl: the hover's phase (+0x420) + 1000 a tick
+020AACB0    spliti      addi            bl: the hover's phase (+0x420) + 500 a tick
+#
+# ---- GND (246, d_a_gnd.cpp: Ganondorf, at the top of the tower, stage GTower; the decomp has no code;
+# execute f_02154EE0). Found with the trial along route gtower (A through the arrival's cutscene, which
+# ends ~f8220; then Link rolls about while Ganondorf attacks). ke_control (f_02154810), his hair: a
+# Verlet chain like the capes (the pull down h^2, the velocity's damping ^h).
+021554E8    whole       sth             gnd execute: a tick count (+0x3E8) + 1
+021554FC    whole       sthx            gnd execute: its timers (+0x41E) count down
+0215551C    whole       sth             gnd execute: a timer (+0x428) - 1
+02155530    whole       sth             gnd execute: a timer (+0x42A) - 1
+02155544    whole       sth             gnd execute: a timer (+0x434) - 1
+02155554    whole       sth             gnd execute: a timer (+0x178C) - 1
+02158CBC    whole       sth             gnd: a count (+0x3EC) + 1
+021595E8    whole       stb             gnd: a count (+0x609) + 1
+0215CD90    *h@f10      fadds           gnd: pos.x += a move (+0x10E4) a tick
+0215CDA0    *h@f6       fadds           gnd: pos.y += a move
+0215CDB0    *h@f10      fadds           gnd: pos.z += a move
+0215CE00    vec@r4      bl 028e8d88     gnd: pos += a step along his facing
+# pos_move (f_02154C34): speed.xz from speedF along his angle, pos += speed, pos.y += speed.y, speed.y +=
+# gravity (+0x374): his walks and leaps (the fight's opening leap at f8213 on route gtower)
+02154D3C    vec@r4      bl 028e8d88     gnd pos_move: pos += speed
+02154D4C    *h@f13      fadds           gnd pos_move: pos.y += speed.y
+02154D54    *h@f12      fadds           gnd pos_move: speed.y += gravity (+0x374)
+02154A60    *hh@f23     fadds           gnd ke_control: a hair point's y + the pull down
+02154B34    d@f24       fmuls           gnd ke_control: velocity.x = move * damping
+02154B48    d@f24       fmuls           gnd ke_control: velocity.y = move * damping
+02154B5C    d@f24       fmuls           gnd ke_control: velocity.z = move * damping
+#
+# ---- doors (DOOR10 300, converted by default, and the door helpers): a door's rattle (f_0252B2D8, from
+# f_021268C8 and f_021978D4: a counter +0x34 and an offset +0x28/+0x30 of its shake, alternating a tick
+# with growing amplitude). Stepped at 60 the counter doubled and the shutters of Ganon's Tower's battle
+# rooms (GanonB-D) ended their rattle 20 units off. A vibration a tick: it runs on whole ticks only.
+0252B32C    whole       stb             door rattle: its count + 1
+0252B340    whole       stfs            door rattle: x offset += the shake
+0252B34C    whole       stfs            door rattle: z offset += the shake
+0252B390    whole       stb             door rattle: its count + 1 (the other phase)
+0252B3A4    whole       stfs            door rattle: x offset += the shake
+0252B3B0    whole       stfs            door rattle: z offset += the shake
+0252B3C0    whole       stb             door rattle: started (+0x35)

@@ -766,9 +766,23 @@ it in a window; D21 "Step 2"):**
     sends Puppet Ganon into its change (the spider ~f1740), `2000:244,602,2,6;2000:244,604,2,0` the
     spider into the snake (~f2250). `WWHD_DEBUG_BOSS=1` with a Darknut spawned on the Outset dock
     crashes the game at f979 (at 30 too): keep it for boss rooms.
-  - Ganondorf (GTower, GND 246, decomp stubs only): an event starts as the room loads (layer -1: its
-    cutscene; layers 0/1 skip it but another event starts ~34 ticks in): it needs a route through the
-    talk. Phantom Ganon (FGANON 241?) appears in no room listed at f1095 (GanonJ's maze, M2ganon).
+  - **Ganondorf** (GTower, GND 246; the decomp has stubs only): route `gtower` (A every 20 frames
+    from f1000) through his arrival's cutscene, which ends ~f8220; then Link rolls about while he
+    attacks. Rules: his hair (a Verlet chain like the capes), his walks and leaps (`pos_move`
+    f_02154C34: found with `WWHD_STATE_CENSUS=1 WWHD_STATE_CENSUS_TRACE=addr`, which names who wrote a
+    field on half frames: the trial had barely seen it, he mostly stood still at 30), his timers.
+    Phantom Ganon (FGANON 241?) appears in no room listed at f1095 (GanonJ's maze, M2ganon): left to
+    the fortress item.
+  - **Miniblins** (PT 247, GanonN) and **Bubbles** (BL 207, GanonB): timers, a hover's phase, falls;
+    they move at the 30-tick run's speeds (paths 4040/3747, 4072/3905, 1901/1883 units) and wander
+    elsewhere (random-driven).
+  - **Doors' rattle** (f_0252B2D8, a helper of DOOR10, which the defaults convert, and DOOR12): its
+    count doubled at 60 and the shutters of the tower's battle rooms ended their rattle 20 units off;
+    it runs on whole ticks only now (a vibration a tick).
+  - Found on the way, not changed: the tevStr's light-change count (+0x1C4 in many actors, from
+    `f_025580FC` in settingTevStruct, up to 20 when an actor's light changes) counts steps, so a
+    converted actor's light fades in twice as fast; a background helper (`f_024F2514`, d_bg_w.cpp's
+    "pupper_pos") writes an actor's x/z a step (seen on Ganondorf and Zelda; not looked into).
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
   CPU, vsyncs missed; `tools/sixty/frames.py` summarises), `WWHD_PROFILE` (`tools/profile_report.py`
   on the worker with the same build). On the desktop, `~/wwhd-test` is ours to deploy to and run
@@ -782,7 +796,8 @@ it in a window; D21 "Step 2"):**
   Chuchus 206, Keese 215, Moblins 188, Darknuts 191, Kargarocs 181, ReDeads 224, Gohma 234 and
   Valoo's tail in its room 223 (counters, timers, two sways; tested idle in the fight), Magtails 216,
   Peahats 209, Boko Babas 214, Outset's NPC_YM2 316 and NPC_YW1 317, Hyrule's flags 174, the
-  capes 192, the Moblins' lanterns 193 and Puppet Ganon 243-245,
+  capes 192, the Moblins' lanterns 193, Puppet Ganon 243-245, Ganondorf 246, Miniblins 247 and
+  Bubbles 207,
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
   `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;
