@@ -69,9 +69,15 @@ namespace
 	// Valoo's tail in its room (DR2), Magtails (MT), Peahats (PH), Boko Babas (BO), and Outset's
 	// NPC_YM2 and NPC_YW1; Hyrule's flags (MAJUU_FLAG), the capes of Darknuts and Phantom Ganon (MANT),
 	// the Moblins' lanterns (KANTERA), Puppet Ganon's three forms (BGN, BGN2, BGN3), Ganondorf (GND),
-	// Miniblins (PT) and Bubbles (BL).
+	// Miniblins (PT) and Bubbles (BL) (session bottom); Windfall's windmill wheel (Obj_Ferris), pigs (KB),
+	// townsfolk (NPC_PEOPLE, NPC_KK1, NPC_MK, NPC_UK, NPC_GK1, NPC_TT, NPC_RSH1), market stalls (Obj_Roten),
+	// its distant models (445) and stands (DAI) (session top). One line each, so the parallel sessions'
+	// additions never meet (docs/handoff.md "Two parallel sessions"); keep a comma after each line's last.
 	// WWHD_60FPS_CONVERT= (empty) converts none.
-	constexpr const char* kConvertedByDefault = "476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,174,192,193,243,244,245,246,247,207";
+	constexpr const char* kConvertedByDefault =
+		"476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,"
+		"174,192,193,243,244,245,246,247,207,"   // session bottom
+		"123,220,353,170,368,374,364,373,352,121,445,309";   // session top
 	const char* ConvertList()
 	{
 		const char* e = getenv("WWHD_60FPS_CONVERT");

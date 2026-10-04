@@ -32,8 +32,8 @@ WW-4's actor conversion is split between two sessions working side by side:
   the same rules file. Docs: append to your own subsection of "WW-4: 60 fps" below.
 - **Integration**: `ww-4` (on the `worker` remote) is the shared branch. To integrate a finished
   step: commit on your branch, `git fetch worker && git rebase worker/ww-4`, resolve (the
-  default list `kConvertedByDefault` in `src/overrides/sixty.cpp` is one line both edit: keep the
-  union), rebuild, run `tools/sixty/tests/checks.sh NAME` (all must match) and, after shared changes
+  default list `kConvertedByDefault` in `src/overrides/sixty.cpp` has one string literal per
+  session: append to your own line), rebuild, run `tools/sixty/tests/checks.sh NAME` (all must match) and, after shared changes
   (helpers, shared rules), `tools/sixty/tests/regress.sh`; then `git push worker HEAD:ww-4` and
   `git push worker HEAD:ww-4-<session> --force-with-lease`. If the push to ww-4 is refused, the
   other session integrated first: fetch, rebase, check again.
@@ -705,13 +705,58 @@ it in a window; D21 "Step 2"):**
     time-step override; it has one now in `sixty_step.cpp`, and a circling point (f_02587128:
     angle += speed) gets `split`. `actor_types.py` now also skips +0x194 (listener-relative too:
     static signposts differ there).
-  - **Windfall** (`room_list.sh sea,0,11,-1`; `route_test.sh save PROC 1000 1500` with
-    `WWHD_DEBUG_STAGE=920:sea,0,11,-1`), measured, not converted yet: townsfolk NPC_PEOPLE (373 x16)
-    within 2.1 units (its trial shows only gravity and a turn: close); market stalls Obj_Roten (121)
-    match; the ferris wheel Obj_Ferris (123) has counters stepping twice (f_0233EDE0+0x148 +0x1A74,
-    +0x6C +0x1A6C a phase, f_0233E254+0x40 +0x1A76); the Killer Bees NPC_UK (368) drift up to 67
-    units (f_022F2C80 an approach on +0x380/+0x394, f_0259DDA0 head turns +0x7AA); KB (220, the pigs?)
-    drift far (counters f_02190CE0+0xEC/+0xA0/+0x514 step twice). The next session's first item.
+  - **Windfall, converted (session top, 2026-10-04; rules in `config/US_v0/tick_rules/windfall.txt`)**.
+    `tools/sixty/tests/types_test.sh sea,0,11,-1 1000 1500` (every actor converted at once but Link)
+    found 15 types matching at every tick and 18 not; `area_test.sh` (the trial and 30 against 60 for
+    several types in one run), `actor_rmw.py` and the decomp did the rest. In the defaults now:
+    - the windmill's gondola wheel Obj_Ferris (123): its angle `split`, the gondolas' sway `spliti`,
+      the frame timer `late` (rot_mng reads it first), the start/stop states' counters; at 60 its angle
+      equals the 30-tick run's at every half frame;
+    - the flags MAJUU_FLAG (174; the rules are session bottom's in ganon.txt, the same seven derived here
+      independently): a 21-point cloth, speed += force (`vec@` on PSVECAdd), speed *= 0.85
+      (`d@` on PSVECScale), position += speed (`vec@`), its wave phase; it flapped twice as fast (points
+      moving 51 units a tick against 24), now 26 against 24 (the cloth's shape diverges: chaotic);
+    - pigs KB (220): timers, the push-out WWHD adds by hand (`*h`), the roll, flips, bob and anger flash
+      of their other states (from the decomp); their gait matches (speedF 1.33/1.32, walking 45%/45%,
+      steps 2.98/3.03 units a tick) while their paths diverge with random choices;
+    - townsfolk: Mila NPC_KK1 (353: blink, three frame counts; 31 units off before, 4 now), Ivan NPC_MK
+      (170) and the Killer Bees NPC_UK (368: blinks, visit timers, gravity, a sidestep impulse; 2-7
+      units), Mila's father NPC_GK1 (374), Tott NPC_TT (364), NPC_PEOPLE (373, sixteen) and Zunari
+      NPC_RSH1 (352) (blinks, countdowns); and the static ones that match: market stalls Obj_Roten (121),
+      the island's distant models (445) and stands DAI (309).
+    Blinks and random waits differ from the 30-tick run in phase, not rate (the random stream differs
+    at 60). Not converted: pots TSUBO (453: resting ones match, but thrown, rolling and floating ones
+    have ~30 per-tick sites: an item of their own), Coming2 (270: the sailing barrel course's invisible
+    manager), item stands (462), salvage lights (401), shutters (259), door knobs (305), the mailbox
+    (67), Obj_Light (128: phases that run at night only), tags, and 27, 38, 195, 298, 384, 439 (matched
+    in daytime, other states unchecked). NPC_SO (118) is on Windfall too: Outset's item.
+  - **whole, late or keep for a counter** (session top): which is exact depends on when the code reads
+    the value within the tick. Changed first and read later in the same execute (enemy timers at the top
+    of execute): `whole` on the store. Read at entry and changed after (`if (t) { t--; break; }`, the
+    NPC blinks' `if (frame >= max) ... else frame++`): `late` (with `whole` the half tick sees the next
+    tick's value and acts half a tick early). Changed and tested on the register in the same call
+    (`t++; if (t > N)`): `keep` on the add (otherwise the half tick computes t + 2 from memory and can
+    cross early). `t++; if (t == N) act()` where acting changes no state: `whole` on the action as well
+    (the pig's lift particle). `python3 tools/sixty/rule_audit.py` (worker) lists every `whole`/`late`
+    store whose register is tested, returned or put in cr0 right after: it found the shared countdown
+    helpers (cLib_calcTimer<s16> f_02055B64 and the int one f_0211D2F8, 173+ callers) returning `*t - 1`
+    on half ticks while `*t` stayed, so callers waiting for 0 acted half a tick early and then again;
+    they, Darknut's countdown, a Moblin, Floormaster and NPC_YM2 counter now have `keep` on the add
+    (2026-10-04, shared: regress.sh rerun; the u8 one's override already returned `*t`). The regress
+    set showed two more, fixed: the enemies' shared move (f_02043F34) adds speed.y K to the position
+    before gravity (explicit Euler), and with gravity `*h` two half steps fell K g/4 a tick too far
+    (0.75 units, so a Moblin walking off the dock was 7 units lower 10 ticks on): its speed.y store is
+    `late` now, gravity once a tick, and the fall matches the 30-tick run's (a tick early: it reaches
+    the edge half a tick sooner); and the Chuchu's own `speed.y += gravity` (021101B0) had no rule, so
+    its jumps had half their height and airtime. Left: an enemy falling into water hangs at the surface
+    about 2 ticks at 30 and not at 60 (the move's ground check), and hand-made gravity with `*h` arcs
+    about g/4 a tick higher than at 30 (fopAcM_posMove's exact arc only knows fopAcM_calcSpeed's
+    gravity: a rule that hands posMove the gravity added by hand would make them exact). Also shared,
+    found on Windfall: the light palette's start timer (setLight_palno_get,
+    `config/US_v0/tick_rules/env_light.txt`), counted in every converted actor's draw, so twice a tick.
+  - **Tools (session top)**: `tools/sixty/tests/types_test.sh STAGE FROM TO` (an area's first pass),
+    `area_test.sh STAGE FROM TO P,Q,...` (several types in one run), `capture.sh NAME STAGE SWAPS
+    [INPUTS]` (captures for the progress page at 60 on the worker's GPU: quick, not for comparisons).
   - **Doors**: on the door route at 60 every frame changes up to the black screen of the room load
     (captures of each swap, `/wwhd/data/m6/framediff.sh ROUTE FIRST LAST`); Link and the camera
     step on every half frame. The owner's "entrances drop to 30" wasn't reproduced there: ask which
@@ -797,7 +842,8 @@ it in a window; D21 "Step 2"):**
   Valoo's tail in its room 223 (counters, timers, two sways; tested idle in the fight), Magtails 216,
   Peahats 209, Boko Babas 214, Outset's NPC_YM2 316 and NPC_YW1 317, Hyrule's flags 174, the
   capes 192, the Moblins' lanterns 193, Puppet Ganon 243-245, Ganondorf 246, Miniblins 247 and
-  Bubbles 207,
+  Bubbles 207 (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364, 373, 352, 121, 445,
+  309 (session top; `kConvertedByDefault` has a line per session),
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
   `WWHD_60FPS_CONVERT=` (empty) converts nothing, `WWHD_60FPS_PARTICLES=0` keeps particles at 30) (with
   `WWHD_60FPS_FROM` for routes). `tools/sixty/run.sh` takes `SIXTY_FRAMES=N` to end a route early;

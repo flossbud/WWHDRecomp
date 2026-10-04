@@ -32,8 +32,10 @@ def main():
             p = line.rstrip("\n").split("\t")
             if p and p[0].isdigit():
                 names[int(p[0])] = p[1] if len(p) > 1 and p[1] != "?" else ""
-    m = re.search(r'kConvertedByDefault = "([0-9,]*)"', read("src/overrides/sixty.cpp"))
-    converted = [int(x) for x in m.group(1).split(",") if x] if m else []
+    # the list is one string literal per session, from its declaration to the `;`
+    m = re.search(r'kConvertedByDefault =([^;]*);', read("src/overrides/sixty.cpp"))
+    joined = "".join(re.findall(r'"([0-9,]*)"', m.group(1))) if m else ""
+    converted = [int(x) for x in joined.split(",") if x]
     rules_text = read("config/US_v0/tick_rules.txt")
     extra = os.path.join(ROOT, "config/US_v0/tick_rules")
     if os.path.isdir(extra):

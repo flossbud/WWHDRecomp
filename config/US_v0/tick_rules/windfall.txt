@@ -1,0 +1,101 @@
+# Windfall Island (sea room 11), session top (docs/handoff.md "Two parallel sessions"). Found with
+# tools/sixty/tests/types_test.sh and area_test.sh (warp sea,0,11,-1 at f920 on route save; the trial and
+# 30 against 60 over f1000-1500), tools/sixty/actor_rmw.py, and matched with the GameCube decomp
+# (zeldaret/tww, the file named in each section). The format: ../tick_rules.txt.
+#
+# ---- the ferris wheel (Obj_Ferris, process 123, d_a_obj_ferris.cpp; _execute f_0233EDE0, rot_mng
+# f_0233E2A0, angle_mng f_0233E254). The trial: mRotAngle, mFrameTimer and mGondolaWaveTimer stepped
+# twice. mFrameTimer is read by rot_mng earlier in the tick (`!(mFrameTimer & 3)`): late. The event
+# states' (2-10: the wheel starting and stopping) counters and speed steps go by whole ticks.
+0233EE44    split@r10   add             ferris _execute: mRotAngle (+0x1A6C) += mRotSpeed (+0x1A6E)
+0233EF28    late        sth             ferris _execute: mFrameTimer (+0x1A74) + 1
+0233E41C    keep:r9     addi            ferris rot_mng (states 2, 6): mRotTimer (+0x1A68) + 1, then > 20 ends the state
+0233E4BC    whole       sth             ferris rot_mng (states 3-9): mRotSpeed - 1
+0233E4CC    whole       sth             ferris rot_mng (states 3-9): mRotTimer + 1
+0233E60C    whole       sth             ferris rot_mng (state 1): mRotSpeed + 1 every 4 ticks
+0233E264    spliti      addi            ferris angle_mng: mGondolaWaveTimer (+0x1A78) += 500
+#
+# ---- the flags (MAJUU_FLAG, process 174, d_a_majuu_flag.cpp): ruled in ganon.txt (session bottom, for
+# Hyrule's flags; it landed first). Derived here independently, the same seven rules: the wave phase
+# split, speed += force and pos += speed vec@, speed *= 0.85 d@. On Windfall the flags flapped twice as
+# fast (cloth points moving 51 units a tick against 24); with the rules 26 against 24.
+#
+# ---- pigs (KB, process 220, d_a_kb.cpp; daKb_Execute f_02190CE0 with its moves inlined, attack_move
+# f_021947AC; WWHD's fields 0x348 on from the GameCube's). The timers m426[8], the tick count m446 and
+# the push-out (WWHD clamps it and adds x and z itself) were found with the trial; the other states'
+# steps from the decomp: carry (m438, the roll), swim (the bob phase m436, m43A), attack (the flips,
+# m448, the anger flash's phase m44C), m444.
+02190D60    whole       sth             kb execute: m426[4] (+0x776) + 1 while a global flag is set (WWHD)
+02190D80    whole       sthx            kb execute: the timers m426[8] (+0x76E) count down
+02190DCC    whole       sth             kb execute: m446 (+0x78E) + 1
+021932FC    *h@f11      fadds           kb execute: current.pos.x += the push-out's x (clamped)
+02193300    *h@f8       fadds           kb execute: current.pos.z += the push-out's z
+02193328    *h@f11      fadds           kb execute: current.pos.x += the push-out's x
+0219332C    *h@f8       fadds           kb execute: current.pos.z += the push-out's z
+02193358    keep:r10    addi            kb execute: m444 (+0x78C) - 1, then >= 3 picks the squash's target
+02193664    keep:r9     addi            kb execute (attack): m448 (+0x790) + 1 while still, then > 10 calms it
+021936E0    split@r9    add             kb execute: the anger flash's phase m44C (+0x794) += 1000
+02191C4C    whole       sth             kb carry_move (0xA): m438 (+0x780) + 1 while lifted
+02191C8C    whole       bl 025a847c     kb carry_move (0xA): ...then == 4 sets a particle (a half tick's m438 + 2 must not)
+021921E0    d@f8        fmuls           kb carry_move (0xC): speedF *= 0.99 (rolling)
+02192200    spliti      addi            kb carry_move (0xC): shape_angle.x += 0x1000 (rolling)
+02192BEC    spliti      addi            kb swim_move: the bob phase m436 (+0x77E) += 0x800
+02193218    late        sth             kb swim_move: m43A (+0x782) - 1 (== 0 is checked earlier in the tick)
+02194AD4    spliti      addi            kb attack_move (0x22): shape_angle.x -= 0x2000 (the flip)
+02194B48    spliti      addi            kb attack_move (0x23): shape_angle.x -= 0x1000
+#
+# ---- Mila (NPC_KK1, process 353, d_a_npc_kk1.cpp, not decompiled): the trial found her blink
+# (f_0226B8E4: its frame + 1 while the s16 timer is 0, then the pattern's length restarts it, as
+# daNpc_Mk_c::playTexPatternAnm) and three frame counts (f_0226BA48) stepping twice. Each is added to
+# and then compared within the call: on a half tick it keeps the whole tick's count (keep).
+0226B934    keep:r12    addi            kk1 blink (f_0226B8E4): its frame (+0x860) + 1, then >= the length restarts it
+0226BA60    keep:r12    addi            kk1 (f_0226BA48): a frame count (+0xAAC) + 1, held at 29
+0226BA8C    keep:r12    addi            kk1 (f_0226BA48): a frame count (+0xAAE) + 1, held at its animation's last frame
+0226BABC    keep:r12    addi            kk1 (f_0226BA48): the same (+0xAAE), the other path
+0226BAE8    keep:r12    addi            kk1 (f_0226BA48): a frame count (+0xAB0) + 1, 59 once past its animation's end
+0226BB34    keep:r12    addi            kk1 (f_0226BA48): the same (+0xAB0), the other path
+#
+# ---- Ivan (NPC_MK, process 170, d_a_npc_mk.cpp; WWHD's fields 0x178 on from the GameCube's). The trial
+# found the blink; the visit modes' timers are from the decomp. Each is checked at the call's entry
+# (`if (t != 0) { t--; break; }`) and counted after: late, so both frames of a tick see its count.
+022968BC    late        stb             mk playTexPatternAnm: mBlinkFrame (+0x430) + 1
+02297104    late        stb             mk chkAttentionLocal: mAttentionTimer (+0x7FE) - 1
+02297BF4    late        stb             mk nextVisitMode: mRunAroundLinkTimer (+0x81A) - 1
+02297C6C    late        stb             mk nextVisitMode: mWaitTimer (+0x819) - 1
+02297D40    late        sth             mk nextVisitMode: field_0x6A4 (+0x81C) - 1
+02298114    late        stb             mk visitProc: mTimerToReachLink (+0x81B) + 1, up to 55
+#
+# ---- the Killer Bees (NPC_UK, process 368, d_a_npc_uk.cpp, not decompiled): the blink as Ivan's
+# (f_022F1D14), gravity added by hand (f_022F1F98), and a sidestep from an actor running by
+# (f_022F4DA0: speed.xz += a perpendicular a tick while near it; the trial: twice).
+022F1DCC    late        stb             uk blink (f_022F1D14): its frame (+0x434) + 1
+022F21D8    *h@f7       fadds           uk (f_022F1F98): speed.y += gravity (+0x374)
+022F4E98    *h@f13      fmadds          uk (f_022F4DA0): speed.x += a sidestep a tick
+022F4EB0    *h@f13      fmadds          uk (f_022F4DA0): speed.z += a sidestep a tick
+022F4EEC    *h@f13      fmadds          uk (f_022F4DA0): speed.x += a sidestep a tick (the other side)
+022F4F04    *h@f13      fmadds          uk (f_022F4DA0): speed.z += a sidestep a tick (the other side)
+#
+# ---- Mila's father (NPC_GK1, process 374, d_a_npc_gk1.cpp, not decompiled): the blink as Mila's
+# (f_02236350).
+022363A0    keep:r12    addi            gk1 blink (f_02236350): its frame (+0x868) + 1, then >= the length restarts it
+#
+# ---- Tott (NPC_TT, process 364, d_a_npc_tt.cpp; WWHD's fields 0x174 on from the GameCube's up to
+# mNoticeLinkTimer): the blink (f_022EE8E8, playTexPatternAnm) and msgContinue's timer (f_022EF2FC), both
+# checked at entry.
+022EE994    late        stb             tt playTexPatternAnm: mBlinkFrame (+0x454) + 1
+022EF318    late        sth             tt msgContinue: mNoticeLinkTimer (+0x82A) - 1
+#
+# ---- Windfall's townsfolk (NPC_PEOPLE, process 373, d_a_npc_people.cpp, sixteen of them): two blinks
+# (f_022B78D8, f_022C2CC0: the frame + 1 while the s16 timer is 0, checked at entry) and two countdowns
+# tested right after (f_022C4B80, f_022C511C: mode handlers; a half tick keeps the count, so the mode
+# changes on the whole tick it does at 30). Not reached on Windfall and left as they are:
+# f_022B99FC's accumulators +0x918/+0x91C.
+022B7984    late        stb             people blink (f_022B78D8): its frame (+0x4F0) + 1
+022C2D54    late        stb             people blink (f_022C2CC0): its frame (+0x902) + 1
+022C4BB4    keep:r12    addi            people (f_022C4B80): a countdown (+0x8E6) - 1, then == 0 changes the mode
+022C518C    keep:r8     addi            people (f_022C511C): a countdown (+0x8E2) - 1, then == 0 changes the mode
+#
+# ---- Zunari (NPC_RSH1, process 352, d_a_npc_rsh1.cpp; WWHD's fields 0x174 on from the GameCube's): the
+# blink (playTexPatternAnm, f_022D7C7C), checked at entry. m95A counts animation ends (checkPass, which
+# has its time step), not ticks.
+022D7D28    late        stb             rsh1 playTexPatternAnm: mBtpFrame (+0x430) + 1

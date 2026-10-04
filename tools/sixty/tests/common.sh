@@ -6,7 +6,8 @@ OUT=/wwhd/data/m6/$(basename "$ROOT")
 mkdir -p "$OUT"
 cd "$ROOT"
 # defaults: the processes sixty.cpp converts by default
-defaults() { grep -o 'kConvertedByDefault = "[0-9,]*"' src/overrides/sixty.cpp | cut -d'"' -f2; }
+# (the list is one string literal per session, from its declaration to the `;`)
+defaults() { sed -n '/kConvertedByDefault =/,/;/p' src/overrides/sixty.cpp | grep -o '"[0-9,]*"' | tr -d '"\n' | sed 's/,$//'; }
 # base: what spawn and stage tests convert besides the actor tested: the camera, the ship and its
 # sail, not Link (so an actor that reads Link sees the 30-tick run's Link; the numbers in
 # docs/handoff.md were measured so). BASE=defaults uses the default list instead.

@@ -1,0 +1,9 @@
+# The environment light's per-actor state (d_kankyo.cpp), shared by every actor that draws with
+# settingTevStruct: session top found it on Windfall (docs/handoff.md "Two parallel sessions"; a shared
+# rule: tools/sixty/tests/regress.sh after a change). The format: ../tick_rules.txt.
+#
+# setLight_palno_get (f_025580FC), from settingTevStruct in an actor's draw: dKy_tevstr_c::mInitTimer
+# counts 1..20 after a tevStr is set up (the palette blend's start), then 0. A converted actor draws on
+# half ticks too and its writes stand, so it counted twice a tick (the 0x1C4 byte of market stalls,
+# doors and LOD buildings ran a tick ahead in 30 against 60 on Windfall); a half tick keeps the count.
+0255817C    keep:r11    addi            setLight_palno_get: mInitTimer + 1, then > 20 ends it

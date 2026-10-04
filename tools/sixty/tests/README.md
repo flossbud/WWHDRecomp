@@ -8,6 +8,11 @@ Outputs go to `/wwhd/data/m6/<checkout name>/` (game memory and captures: they s
   (`WWHD_DEBUG_BOSS=1` for bosses on a finished save).
 - `route_test.sh ROUTE PROC FROM TO`: on a route (NPCs, objects).
 - `room_list.sh STAGE,point,room,layer`: warp and list the processes there (start of an area).
+- `types_test.sh STAGE,point,room,layer FROM TO`: every actor converted but Link, each type ranked by the
+  ticks it matches the 30-tick run (an area's first pass: 100% needs no rules of its own).
+- `area_test.sh STAGE,point,room,layer FROM TO P,Q,...`: `route_test.sh` for several types in one run.
+- `capture.sh NAME STAGE,point,room,layer|- SWAPS ["SWAP BUTTON FRAMES"...]`: captures at 60 on the
+  worker's GPU for the progress page (quick; comparisons use llvmpipe).
 - `paths.py DIR FROM TO [OFFSET]`: 30 against 60 by half frame (positions, or e.g. 0x390, the eye).
 - `regress.sh`: every converted enemy again, after shared changes.
 - `checks.sh NAME`: the switch-off checks every commit needs (all MATCH, diff 0 mismatches,

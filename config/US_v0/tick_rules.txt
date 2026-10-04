@@ -347,7 +347,10 @@
 02044A90    *h@f11      fadds           enemy move: current.pos.z += speed.z K + forward.z
 02044AC4    *h@f6       fadds           enemy move: current.pos.x += knockback.x
 02044AD8    *h@f8       fadds           enemy move: current.pos.z += knockback.z
-02044B00    *h@f12      fsubs           enemy move: speed.y -= gravity
+02044B08    late        stfs            enemy move: speed.y -= gravity, stored once a tick at its end: the position
+#                                       adds speed.y K before it (explicit Euler), so both half steps take the tick's
+#                                       speed; with gravity h a step, a falling enemy dropped K g/4 a tick too far
+#                                       (session top, 2026-10-04: spawn tests' Moblin and Darknut walking off the dock)
 #
 # ---- step rules: the scene's plants (sixty.cpp's Plants, WWHD_60FPS_PLANTS=1). Found with the
 # step-doubling trial (WWHD_60FPS_TRIAL_PLANTS=1) along route plants (Outset's village).
@@ -373,6 +376,8 @@
 # ---- step rules: Chuchus (CC, process 206, d_a_cc.cpp). Found with the step-doubling trial on one
 # spawned on the Outset dock (WWHD_DEBUG_SPAWN=950:206,0,-201622,190,312700, route save).
 0210DF90    whole       sthx            cc execute: its timers count down
+021101B0    *h@f7       fadds           cc move: speed.y += gravity (+0x374) by hand (session top, 2026-10-04: at 60 it took
+#                                       a full tick's gravity each half tick, so a jump had half its height and airtime)
 #
 # ---- step rules: Keese (KI, process 215, d_a_ki.cpp). Found with the trial on one spawned on the dock.
 02199BE8    *h@f11      fadds           ki fly (f_02199A64): current.pos.x += speed.x
@@ -414,14 +419,14 @@
 021CA0CC    whole       stw             mo2: a tick count (+0x840) + 1
 021CA0E0    whole       sthx            mo2: its timers (+0x848) count down
 021CA27C    whole       sth             mo2: a countdown (+0x45C) - 1
-021CC2F4    whole       sth             mo2: a counter (+0x2D4C) + 1
+021CC2E8    keep:r4     addi            mo2: a counter (+0x2D4C) + 1, then compared (keep: session top's audit, tools/sixty/rule_audit.py)
 #
 # ---- step rules: Darknuts (TN, process 191, d_a_tn.cpp). Found with the trial on one spawned on the
 # dock: its path already matched.
 024BD528    whole       stw             tn: a tick count (+0x4F0) + 1
 024BD53C    whole       sthx            tn: its timers (+0x4F8) count down
 024BC4E4    whole       sth             tn (f_024BC3EC): a part's counter + 1
-024BD2F0    whole       stb             tn: a countdown (+0x1670) - 1
+024BD2E8    keep:r8     addi            tn: a countdown (+0x1670) - 1, then == 0 acts (keep: rule_audit.py)
 #
 # ---- step rules: Kargarocs (BB, process 181, d_a_bb.cpp; execute f_0205EA58).
 0205ED04    whole       sth             bb: a counter (+0x4C6) + 1
@@ -439,7 +444,8 @@
 #
 # ---- step rules: a shared int countdown (f_0211D2F8: if (*t) --*t; return *t; 173 callers, a
 # cLib_calcTimer-like template). Found on ReDeads (RD, process 224), whose paths already matched.
-0211D308    whole       stw             countdown helper: *t - 1
+0211D304    keep:r12    addi            countdown helper: *t - 1, returned in r3 (keep: a half tick returns *t as it is,
+#                                       not *t - 1, which made callers waiting for 0 act half a tick early and again)
 #
 # ---- step rules: Gohma (BTD, process 234, d_a_btd.cpp; execute f_020F1494). Found with the trial in
 # its room (WWHD_DEBUG_BOSS=1 on a finished save).
@@ -501,8 +507,8 @@
 0214D590    whole       stb             fm: a counter (+0x3F0) + 1
 0214D780    whole       stb             fm: a counter (+0x3F1) + 1
 0214EF68    whole       sth             fm: a counter (+0x43E) + 1
-0214F050    whole       sth             fm: a counter (+0x3F6) + 1
-0214F0AC    whole       sth             fm: a counter (+0x3F6) + 1
+0214F048    keep:r5     addi            fm: a counter (+0x3F6) + 1, then compared (keep: rule_audit.py)
+0214F0A4    keep:r5     addi            fm: a counter (+0x3F6) + 1, then compared (keep: rule_audit.py)
 0214DA10    *h@f0       fadds           fm: speed.y += gravity (+0x374)
 0214E298    *h@f0       fadds           fm: speed.y += gravity (+0x374)
 0214E554    *h@f0       fadds           fm: speed.y += gravity (+0x374)
@@ -584,10 +590,10 @@
 #
 # ---- step rules: a shared s16 countdown (f_02055B64: if (*t) --*t; return *t; cLib_calcTimer<s16>, as
 # cLib_calcTimer<u8> 0207A9A0 is overridden). Found on Outset's NPC_YW1 (process 317).
-02055B78    whole       sth             countdown helper (s16): *t - 1
+02055B70    keep:r12    addi            countdown helper (s16): *t - 1, returned in r3 (keep, as the int one's)
 #
 # ---- step rules: Outset's NPC_YM2 (process 316; f_022F7918).
-022F795C    whole       stb             ym2: a frame counter (+0x868) + 1
+022F7950    keep:r31    addi            ym2: a frame counter (+0x868) + 1, then >= the length restarts it (keep: rule_audit.py)
 
 #
 # ---- step rules: a circling point (f_02587128: its angle +0x20 += its speed +0x22, then the point is the
