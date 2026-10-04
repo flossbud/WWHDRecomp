@@ -71,6 +71,20 @@ static inline void rt_step_vec_end(uint32 ea, const float saved[3])
 	for (int i = 0; i < 3; i++)
 		rt_vec_wr(ea + 4 * i, saved[i]);
 }
+// ssplit@: for one call, the s16 at ea (an angular speed a cSAngle's += is passed by address) is split
+// between the whole tick and the half tick as rt_step_split splits a register, and put back after
+// (outside the store journal, as vec@'s vector)
+static inline uint16 rt_step_s16_begin(uint32 ea)
+{
+	uint16 v; memcpy(&v, memory_base + ea, 2); v = __builtin_bswap16(v);
+	const uint16 s = (uint16)rt_step_split((uint32)(sint32)(sint16)v);
+	const uint16 b = __builtin_bswap16(s); memcpy(memory_base + ea, &b, 2);
+	return v;
+}
+static inline void rt_step_s16_end(uint32 ea, uint16 saved)
+{
+	const uint16 b = __builtin_bswap16(saved); memcpy(memory_base + ea, &b, 2);
+}
 
 // Guest time (design D6, revised for M4): every instruction costs one cycle of the thread's
 // timeslice, exactly as in Cemu's `while ((--remainingCycles) >= 0)` loop. When the slice is used

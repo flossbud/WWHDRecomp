@@ -324,6 +324,39 @@ void f_025D6800(PPCInterpreter_t* __restrict ctx)
 	wrf(actor + 0x31C, z);
 }
 
+// daObj::posMoveF_grade (d_a_obj.cpp; actor r3, push r4, stream speed r5, resistance k1 f1 and k2 f2,
+// slope normal r6, friction f3, no-grade cos f4, an extra acceleration r7; daObj::posMoveF_stream
+// calls it too): what is thrown, rolls or floats (pots, stones, barrels, bombs) changes its speed by
+// accelerations a tick (gravity +0x374, the stream's resistance k1 (v - s) + k2 |v - s| (v - s), the
+// slope's pull and friction, the extra one), then calls fopAcM_posMove. With a step h each is h of
+// itself for the call (gravity and the extra acceleration put back after), and what gravity adds is
+// noted for posMove's arc correction, as the calcSpeed override does.
+void f_023121C4(PPCInterpreter_t* __restrict ctx)
+{
+	if (!Stepped())
+		[[clang::musttail]] return orig_f_023121C4(ctx);
+	const uint32 actor = GPR(3), accel = GPR(7);
+	const float h = Step();
+	const uint32 g = rd32(actor + 0x374);
+	FPR(1).fp0 = Single(FPR(1).fp0 * h);
+	FPR(2).fp0 = Single(FPR(2).fp0 * h);
+	FPR(3).fp0 = Single(FPR(3).fp0 * h);
+	uint32 a[3] = {};
+	if (accel)
+		for (int i = 0; i < 3; i++)
+		{
+			a[i] = rd32(accel + 4 * i);
+			wrf(accel + 4 * i, std::bit_cast<float>(a[i]) * h);
+		}
+	wrf(actor + 0x374, std::bit_cast<float>(g) * h);
+	s_fall[actor] = { std::bit_cast<float>(g) * h, StepId() };   // posMove, called inside, corrects the arc
+	orig_f_023121C4(ctx);
+	wr32(actor + 0x374, g);
+	if (accel)
+		for (int i = 0; i < 3; i++)
+			wr32(accel + 4 * i, a[i]);
+}
+
 // ---- animation (J3DAnimation.cpp) ------------------------------------------------------------------
 
 // J3DFrameCtrl::checkPass(pass frame f1, ctrl r3): whether the next update (mFrame to mFrame + mRate)

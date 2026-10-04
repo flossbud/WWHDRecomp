@@ -79,6 +79,8 @@ rules, for the code of processes that run every frame with a time step h
                handed to a vector add)
   arc@rN       the same for a velocity: x and z times h, y as h y + (1 - h)/2 (y - noted), noted
                before gravity was added: the semi-implicit 30 Hz arc exactly at whole ticks
+  ssplit@rN    for a call, the s16 rN points to is split between the whole tick and the half tick
+               as split@ splits a register (a cSAngle's += of an angular speed it is passed by address)
   reload:fD=rB+O[+O2]  after the instruction, at 60 fps (g_rtSixty, drawing too, where the step
                is 1), fD is the float at rB + O again (with O2, at the word at rB + O, plus O2):
                code that truncates a frame count kept as a float (whose half steps are .5) gets it
@@ -232,9 +234,9 @@ class Program:
                 kind, sep, arg = rule.partition(":")
                 if "@" in rule:
                     kind, sep, arg = rule.partition("@")
-                    assert kind in ("split", "vec", "arc", "fall") or kind in self.STEP_OPS, f"tick_rules.txt:{n}: {rule}: @ takes a step operation"
+                    assert kind in ("split", "vec", "arc", "fall", "ssplit") or kind in self.STEP_OPS, f"tick_rules.txt:{n}: {rule}: @ takes a step operation"
                     assert kind != "fall" or arg[0] == "f", f"tick_rules.txt:{n}: {rule}: fall@ takes the gravity's float register"
-                    assert kind not in ("vec", "arc") or (arg[0] == "r" and words[2] == "bl"), f"tick_rules.txt:{n}: {rule}: a call's pointer register"
+                    assert kind not in ("vec", "arc", "ssplit") or (arg[0] == "r" and words[2] == "bl"), f"tick_rules.txt:{n}: {rule}: a call's pointer register"
                     kind += "@"
                 if kind == "reload":
                     m = re.fullmatch(r"(f(?:[12]?[0-9]|3[01]))=(r(?:[12]?[0-9]|3[01]))\+(0x[0-9a-fA-F]+)(?:\+(0x[0-9a-fA-F]+))?", arg)
@@ -254,7 +256,8 @@ class Program:
                         assert key == "r3", f"tick_rules.txt:{n}: unknown rule argument {arg}"
                         value = v if re.fullmatch(r"r([12]?[0-9]|3[01])", v) else int(v, 0)
                 else:
-                    assert kind.rstrip("@") in ("keep", "split", "note", "vec", "arc", "fall") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert kind.rstrip("@") in ("keep", "split", "note", "vec", "arc", "fall", "ssplit") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert kind != "ssplit", f"tick_rules.txt:{n}: ssplit takes @: ssplit@rN"
                     assert kind != "fall", f"tick_rules.txt:{n}: fall takes @: fall@fREG"
                     assert kind != "note" or arg[0] == "f", f"tick_rules.txt:{n}: note takes a float register"
                     assert re.fullmatch(r"[rf]([12]?[0-9]|3[01])", arg), f"tick_rules.txt:{n}: {rule}: a register expected"
@@ -554,6 +557,10 @@ def apply_tick_rule(rule, i, lines):
         if not any(assign.search(l) for l in lines):
             out.append(f"\t{reg} = saved_;")
         return out + ["}"]
+    if op == "ssplit":
+        return ([f"{{ const uint32 sEa_ = {reg}; uint16 sSaved_ = 0; const bool s_ = RT_STEPPED();   // step rule: {what}",
+                 f"\tif (s_) sSaved_ = rt_step_s16_begin(sEa_);"]
+                + ["\t" + l for l in lines] + ["\tif (s_) rt_step_s16_end(sEa_, sSaved_);", "}"])
     if op in ("vec", "arc"):
         arc = "true" if op == "arc" else "false"
         return ([f"{{ const uint32 vecEa_ = {reg}; float vecSaved_[3]; const bool vec_ = RT_STEPPED();   // step rule: {what}",

@@ -1,0 +1,63 @@
+# Step and tick rules for the objects Link carries and throws, which session bottom took (agreed with
+# session top): pots (TSUBO 453) and stones (STONE 454). Format: ../tick_rules.txt and tools/recomp/
+# generate.py. What they share: daObj::posMoveF_grade (and posMoveF_stream), the thrown, rolling and
+# floating objects' move, has a time step in src/overrides/sixty_step.cpp.
+#
+# ---- TSUBO (453, d_a_tsubo.cpp, daTsubo::Act_c: pots, barrels, stools, skulls...; its code
+# 024CC238-024D1998; WWHD's fields at the GameCube's + 0x11A). Tested by spawning one on the Outset dock
+# and poking a throw's speeds into it (WWHD_DEBUG_POKE=955:453,370,4,41700000;955:453,340,4,41a00000):
+# path 692 against 693 units, 5 apart on average.
+024CDD14    keep:r11    addi            tsubo: a countdown (+0x79D, m683) - 1, on whole ticks
+# its speedF damped a tick: sliding on the ground (* 0.5), pushed in its throw (* 0.9), against a wall
+024CE1C0    d@f11       fmuls           tsubo wait: speedF *= 0.5 (sliding to a stop)
+024CF110    d@f12       fmuls           tsubo drop: speedF *= 0.9 (pushed)
+024CF72C    d@f0        fmuls           tsubo bound: speedF *= 0.9 (against a wall)
+# its squash and stretch when it lands: a damped spring on scale.x/z (+0x330) and scale.y (+0x334),
+# v = (v - k (s - 1)) (1 - d), s += v
+024CEC74    *h@f13      fnmsubs         tsubo squash: v.x -= k (scale - 1)
+024CEC7C    *h@f13      fnmsubs         tsubo squash: v.y -= k (scale - 1)
+024CEC80    k@f0        fnmsubs         tsubo squash: v.x *= 1 - d
+024CEC88    k@f0        fnmsubs         tsubo squash: v.y *= 1 - d
+024CEC90    *h@f12      fadds           tsubo squash: scale.x += v.x
+024CEC98    *h@f10      fadds           tsubo squash: scale.y += v.y
+# afloat: its height toward the water line (water_tention), its bob's two phases (+ rnd + 0x514 a tick)
+024CFAA0    k@f13       fmadds          tsubo water: pos.y += (the water line - pos.y) * 0.8 or 0.2
+024CFDD8    split@r0    add             tsubo afl: a bob's phase (+0x920, m804) += rnd(400) + 0x514
+024CFE5C    split@r12   add             tsubo afl: the other phase (+0x922, m806) += rnd(400) + 0x514
+# its spin (set_tensor_drop, _sink, _afl: an angular speed drags down, the angle += it; cSAngle's -= and
+# += of an s16, the += by address: ssplit@)
+024D00CC    split@r4    bl 0200692c     tsubo drop: m68C -= its drag
+024D00D8    ssplit@r4   bl 020068cc     tsubo drop: m68A += m68C (its tumble)
+024D0114    split@r4    bl 0200692c     tsubo drop: m690 -= its drag
+024D0120    ssplit@r4   bl 020068cc     tsubo drop: m68E += m690 (its spin)
+024D01DC    split@r4    bl 0200692c     tsubo sink: m68C -= its drag
+024D01E8    ssplit@r4   bl 020068cc     tsubo sink: m68A += m68C
+024D0224    split@r4    bl 0200692c     tsubo sink: m690 -= its drag
+024D0230    ssplit@r4   bl 020068cc     tsubo sink: m68E += m690
+024D02EC    split@r4    bl 0200692c     tsubo afl: m68C -= its drag
+024D02F8    ssplit@r4   bl 020068cc     tsubo afl: m68A += m68C
+024D031C    split@r4    bl 0200691c     tsubo afl: m690 += m68E * -0.0005 (righting itself)
+024D0358    split@r4    bl 0200691c     tsubo afl: m690 += 4 sin(m806) (the bob's roll)
+024D0394    split@r4    bl 0200692c     tsubo afl: m690 -= its drag
+024D03A0    ssplit@r4   bl 020068cc     tsubo afl: m68E += m690
+# rolling (set_tensor_walk): its spin speed comes from this step's move (pos - old.pos), so it is per step
+# already; only its approach (0.7) takes a step
+024CFFD4    k@f13       fmadds          tsubo walk: m690 += (its move's spin - m690) * 0.7
+# decorations that bounce (a kutani pot's: y += vy after vy -= g: once a tick)
+024CF428    *h@f1       fadds           tsubo bits: y += vy
+024CF434    late        stfs            tsubo bits: vy -= gravity (once a tick)
+#
+# ---- STONE (454, d_a_stone.cpp, daStone::Act_c: the rocks Link carries and throws; its move is
+# posMoveF/posMoveF_stream, as the pots'). A thrown one (spawned on the dock with a throw's speeds and
+# spins poked in): path 1306 against 1307 units.
+0249CFB0    keep:r12    addi            stone: a countdown (+0x795) - 1, on whole ticks
+0249DD50    k@f13       fmadds          stone water: pos.y += (the water line - pos.y) * 0.8 or 0.2
+# its tumble and spin (set_drop_rot f_0249D948, set_sink_rot f_0249DD68), as the pots'
+0249D9F8    split@r4    bl 0200692c     stone drop: m680 -= its drag
+0249DA04    ssplit@r4   bl 020068cc     stone drop: m67E += m680 (its tumble)
+0249DA88    split@r4    bl 0200692c     stone drop: m684 -= its drag
+0249DA94    ssplit@r4   bl 020068cc     stone drop: m682 += m684 (its spin)
+0249DE18    split@r4    bl 0200692c     stone sink: m680 -= its drag
+0249DE24    ssplit@r4   bl 020068cc     stone sink: m67E += m680
+0249DEA8    split@r4    bl 0200692c     stone sink: m684 -= its drag
+0249DEB4    ssplit@r4   bl 020068cc     stone sink: m682 += m684

@@ -1022,6 +1022,20 @@ it in a window; D21 "Step 2"):**
     its water (Obj_Tide 39), Obj_Hha 136, Obj_Htetu1 137, stakes (KUI 250), Obj_Hcbh 150. Not converted:
     the light bridges (427, 428: their animation frames drift from 30's), Hys (450), the hot floor
     (231: a Beamos's scorch, its path doubled).
+  - **Pots and stones** (TSUBO 453, STONE 454; agreed with session top, not in the queue;
+    `config/US_v0/tick_rules/carried.txt`). Shared: **daObj::posMoveF_grade** (f_023121C4, also behind
+    daObj::posMoveF_stream: the move of what is thrown, rolls or floats: pots, stones, barrels, bombs)
+    has a time step now (src/overrides/sixty_step.cpp): its accelerations (gravity, the stream's linear
+    and quadratic resistance, the slope's friction, the extra acceleration) are h of themselves for the
+    call, and gravity's part is noted for posMove's arc correction. New step op **`ssplit@rN`**
+    (generate.py, ppc_ops.h): for a call, the s16 that rN points to is split between the whole and the
+    half tick (put back after), for cSAngle's `+=` of an angular speed passed by address (the pots'
+    and stones' tumble and spin: `split@r4` on the `-=` of their drag, by value). Pots: their slide,
+    push and wall damping (d@), the squash spring on landing (forces *h@, damping k@, scale += v *h@),
+    their height in water (k@), their bob's phases, a decoration's bounce (late). Tested by spawning
+    one on the Outset dock and poking a throw into it (speeds, mode, spins: see carried.txt): a thrown
+    pot 494 against 493 units, 0.3 apart, its spin within 0.2%; a thrown stone 1306 against 1307.
+    Not checked: a rolling pot (mode walk) and floating ones (afl), by the decomp only.
   - **`fall@fREG`** (new step rule, shared: generate.py, sixty.cpp's `g_rtActor`, sixty_step.cpp's
     `rt_step_fall`): many executes inline fopAcM_calcSpeed's `speed.y += gravity` instead of calling
     it (a scan for `lfs fG,0x374(rA)` ... `fadds` ... `stfs 0x340(rA)` found 62 sites in ~25 types),
@@ -1054,8 +1068,8 @@ it in a window; D21 "Step 2"):**
   Armos 202/203, Molgera 217/219, the Earth Temple's Stalfos 190, Poes 212, Floormasters 119 and
   Jalhalla 211, the Forsaken Fortress's anchors 431, barrels 456, ropes 447 and Tetra 426, the
   Tower of the Gods' Beamos 233 and beams 232, lifts 40, balance lifts 111, statues 458, floor
-  switches 29, its water 39, 136, 137, stakes 250, 150, Gohdan 240, rats 198 and Helmaroc King 238
-  (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
+  switches 29, its water 39, 136, 137, stakes 250, 150, Gohdan 240, rats 198, Helmaroc King 238, pots
+  453 and stones 454 (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
   373, 352, 121, 445, 309 and Outset's 118, 68, 73, 200, 255, 71, 67, 335, 319, 320, 331, 461, 45
   (session top; `kConvertedByDefault` has a line per session),
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
