@@ -1106,7 +1106,10 @@ it in a window; D21 "Step 2"):**
     on twice a tick; with the move read per tick (/h) and the phase's add split, on the walk route the
     flutter's phase advances 3862 a tick (30: 3845; it was 6585), its swing 950 (944; was 716), the
     sideways lean 4765 (4765; was 6066). Also the swim wait's bob phase (0242F5E8, split) and the wait's
-    countdown to an idle (02417B84, keep). In `link_items.txt`.
+    countdown to an idle (02417B84, keep). Under water Link rises by `speed.y += lift` a tick
+    (changeSwimUpProc f_02421FBC): at 60 he came back up twice as fast after a drop into deep water
+    (session top's kindan room 11 test); *h@ on the add: he surfaces on the same tick as at 30. In
+    `link_items.txt`.
   - **Pots and stones** (TSUBO 453, STONE 454; agreed with session top, not in the queue;
     `config/US_v0/tick_rules/carried.txt`). Shared: **daObj::posMoveF_grade** (f_023121C4, also behind
     daObj::posMoveF_stream: the move of what is thrown, rolls or floats: pots, stones, barrels, bombs)

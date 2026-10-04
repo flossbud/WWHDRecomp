@@ -42,6 +42,11 @@
 # trail's, f_0240CDD0), colliders' centres (f_02018428) and his place before the move (posMove).
 02417B84    keep:r11    addi            link wait: +0x6918 - 1, the countdown to an idle
 0242F5E8    split@r10   add             link swim: the bob's phase (+0x691A) += a random step a tick
+# Link under water (changeSwimUpProc f_02421FBC, from the swim procedures while he is below the surface):
+# speed.y += the water's lift a tick, up to a cap. At 60 he came up twice as fast after a drop into deep
+# water (session top's kindan room 11 test: back at the surface 8 ticks early, then everything after
+# apart, the Morths' paths too).
+02422000    *h@f12      fadds           link swim: speed.y += the water's lift (0x100355C4) a tick
 # Link gliding with the Deku Leaf (procFanGlide f_02438E78, proc 0x93): the wind's push m3730 (approached
 # by cLib_addCalc, time-stepped) is added to his position by the glide itself (not posMove's adds): at 60
 # he drifted sideways twice as far (the leaf route: 861 against 349 units in 46 ticks) and landed
