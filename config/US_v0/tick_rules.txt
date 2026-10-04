@@ -158,6 +158,53 @@
 02506FC8    *h@f21      fmadds          CalcSubjectAngle: m388 += stick y * rate, the pitch (the telescope's)
 02506FE0    *h@f20      fmuls           CalcSubjectAngle: m384 = -stick x * rate, the yaw a call
 02506FEC    *h@f21      fmadds          CalcSubjectAngle: m388 += stick y * rate, the pitch
+# the Z-target camera (lockonCamera f_025052E8, its work area at r28, dCamera +0x37C, tagged 'LOCK';
+# session bottom): every approach in it ran twice a tick at 60 (a camera trial over a ZL lock-on on a
+# ChuChu: the eye's distance 281 against 241 four ticks in, the letterbox 84.9 against 68.6, the yaw
+# ahead by 2-5 degrees). k@ on each factor: the cushion m3B8 and the factors m3B4 and m3B0 (CusCus),
+# the centre's height (by m3B8), the centre offset globe m3A8 (by m3B4, m3B0, 0.05; R x 0.75 a tick
+# while the view is blocked), the view's yaw (by dVar17, every branch's factor) and latitude (0.05,
+# 0.1, m028, fVar5 x |cos V|: k@ on fVar5, exact where |cos| is 1), its radius (0.05) and fovy (m028),
+# the charge's latitude (by the bezier of its count); the charge's count and the blocked-view countdown
+# m388 count ticks
+02505974    whole       stw             lockonCamera: m388 = 60 - 1 (the blocked-view countdown, seen blocked)
+02505990    whole       stw             lockonCamera: m388 - 1 (the blocked-view countdown)
+02505A38    k@f12       fmadds          lockonCamera: m3B8 += (Cushion4Jump - m3B8) * CusCus
+02505A70    k@f12       fmadds          lockonCamera: m3B8 += (Cushion4Base - m3B8) * CusCus
+02505AC0    k@f6        fmadds          lockonCamera: m390.y += m3B8 * (y + height - m390.y) (blocked: +25)
+02505B00    k@f6        fmadds          lockonCamera: m390.y += m3B8 * (y + height - m390.y)
+02505B98    k@f10       fmadds          lockonCamera: m3B4 += (fVar21 - m3B4) * CusCus (a target)
+02505BAC    k@f8        fmadds          lockonCamera: m3B0 += (fVar2 - m3B0) * CusCus (a target)
+02505BD0    k@f1        bl 0200693c     lockonCamera: m3A8.U += (U' - U) * m3B4 (a target)
+02505C48    k@f10       fmadds          lockonCamera: m3B4 += (fVar21 - m3B4) * CusCus (none)
+02505C58    k@f8        fmadds          lockonCamera: m3B0 += (fVar2 - m3B0) * CusCus (none)
+02505C7C    k@f1        bl 0200693c     lockonCamera: m3A8.U += (U' - U) * m3B4 (none)
+02505CC0    d@f8        fmuls           lockonCamera: m3A8.R x 0.75 (the view blocked)
+02505CD4    k@f1        bl 0200693c     lockonCamera: m3A8.V += (V' - V) * 0.05 (the view blocked)
+02505D68    k@f13       fmadds          lockonCamera: m3A8.R += m3B0 * (R' - R)
+02505D7C    k@f1        bl 0200693c     lockonCamera: m3A8.V += (V' - V) * m3B4
+02505EFC    k@f1        bl 0200693c     lockonCamera: yaw += (U' + 15 - yaw) * 0.05 (the view blocked)
+02505F70    k@f1        bl 0200693c     lockonCamera: yaw += (U' - 15 - yaw) * 0.05 (the view blocked)
+025062D4    k@f1        bl 0200693c     lockonCamera: yaw += (U' - yaw) * dVar17 (its branches' factors)
+0250636C    k@f1        bl 0200693c     lockonCamera: latitude += (charge's - lat) * bezier(m380 / its time)
+02506394    late        stw             lockonCamera: m380 + 1 (the charge's ticks)
+025063A8    k@f24       fmadds          lockonCamera: R += (R' - R) * 0.05 (charging)
+0250640C    k@f8        fmadds          lockonCamera: mFovy += (fovy' - mFovy) * m028 (charging)
+0250647C    k@f1        bl 0200693c     lockonCamera: latitude -= (U x 0.7 + lat) * 0.1 (the view blocked)
+02506498    k@f24       fmadds          lockonCamera: R += (R' - R) * 0.05 (the view blocked)
+025064FC    k@f8        fmadds          lockonCamera: mFovy += (fovy' - mFovy) * m028 (the view blocked)
+02506548    k@f1        bl 0200693c     lockonCamera: latitude += (LockonLatitude - lat) * 0.05
+025065A0    k@f1        bl 0200693c     lockonCamera: latitude += (U' - lat) * fVar5 (then x |cos V|)
+02506648    k@f1        bl 0200693c     lockonCamera: latitude -= latitude * m028 (the boomerang's target)
+02506690    k@f1        bl 0200693c     lockonCamera: latitude += (LockonLatitude - lat) * m028
+02506798    k@f24       fmadds          lockonCamera: R += (R' - R) * 0.05
+025067FC    k@f8        fmadds          lockonCamera: mFovy += (LockonFovy - mFovy) * m028
+025068D8    k@f8        fmadds          lockonCamera: mFovy += (LockonFovy - mFovy) * m028
+# the letterbox (f_024FF8A0: dCamera +0x5FC, GC's mTrimSize: 0 to 90 when Z-targeting, by its mode
+# m600): it approaches its size by 0.25 a call, or 0
+024FF940    k@f31       fmadds          trim: size += (size' (+0x7A8) - size) * 0.25
+024FF984    k@f31       fmadds          trim: size += (size' (+0x7A4) - size) * 0.25
+024FF9C0    k@f31       fnmsubs         trim: size -= size * 0.25
 # the shield camera (f_02513E98: the shield up (ZR) or the sword out; its work area is tagged 'SHLD'):
 # on its first tick (m11C 0) N and the weight W (N(N+1)/2) come from how far it has to turn; then a
 # tick eye, angles and fovy approach by (N - m11C) / W and W loses N - m11C (late, as m11C: at 60 it

@@ -1139,6 +1139,15 @@ it in a window; D21 "Step 2"):**
     hookshot pulling Link to a target, swinging on the rope, the bait bag (ESA 221 not converted). The
     Ballad of Gales' cyclone (TORNADO 443: texture frames, spin angles, a timer, a fade) too: in the warp
     (an event, where converted processes don't step) it still runs once a tick, as at 30.
+  - **The Z-target camera ran its approaches twice a tick at 60, fixed (shared; regress.sh rerun)**:
+    lockonCamera (f_025052E8, work area tagged 'LOCK') had no rules. A ZL lock-on on a ChuChu spawned on
+    the Outset dock: four ticks in, the eye's distance 281 against 241, the letterbox (dCamera +0x5FC,
+    GC's mTrimSize, f_024FF8A0: 0 to 90 by 0.25 a call) 84.9 against 68.6, the fovy and the yaw ahead.
+    36 rules (tick_rules.txt): k@ on every approach's factor (its cushions, the centre offset globe, the
+    view's yaw, latitude, radius, fovy, the charge's latitude), d@ on the blocked view's R x 0.75, the
+    charge's count late and the blocked-view countdown whole. After: the letterbox equal, the distance
+    within 1% (241/245, 274/278, ... 392/392), fovy and pitch within 0.6 degrees, the yaw ~0.9 degrees
+    ahead (the route's half-tick input). The follow camera's distance after a lock ends is ~2% shorter.
   - **First-person views turned twice as fast at 60, fixed (shared; regress.sh rerun)**:
     dCamera_c::CalcSubjectAngle (f_02506964), which Link's setBodyAngleToCamera (f_02416E90) calls on
     each of his steps, adds the right stick's y times a rate to the view's pitch fraction m388 and sets
@@ -1171,11 +1180,19 @@ it in a window; D21 "Step 2"):**
     (kindan room 11 from session top; the items route), aiming the grappling hook and the boomerang while
     walking (items), his items (arrows, boomerang, hookshot, grappling hook), lifting and carrying a pot
     (carry: a pot spawned with Outset's own small pots' params, 707fff00; one of param 0 doesn't lift).
-    Not driven yet: climbing vines, pushing and pulling blocks, hiding in a barrel, swinging on the rope
-    (its phases and pump are ruled from the decomp: unruled, the swing ran at twice its frequency; a stake,
-    KUI 250, spawned above the Outset dock let the hook be thrown at it with ZL held, but the hook came
-    back instead of wrapping), the hookshot's pull, the boomerang's lock-ons. Everywhere Link's camera-relative heading is ~1.5 degrees off 30's (the camera's
-    control angle, below), so long routes drift a little (a wall's corner reached later, then apart).
+    Swinging on the grappling hook's rope: a stake (KUI 250, `ffff0400` like the stages' own) spawned
+    over the sea off the Outset dock on Link's first-person sight line
+    (`WWHD_DEBUG_SPAWN=950:250,ffff0400,-201481,751,311511`; inputs 1000 Y 3, 1020 RUP 12, 1070 Y 3,
+    1130 LUP 70; the scratch script bin/rswing.sh in session bottom's worker dir): the hook wraps, Link
+    is pulled under it (proc 0x77) and swings (0x78) with the stick's pump, then the swing dies down. The
+    swing's phases add 1 + a little a tick in four copies the compiler made (by the quadrants' cases):
+    with all four and the pump ruled the phase stays within 0.04 rad of 30's over 200 ticks (it ran 1.4x
+    to 2x before). The boomerang's lock-ons: three ChuChus (CC 206) spawned on the dock ahead, Y held, the
+    view swept across them with the right stick, Y released: the same lock, throw and return at 60 (the
+    lock markers' pulse is held to whole ticks). Not driven yet: climbing vines, pushing and pulling
+    blocks, hiding in a barrel, the hookshot's pull. Everywhere Link's camera-relative heading is ~1.5
+    degrees off 30's (the camera's control angle, below), so long routes drift a little (a wall's corner
+    reached later, then apart).
   - **Rope bridges (BRIDGE 89), ruled, not converted** (`earth.txt`): the most placed unconverted type that
     moves (a census of every stage's placements against the defaults: GRASS, tags, switches, static
     models come first; then bridges 32 in 7 stages, fires 424, WARPLIGHT 106, magma 434, Obj_Barrel2 457,

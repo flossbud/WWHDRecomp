@@ -78,11 +78,16 @@
 # swing is the amplitude m34D4 times the sine of a phase (m35A8 x m35A4, the rope's own frequency; m35AC
 # the side swing's), and the phases add 1 + a little a tick: at 60 he swung twice as fast. The phases'
 # adds are h of themselves, and so is the pump the stick gives the amplitude a tick (m34D4 += 0x40
-# |cos|). From the decomp (no swing on a route yet).
+# |cos|). The compiler made four copies of the phases' adds (by the quadrants' cases). Checked by
+# swinging from a stake (KUI 250) spawned off the Outset dock (bin/rswing.sh's setup, in the handoff).
 024356D8    *h@f9       fadds           link rope swing: m35A8 (+0x6A00) += 1, the swing's phase (a special rope)
 024356E0    *h@f9       fadds           link rope swing: m35AC (+0x6A04) += 1, the side swing's phase
 024357D8    *h@f9       fadds           link rope swing: m35A8 += 1 + f, the swing's phase
 024357EC    *h@f11      fadds           link rope swing: m35AC += 1 + f, the side swing's phase
+0243584C    *h@f9       fadds           link rope swing: m35A8 += 1 + f (the compiler's third copy, by quadrant)
+02435868    *h@f11      fadds           link rope swing: m35AC += 1 + f (third copy)
+024358A0    *h@f9       fadds           link rope swing: m35A8 += 1 + f (fourth copy)
+024358A8    *h@f11      fadds           link rope swing: m35AC += 1 + f (fourth copy)
 02435C14    *h@f7       fmadds          link rope swing: m34D4 (+0x691A) += 0x40 |cos|, the stick's pump a tick
 #
 # ---- arrows (ARROW, process 472, d_a_arrow.cpp; execute f_02052DB8). WWHD's fields are the GameCube's +
@@ -141,6 +146,9 @@
 020CF288    *h@f11      fmadds          boomerang procMove: current.pos.x += speedF cos(x) sin(y)
 020CF2A0    *h@f12      fnmsubs         boomerang procMove: current.pos.y -= speedF sin(x)
 020CF2C0    *h@f10      fmadds          boomerang procMove: current.pos.z += speedF cos(x) cos(y)
+# the lock-on markers (daBoomerang_sightPacket_c::play f_020CC2EC, from execute): each locked target's
+# marker pulses by a u8 frame (+1 a call, 0 at 26): at 60 twice as fast; held to whole ticks
+020CC31C    whole       stb             boomerang sight: mFrameArr[n] + 1 (the lock markers' pulse)
 #
 # ---- the hookshot (HOOKSHOT, process 169, d_a_hookshot.cpp; execute f_02176D98): its tip's step out
 # (procShot f_02178DDC: current.pos + mMoveVec x 15, mMoveVec 7 long: 105 a tick), back (procReturn
