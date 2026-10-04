@@ -1289,6 +1289,35 @@ it in a window; D21 "Step 2"):**
     `f_025580FC` in settingTevStruct, up to 20 when an actor's light changes) counts steps, so a
     converted actor's light fades in twice as fast; a background helper (`f_024F2514`, d_bg_w.cpp's
     "pupper_pos") writes an actor's x/z a step (seen on Ganondorf and Zelda; not looked into).
+- **Session qa** (from 2026-10-04: the owner's bugs, B1... on the progress page; `publish.sh bug list`):
+  - **Doors (B1, B3, B4), fixed (shared: `sixty.cpp`; regress.sh rerun)**: the owner's Link turning left
+    into the wall at a Dragon Roost Cavern door, turning round and walking off a ledge at a Tower of the
+    Gods door, and doors that wouldn't open again. One cause. DOOR10 (300) is converted, and while Link's
+    action is wait or move a converted process steps in an event too. The door's demo action ends its
+    event with `dComIfGp_event_reset()` (bit 8 of dEvt_control_c's event flags, gameInfo +0x52B8) and goes
+    back to its wait action; the event's control clears the partners' event commands on the next whole
+    tick (its check, in the event manager's runProc). At 30 nothing runs between. At 60 the door's half
+    step ran its wait action with its command (actor +0xF8) still 3, took that for a new door event and
+    went back into its demo action (+0x4EC = 3) for good: it could not be opened again, and, executing
+    whenever Link is in one of its rooms, it answered every later door event of that room (its own
+    slide, smoke and `setGoal`, the goal Link's event walk heads for, computed along its own direction):
+    Link walked off toward the stuck door's side. Now no converted process steps on the half tick after
+    an event's end is asked (`EventEnding`, as after one is ordered), and
+    `dEvent_manager_c::getIsAddvance` (f_025447C8, a new override) reads 0 on a converted half step: the
+    manager advances cuts on whole ticks, so a half step saw the cut as new again and ran its init twice
+    (the door's smoke: a second emitter, its shake never counted; `setGoal` again from where Link had
+    walked to). `WWHD_60FPS_EVENTEND=0` turns both off. Tests: routes `back` (through the door behind
+    Link and back again from the other side) and `door2` (then a second door spawned ahead) with
+    `WWHD_DEBUG_STAGE=920:M_NewD2,5,14,-1` (Dragon Roost Cavern's rat room, by its lower door) and
+    `WWHD_STATE_TRACK=168,300`: before, at 60 Link stood at the door on the way back and the door's
+    +0x4EC ended 3; now he goes back through as at 30 (5 units apart), the door ends 1, its smoke fields
+    (+0x420, +0x421) as at 30, and the first door's state no longer changes during the second door's
+    event. The event still ends ~2 ticks sooner at 60 (cuts end on the half tick they finish in). Session
+    top takes the half tick a converted process loses at each event's start and end (it skips its half
+    step there): only processes not part of the event may finish their tick.
+    A door's rooms are in its x angle (front room `& 0x3F`, back room `>> 6 & 0x3F`; the stage file's
+    TGDR chunk: M_NewD2's rat room 14 has two doors to the outside, room 3). `WWHD_DEBUG_PLACE` stops at
+    the first wall on the way (the ground check's line from the old position): place Link within a room.
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
   CPU, vsyncs missed; `tools/sixty/frames.py` summarises), `WWHD_PROFILE` (`tools/profile_report.py`
   on the worker with the same build). On the desktop, `~/wwhd-test` is ours to deploy to and run

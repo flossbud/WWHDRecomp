@@ -1,0 +1,18 @@
+# Route: back through the door behind Link, twice (session qa, the owner's door bugs): after a stage
+# warp to a spawn point just inside a door (WWHD_DEBUG_STAGE=920:..., e.g. M_NewD2,5,14,-1: Dragon Roost
+# Cavern's rat room, by its lower door to the outside), turn round, walk to the door, open it (A) and let
+# the event walk Link through (over by ~f1111); then turn round again and go back through it from the
+# other side (a door that can't be opened again leaves Link standing at it).
+# FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start; gameplay from ~f870 (the warp at f920)
+1000 LDOWN 30  # turn round and walk to the door
+1035 A 3       # Open
+1045 A 3
+1055 A 3
+1125 LDOWN 35  # through; turn round and walk back to it
+1165 A 3       # Open, from the other side
+1175 A 3
+1185 A 3

@@ -181,13 +181,30 @@ namespace
 	{
 		return (sint8)rd8(0x1046F0B0u + 0x5290u) > 0;
 	}
+	// An event whose end was asked this tick (dComIfGp_event_reset: bit 8 of dEvt_control_c's event flags,
+	// g_dComIfG_gameInfo +0x52B8, as DOOR10's demo action sets it, f_02127408): the control ends it on the
+	// next whole tick (its check: the partners' event commands cleared, the event's state NONE). At 30 no
+	// actor runs between its reset and that. A half tick between ran the actor with its command still set:
+	// a converted door, back in its wait action, took the command for a new door event and stayed in its
+	// demo action for good (the owner's doors that wouldn't open again; and a door stuck there answered the
+	// next door's event too, setting Link's goal along its own direction: Link turning away at a door).
+	// WWHD_60FPS_EVENTEND=0 (a probe): as before, and getIsAddvance (f_025447C8, below) as the game's.
+	bool EventEndRules()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_EVENTEND"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	bool EventEnding()
+	{
+		return EventEndRules() && (rd16(0x1046F0B0u + 0x52B8u) & 8) != 0;
+	}
 	std::unordered_map<uint32, bool> s_stepping;    // process -> stepping at 60 this tick
 	std::unordered_map<uint32, bool> s_eventAtWhole;   // process -> an event ran at its whole step
 	// Converted processes step at 60 in an event too while Link's action is one checked in events
 	// (D21): his procedure's index (daPy_lk_c +0x65F0, the function at +0x65F8) in this list: 4 wait,
 	// 6 move (an entrance's walk out matches the 30-tick run, the camera too). Others (the Wind Waker's
 	// 0x9A-0x9C: its beat counts ticks) hold the event to whole ticks as before; so does the half tick
-	// after an event starts or is ordered. WWHD_60FPS_EVENTS=0: no stepping in events at all.
+	// after an event starts, is ordered or is asked to end. WWHD_60FPS_EVENTS=0: no stepping in events at all.
 	uint32 s_link = 0;                              // Link (168) as he last executed
 	bool StepInEvents()
 	{
@@ -197,11 +214,11 @@ namespace
 		const uint32 action = rd32(s_link + 0x65F0);
 		return action == 4 || action == 6 || action == 0x9A;
 	}
-	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0;
+	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0;
 	void StepStats()
 	{
-		cemuLog_log(LogType::Force, "wwhd sixty: {} half steps of converted processes; {} stopped by a running event, {} by an ordered one",
-			s_halfSteps, s_eventStops, s_orderStops);
+		cemuLog_log(LogType::Force, "wwhd sixty: {} half steps of converted processes; {} stopped by a running event, {} by an ordered one, {} by an ending one",
+			s_halfSteps, s_eventStops, s_orderStops, s_endStops);
 	}
 
 	// WWHD_STATE_TRACK=n,m,...: with the probe, these processes' bytes after every whole tick and, at
@@ -1581,9 +1598,11 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 			(void)once;
 			const bool running = EventRunning() && !(s_eventAtWhole[proc] && StepInEvents());
 			const bool ordered = !running && EventOrdered();
+			const bool ending = !running && !ordered && EventEnding();
 			s_eventStops += running;
 			s_orderStops += ordered;
-			if (running || ordered)
+			s_endStops += ending;
+			if (running || ordered || ending)
 				s_stepping[proc] = false;
 			else
 				s_halfSteps++;
@@ -1610,6 +1629,21 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	static const bool attached = [] { const char* e = getenv("WWHD_60FPS_ATTACHED"); return !(e && atoi(e) == 0); }();
 	if (g_rtHalfTick && attached && rd16(proc + 0x08) == 168 && Rollback())
 		NoteHeld(proc);
+}
+
+// dEvent_manager_c::getIsAddvance (f_025447C8: the staff's mAdvance, set while its cut is in its first
+// tick; DOOR10's demoProc, f_021268C8, asks it before a cut's init, as in the decomp). The event manager
+// advances cuts on whole ticks, so on a half tick a converted actor saw the cut as new again and ran its
+// init twice (a door's smoke: a second emitter and its shake count reset; its goal for Link set again
+// from where he had walked to). A half step sees no new cut: the whole tick's step did the init.
+void f_025447C8(PPCInterpreter_t* __restrict ctx)
+{
+	if (g_rtHalfTick && s_converting > 0 && EventEndRules())
+	{
+		GPR(3) = 0;
+		return;
+	}
+	[[clang::musttail]] return orig_f_025447C8(ctx);
 }
 
 // The play scene's plants (its execute, f_025AF8A0, calls each): the grass, trees, bushes (dWood) and
