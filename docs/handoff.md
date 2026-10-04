@@ -929,8 +929,10 @@ it in a window; D21 "Step 2"):**
     the moths around their lanterns: 10.00 against 9.96 units a tick) and Tetra (NPC_ZL1 426: idle).
     Not converted: searchlights (OBJ_SEARCH 66) and the pirate ship (57): still on this save (nothing
     to gain); the pirate flag (173) and the sails (SAIL 172): cloths (see the Stalfos' hair: a one-pass
-    solver can't take half steps); rats (NZ 198: their code isn't decompiled, two of three ran 44-69%
-    farther at 60; their tails are chains). Helmaroc King (BDK 238, M2tower layer 3): M2tower and Mjtower
+    solver can't take half steps). Rats (NZ 198, not decompiled; here and in the tower) are converted
+    since: they run 20 a tick at both rates; their timers (keep) and their tail (a one-pass chain: its
+    call on whole ticks) were what made them run 44-69% farther; they still differ by the random waits
+    they draw. Helmaroc King (BDK 238, M2tower layer 3): M2tower and Mjtower
     load to a black screen through WWHD_DEBUG_STAGE (their PLYR points exist; any point and layer).
     Phantom Ganon (FGANON 241, GanonC/J/M): absent on the finished save even with WWHD_DEBUG_BOSS=1, and a
     WWHD_DEBUG_SPAWN of it is created and gone; its code's many `+= 1` sites at +0x5BC are mode steps.
@@ -948,7 +950,7 @@ it in a window; D21 "Step 2"):**
     no rules, matching: statues (Obj_Try 458, 4 units higher at rest), floor switches (Obj_Swflat 29),
     its water (Obj_Tide 39), Obj_Hha 136, Obj_Htetu1 137, stakes (KUI 250), Obj_Hcbh 150. Not converted:
     the light bridges (427, 428: their animation frames drift from 30's), Hys (450), the hot floor
-    (231: a Beamos's scorch, its path doubled), rats (198: see the fortress).
+    (231: a Beamos's scorch, its path doubled).
   - **`fall@fREG`** (new step rule, shared: generate.py, sixty.cpp's `g_rtActor`, sixty_step.cpp's
     `rt_step_fall`): many executes inline fopAcM_calcSpeed's `speed.y += gravity` instead of calling
     it (a scan for `lfs fG,0x374(rA)` ... `fadds` ... `stfs 0x340(rA)` found 62 sites in ~25 types),
@@ -981,7 +983,7 @@ it in a window; D21 "Step 2"):**
   Armos 202/203, Molgera 217/219, the Earth Temple's Stalfos 190, Poes 212, Floormasters 119 and
   Jalhalla 211, the Forsaken Fortress's anchors 431, barrels 456, ropes 447 and Tetra 426, the
   Tower of the Gods' Beamos 233 and beams 232, lifts 40, balance lifts 111, statues 458, floor
-  switches 29, its water 39, 136, 137, stakes 250, 150 and Gohdan 240 (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
+  switches 29, its water 39, 136, 137, stakes 250, 150, Gohdan 240 and rats 198 (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
   373, 352, 121, 445, 309 and Outset's 118, 68, 73, 200, 255, 71, 67, 335, 319, 320, 331, 461, 45
   (session top; `kConvertedByDefault` has a line per session),
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,

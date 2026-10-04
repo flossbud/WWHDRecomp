@@ -19,3 +19,9 @@
 #
 # ---- NPC_ZL1 (426: Tetra in M2ganon; f_02304268)
 023042BC    keep:r12    addi            zl1: a count (+0x95C) + 1, then compared (on whole ticks)
+#
+# ---- NZ (198: rats, in majroom and the Tower of the Gods; execute f_0230BEF4; d_a_nz.cpp is not decompiled).
+# They run 20 a tick at both rates; their waits counted half ticks too (they ran 44-69% farther at 60).
+0230C100    keep:r6     addi            nz: its timers (+0x3F0...) - 1, on whole ticks
+# its tail (tail_control f_0230A3C0): a chain solved in one pass, as the Stalfos' hair: its 30 Hz step
+0230BF9C    whole       bl 0230a3c0     nz: tail_control, on whole ticks
