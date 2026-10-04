@@ -86,14 +86,15 @@ namespace
 	// fireflies (NH), lily pads (LEAF_LIFT), baba buds (JBO), trees (Lwood), Obj_Ojtree, WARPFOUT, the Deku
 	// Tree (NPC_DE1), KYTAG00, TAG_HINT, BG and Tag_Attention (KUI is in session bottom's line); the Forbidden Woods' vines (SK, SK2),
 	// fences (SAKU), acorn leaves (ACORN_LEAF), warp pots (OBJ_WARPT), KDDOOR, leaf piles (Obj_Leaves),
-	// Obj_Mtest, ANDSW0 and the propeller switch's 430 (session top).
+	// Obj_Mtest, ANDSW0, the propeller switch's 430, ceiling tentacles (SHAND), small vines (SSK), Mothulas
+	// (GM) and Kalle Demos (BMD, BMDHAND, BMDFOOT) (session top).
 	// One line each, so the parallel sessions' additions never meet (docs/handoff.md "Two parallel
 	// sessions"); keep a comma after each line's last.
 	// WWHD_60FPS_CONVERT= (empty) converts none.
 	constexpr const char* kConvertedByDefault =
 		"476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,"
 		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,"   // session bottom
-		"123,220,353,170,368,374,364,373,352,121,445,309,118,68,73,200,255,71,67,335,319,320,331,461,45,63,179,230,269,164,391,176,294,187,313,120,213,407,83,105,116,383,410,439,470,101,102,398,297,65,304,144,74,307,430";   // session top
+		"123,220,353,170,368,374,364,373,352,121,445,309,118,68,73,200,255,71,67,335,319,320,331,461,45,63,179,230,269,164,391,176,294,187,313,120,213,407,83,105,116,383,410,439,470,101,102,398,297,65,304,144,74,307,430,99,103,204,235,236,237";   // session top
 	const char* ConvertList()
 	{
 		const char* e = getenv("WWHD_60FPS_CONVERT");

@@ -239,7 +239,13 @@
     "297": "Acorn leaf",
     "65": "Warp pot",
     "304": "Forbidden Woods door (KDDOOR)",
-    "144": "Leaf pile"
+    "144": "Leaf pile",
+    "99": "Ceiling tentacle (Forbidden Woods)",
+    "103": "Small vine (SSK)",
+    "204": "Mothula",
+    "235": "Kalle Demos (core)",
+    "236": "Kalle Demos (ceiling tentacles)",
+    "237": "Kalle Demos (floor tentacles)"
   },
   "queue_note": "Two sessions: 'top' takes items from the top down, 'bottom' from the bottom up. Claim an item before starting it (tools/progress/publish.sh claim ID); stop where the other session's claims begin. Stage names under 'where' past Windfall and Outset are unverified guesses: confirm with tools/sixty/tests/room_list.sh.",
   "queue": [

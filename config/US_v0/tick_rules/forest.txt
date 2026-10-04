@@ -41,21 +41,105 @@
 02488834    late        sth             sk dousa_move: m2BE (+0x3DA) + 1, after the joints read it
 # Vines (SK2, process 102, "Turu2"/"Turu3", d_a_sk2.cpp): three counts; the joints' sines of +0x3E8, taken before it counts.
 02489408    whole       sth             sk2: a count (+0x3D6) + 1
-0248942C    whole       sth             sk2: a countdown (+0x3D8) - 1
+02489424    keep:r12    addi            sk2: a countdown (+0x3D8) - 1, its extsh. decides at once (rule_audit.py)
 0248959C    late        sth             sk2: the joints' count (+0x3E8) + 1, after the joints read it
+# Small vines (SSK, process 103, "s_turu", 56 in room 7; in their swaying state): their count, which the
+# joints' sines read after it counts, the first joint from the register (keep), the rest from memory.
+0248E098    keep:r5     addi            ssk: the joints' count (+0x40C) + 1, the first joint's sine at once
 # Fences (SAKU, process 398, "Ksaku"/"Dsaku"): a tick count.
 0246538C    whole       stw             saku: a count (+0x1004) + 1
 # Acorn leaves (ACORN_LEAF, process 297, "VigaH", d_a_acorn_leaf.cpp): unk_41C counts to 69 (then 70:
 # the leaf's animation starts), compared at once: keep.
 02047CC8    keep:r10    addi            acorn_leaf _execute: unk_41C (+0x5B4) + 1, then == 69
+# Ceiling tentacles (SHAND 99, d_a_shand.cpp, room 12; the general tentacle, as Kalle Demos's BMDHAND): its
+# tick count (the wiggle's sines), timers, and the chain's per-tick pull and wiggle, h of themselves (see BMDHAND
+# below), in both copies of the loop.
+0246FC14    whole       sth             shand execute: mExecuteCount (+0x3D0) + 1
+0246FC28    whole       sthx            shand execute: field_2BC[i] (+0x3D8) - 1
+0246FC44    whole       sth             shand execute: field_2C4 (+0x3E0) - 1
+0246FF80    vec@r3      bl 0200fcd8     shand chain: the pull (0, field_2F8, field_2FC), h of itself
+0246FFB8    *h:f26      lfs             shand chain: field_300, the wiggle's size, h of itself
+02470648    vec@r3      bl 0200fcd8     shand chain (copy 2): the pull
+024706FC    *h:f12      lfs             shand chain (copy 2): field_300 (loaded in the loop)
 # Mothulas (GM, process 204, "gmos"; their other rules are in ../tick_rules.txt, the "fm" ones): a count
 # + 1 then compared with its limit (+0x41A) at once (past it, state 70): keep. With it the trial is clean
 # and a Mothula in room 9 (walk route) flies 5669 units against 30's 5750 (its dashes are random).
 021522E4    keep:r7     addi            gm: a count (+0x410) + 1, then > its limit (+0x41A) goes to state 70
 # Not converted yet: the hanging flower platforms (KITA 97: their sway counter at 0219E040 and 0219FCD4
 # is whole, but floating in water they drift and turn a step a tick, not ruled), the hanging house
-# (KOKIIE 98: m298 + 1 at 021A5838; its fall when cut, speed.y by hand, not ruled), the ceiling
-# tentacles (SHAND 99: mExecuteCount + 1 at 0246FC14; each joint adds a pull and a wiggle to its
-# direction a tick), Octoroks (OQ 227: their bob's phase + 0x800 a tick, 023C11AC spliti; their
+# (KOKIIE 98: m298 + 1 at 021A5838; its fall when cut, speed.y by hand, not ruled), Octoroks (OQ 227: their bob's phase + 0x800 a tick, 023C11AC spliti; their
 # attacks untested), Morths (205: tick_rules.txt has their rules; the trial has f_024F2514, d_bg_w's
 # helper, moving them 1.63 times as far, and their hops are random).
+#
+# ---- Kalle Demos (stage kinBOSS: BMD 235, the core; BMDFOOT 237, the floor tentacles; BMDHAND 236, the
+# ceiling tentacles; d_a_bmd.cpp, d_a_bmdfoot.cpp, d_a_bmdhand.cpp), fought after a warp to kinBOSS,0,0,-1
+# with WWHD_DEBUG_BOSS=1 (no intro) and the walk route.
+# The core (execute f_020AEBCC): its tick count m2FE, its timers (m308[], m310, m314, m312, m334), a phase
+# (m918 += 6000 a tick), two phases of the thrown core, its moves: pos += speed (a vector add), the thrown
+# core's m924 += m930 (one vector add per state) with m930.y's gravity once a tick after it (late), and
+# move()'s explicit step: pos += the forward move and speed.y, then speed.y += gravity (late); a height a tick.
+020AEC74    whole       sth             bmd execute: m2FE (+0x420) + 1
+020AEC88    whole       sthx            bmd execute: m308[i] (+0x42A) - 1
+020AECA8    whole       sth             bmd execute: m310 (+0x432) - 1
+020AECBC    whole       sth             bmd execute: m314 (+0x436) - 1
+020AECD0    whole       sth             bmd execute: m312 (+0x434) - 1
+020AECE0    whole       sth             bmd execute: m334 (+0x454) - 1
+020AFAE4    split@r0    add             bmd: m918 (+0xA38) += 6000 a tick
+020AF2D0    spliti      addi            bmd: a phase (+0xA5C) + 0x800 a tick
+020AF2D8    spliti      addi            bmd: a phase (+0xA5E) + 0x500 a tick
+020AE950    vec@r4      bl 028e8d88     bmd: pos += speed
+020AF2E8    vec@r4      bl 028e8d88     bmd: m924 (+0xA44) += m930 (+0xA50)
+020AF540    vec@r4      bl 028e8d88     bmd: the same (another state)
+020AF634    vec@r4      bl 028e8d88     bmd: the same
+020AF76C    vec@r4      bl 028e8d88     bmd: the same
+020AF8C4    vec@r4      bl 028e8d88     bmd: the same
+020AF93C    vec@r4      bl 028e8d88     bmd: the same
+020AF30C    late        stfs            bmd: m930.y (+0xA54) -= gravity, once a tick (after the add)
+020AFDB8    *h@f9       fadds           bmd: a height (+0x4 of r21) += a constant a tick
+020B2C7C    *h@f6       fadds           bmd move: pos.x += the forward move
+020B2C98    *h@f8       fadds           bmd move: pos.z += the forward move
+020B2C90    *h@f10      fadds           bmd move: pos.y += speed.y
+020B2CA8    late        stfs            bmd move: speed.y += gravity, once a tick (explicit: after the move)
+# The floor tentacles (BMDFOOT 237, execute f_020B5DC4): a tick count, their timers, a phase, their state
+# counts (+0x3D8, at each state's end), the grab's offset (+0xDE0 += a vector a tick, +0xDF4 += a step).
+020B5E54    whole       sth             bmdfoot: a count (+0x3D4) + 1
+020B5E68    whole       sthx            bmdfoot: timers (+0x3DC) - 1
+020B62C8    spliti      addi            bmdfoot: a phase (+0x508) + 0x200 a tick
+020B647C    whole       sth             bmdfoot: a state count (+0x3D8) + 1
+020B64C8    whole       sth             bmdfoot: the same
+020B6568    whole       sth             bmdfoot: the same
+020B6630    whole       sth             bmdfoot: the same
+020B6A08    whole       sth             bmdfoot: the same
+020B6A48    whole       sth             bmdfoot: the same
+020B6B90    whole       sth             bmdfoot: the same
+020B6C20    whole       sth             bmdfoot: the same
+020B6D78    whole       sth             bmdfoot: the same
+020B6E9C    whole       sth             bmdfoot: the same
+020B7008    whole       sth             bmdfoot: the same
+020B727C    whole       sth             bmdfoot: the same
+020B5C3C    vec@r4      bl 028e8d88     bmdfoot: +0xDE0 += a vector a tick
+020B5C48    *h@f9       fadds           bmdfoot: +0xDF4 += a step a tick
+# The ceiling tentacles (BMDHAND 236, execute f_020B8D9C; the general tentacle's code, as SHAND's): a tick
+# count m2B8 (the joints' wiggle is sines of it), the timers; and the chain: each tick every joint's
+# direction gets a pull (local_ac: (0, m314, m318) rotated, a vector by MtxPosition) and a wiggle (m31C x a
+# sine) added before the joint is put back at its length: both h of themselves at 60 (vec@ on the pull's
+# MtxPosition, *h on m31C's load), in each of the seven copies of the loop (control1, start_control1,
+# cut_control and their inlined copies). Not ruled: m304, the hand's 3-tick close (not found at +0x420).
+020B8E5C    whole       sth             bmdhand execute: m2B8 (+0x3D4) + 1, the wiggle's count
+020B8E70    whole       sthx            bmdhand execute: m2C0[i] (+0x3DC) - 1
+020B8E90    whole       sth             bmdhand execute: m2C8 (+0x3E4) - 1
+020B8EA4    whole       sth             bmdhand execute: m2CA (+0x3E6) - 1
+020B897C    vec@r3      bl 0200fcd8     bmdhand chain: the pull (0, m314, m318), h of itself
+020B8A74    *h:f0       lfs             bmdhand chain: m31C, the wiggle's size, h of itself
+020B924C    vec@r3      bl 0200fcd8     bmdhand chain (copy 2): the pull
+020B928C    *h:f26      lfs             bmdhand chain (copy 2): m31C
+020B9448    vec@r3      bl 0200fcd8     bmdhand chain (copy 3): the pull
+020B9488    *h:f26      lfs             bmdhand chain (copy 3): m31C
+020B959C    vec@r3      bl 0200fcd8     bmdhand chain (copy 4): the pull
+020B95DC    *h:f26      lfs             bmdhand chain (copy 4): m31C
+020B96DC    vec@r3      bl 0200fcd8     bmdhand chain (copy 5): the pull
+020B971C    *h:f26      lfs             bmdhand chain (copy 5): m31C
+020B98A8    vec@r3      bl 0200fcd8     bmdhand chain (copy 6): the pull
+020B98E8    *h:f26      lfs             bmdhand chain (copy 6): m31C
+020BA51C    vec@r3      bl 0200fcd8     bmdhand chain (copy 7): the pull
+020BA558    *h:f29      lfs             bmdhand chain (copy 7): m31C

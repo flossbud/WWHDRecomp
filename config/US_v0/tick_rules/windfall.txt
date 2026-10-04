@@ -12,7 +12,7 @@
 0233E41C    keep:r9     addi            ferris rot_mng (states 2, 6): mRotTimer (+0x1A68) + 1, then > 20 ends the state
 0233E4BC    whole       sth             ferris rot_mng (states 3-9): mRotSpeed - 1
 0233E4CC    whole       sth             ferris rot_mng (states 3-9): mRotTimer + 1
-0233E60C    whole       sth             ferris rot_mng (state 1): mRotSpeed + 1 every 4 ticks
+0233E604    keep:r10    addi            ferris rot_mng (state 1): mRotSpeed + 1 every 4 ticks, then > 67 (keep: rule_audit.py)
 0233E264    spliti      addi            ferris angle_mng: mGondolaWaveTimer (+0x1A78) += 500
 #
 # ---- the flags (MAJUU_FLAG, process 174, d_a_majuu_flag.cpp): ruled in ganon.txt (session bottom, for

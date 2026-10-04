@@ -29,7 +29,7 @@
 # wind-pushed bomb moves by daObj::posMoveF_grade, which has no time step yet.
 020C6CFC    keep:r11    addi            bomb checkExplodeTimer: mRestTime (+0xA7C) - 1, then 0 explodes
 020C705C    late        sth             bomb posMoveF: mNoGravityTime (+0xA80) - 1 (checked at entry)
-020C7638    whole       sth             bomb (f_020C74A0): field_0x6FE (+0xA7E) - 1, the collider's mass time
+020C7638    whole       sth             bomb (f_020C74A0): field_0x6FE (+0xA7E) - 1, the collider's mass time (rule_audit.py's 020C764C reads an r0 reloaded before it)
 020C4BD0    late        stw             bomb set_real_shadow_flag: field_0x7C8 (+0xB4C) - 1 (checked first)
 020C5040    whole       stw             bomb execute: field_0x784 (+0xB08) + 1 while field_0x782
 020C6E9C    k@f13       fmadds          bomb water_tention: pos.y += (surface - pos.y) x 0.8 or 0.2, an approach

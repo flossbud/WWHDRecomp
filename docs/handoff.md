@@ -812,11 +812,27 @@ it in a window; D21 "Step 2"):**
       counts: `late`; `whole` had them a tick ahead), fences SAKU 398, acorn leaves ACORN_LEAF 297 (`keep`:
       counts to 69, compared at once), and with no rules warp pots OBJ_WARPT 65, KDDOOR 304, leaf piles
       Obj_Leaves 144, Obj_Mtest 74, ANDSW0 307, 430.
+    - then: ceiling tentacles SHAND 99 and small vines SSK 103 (below), Mothulas GM 204 (one more count,
+      `keep`: the trial clean, 5669 units flown against 30's 5750 in room 9 on the walk route; its dashes
+      are random) and Kalle Demos (kinBOSS, `WWHD_DEBUG_BOSS=1`, walk route): the core BMD 235 (timers,
+      phases, `pos += speed` and the thrown core's `m924 += m930` by `vec@`, its move's explicit gravity
+      `late`; 14 units from 30's path, was 119), the ceiling tentacles BMDHAND 236 (20; 7-23 units over
+      ~5000-unit paths, were 72-190 and 7% longer) and the floor tentacles BMDFOOT 237 (8; they ride the
+      core: 5-24 units apart, paths 5-10% shorter as the core's 5%).
+    The general tentacle (SHAND, BMDHAND: "汎用触手") is a one-pass chain: every joint is put back at its
+    length from the joint before's new place, its direction the old one plus a pull (a rotated vector) and
+    a wiggle (sines of a tick count) added each tick. Both added terms h of themselves (`vec@r3` on the
+    pull's MtxPosition, the new `*h:` on the wiggle size's load, in each copy of the loop: SHAND 2,
+    BMDHAND 7) brought SHAND within 0.4 units of the 30-tick run. (Session bottom found Verlet chains,
+    where a move crosses one segment a step, can't be half-stepped: they keep those updates `whole`.)
+    Vines' counts: SK's joints read the count before it counts (`late`), SSK's first joint takes it from
+    the register right after (`keep`), SK2's countdown decides by its `extsh.` (`keep`):
+    `tools/sixty/rule_audit.py` found that one and Windfall's ferris speed step (`keep` now).
     Not converted (forest.txt has the sites found): hanging flower platforms KITA 97 (floating in water
-    they drift and turn a step a tick), the hanging house KOKIIE 98 (its fall), ceiling tentacles SHAND 99
-    (each joint adds a pull and a wiggle a tick), SSK 103 (joints a tick ahead as SK's were: `late` on its
-    count, +0x40C), Octoroks OQ 227 (the bob's phase `spliti` at 023C11AC; attacks untested), torches,
-    pots. Process 204 is a Mothula (GM, "gmos"), not a Floormaster: corrected in tick_rules.txt.
+    they drift and turn a step a tick), the hanging house KOKIIE 98 (its fall), Octoroks OQ 227 (the
+    bob's phase `spliti` at 023C11AC; attacks untested), Morths 205 (random hops; a background helper
+    moves them 1.63 times as far), torches, pots. Process 204 is a Mothula (GM, "gmos"), not a
+    Floormaster: corrected in tick_rules.txt.
   - **Two 60 fps crashes in the Forbidden Woods, fixed (session top; shared, `sixty.cpp` `LiveStore`)**: at
     every warp there with Link converted (the defaults). Both came from half ticks putting back or hiding
     words in .data/.bss that head lists whose nodes are on the heap (which a half tick never puts back):
