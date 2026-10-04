@@ -281,6 +281,14 @@
 02511FE0    k@f4        stfs            hookshotCamera: the centre's approach factor, y (the other path)
 02511FE8    k@f5        stfs            hookshotCamera: the centre's approach factor, z
 02511FF8    k@f5        stfs            hookshotCamera: the centre's approach factor, x
+# the talk camera (talktoCamera f_02508A60, work area at r26 tagged 'TALK'; the decomp has a stub;
+# session bottom, bug B18): at each cut (a speaker's turn) it sets up N and a weight W, then a call
+# approaches eye, centre, angles and fovy by (N - count) / W and W loses N - count, and the count (work
+# +0x44) + 1 at the call's end: the shield and swing cameras' scheme with its own count. k: on the
+# factor, W's loss and the count late
+02509BBC    k:f31       fdivs           talktoCamera: f31 = (N - count) / W, the approach's factor
+02509CE8    late        stfs            talktoCamera: W -= N - count
+0250B2A0    late        stw             talktoCamera: the cut's count (work +0x44) + 1
 # the letterbox (f_024FF8A0: dCamera +0x5FC, GC's mTrimSize: 0 to 90 when Z-targeting, by its mode
 # m600): it approaches its size by 0.25 a call, or 0
 024FF940    k@f31       fmadds          trim: size += (size' (+0x7A8) - size) * 0.25

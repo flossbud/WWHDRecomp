@@ -1216,6 +1216,17 @@ it in a window; D21 "Step 2"):**
     type (38) switched 44 ticks early at 60 (f1293 against f1338): requested by name only by the Gyorg
     controller (GY_CTRL 229/230, f_0216BBBC) and NPC_SO (f_022E06A4), so the Gyorg attack's trigger fires
     early (told session top, sea life). The camera's type is at camera +0x248+0x51C, its style +0x514.
+  - **Bug B18, talks ran at 30, now at 60 (shared: sixty.cpp's StepInEvents; regress.sh rerun)**: Link's
+    action while talking is 0xAA, which wasn't in the list of actions converted processes step under
+    in an event (4 wait, 6 move, 0x9A conducting), so a talk held them to whole ticks. 0xAA added, and
+    the talk camera (talktoCamera f_02508A60, 'TALK'; the decomp has a stub) ruled: at each cut it sets
+    up N and a weight W and approaches by (N - count) / W, W losing N - count and its own count + 1 a
+    call (the shield camera's scheme): k: on the factor, the two late. qa's `talk` route (Windfall's
+    dock, the sailor): the talk steps at 60, its camera's fovy equal to 30's through the cut, yaw and
+    pitch within a degree, distance 370 against 382; the sailor turns to within 0.9 degrees. The cut's
+    set-up runs on both half steps of its first tick (m11C late); left, as the result is this close.
+    Open, older than this (also with `WWHD_60FPS_EVENTS=0`): after the talk the next A starts a new
+    talk 30 ticks sooner at 60 (f1270's A at 60, f1300's at 30): a cooldown after a talk counts a step.
   - **Bug B19, the camera's shake too strong at 60, fixed (shared; regress.sh rerun)**: shakeCamera
     (f_024FC108, from Run) steps its pattern a bit a call and flips the offset's sign a call: at 60 a
     bomb's 10-call shake (one held in Link's hands on the Outset dock) ran in 5 ticks, the sign flipping
