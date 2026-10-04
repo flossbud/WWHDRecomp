@@ -75,6 +75,7 @@ def main():
         "ticket": plan["ticket"],
         "milestones": plan["milestones"],
         "queue": plan.get("queue", []),
+        "queue_done": plan.get("queue_done", []),
         "known_issues": plan["known_issues"],
         "groups": groups,
         "counts": {

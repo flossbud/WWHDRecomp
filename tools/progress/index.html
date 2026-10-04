@@ -210,7 +210,8 @@ function render() {
     const badge = c ? `<span class="badge ${c.state}">${c.state === "done" ? "done" : "working"} · ${esc(c.session)}</span>` : `<span class="badge">open</span>`;
     return `<li><b>${esc(q.id)}</b>${badge}<div class="sub">${esc(q.name)}</div>${c && c.note ? `<div class="sub">${esc(c.note)}</div>` : ""}</li>`;
   }).join("");
-  $("later").textContent = d.later && d.later.length ? "Later: " + d.later.join(" · ") : "";
+  const earlier = (d.queue_done || []).map(id => id + (cl[id] ? " (" + cl[id].session + ")" : ""));
+  $("later").textContent = (earlier.length ? "Done earlier: " + earlier.join(", ") + ". " : "") + (d.later && d.later.length ? "Later: " + d.later.join(" · ") : "");
   $("issues").innerHTML = d.known_issues.map(i => `<li>${esc(i)}</li>`).join("");
   $("foot").textContent = "Data from " + ago(d.generated) + " · refreshes every 20 s";
 }
