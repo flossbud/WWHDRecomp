@@ -71,7 +71,9 @@ namespace
 	// the Moblins' lanterns (KANTERA), Puppet Ganon's three forms (BGN, BGN2, BGN3), Ganondorf (GND),
 	// Miniblins (PT) and Bubbles (BL), the Wind Temple's fans (WINDMILL), blade traps (Obj_Trap),
 	// Wizzrobes (WZ), moving platforms (MACHINE), 252, Armos (AM, AM2) and Molgera (BWD, BWDG), the Earth
-	// Temple's Stalfos (ST), Poes (PW), Floormasters (FM) and Jalhalla (BPW) (session bottom); Windfall's
+	// Temple's Stalfos (ST), Poes (PW), Floormasters (FM) and Jalhalla (BPW), the Forsaken Fortress's
+	// anchors (IKARI), barrels (Obj_Barrel), ropes and their lanterns' moths (HIMO3) and Tetra (NPC_ZL1)
+	// (session bottom); Windfall's
 	// windmill wheel (Obj_Ferris), pigs (KB),
 	// townsfolk (NPC_PEOPLE, NPC_KK1, NPC_MK, NPC_UK, NPC_GK1, NPC_TT, NPC_RSH1), market stalls (Obj_Roten),
 	// its distant models (445) and stands (DAI); Outset's fishman (NPC_SO), Beedle's ship (OBJ_IKADA), palms
@@ -84,7 +86,7 @@ namespace
 	// WWHD_60FPS_CONVERT= (empty) converts none.
 	constexpr const char* kConvertedByDefault =
 		"476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,"
-		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,"   // session bottom
+		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,"   // session bottom
 		"123,220,353,170,368,374,364,373,352,121,445,309,118,68,73,200,255,71,67,335,319,320,331,461,45,63,179,230,269,164,391,176,294";   // session top
 	const char* ConvertList()
 	{

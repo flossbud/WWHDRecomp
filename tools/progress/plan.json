@@ -177,6 +177,11 @@
     "203": "Armos Knight",
     "254": "Moving platform (MACHINE)",
     "119": "Floormaster",
+    "431": "Anchor (IKARI)",
+    "456": "Barrel",
+    "447": "Rope (HIMO3)",
+    "426": "Tetra (NPC_ZL1)",
+    "198": "Rat (NZ)",
     "185": "Torch (EP)",
     "367": "Medli (NPC_MD)",
     "453": "Pot",
@@ -245,7 +250,7 @@
     {
       "id": "fortress",
       "name": "Forsaken Fortress: searchlights, guards, Helmaroc King, Phantom Ganon",
-      "where": "MajyuE, Majroom"
+      "where": "MajyuE (spawn points 0-6), majroom (rooms 0-4), M2ganon; M2tower/Mjtower (Helmaroc King) don't load by warp"
     },
     {
       "id": "earth",

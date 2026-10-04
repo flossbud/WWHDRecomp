@@ -1,0 +1,21 @@
+# Step and tick rules for the Forsaken Fortress (the work queue's "fortress"; session bottom). Format:
+# ../tick_rules.txt and tools/recomp/generate.py. Stages: MajyuE (outside; its spawn points move Link, its
+# layers all list the same actors on the finished save), majroom (rooms 0-4, by point and room), M2ganon
+# (Ganondorf's room, Tetra). M2tower and Mjtower (Helmaroc King) don't load through WWHD_DEBUG_STAGE (a black
+# screen; their PLYR points exist). Found with the step-doubling trial, checked 30 against 60.
+#
+# ---- IKARI (431: the anchors; execute f_0217DAF8): its tick count; angle.x sways as a sine of it
+0217DB18    whole       stw             ikari: its tick count (+0x3BC) + 1
+#
+# ---- Obj_Barrel (456: barrels; f_0231D5C4)
+0231D660    keep:r9     addi            barrel: a countdown (+0x73D) - 1, on whole ticks
+#
+# ---- HIMO3 (447: ropes; M2ganon's hold lanterns with moths around them; f_02172A00)
+02172F50    whole       sth             himo3: a tick count (+0x3D6) + 1
+02173E0C    keep:r9     addi            himo3: its timers (+0x3D0...) - 1, on whole ticks
+02174220    vec@r4      bl 028e8d88     himo3 moth: pos += its flight (10 a tick toward its target)
+0217432C    vec@r4      bl 028e8d88     himo3 moth: pos += its flight (the other branch)
+02174348    spliti      addi            himo3 moth: its wings' phase + 0x3E00
+#
+# ---- NPC_ZL1 (426: Tetra in M2ganon; f_02304268)
+023042BC    keep:r12    addi            zl1: a count (+0x95C) + 1, then compared (on whole ticks)

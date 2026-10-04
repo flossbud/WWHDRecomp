@@ -920,6 +920,20 @@ it in a window; D21 "Step 2"):**
     companion Medli to test), torches (EP 185: a random flicker target each step, as session top found
     for Outset), tapestries (289: a cloth), mirrors (272), coffins (159), the rope bridge (89),
     light switches (30), pots.
+  - **The Forsaken Fortress** (`fortress`; `config/US_v0/tick_rules/fortress.txt`): `MajyuE` (outside: its
+    spawn points move Link; its layers list the same actors on the finished save), `majroom` (rooms 0-4
+    by point and room), `M2ganon` (Ganondorf's room, Tetra). `tools/stage_actors.py` (session top's)
+    lists a stage's placements by layer; a PLYR reader in the same style shows a stage's spawn points.
+    Converted: anchors (IKARI 431: a sway from its tick count: equal to 30), barrels (Obj_Barrel 456:
+    a countdown; 3.75 units higher at rest, the known resting offset), ropes (HIMO3 447: counters, and
+    the moths around their lanterns: 10.00 against 9.96 units a tick) and Tetra (NPC_ZL1 426: idle).
+    Not converted: searchlights (OBJ_SEARCH 66) and the pirate ship (57): still on this save (nothing
+    to gain); the pirate flag (173) and the sails (SAIL 172): cloths (see the Stalfos' hair: a one-pass
+    solver can't take half steps); rats (NZ 198: their code isn't decompiled, two of three ran 44-69%
+    farther at 60; their tails are chains). Helmaroc King (BDK 238, M2tower layer 3): M2tower and Mjtower
+    load to a black screen through WWHD_DEBUG_STAGE (their PLYR points exist; any point and layer).
+    Phantom Ganon (FGANON 241, GanonC/J/M): absent on the finished save even with WWHD_DEBUG_BOSS=1, and a
+    WWHD_DEBUG_SPAWN of it is created and gone; its code's many `+= 1` sites at +0x5BC are mode steps.
   - **`fall@fREG`** (new step rule, shared: generate.py, sixty.cpp's `g_rtActor`, sixty_step.cpp's
     `rt_step_fall`): many executes inline fopAcM_calcSpeed's `speed.y += gravity` instead of calling
     it (a scan for `lfs fG,0x374(rA)` ... `fadds` ... `stfs 0x340(rA)` found 62 sites in ~25 types),
@@ -950,7 +964,8 @@ it in a window; D21 "Step 2"):**
   capes 192, the Moblins' lanterns 193, Puppet Ganon 243-245, Ganondorf 246, Miniblins 247,
   Bubbles 207, the Wind Temple's fans 114, blade traps 135, Wizzrobes 208, platforms 254 and 252,
   Armos 202/203, Molgera 217/219, the Earth Temple's Stalfos 190, Poes 212, Floormasters 119 and
-  Jalhalla 211 (session bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
+  Jalhalla 211, the Forsaken Fortress's anchors 431, barrels 456, ropes 447 and Tetra 426 (session
+  bottom), Windfall's 123, 220, 353, 170, 368, 374, 364,
   373, 352, 121, 445, 309 and Outset's 118, 68, 73, 200, 255, 71, 67, 335, 319, 320, 331, 461, 45
   (session top; `kConvertedByDefault` has a line per session),
   the plants, and particles; `WWHD_60FPS_CONVERT=list` replaces the list,
