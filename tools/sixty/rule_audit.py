@@ -49,14 +49,26 @@ def reads(i, reg):
         return (f.get("rA") == reg and reg != 0) or f.get("rB") == reg
     if i.op in ("addi", "addis") and f.get("rA") == 0:  # li, lis
         return False
+    if i.op in IMM_LOGICAL:                            # rA = f(rS, an immediate): rA is the destination
+        return f.get("rS", f.get("rT")) == reg
+    if i.op in X_LOGICAL:                              # rA = rS op rB
+        return f.get("rS", f.get("rT")) == reg or f.get("rB") == reg
+    if i.op == "rlwimi":                               # inserts into rA: reads rA and rS
+        return f.get("rA") == reg or f.get("rS", f.get("rT")) == reg
     return any(f.get(k) == reg for k in ("rA", "rB", "rS", "rT"))
+
+
+# logical and shift forms whose rA is the destination (rS the source)
+IMM_LOGICAL = ("rlwinm", "ori", "oris", "xori", "xoris", "andi.", "andis.", "extsh", "extsb", "srawi", "cntlzw")
+X_LOGICAL = ("and", "andc", "or", "orc", "xor", "nor", "nand", "eqv", "slw", "srw", "sraw", "rlwnm")
+LOADS = ("lwz", "lhz", "lha", "lbz", "lwzx", "lhzx", "lhax", "lbzx", "lwzu", "lhzu", "lhau", "lbzu", "lwzux", "lhzux", "lhaux", "lbzux")
 
 
 def writes(i, reg):
     f = i.f
-    if i.op in ("or", "extsh", "extsb", "rlwinm", "andi.", "ori", "xori"):
+    if i.op in IMM_LOGICAL + X_LOGICAL + ("rlwimi",):
         return f.get("rA") == reg
-    return f.get("rD") == reg or (i.op in ("lwz", "lhz", "lha", "lbz", "lwzx", "lhzx", "lhax", "lbzx") and f.get("rT", f.get("rD")) == reg)
+    return f.get("rD") == reg or (i.op in LOADS and f.get("rT", f.get("rD")) == reg)
 
 
 def main():

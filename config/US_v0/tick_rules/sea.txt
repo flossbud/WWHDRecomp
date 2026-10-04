@@ -57,3 +57,12 @@
 023CA1B0    split@r5    add             ph (sea): a phase (+0x474) += its step a tick
 023CA1E0    split@r0    add             ph (sea): a phase (+0x476) += its step a tick
 023CE960    vec@r4      bl 028e8d88     ph (sea): +0x430 += a rotated step a tick
+#
+# ---- Big Octo (DAIOCTA 225, its eyes DAIOCTA_EYE 226) and Gyorgs (GY 228): no rules; tested on the boat
+# (route `sail`: aboard by f1095, sailing west-northwest from f1400 at ~50 units a tick). Big Octo's
+# switch (0x0D) is set on the 100% save, so one is spawned ahead of the boat without it:
+# WWHD_DEBUG_SPAWN=1450:225,ffff2802,-216800,0,314300; trial clean, the body within 18 units of the 30-tick
+# run as it pulls the boat (its eyes' paths spread with their random turns); its swallowing is an event
+# (whole ticks). Gyorgs: a type-B spawner (no switch) spawned ahead of the boat makes them,
+# WWHD_DEBUG_SPAWN=1450:230,ffff1441,-214000,0,312500; three attack, trial clean but for copies (a line
+# check's ends, the shape angle, a matrix result), paths within 2.5-4.5% of the 30-tick run's.

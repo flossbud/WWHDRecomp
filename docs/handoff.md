@@ -860,11 +860,14 @@ it in a window; D21 "Step 2"):**
       at its landing height from the start), ruled from the code;
     - not converted: Morths 205 (the sideways wiggle now `*h`, the inlined gravity `fall@`: trial clean,
       but their paths part from 30's: most stay put at 60 where at 30 they chased; they react to Link,
-      whose own walk differs at 60 (session bottom's Link fields): retest after those); Gyorgs 228 (their
-      spawner, GY_CTRLB, waits for the ship; one spawned alone deletes itself; poking the spawner's mode,
-      +0x440, to 1 didn't make it spawn: its path check failed with Link swimming); Big Octo 225/226 (its
-      switch, 0x0D, is set on the 100% save; `WWHD_DEBUG_SPAWN=1000:225,ffff2802,184800,0,-283200` in
-      sea room 6 brings it back without one: trial clean, eyes equal, but its fight needs the ship).
+      whose own walk differs at 60 (session bottom's Link fields): retest after those);
+    - Big Octo 225/226 and Gyorgs 228, converted, tested on the boat (route `sail`, aboard by f1095,
+      sailing west-northwest from f1400): Big Octo's switch (0x0D) is set on the 100% save, so one is
+      spawned ahead of the boat without it (`WWHD_DEBUG_SPAWN=1450:225,ffff2802,-216800,0,314300`): trial
+      clean, its body within 18 units of 30's as it pulls the boat (its swallowing is an event: whole
+      ticks). Gyorgs need the ship (their spawner targets it; one spawned alone deletes itself): a type-B
+      spawner spawned ahead of the boat (`1450:230,ffff1441,-214000,0,312500`) makes three; trial clean but
+      for copies, paths within 2.5-4.5% of 30's. (sea.txt has the notes.)
     - `WWHD_DEBUG_PLACE` didn't hold at 30 in Forest Haven (Link stayed at the spawn at f1000 and f1050)
       though it did at 60: a test placing Link compares different scenes then; spawn the actor in front
       of Link instead (the spawn aid works at both rates).
