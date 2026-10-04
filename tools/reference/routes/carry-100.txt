@@ -1,0 +1,13 @@
+# Route: Link lifting and carrying a pot on the Outset dock (WW-4: Link's carry at 60 fps), with the 100%
+# save (REF_SAVE=/wwhd/data/saves/wwhd_100) and a small pot spawned behind him where he stops
+# (WWHD_DEBUG_SPAWN=950:453,707fff00,-201660,190,312465; 707fff00, Outset's own small pots' type; a pot of
+# param 0 isn't one Link lifts): continue-100.txt's inputs, then the stick back (he turns and walks to the
+# pot), A (he lifts it), the stick forward (he carries it to the dock's end and over it).
+# FRAME BUTTONS [FRAMES_HELD]; frames are game frames (at 60 fps, every other swap).
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+960 LDOWN 18   # turn round and walk to the pot
+1000 A 3       # lift it
+1040 LUP 40    # carry it toward the dock's end (and off it, into the sea)
