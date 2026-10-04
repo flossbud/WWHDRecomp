@@ -1084,6 +1084,13 @@ it in a window; D21 "Step 2"):**
     drains a point at 0: its store, the drain and the reset whole) are ruled; on a new route, `leaf`
     (`tools/reference/routes/leaf-100.txt`: off the Outset dock's end with the leaf opened in the air),
     the glide at 60 keeps within ~10 units of 30's to the water.
+  - **Link's own position adds, audited (session bottom)**: every VECAdd into Link's current.pos and
+    every inline `pos += x` in his code (actor_rmw.py 168, 44 sites) is ruled, or adds a per-call
+    measure (the animation's root motion since the last call, posMove; the hands' spread change,
+    procClimbMoveSide), or a one-shot amount cleared after use (the collision push and m3644, posMove), or
+    is a procedure's one-time setup (swim in and out, climb-down start, hang-fall start; setGrabItemPos
+    places the carried actor). The glide's wind drift (an approached state added a call) was the one
+    runaway. Not driven by a route yet: climbing, crawling, hanging, carrying, pushing blocks, the barrel.
   - **Joint callbacks run with every drawn frame's calc (a hazard)**: a converted process's model is
     calculated each frame it is drawn (twice a tick), an unconverted one's once a tick, and the step is 1
     there, so step rules don't apply: an increment in a joint callback (J3DNode calc callbacks, e.g.
