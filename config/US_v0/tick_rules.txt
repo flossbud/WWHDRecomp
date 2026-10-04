@@ -80,6 +80,12 @@
 024FEACC    late        stw             Run: m108 + 1
 024FEAD0    late        stw             Run: m080 + 1
 024FE644    whole:r3=r4 bl 024fa410     Run: mNextType = nextType(mCurType) on whole ticks (requests come on them)
+# the camera's shake (shakeCamera f_024FC108, from Run; bug B19, session bottom): a call steps its pattern
+# (its index m554, +0x558, a bit a call), flips the offset's sign and sets the eye, centre, fovy and bank
+# shakes, or decays them by 0.1 and counts the blur's timer down. At 60 a bomb's 10-call shake ran in 5
+# ticks with the sign flipping every frame (a harsher, shorter jitter). Once a tick, its offsets held
+# on the half tick as 30 shows them for both frames; its result (f1) isn't read
+024FEB14    whole       bl 024fc108     Run: shakeCamera(), once a tick
 024FE670    whole:r3=r4 bl 024fa410     Run: mNextType = nextType(mCurType) on whole ticks
 024FE89C    k@f1        bl 0200693c     Run: m148 += (forwardCheckAngle - m148) * FwdCushion (cSAngle *)
 024FEB00    k@f1        bl 0200693c     Run: mViewCache.mBank -= mBank * 0.05 (cSAngle *)
@@ -260,6 +266,21 @@
 0250EE08    k@f1        bl 0200693c     rideCamera: bank += (bank' - bank) * k |speed|
 0250EE8C    k@f22       fmadds          rideCamera: fovy += (fovy' - fovy) * k (the other copy)
 0250EED0    k@f1        bl 0200693c     rideCamera: bank += (bank' - bank) * k |speed| (the other copy)
+# the hookshot's pull camera (hookshotCamera f_02511B5C, work area 'HOOK'; the decomp has a stub;
+# session bottom): its centre approaches Link's point by a factor vector it stores to the stack (x and
+# z one value, y another), and its radius, yaw and latitude approach the globe from the last frame's
+# eye (dCamera +0x1C) to that centre by f30: self-referential, they move by f30 of the centre's own
+# step (the eye follows at 1 - f30 of its speed), the same a tick at 60 unconverted, so they're not
+# ruled (with k: the eye's pull-back grew 2/3 as fast); its fovy approaches the style's by f30. A pull
+# to a post on Windfall (sea room 11, spawn 8): at 60 the centre ran ahead. k@ on the vector's stores
+# and on the fovy's factor
+02512194    k@f30       fmadds          hookshotCamera: fovy += (fovy' - fovy) * f30
+02511F9C    k@f4        stfs            hookshotCamera: the centre's approach factor, y
+02511FA8    k@f5        stfs            hookshotCamera: the centre's approach factor, x
+02511FB8    k@f5        stfs            hookshotCamera: the centre's approach factor, z
+02511FE0    k@f4        stfs            hookshotCamera: the centre's approach factor, y (the other path)
+02511FE8    k@f5        stfs            hookshotCamera: the centre's approach factor, z
+02511FF8    k@f5        stfs            hookshotCamera: the centre's approach factor, x
 # the letterbox (f_024FF8A0: dCamera +0x5FC, GC's mTrimSize: 0 to 90 when Z-targeting, by its mode
 # m600): it approaches its size by 0.25 a call, or 0
 024FF940    k@f31       fmadds          trim: size += (size' (+0x7A8) - size) * 0.25

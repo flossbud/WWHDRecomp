@@ -1216,6 +1216,18 @@ it in a window; D21 "Step 2"):**
     type (38) switched 44 ticks early at 60 (f1293 against f1338): requested by name only by the Gyorg
     controller (GY_CTRL 229/230, f_0216BBBC) and NPC_SO (f_022E06A4), so the Gyorg attack's trigger fires
     early (told session top, sea life). The camera's type is at camera +0x248+0x51C, its style +0x514.
+  - **Bug B19, the camera's shake too strong at 60, fixed (shared; regress.sh rerun)**: shakeCamera
+    (f_024FC108, from Run) steps its pattern a bit a call and flips the offset's sign a call: at 60 a
+    bomb's 10-call shake (one held in Link's hands on the Outset dock) ran in 5 ticks, the sign flipping
+    every frame, a harsher and shorter jitter. It runs once a tick now (whole on Run's call), its
+    offsets held on the half tick as 30 shows them on both frames.
+  - **The hookshot's pull camera (hookshotCamera f_02511B5C, 'HOOK'), ruled (shared)**: its centre
+    approaches Link's point by a factor vector it stores (k@ on the stores) and its fovy the style's
+    (k@). Its radius, yaw and latitude approach the globe from the last frame's eye to that centre: a
+    self-referential update (the eye follows at 1 - k of the centre's speed) that is the same a tick at
+    60 unconverted; with them converted the eye's pull-back grew only 2/3 as fast, so they're left. A
+    lesson for the other cameras: an approach toward a target built from the camera's own last eye
+    isn't a fixed-target approach.
   - **The bait (ESA 221), converted**: the pieces the bait bag throws (all-purpose bait itself on a
     button: item 0x82, `WWHD_DEBUG_POKE=950:0,1046F0BA,1,b;950:0,10474C6C,1,82`; Y throws it,
     procFoodThrow): its timers, its flight (pos += speed, then speed.y -= 3: late) and its bob on water
@@ -1279,8 +1291,13 @@ it in a window; D21 "Step 2"):**
     with all four and the pump ruled the phase stays within 0.04 rad of 30's over 200 ticks (it ran 1.4x
     to 2x before). The boomerang's lock-ons: three ChuChus (CC 206) spawned on the dock ahead, Y held, the
     view swept across them with the right stick, Y released: the same lock, throw and return at 60 (the
-    lock markers' pulse is held to whole ticks). Not driven yet: climbing vines, pushing and pulling
-    blocks, hiding in a barrel, the hookshot's pull. Everywhere Link's camera-relative heading is ~1.5
+    lock markers' pulse is held to whole ticks). The hookshot's pull: on Windfall (sea room 11; spawn 8
+    with `WWHD_DEBUG_STAGE=920:sea,8,11,-1`, the point is the spawn's id; the hookshot poked onto Y after
+    the warp, `1035:0,1046f0ba,1,13;1035:0,10474c6c,1,2f`, as the warp resets the buttons), Y, 2 frames
+    of right stick left, 3 up, Y: it sticks in a wooden post (an HS-flagged target, ~(1710, 1880,
+    -202829)) and pulls Link at 30's ~61 a tick, landing within ~20 units (a tick early: the input's
+    half tick); the pull's camera is hookshotCamera (ruled, below). Not driven yet: climbing vines,
+    pushing and pulling blocks, hiding in a barrel. Everywhere Link's camera-relative heading is ~1.5
     degrees off 30's (the camera's control angle, below), so long routes drift a little (a wall's corner
     reached later, then apart).
   - **Rope bridges (BRIDGE 89), ruled, not converted** (`earth.txt`): the most placed unconverted type that
@@ -1302,7 +1319,11 @@ it in a window; D21 "Step 2"):**
     ticks): the gap is likely the k75 approximation with a factor that changes every tick. In a
     sustained turn it isn't a rate: Link swimming in circles off the Outset dock (stick up-left, ~190
     ticks) has the control angle turning +10496 against +10570 over 48 ticks, ~300 (1.6 degrees) behind
-    30's throughout; kindan's 16 ticks were the turn's start. Not changed.
+    30's throughout; kindan's 16 ticks were the turn's start. Not changed. A lead (session bottom,
+    from the hookshot camera): followCamera's yaw starts each call from the globe of its own last eye
+    to the moved centre (decomp l.371, `local_484`), which is rate-invariant unconverted, then
+    approaches the target yaw by m3B8 cos V (k75@); the two together, and the eye's own 0.75
+    smoothing after, may not add up to one tick's in a sustained turn.
   - **Link's own position adds, audited (session bottom)**: every VECAdd into Link's current.pos and
     every inline `pos += x` in his code (actor_rmw.py 168, 44 sites) is ruled, or adds a per-call
     measure (the animation's root motion since the last call, posMove; the hands' spread change,
