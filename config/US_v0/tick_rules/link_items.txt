@@ -19,6 +19,29 @@
 02416C48    /h:f4       lfs             link aim walk (no stick): the least step
 02416C54    /h:f3       lfs             link aim walk (no stick): the most step
 02435200    keep:r8     addi            link rope aim: the sight's lock frame (+0x58EE) + 1, a sound at 26
+# Link's hat (f_024022D0; m34F6 to m351A at + 0x3450 in WWHD): its angles lean away from the hat's move
+# since the last call (m3718, +0x7320, minus its joint's place, then 7.5 down and the wind) and flutter by
+# a phase (m3514, +0x6964) that adds 1500 + 4060 f a tick, f from the wind and that move's length x 0.65.
+# At 60 the move since the last call is a step's: the hat leaned back half as far running and fluttered
+# weakly, while the phase went on twice a tick (session top's swimming test: the phase x3 a tick). The
+# move reads per tick (/h), the phase's add is split (its 3 and 6 steps behind for the hat's other two
+# segments still use the tick's add). Its angles' approach is cLib_addCalcAngleS2 (time-stepped), and
+# their carried velocities (0.2 of the last change, added again) are a step's both ways.
+024026C8    /h:f12      fsubs           link hat: the move since the last call (y), per tick
+024026DC    /h:f10      fsubs           link hat: (x)
+024026E4    /h:f9       fsubs           link hat: (z)
+02402714    /h:f12      fsubs           link hat: the move since the last call (y; the other branch)
+02402720    /h:f10      fsubs           link hat: (x)
+02402734    /h:f9       fsubs           link hat: (z)
+02402CCC    /h@f1       fmadds          link hat: the flutter's strength from the move's length, per tick
+02402D54    split@r5    add             link hat: m3514 (+0x6964) += 1500 + 4060 f, the flutter's phase
+# More of Link from session top's swimming test (the sea, room 18, and the Forbidden Woods' pool): his
+# wait's countdown to an idle (procWait f_024177A8: - 1 then extsh. tests it) and his bob in water (the
+# swim wait f_0242F590: a phase + a random step a tick, the bob 5 sin of it). The trial's other Link
+# fields there are copies: the hat's joints' quaternions (f_023D6B30), the last two places of a point (a
+# trail's, f_0240CDD0), colliders' centres (f_02018428) and his place before the move (posMove).
+02417B84    keep:r11    addi            link wait: +0x6918 - 1, the countdown to an idle
+0242F5E8    split@r10   add             link swim: the bob's phase (+0x691A) += a random step a tick
 #
 # ---- arrows (ARROW, process 472, d_a_arrow.cpp; execute f_02052DB8). WWHD's fields are the GameCube's +
 # 0x11C up to field_0x604, + 0x118 after it. procMove (f_02054040): current.pos += speed (200 a tick; the

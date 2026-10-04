@@ -1075,6 +1075,13 @@ it in a window; D21 "Step 2"):**
     tap took Link from 12 to 536 a tick and off the dock in 20 ticks. setNormalSpeedF's least and most
     steps are divided by h at f_02416B70's two calls (the override takes h of them again: 30's steps a
     step); Link's path now matches 30 within a few units.
+  - **Link's hat and his bob in water (shared; regress.sh rerun)**, from session top's swimming test: the
+    hat (f_024022D0) leans away from its move since the last call and flutters by a phase that adds 1500 +
+    4060 f a tick (f from the wind and that move's length). At 60 the move was a step's and the phase went
+    on twice a tick; with the move read per tick (/h) and the phase's add split, on the walk route the
+    flutter's phase advances 3862 a tick (30: 3845; it was 6585), its swing 950 (944; was 716), the
+    sideways lean 4765 (4765; was 6066). Also the swim wait's bob phase (0242F5E8, split) and the wait's
+    countdown to an idle (02417B84, keep). In `link_items.txt`.
   - **Pots and stones** (TSUBO 453, STONE 454; agreed with session top, not in the queue;
     `config/US_v0/tick_rules/carried.txt`). Shared: **daObj::posMoveF_grade** (f_023121C4, also behind
     daObj::posMoveF_stream: the move of what is thrown, rolls or floats: pots, stones, barrels, bombs)
