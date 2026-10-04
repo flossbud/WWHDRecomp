@@ -951,11 +951,23 @@ it in a window; D21 "Step 2"):**
       Beam/Bemos, noted to it);
     - eye switches (Hys 450): the eye's frame ±1 a tick `keep`; poked into its wait in Siren room 1 it
       closes over the same three ticks as at 30;
-    - mailboxes (OBJ_TORIPOST 67): no rules; equal to 30's on routes save and tour.
+    - mailboxes (OBJ_TORIPOST 67): no rules; equal to 30's on routes save and tour;
+    - item stands (STANDITEM 462): four animation countdowns `keep` (one at 0 starts the other, so a half
+      step never acts twice), a wind sway's strength `*h@` and phase `split`; Windfall's fourteen: trial
+      clean (their idle timers come from the random stream at creation). Some carry a cloth: the chains
+      item;
+    - bomb flowers' bombs (BOMB2 295; session qa's B17: they animated at 30 beside Link's bombs): the fuse,
+      the explosion's collider time and the sink's count `late`; its wobble a damped spring; the fuse
+      smoke's three-point trail shifts once a tick (`whole`) while its tip moves every step (the smoke's
+      particle speeds come from the points' per-tick differences). Tested with session qa's setup: route
+      `carry` with `WWHD_DEBUG_SPAWN=950:296,0000ff00,-201660,190,312465` (a bomb flower where the pot
+      was; Link pulls the bomb at f1000).
     - Not yet: door knobs (KNOB00 305: a door whose motion is its open event, which steps at 30; left for
-      the events item and session qa's door fixes), item stands (STANDITEM 462: four countdowns `keep`, a
-      wind phase `split`; some carry a cloth: the chains item), Windfall's night lights (128) and
-      shutters (259).
+      the events item and session qa's door fixes), Windfall's night lights (Obj_Light 128: its decomp is
+      stubs, and its phases run at night only) and shutters (SHUTTER 259: they move in their open/close
+      events). In daytime on Windfall both match 30 at every tick unconverted. For a night test the save's
+      time of day is a float at g_dComIfG_gameInfo + 0x24 (dSv_player_status_b_c::mTime, degrees at 15 an
+      hour: 22:00 is 330.0, 0x43A50000), to poke before a warp.
     - B10 (Beedle's ships sail too fast; session qa handed it over): not reproduced. Outset's Beedle ship
       tracked on route sail: speed 12.00/12.00 a tick, path 16132/16153 units over f900-2900, its bob
       phase and height identical tick for tick.

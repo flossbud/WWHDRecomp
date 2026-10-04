@@ -168,3 +168,27 @@
 02118178    keep:r12    addi            standitem animTestForOneTime: mBckStopTimer - 1
 02117FB0    *h@f0       fadds           standitem actionFobj06: the wind's strength (+0x7E0) += |the wind| a tick
 02118030    split@r10   add             standitem actionFobj06: the sway's phase (+0x7D0) += its speed (+0x7CE)
+#
+# ---- bomb flowers' bombs (BOMB2 295, d_a_bomb2.cpp; session qa's B17: carried and thrown at 30 beside Link's
+# bombs; its code sits in d_a_boomerang.cpp's range; fields at GC + 0x1F8 to 0x204). The fuse, the
+# explosion's collider time and the sink's count (`addic.`, then a branch on it) late; the wobble a damped
+# spring (keep on the velocity's fadds and fmuls, *h@ on the point's adds) and its count keep; the fuse
+# smoke's three-point trail shifts once a tick (whole: its particles' speeds come from the points' per-tick
+# differences) while its tip moves every step. The sink's `pos.y += the surface's change` is a change since
+# the last step: no rule.
+020CACA8    late        stw             bomb2 chk_exp_timer: the fuse (+0x934) - 1, then 0 explodes
+020C9D74    late        stw             bomb2 cc_set: the explosion's collider time (+0x938) - 1
+020CB260    late        stw             bomb2 mode_sink: --field_0x698 (+0x890) > 0, the surface followed 4 ticks
+020C9014    whole       stw             bomb2 eff_fuse_move: the smoke's oldest point (+0x8D0) y = the older's
+020C9018    whole       stw             bomb2 eff_fuse_move: oldest z
+020C902C    whole       stw             bomb2 eff_fuse_move: oldest x
+020C9028    whole       stw             bomb2 eff_fuse_move: the older point (+0x8C4) x = the tip's last
+020C9044    whole       stw             bomb2 eff_fuse_move: older y
+020C903C    whole       stw             bomb2 eff_fuse_move: older z
+020C9B58    keep:f7     fadds           bomb2 vib_proc: the wobble's v1 (+0x990) += its pull
+020C9B78    keep:f7     fmuls           bomb2 vib_proc: v1 *= 1 - damping
+020C9B84    *h@f12      fadds           bomb2 vib_proc: p1 (+0x988) += v1
+020C9B74    keep:f11    fadds           bomb2 vib_proc: v2 (+0x994) += its pull
+020C9B8C    keep:f11    fmuls           bomb2 vib_proc: v2 *= 1 - damping
+020C9B98    *h@f7       fadds           bomb2 vib_proc: p2 (+0x98C) += v2
+020C9BAC    keep:r12    addi            bomb2 vib_proc: field_0x7A8 (+0x9A4) - 1
