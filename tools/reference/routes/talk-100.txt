@@ -1,0 +1,18 @@
+# Route: talking to a townsperson at 60 fps (session qa: B16, B18): after a warp to Windfall's dock
+# (WWHD_DEBUG_STAGE=920:sea,0,11,-1: Link at 668,95,-197304; the sailor Sa4, an NPC_PEOPLE, stands 589
+# units to his left at the dock's end), sidestep left to him with ZL held (the camera stays behind Link),
+# talk (A), and click through his lines; then stand there.
+# FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start; gameplay from ~f870 (the warp at f920)
+1000 ZL+LLEFT 80   # sidestep to the sailor
+1090 A 3       # talk
+1120 A 3       # his lines
+1150 A 3
+1180 A 3
+1210 A 3
+1240 A 3
+1270 A 3
+1300 A 3
