@@ -65,11 +65,35 @@
 # + 1 then compared with its limit (+0x41A) at once (past it, state 70): keep. With it the trial is clean
 # and a Mothula in room 9 (walk route) flies 5669 units against 30's 5750 (its dashes are random).
 021522E4    keep:r7     addi            gm: a count (+0x410) + 1, then > its limit (+0x41A) goes to state 70
-# Not converted yet: the hanging flower platforms (KITA 97: their sway counter at 0219E040 and 0219FCD4
-# is whole, but floating in water they drift and turn a step a tick, not ruled), the hanging house
-# (KOKIIE 98: m298 + 1 at 021A5838; its fall when cut, speed.y by hand, not ruled), Octoroks (OQ 227: their bob's phase + 0x800 a tick, 023C11AC spliti; their
-# attacks untested), Morths (205: tick_rules.txt has their rules; the trial has f_024F2514, d_bg_w's
-# helper, moving them 1.63 times as far, and their hops are random).
+# Hanging flower platforms (KITA 97, d_a_kita.cpp; room 12): the sway's count (mMoveCounter, counted
+# before the sines read it: whole), a countdown, and floating in water after a hit: the drift's timer
+# field_374 (checked, then counted down: late), the drift (pos += speed, a vector add) and the turn
+# (angle.y += mAngleYSpeed: split).
+0219E040    whole       sth             kita: mMoveCounter (+0x3B4) + 1
+0219FCD4    whole       sth             kita: the same (another path)
+0219DFE8    whole       sth             kita: a countdown (+0x492) - 1
+0219E708    late        sth             kita (in water): field_374 (+0x490) - 1, checked first
+0219EA64    vec@r4      bl 028e8d88     kita (in water): pos += the drift (speed)
+0219E7B8    split@r5    add             kita (in water): angle.y += mAngleYSpeed
+0219E8B0    split@r5    add             kita (in water): the same (another path)
+# The hanging house (KOKIIE 98, d_a_kokiie.cpp; room 5): its sway's count m298 (whole); its fall when its
+# ropes are cut (m29A 1): pos.y += speed.y (*h@), then speed.y -= gravity once a tick (late: the step
+# 30 takes), and m37A + 1 a tick (whole: its one-shots at 0x1B and 0x40, the switch, the crash and the
+# splash, read it before it counts, so each fires on the tick's first step only).
+021A5838    whole       sth             kokiie: m298 (+0x3B4) + 1
+021A5BD0    *h@f11      fadds           kokiie (falling): pos.y += speed.y
+021A5BE4    late        stfs            kokiie (falling): speed.y -= gravity, once a tick
+021A6370    whole       sth             kokiie: m37A (+0x496) + 1
+# Morths (KS 205; the rest of their rules are in ../tick_rules.txt): speed_keisan's sideways wiggle,
+# pos.x/z += a rotated (m30C sin(phase), 0, 0) a tick.
+021A7B20    *h@f0       fadds           ks speed_keisan: pos.x += the wiggle
+021A7B30    *h@f13      fadds           ks speed_keisan: pos.z += the wiggle
+# The hanging platforms' water state and the house's fall aren't reached on the 100% save (the house lies
+# at its landing height, 1380, from the start; poking +0x3B6 and +0x494 to 1 only replays its landing):
+# their rules follow the code (and session bottom's check of *h@ plus late on an explicit step). Octoroks'
+# rules are in sea.txt (the pools' Octoroks here woke and match). Not converted: Morths (205: with the
+# wiggle and fall@ their trial is clean, but their paths part from the 30-tick run's, most staying put at
+# 60 where at 30 they chased; they react to Link, whose own walk differs at 60: retest after Link's fields).
 #
 # ---- Kalle Demos (stage kinBOSS: BMD 235, the core; BMDFOOT 237, the floor tentacles; BMDHAND 236, the
 # ceiling tentacles; d_a_bmd.cpp, d_a_bmdfoot.cpp, d_a_bmdhand.cpp), fought after a warp to kinBOSS,0,0,-1

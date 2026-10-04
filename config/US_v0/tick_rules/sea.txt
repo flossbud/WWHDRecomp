@@ -36,3 +36,24 @@
 020C6F38    d@f0        fmuls           bomb posMoveF: speed.y *= 0.9 in water
 020C6F3C    d@f0        fmuls           bomb posMoveF: speedF *= 0.9 in water
 020C487C    d@f1        bl 028e8e64     bomb set_wind_vec: mWindVec *= 0.95
+#
+# ---- Octoroks (OQ, process 227: "Oqw" at sea, "Oq" in the Forbidden Woods' pools; d_a_oq.cpp isn't
+# decompiled): their bob's phase (+0x800 a tick: the height they approach), their spin (shape_angle +=
+# a csXyz by csXyz::operator+=, which has no step: on whole ticks, as session bottom's Stalfos part) and a
+# count. Found with Link by the pools of kindan room 12 (WWHD_DEBUG_PLACE=1000:-9400,420,-1400): they
+# woke there; at sea the one in room 18 didn't, with Link swimming 600 units off.
+023C11AC    spliti      addi            oq: the bob's phase (+0x400) + 0x800 a tick
+023C2B50    whole       bl 0201a554     oq: shape_angle (+0x328) += its spin (+0x468), once a tick
+023C2BDC    whole       bl 0201a554     oq: the same (another state)
+023C2F94    whole       bl 0201a554     oq: the same
+023C2FEC    whole       bl 0201a554     oq: the same
+023C2424    whole       stb             oq: a count (+0x3E0) + 1
+#
+# ---- Seahats (PH 209 with the sea's parameter: Peahats, in the defaults; their sea code has its own
+# steps, found with Link placed among them in sea room 24): three phases += a per-tick amount (split),
+# and +0x430 += a rotated step a tick (a vector add). The vector adds of +0x400 to and from the position
+# around the sea's checks cancel within a step: no rule.
+023CA190    split@r8    add             ph (sea): a phase (+0x472) += its step a tick
+023CA1B0    split@r5    add             ph (sea): a phase (+0x474) += its step a tick
+023CA1E0    split@r0    add             ph (sea): a phase (+0x476) += its step a tick
+023CE960    vec@r4      bl 028e8d88     ph (sea): +0x430 += a rotated step a tick

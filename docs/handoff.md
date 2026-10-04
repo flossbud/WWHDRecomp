@@ -842,21 +842,32 @@ it in a window; D21 "Step 2"):**
     trials clean in Link's house and the Forbidden Woods but for a torch light's radius (a cube of its
     power: 0.19 a tick against 0.11) and the moths' wing scale and turn (read before their phase moves:
     half a tick ahead). Both in the defaults.
-  - **Signs (KANBAN 182): not converted (session top)**. Idle they match 30 but for +0x710 (collider
-    bookkeeping); what matters is a cut sign (its pieces fly, spin and float; the mother falls over and
-    wobbles a tick at a time; ten inlined gravity sites), and no test cut one: `WWHD_DEBUG_PLACE` doesn't
-    hold on Outset's dock at f1000 or f1100 (Link stays there); in Forest Haven (Omori, the sign at
-    1726,726,-1511) it does, but B held from f1010 for 45 frames drew the sword and didn't cut it (facing,
-    or the spin's charge, untried). A route that cuts one is the next step.
-  - **What's left in session top's areas** (2026-10-04, free to take; forest.txt and objects.txt note the
-    sites found): signs KANBAN 182 (above); Octoroks OQ 227 (the bob's phase `spliti` at 023C11AC; not
-    woken by the tests at sea, attacks untested); hanging flower platforms KITA 97 (the sway count
-    `whole` at 0219E040/0219FCD4; floating in water they drift and turn a step a tick: the turn at
-    0219E7B8/0219E8B0 `split@r5`, the drift not found yet); the hanging house KOKIIE 98 (m298 at 021A5838;
-    its fall when cut, speed.y by hand); Morths 205 (rules in tick_rules.txt; their hops are random, and
-    the trial has `f_024F2514`, d_bg_w's helper, moving them 1.63 times as far: shared); Big Octo
-    225/226 (beaten on the 100% save); Gyorgs 228 (not woken by the tests); Seahats. Link's two
-    counters noted above are session bottom's now (with Link's items).
+  - **Session top's leftovers, tested (2026-10-04; rules in objects.txt, sea.txt and forest.txt)**:
+    - signs KANBAN 182, converted: cut in a test by spawning one ahead of Link (Forest Haven, after a
+      warp to `Omori,0,0,-1` Link stands at 2113,714,-1335 facing -x:
+      `WWHD_DEBUG_SPAWN=1000:182,0000034d,2033,714,-1335`) and the new route `slash` (B at f1010 and
+      f1030). The mother and pieces: timers, gravity copied into every state's tail (`fall@`), the
+      float's step, the fallen mother's wobble, the pieces' spin. Trial clean; a tracked piece 21 units
+      from the 30-tick run's (81 before);
+    - Octoroks OQ 227, converted: the bob's phase, their spin (csXyz `+=` on whole ticks) and a count.
+      In the Forbidden Woods' pools (Link placed by them in kindan room 12) they woke: trial clean, two
+      within 1.5 units of the 30-tick run (paths had been twice as long); at sea the one in room 18
+      stayed under, Link swimming 600 units off;
+    - Seahats (PH 209 at sea, already in the defaults): their sea code's three phases and a step (`split`,
+      `vec@`); ten in sea room 24 came from ~3800 units apart to 17-31 (one 224);
+    - hanging flower platforms KITA 97 and the hanging house KOKIIE 98, converted: their sways verified;
+      the platforms' water drift and the house's fall aren't reached on the 100% save (the house lies
+      at its landing height from the start), ruled from the code;
+    - not converted: Morths 205 (the sideways wiggle now `*h`, the inlined gravity `fall@`: trial clean,
+      but their paths part from 30's: most stay put at 60 where at 30 they chased; they react to Link,
+      whose own walk differs at 60 (session bottom's Link fields): retest after those); Gyorgs 228 (their
+      spawner, GY_CTRLB, waits for the ship; one spawned alone deletes itself; poking the spawner's mode,
+      +0x440, to 1 didn't make it spawn: its path check failed with Link swimming); Big Octo 225/226 (its
+      switch, 0x0D, is set on the 100% save; `WWHD_DEBUG_SPAWN=1000:225,ffff2802,184800,0,-283200` in
+      sea room 6 brings it back without one: trial clean, eyes equal, but its fight needs the ship).
+    - `WWHD_DEBUG_PLACE` didn't hold at 30 in Forest Haven (Link stayed at the spawn at f1000 and f1050)
+      though it did at 60: a test placing Link compares different scenes then; spawn the actor in front
+      of Link instead (the spawn aid works at both rates).
   - **Two 60 fps crashes in the Forbidden Woods, fixed (session top; shared, `sixty.cpp` `LiveStore`)**: at
     every warp there with Link converted (the defaults). Both came from half ticks putting back or hiding
     words in .data/.bss that head lists whose nodes are on the heap (which a half tick never puts back):

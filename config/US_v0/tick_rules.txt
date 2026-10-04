@@ -467,7 +467,7 @@
 # l_objectName (tools/stage_actors.py), GameCube processes 206 and 205.
 021A8170    whole       sthx            205: its timers (+0x564) count down
 021A9B74    whole       sth             205: a counter (+0x57E) + 1, up to 7
-021A9C2C    *h@f11      fadds           205: speed.y += gravity (+0x374)
+021A9C2C    fall@f11    fadds           205: speed.y += gravity (+0x374), an inlined calcSpeed: fall@ (session top)
 021A8128    *h@f30      fadds           205: +0x59C += a step a tick
 021A85E0    spliti      addi            205: a phase (+0x56C) + 0x3E8 a tick
 021A8BB0    spliti      addi            205: a phase (+0x56C) + 0xBB8 a tick

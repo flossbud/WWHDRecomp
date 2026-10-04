@@ -43,3 +43,32 @@
 021B1640    spliti      addi            lamp execute: mCycleCtr (+0x3B6) + 1 a tick
 021B170C    late        stb             lamp execute: mOto (+0x548) - 1
 021B1B0C    keep:r6     addi            lamp execute: mHitTimeoutLeft (+0x550) - 1, then > 10
+#
+# ---- signs (KANBAN, process 182, d_a_kanban.cpp; execute f_0218B234): tested by cutting one (a sign
+# spawned 80 units ahead of Link in Forest Haven, WWHD_DEBUG_SPAWN=1000:182,0000034d,2033,714,-1335 after
+# a warp to Omori,0,0,-1, and the route `slash`: B at f1010 and f1030): it splits into its mother and
+# pieces (KANBAN children). Their timers; each state's tail adds gravity to speed.y before posMove (an
+# inlined calcSpeed, copied into every state: fall@); floating, pos.y += speed.y then speed.y's buoyancy
+# once a tick (late); the float's bob phase (split); the fallen mother's wobble, a count and a toggle a
+# tick (whole); a piece's spin (shape_angle.x + 0x1000 a tick). pos.y += m2E8 and -= m2A0 around the
+# ground check cancel within a step: no rule.
+0218B2B0    whole       sthx            kanban execute: m2B2[i] (+0x3CE) - 1
+0218B33C    fall@f8     fadds           kanban: speed.y += gravity (a state's tail)
+0218B3B0    fall@f8     fadds           kanban: the same
+0218BA1C    fall@f8     fadds           kanban: the same
+0218BBD4    fall@f8     fadds           kanban: the same
+0218BC94    fall@f8     fadds           kanban: the same
+0218BDB8    fall@f8     fadds           kanban: the same
+0218C2F0    fall@f8     fadds           kanban: the same
+0218C370    fall@f8     fadds           kanban: the same
+0218C5D4    fall@f8     fadds           kanban: the same
+0218C6F8    fall@f8     fadds           kanban: the same
+021899E8    *h@f0       fadds           kanban (floating): pos.y += speed.y
+02189A34    late        stfs            kanban (floating): speed.y's buoyancy, once a tick
+0218A854    split@r0    add             kanban (floating): m2BC (+0x3D8) += its step a tick
+0218A918    split@r9    add             kanban (floating): the same (the pieces')
+0218B808    whole       sth             kanban mother: m2C6 (+0x3E2) ^= 0xFF00, the wobble's toggle
+0218B814    whole       stb             kanban mother: m298 (+0x3B4) + 1, the wobble's count
+0218C124    whole       sth             kanban mother: the same toggle (another path)
+0218C130    whole       stb             kanban mother: the same count (another path)
+0218C044    spliti      addi            kanban piece: shape_angle.x + 0x1000 a tick

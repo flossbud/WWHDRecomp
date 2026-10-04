@@ -1,0 +1,10 @@
+# Route: two sword slashes after continue-100.txt's start (f1010 and f1030), at whatever stands in front of
+# Link: e.g. a sign spawned there (Forest Haven, after a warp to Omori,0,0,-1, Link stands at
+# 2113,714,-1335 facing -x: WWHD_DEBUG_SPAWN=1000:182,0000034d,2033,714,-1335 puts one 80 units ahead).
+# FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start; gameplay from ~f870
+1010 B 3       # slash
+1030 B 3       # slash

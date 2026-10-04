@@ -253,7 +253,11 @@
     "236": "Kalle Demos (ceiling tentacles)",
     "237": "Kalle Demos (floor tentacles)",
     "185": "Torch",
-    "186": "Wall lamp"
+    "186": "Wall lamp",
+    "227": "Octorok",
+    "97": "Hanging flower platform",
+    "98": "Hanging house (Forbidden Woods)",
+    "182": "Sign"
   },
   "queue_note": "Two sessions: 'top' takes items from the top down, 'bottom' from the bottom up. Claim an item before starting it (tools/progress/publish.sh claim ID); stop where the other session's claims begin. Stage names under 'where' past Windfall and Outset are unverified guesses: confirm with tools/sixty/tests/room_list.sh.",
   "queue": [
