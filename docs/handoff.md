@@ -793,8 +793,8 @@ it in a window; D21 "Step 2"):**
       ships' flags Sie_Flag (176: a dCloth, its fixed values set at creation): no rules;
     - bombs BOMB (294: Link's bombs and the cannonballs): the fuse (`keep`), the no-gravity and shadow
       timers (`late`), the collider's mass time, a counter, water damping and floating, the wind's
-      damping. A bomb spawned on the dock lives the same 93 ticks at both rates. Not yet: a wind-pushed
-      bomb moves by daObj::posMoveF_grade (no time step).
+      damping. A bomb spawned on the dock lives the same 93 ticks at both rates. A wind-pushed bomb
+      moves by daObj::posMoveF_grade, time-stepped now (session bottom's override, 8e84743).
     `trial.py` now reads integer fields' changes modulo their width: s16 phases that wrap (the cannon's,
     the spawner's) had come out as x-8.58 and x-326 and been filtered away as noise.
   - **Forest Haven and the Forbidden Woods (session top, 2026-10-04; rules in `config/US_v0/tick_rules/forest.txt`)**:
@@ -842,6 +842,21 @@ it in a window; D21 "Step 2"):**
     trials clean in Link's house and the Forbidden Woods but for a torch light's radius (a cube of its
     power: 0.19 a tick against 0.11) and the moths' wing scale and turn (read before their phase moves:
     half a tick ahead). Both in the defaults.
+  - **Signs (KANBAN 182): not converted (session top)**. Idle they match 30 but for +0x710 (collider
+    bookkeeping); what matters is a cut sign (its pieces fly, spin and float; the mother falls over and
+    wobbles a tick at a time; ten inlined gravity sites), and no test cut one: `WWHD_DEBUG_PLACE` doesn't
+    hold on Outset's dock at f1000 or f1100 (Link stays there); in Forest Haven (Omori, the sign at
+    1726,726,-1511) it does, but B held from f1010 for 45 frames drew the sword and didn't cut it (facing,
+    or the spin's charge, untried). A route that cuts one is the next step.
+  - **What's left in session top's areas** (2026-10-04, free to take; forest.txt and objects.txt note the
+    sites found): signs KANBAN 182 (above); Octoroks OQ 227 (the bob's phase `spliti` at 023C11AC; not
+    woken by the tests at sea, attacks untested); hanging flower platforms KITA 97 (the sway count
+    `whole` at 0219E040/0219FCD4; floating in water they drift and turn a step a tick: the turn at
+    0219E7B8/0219E8B0 `split@r5`, the drift not found yet); the hanging house KOKIIE 98 (m298 at 021A5838;
+    its fall when cut, speed.y by hand); Morths 205 (rules in tick_rules.txt; their hops are random, and
+    the trial has `f_024F2514`, d_bg_w's helper, moving them 1.63 times as far: shared); Big Octo
+    225/226 (beaten on the 100% save); Gyorgs 228 (not woken by the tests); Seahats. Link's two
+    counters noted above are session bottom's now (with Link's items).
   - **Two 60 fps crashes in the Forbidden Woods, fixed (session top; shared, `sixty.cpp` `LiveStore`)**: at
     every warp there with Link converted (the defaults). Both came from half ticks putting back or hiding
     words in .data/.bss that head lists whose nodes are on the heap (which a half tick never puts back):
