@@ -169,7 +169,8 @@ namespace
 	// whole tick for it and the half tick after, so a switch falls between ticks; an event that starts
 	// during a whole tick (after the process ran: the Wind Waker's song starts one from Link's own
 	// tick) also cancels the half tick's step, which would run event code half a tick early (it took
-	// Link out of the song on the warp route). The process then moves half a tick less at that start.
+	// Link out of the song on the warp route). A process the event doesn't concern finishes its tick there
+	// (InEvent, below); the event's own move half a tick less at that start.
 	bool EventRunning()
 	{
 		return rd8(0x1046F0B0u + 0x5292u) != 0;
@@ -216,11 +217,41 @@ namespace
 		const uint32 action = rd32(s_link + 0x65F0);
 		return action == 4 || action == 6 || action == 0x9A || action == 0xAA;
 	}
-	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0;
+	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0, s_edgeFinishes = 0;
 	void StepStats()
 	{
-		cemuLog_log(LogType::Force, "wwhd sixty: {} half steps of converted processes; {} stopped by a running event, {} by an ordered one, {} by an ending one",
-			s_halfSteps, s_eventStops, s_orderStops, s_endStops);
+		cemuLog_log(LogType::Force, "wwhd sixty: {} half steps of converted processes; {} stopped by a running event, {} by an ordered one, {} by an ending one; {} finished their tick at an event's edge",
+			s_halfSteps, s_eventStops, s_orderStops, s_endStops, s_edgeFinishes);
+	}
+
+	// A process outside the event finishes its tick at an event's edge (D21). The half tick's stops above
+	// (an event that began, was ordered or was asked to end during the whole tick, after the process took
+	// its whole-tick step) cancelled every converted process's half step there, so each moved half a tick
+	// less at every event's start (the Tower of the Gods' light stairs fell half a frame behind 30's at
+	// each). The stops are for the event's own: Link, the camera, an actor the event controls (its event
+	// command, dEvt_info_c at +0xF8, set; the staff status fopAcStts_FORCEMOVE, 0x8000 of actor_status
+	// at +0x2E0) and the actors of a pending order (dEvt_control_c at g_dComIfG_gameInfo +0x51D0: eight
+	// orders of 0x18 bytes, the actors at +0x08 and +0x0C, the count at +0xC0, as its order, f_0253EC0C,
+	// writes them); anything that isn't an actor stays held too. The others take their half step, as
+	// at 30 they finished the tick before the event. WWHD_60FPS_EVENTEDGE=0 (a probe): as before.
+	bool EventEdgeFinish()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_EVENTEDGE"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	bool InEvent(uint32 proc)
+	{
+		const uint16 name = rd16(proc + 0x08);
+		if (name == 168 || name == 476 || !s_knownActors.count(proc))
+			return true;
+		if (rd16(proc + 0xF8) != 0 || (rd32(proc + 0x2E0) & 0x8000u) != 0)
+			return true;
+		constexpr uint32 kEvtControl = 0x1046F0B0u + 0x51D0u;
+		const int orders = (sint8)rd8(kEvtControl + 0xC0u);
+		for (int i = 0; i < orders && i < 8; i++)
+			if (rd32(kEvtControl + i * 0x18u + 0x08u) == proc || rd32(kEvtControl + i * 0x18u + 0x0Cu) == proc)
+				return true;
+		return false;
 	}
 
 	// WWHD_STATE_TRACK=n,m,...: with the probe, these processes' bytes after every whole tick and, at
@@ -1680,13 +1711,19 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 			const bool running = EventRunning() && !(s_eventAtWhole[proc] && StepInEvents());
 			const bool ordered = !running && EventOrdered();
 			const bool ending = !running && !ordered && EventEnding();
-			s_eventStops += running;
-			s_orderStops += ordered;
-			s_endStops += ending;
-			if (running || ordered || ending)
+			const bool edge = running || ordered || ending;
+			if (edge && !(EventEdgeFinish() && !InEvent(proc)))
+			{
+				s_eventStops += running;
+				s_orderStops += ordered;
+				s_endStops += ending;
 				s_stepping[proc] = false;
+			}
 			else
+			{
+				s_edgeFinishes += edge;
 				s_halfSteps++;
+			}
 		}
 		converted = s_stepping[proc];
 	}
@@ -1982,8 +2019,7 @@ void f_025D475C(PPCInterpreter_t* __restrict ctx)
 {
 	if ((Probe() || wwhd::rt::SixtyFrom() != ~0u) && !g_rtHalfTick && s_trialPhase != 1)
 		s_actors.push_back(GPR(3));
-	if (ConvertAll())
-		s_knownActors[GPR(3)] = true;
+	s_knownActors[GPR(3)] = true;                     // actors (ConvertAll's list; InEvent's test)
 	[[clang::musttail]] return orig_f_025D475C(ctx);
 }
 

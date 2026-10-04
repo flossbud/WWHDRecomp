@@ -978,12 +978,29 @@ it in a window; D21 "Step 2"):**
       their overrides anyway. Now Link takes the hit (proc 0x68 from f1155.5, landing 0x69 at f1164;
       30: f1156 and f1165, as hits resolve on whole ticks). Only the bombs guard on that counter (three
       NPCs use it as a random bit).
+    - The half tick a converted process lost at each event's edge (shared, `sixty.cpp` `f_025DE58C`, agreed
+      with session qa after its event-reset change): when an event began, was ordered or was asked to end
+      during a whole tick, after a process had taken its whole-tick step, every converted process's half
+      step was cancelled, so each moved half a tick less at every event's start (the Tower of the Gods'
+      light stairs fell half a frame behind 30's at each). Now only the event's own stop: Link, the camera,
+      an actor with its event command set (+0xF8) or the staff status FORCEMOVE (0x8000 of +0x2E0), and the
+      actors of a pending order (dEvt_control_c's orders at g_dComIfG_gameInfo +0x51D0, 0x18 each, actors
+      at +0x08/+0x0C, count +0xC0, checked against WWHD's order function f_0253EC0C); the rest finish their
+      tick (`InEvent`; `WWHD_60FPS_EVENTEDGE=0` as before). Siren room 2's stairs now equal 30's at every
+      tick (they lost a frame by f1400 before); session qa's door routes `back` and `door2` end as before
+      (the same doors at action 1, Link within 5 units of 30's). fopAc_Execute now always notes actors
+      (`s_knownActors`, which only the convert-all probe filled).
     - Not yet: door knobs (KNOB00 305: a door whose motion is its open event, which steps at 30; left for
       the events item and session qa's door fixes), Windfall's night lights (Obj_Light 128: its decomp is
       stubs, and its phases run at night only) and shutters (SHUTTER 259: they move in their open/close
-      events). In daytime on Windfall both match 30 at every tick unconverted. For a night test the save's
-      time of day is a float at g_dComIfG_gameInfo + 0x24 (dSv_player_status_b_c::mTime, degrees at 15 an
-      hour: 22:00 is 330.0, 0x43A50000), to poke before a warp.
+      events). In daytime on Windfall both match 30 at every tick unconverted. A night test is still to
+      do: poking 330.0 (22:00) at g_dComIfG_gameInfo + 0x24 (where the GameCube's dSv_player_status_b_c::
+      mTime would be) before the warp changed nothing (both still matched, as by day), so WWHD's time of
+      day lives elsewhere.
+    - The early BoatBattle camera on route `sail` (session bottom's find: f1293 at 60 against f1338): the
+      Fishman (NPC_SO 118) asks for it from its near swim, which it enters from its swim once Link on the
+      boat is within its radius. At 30 it was mid-jump then (back in the water at f1336); at 60 its random
+      jump timer (rnd(90) + 30 ticks) drew otherwise and it was swimming. The random stream, not a step.
     - B10 (Beedle's ships sail too fast; session qa handed it over): not reproduced. Outset's Beedle ship
       tracked on route sail: speed 12.00/12.00 a tick, path 16132/16153 units over f900-2900, its bob
       phase and height identical tick for tick.
