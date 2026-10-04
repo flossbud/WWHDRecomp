@@ -224,6 +224,42 @@
 0250F28C    whole       stfs            hungCamera (first tick): W (work +0x8) = (n+1)(n+2)/2
 0250F31C    k:f31       fdivs           hungCamera: f31 = (N - m11C) / W, the approach's factor
 0250F4F8    late        stfs            hungCamera: W -= N - m11C
+# the sailing camera (rideCamera f_0250D4E8, work area at r30 (dCamera +0x37C) tagged 'RIDE'; the GameCube
+# decomp has a stub; session bottom): every approach in it ran twice a tick at 60 (the sail route's
+# trial: ~1.9x a tick). Its smoothed boat values (work +0x3C..+0x48, by a constant; two copies), its
+# lean (+0x4C, by constants), the follow point's factor (+0x50) and that point's approach by it, the
+# two entry transitions (by 1 / (20 or 40 - m11C), as the subject camera's: k: on the division), then
+# following: the centre by a factor a component (stored to the stack), radius, latitude, yaw (three
+# branches), fovy and bank (two copies each)
+0250E238    k@f9        fmadds          rideCamera: work +0x3C += (t - it) * k (smoothed boat values)
+0250E250    k@f9        fmadds          rideCamera: work +0x40 += (t - it) * k
+0250E260    k@f9        fmadds          rideCamera: work +0x48 += (t - it) * k
+0250E268    k@f9        fmadds          rideCamera: work +0x44 += (t - it) * k
+0250E2B4    k@f9        fmadds          rideCamera: work +0x3C += (t - it) * k (the other copy)
+0250E2C8    k@f9        fmadds          rideCamera: work +0x40 += (t - it) * k
+0250E2D8    k@f9        fmadds          rideCamera: work +0x44 += (t - it) * k
+0250E2E0    k@f9        fmadds          rideCamera: work +0x48 += (t - it) * k
+0250E370    k@f12       fmadds          rideCamera: lean (work +0x4C) += (t - it) * k
+0250E450    k@f0        fmadds          rideCamera: lean += (t - it) * k
+0250E47C    k@f0        fmadds          rideCamera: lean += (t - it) * k
+0250E548    k@f6        fmadds          rideCamera: lean += (t - it) * k
+0250E6F8    k@f6        fmadds          rideCamera: work +0x50 += (t - it) * k (the follow point's factor)
+0250E730    k@f1        bl 0201ae48     rideCamera: the follow point (work +0x2C) += (t - it) * work +0x50
+0250E7A4    k:f25       fdivs           rideCamera (entering): f25 = 1 / (20 - m11C)
+0250E8FC    k:f25       fdivs           rideCamera (entering, from another camera): f25 = 1 / (40 - m11C)
+0250E98C    k@f25       fmadds          rideCamera (entering, a cut): fovy += (t - fovy) * k
+0250EA58    k@f15       stfs            rideCamera: the centre's approach factor, x
+0250EA64    k@f16       stfs            rideCamera: the centre's approach factor, y
+0250EA6C    k@f15       stfs            rideCamera: the centre's approach factor, z
+0250EAAC    k@f22       fmadds          rideCamera: R += (R' - R) * k
+0250EAFC    k@f1        bl 0200693c     rideCamera: latitude += (V' - V) * k
+0250EC7C    k@f1        bl 0200693c     rideCamera: yaw += (U' - U) * k
+0250ED00    k@f1        bl 0200693c     rideCamera: yaw += (U' - U) * k (the boat's own heading)
+0250ED48    k@f1        bl 0200693c     rideCamera: yaw += (U' - U) * k
+0250EDC0    k@f22       fmadds          rideCamera: fovy += (fovy' - fovy) * k
+0250EE08    k@f1        bl 0200693c     rideCamera: bank += (bank' - bank) * k |speed|
+0250EE8C    k@f22       fmadds          rideCamera: fovy += (fovy' - fovy) * k (the other copy)
+0250EED0    k@f1        bl 0200693c     rideCamera: bank += (bank' - bank) * k |speed| (the other copy)
 # the letterbox (f_024FF8A0: dCamera +0x5FC, GC's mTrimSize: 0 to 90 when Z-targeting, by its mode
 # m600): it approaches its size by 0.25 a call, or 0
 024FF940    k@f31       fmadds          trim: size += (size' (+0x7A8) - size) * 0.25

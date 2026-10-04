@@ -1169,9 +1169,25 @@ it in a window; D21 "Step 2"):**
     loss late. After: the swing camera within ~20 units of 30's and the swing on screen (captures).
     The other camera modes without rules (a survey of Run's engine table by their work tags):
     talktoCamera 02508A60 ('TALK'), towerCamera 0250B30C ('TOWR'), rideCamera 0250D4E8 ('RIDE': sailing,
-    the sail route from f1045; its trial shows its approaches at ~1.9x a tick), crawlCamera 02511200
-    ('CRWL'), hookshotCamera 02511B5C ('HOOK'), tornadoCamera 025121E8 ('TRND'), vomitCamera 02513518
-    ('VMIT').
+    now ruled, below), crawlCamera 02511200 ('CRWL'), hookshotCamera 02511B5C ('HOOK'), tornadoCamera
+    025121E8 ('TRND'), vomitCamera 02513518 ('VMIT'). Hookshot targets (dzb PolyInfo word 3 & 0x10, a
+    scratch scan of the rooms' embedded collision): sea rooms 1, 10, 11 (Windfall, 54 triangles), 12, 17, 48;
+    none on Outset (room 44).
+  - **The sailing camera ran its approaches twice a tick at 60, fixed (shared; regress.sh rerun)**:
+    rideCamera (f_0250D4E8, 'RIDE'; the decomp has a stub, ruled from its asm and Ghidra's output). On
+    the sail route at 60 it boarded 133 degrees off and, in a turn, pulled back to 977 units against
+    402 (pitch -18.5 against -0.7, fovy 60 against 76); in straight sailing it matched. 29 rules
+    (tick_rules.txt): k@ on its smoothed boat values, lean, follow factor and point, radius, latitude,
+    yaw, fovy and bank; k: on its two entry transitions' 1 / (N - m11C). After: boarding's tail (f1100-1160)
+    and straight sailing equal 30's (distance 700/690, 750/749, 557/557; fovy equal). Open: boarding's
+    first ticks (f1047: yaw 6 against -128; converges by f1100): the set-up (m11C 0) puts the eye on one
+    side of the boat or the other by an angle's comparison (work +0x38 against the boat's heading), and
+    at 60 it chose the other side (the eye 480 units from 30's at f1045, the centre equal); likely Link's
+    slightly different heading after his swim (the camera lag below), not a rate. The turn's pull-back
+    is the BoatBattle camera
+    type (38) switched 44 ticks early at 60 (f1293 against f1338): requested by name only by the Gyorg
+    controller (GY_CTRL 229/230, f_0216BBBC) and NPC_SO (f_022E06A4), so the Gyorg attack's trigger fires
+    early (told session top, sea life). The camera's type is at camera +0x248+0x51C, its style +0x514.
   - **The bait (ESA 221), converted**: the pieces the bait bag throws (all-purpose bait itself on a
     button: item 0x82, `WWHD_DEBUG_POKE=950:0,1046F0BA,1,b;950:0,10474C6C,1,82`; Y throws it,
     procFoodThrow): its timers, its flight (pos += speed, then speed.y -= 3: late) and its bob on water
