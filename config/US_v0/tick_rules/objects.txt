@@ -1,0 +1,45 @@
+# Objects found in many places (not one area's), session top (docs/handoff.md "Two parallel sessions"):
+# what session bottom and session top agreed to split once the queue was done (pots and stones are
+# bottom's). Found with the trial (tools/sixty/tests/area_test.sh) and the GameCube decomp. The format:
+# ../tick_rules.txt.
+#
+# ---- torches (EP, process 185, d_a_ep.cpp; execute f_0212DBFC, Forbidden Woods room 0 for the trial): the
+# flame's flicker, which counts timers down and picks a random target and timer when one reaches 0
+# (its approach to them is cLib_addCalc2's, time-stepped already). The picks' stores are whole: a timer
+# picked as 0 would pick again on the half tick, twice a tick where 30 picks once. The glow's two spins;
+# a count; m7D4, read by the emitter's checks before it counts down (late). Their moths ("ga", two):
+# their timer m3B and the random target it picks (whole, as the flame's), their step forward and the
+# push (vector adds), their wings' phase.
+0212E334    whole       sthx            ep execute: mTimers[i] (+0x614) - 1
+0212E358    whole       sth             ep execute: mTimers[3] (+0x61A) - 1
+0212E39C    whole       sth             ep execute: mTimers[0] = random (the pick, once a tick)
+0212E3C0    whole       stfs            ep execute: mAlphaModelAlphaTarget (+0x610) = random
+0212E400    whole       sth             ep execute: mTimers[1] = random
+0212E414    whole       stfs            ep execute: mAlphaModelScaleTarget (+0x608) = random
+0212E44C    whole       sth             ep execute: mTimers[1] = random (the other branch)
+0212E460    whole       stfs            ep execute: mAlphaModelScaleTarget = random (the other branch)
+0212F3B4    spliti      addi            ep execute: mAlphaModelRotY (+0x622) + 0xD0 a tick
+0212F3B8    spliti      addi            ep execute: mAlphaModelRotX (+0x620) + 0x100 a tick
+0212F3DC    whole       stb             ep execute: a count (+0xB4C) + 1
+0212F3A4    late        sth             ep ep_move: m7D4 (+0x8F8) - 1, read by the emitter's checks first
+0212DF58    whole       stb             ep ga_move: m3B (+0x3B of a moth) - 1
+0212E038    whole       stb             ep ga_move: m3B = random (the pick)
+0212E04C    whole       stfs            ep ga_move: the target m1C.x = random
+0212E060    whole       stfs            ep ga_move: m1C.y
+0212E074    whole       stfs            ep ga_move: m1C.z
+0212E0CC    whole       stfs            ep ga_move: m1C.x, by the Bokoblin stick's flame
+0212E0E0    whole       stfs            ep ga_move: m1C.y
+0212E0F0    whole       stfs            ep ga_move: m1C.z
+0212E10C    whole       stfs            ep ga_move: m1C.y += 1000 (the flame out)
+0212E008    vec@r4      bl 028e8d88     ep ga_move: mPos += the step forward
+0212E1E8    vec@r4      bl 028e8d88     ep ga_move: the same (after a pick)
+0212E238    vec@r4      bl 028e8d88     ep ga_move: mPos += the push
+0212E2D4    spliti      addi            ep ga_move: m38 (the wings) + 0x3E00 a tick
+#
+# ---- wall lamps (LAMP, process 186, d_a_lamp.cpp; execute f_021B15F8): the sway's count (its sines;
+# split, so both steps of a tick sway from the tick's count), mOto (the shake after a quake or a loud
+# sound: checked, then counted down: late), the wind's hit timeout (counted down, then compared at
+# once: keep). The flame's power approaches a new random target every step (noise either way).
+021B1640    spliti      addi            lamp execute: mCycleCtr (+0x3B6) + 1 a tick
+021B170C    late        stb             lamp execute: mOto (+0x548) - 1
+021B1B0C    keep:r6     addi            lamp execute: mHitTimeoutLeft (+0x550) - 1, then > 10

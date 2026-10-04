@@ -833,6 +833,15 @@ it in a window; D21 "Step 2"):**
     bob's phase `spliti` at 023C11AC; attacks untested), Morths 205 (random hops; a background helper
     moves them 1.63 times as far), torches, pots. Process 204 is a Mothula (GM, "gmos"), not a
     Floormaster: corrected in tick_rules.txt.
+  - **Torches and wall lamps (session top; `config/US_v0/tick_rules/objects.txt`, the leftovers both
+    sessions split once the queue was done: pots and stones are session bottom's, `carried.txt`)**:
+    torches EP 185 (the flame's flicker counts timers down and picks a random target and timer at 0;
+    the picks' stores `whole`, as a timer picked as 0 would pick again on the half tick; the glow's
+    spins `spliti`; their two moths' timer, random target, step and push `vec@`, wings `spliti`) and wall
+    lamps LAMP 186 (the sway's count `spliti`, the quake shake `late`, the wind's hit timeout `keep`):
+    trials clean in Link's house and the Forbidden Woods but for a torch light's radius (a cube of its
+    power: 0.19 a tick against 0.11) and the moths' wing scale and turn (read before their phase moves:
+    half a tick ahead). Both in the defaults.
   - **Two 60 fps crashes in the Forbidden Woods, fixed (session top; shared, `sixty.cpp` `LiveStore`)**: at
     every warp there with Link converted (the defaults). Both came from half ticks putting back or hiding
     words in .data/.bss that head lists whose nodes are on the heap (which a half tick never puts back):

@@ -245,7 +245,9 @@
     "204": "Mothula",
     "235": "Kalle Demos (core)",
     "236": "Kalle Demos (ceiling tentacles)",
-    "237": "Kalle Demos (floor tentacles)"
+    "237": "Kalle Demos (floor tentacles)",
+    "185": "Torch",
+    "186": "Wall lamp"
   },
   "queue_note": "Two sessions: 'top' takes items from the top down, 'bottom' from the bottom up. Claim an item before starting it (tools/progress/publish.sh claim ID); stop where the other session's claims begin. Stage names under 'where' past Windfall and Outset are unverified guesses: confirm with tools/sixty/tests/room_list.sh.",
   "queue": [
