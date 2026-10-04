@@ -57,6 +57,12 @@
 02439710    split@r0    add             link glide: shape_angle.y += m34D4 (+0x691A), the stick's turn a tick
 02439838    split@r7    add             link glide: m34E0 (+0x6928) += m34D6, its bank's carried turn
 024399FC    split@r12   add             link glide: m34E2 (+0x692C) += m34D8, the other axis's
+# Link's own other position adds (every VECAdd into his current.pos checked): procRopeReady (f_024352F4)
+# moves him toward the rope's hang point by m35A0 (chased up to 50 a tick) a call; posMove's others are
+# the animation's root motion since the last call (a step's) and the collision push (used once, then
+# cleared by posMove itself); procHookshotFly adds the hookshot's mMoveVec (a step's: the hookshot's
+# rules). The rope's is ruled from the decomp (no rope target on the routes).
+02435410    vec@r4      bl 028e8d88     link rope ready: current.pos += toward the rope's point, m35A0 a tick
 #
 # ---- arrows (ARROW, process 472, d_a_arrow.cpp; execute f_02052DB8). WWHD's fields are the GameCube's +
 # 0x11C up to field_0x604, + 0x118 after it. procMove (f_02054040): current.pos += speed (200 a tick; the
