@@ -1242,6 +1242,20 @@ it in a window; D21 "Step 2"):**
     type (38) switched 44 ticks early at 60 (f1293 against f1338): requested by name only by the Gyorg
     controller (GY_CTRL 229/230, f_0216BBBC) and NPC_SO (f_022E06A4), so the Gyorg attack's trigger fires
     early (told session top, sea life). The camera's type is at camera +0x248+0x51C, its style +0x514.
+  - **Bug B20, the warp light's rise ran at 30, now at 60 (shared: sixty.cpp's StepInEvents, a new
+    `lag` step rule in generate.py, tick_rules.txt; regress.sh rerun)**: B18's cause again: rising in a
+    warp light is Link's action 0xD2 (daPyProc_DEMO_WARP_SHORT, dProcWarpShort f_0242583C), not in the
+    event-stepping list. Added, with his rise's acceleration `*h@` (link_items.txt) and the rolling event
+    camera that circles him (f_025369BC; the decomp has a stub; data names as TP's rollingEvCamera):
+    a call moves its centre toward the target by CtrCus (`k@f1` on the scaling calls) and puts the eye
+    on a globe whose longitude and radius are the start's plus m11C x a speed. m11C counts whole ticks
+    (`late`), so the whole tick's step would show the last tick's angle and the circle would turn every
+    other frame: `lag@fN` (new; `lagi`'s float twin, for a count made a float) makes the count N - 1/2
+    on the whole tick's step. Test: Cave01 room 0's light (`WWHD_DEBUG_STAGE=920:Cave01,0,0,-1` on the
+    save route, walk off it and back: LUP 25 at f1030, LDOWN 30 at f1070): the warp lasts 119 ticks at
+    both rates (it starts a tick sooner at 60, Link's walk), the camera turns 0.75 degrees a frame (30's
+    1.5 a tick; its mid-tick yaw half way), its distance within 1.5 units and pitch within 0.3 degrees,
+    Link's height within 0.2; the camera's trial over the rise clean, Link's speed equal.
   - **Bug B18, talks ran at 30, now at 60 (shared: sixty.cpp's StepInEvents; regress.sh rerun)**: Link's
     action while talking is 0xAA, which wasn't in the list of actions converted processes step under
     in an event (4 wait, 6 move, 0x9A conducting), so a talk held them to whole ticks. 0xAA added, and

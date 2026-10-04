@@ -221,3 +221,8 @@
 021305F0    late        stfs            esa move: speed.y -= 3 (gravity, once a tick)
 02130B3C    spliti      addi            esa on water: m3E0 + 3000 a tick (its bob's phase)
 02130B7C    spliti      addi            esa on water: m3E0 + 3000 a tick (the other copy)
+
+#
+# ---- Link rising in a warp light (dProcWarpShort f_0242583C, daPyProc_DEMO_WARP_SHORT 0xD2; bug B20):
+# speed.y + the HIO's rise (0x10035818) a call up to its cap (0x10036054); his posMove moves him
+0242585C    *h@f0       fadds           link warp short: speed.y += the rise's acceleration a tick

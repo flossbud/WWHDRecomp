@@ -76,6 +76,9 @@ rules, for the code of processes that run every frame with a time step h
   lagi         for a `mulli rD, rA, IMM` of a tick count (a phase as count x IMM, the count kept to whole
                ticks): on the whole tick's step rD lags by IMM/2, (count - 1/2) x IMM, so the phase
                moves every frame and is 30's at half ticks
+  lag:fREG     the same for a tick count made a float (count x speed with fmuls, count x speed + base
+               with fmadds; lag@ for that instruction only): on the whole tick's step the float REG is
+               REG - 1/2
   OP@REG       the same, for this instruction only: REG has its value back afterwards (unless the
                instruction writes it), as in `x += (t - x) * k` with k@f2 on its fmadds
   note:REG     after the instruction, the float REG is noted (g_rtNote) for an arc@ later in the step
@@ -216,7 +219,8 @@ class Program:
             self.entries |= {a for a, _, _ in self.synthetic}
 
     STEP_OPS = {"*h": "rt_step_mul", "/h": "rt_step_div", "k": "rt_step_approach", "d": "rt_step_damp",
-                "k75": "rt_step_approach75", "*hh": "rt_step_mul(rt_step_mul({}))"}
+                "k75": "rt_step_approach75", "*hh": "rt_step_mul(rt_step_mul({}))",
+                "lag": "({} - (RT_WHOLE_TICK() ? 0.5 : 0.0))"}
 
     def load_tick_rules(self, path):
         """address -> (rule, argument, expected instruction text, what): see the docstring. rule is
@@ -266,6 +270,7 @@ class Program:
                     assert kind != "note" or arg[0] == "f", f"tick_rules.txt:{n}: note takes a float register"
                     assert re.fullmatch(r"[rf]([12]?[0-9]|3[01])", arg), f"tick_rules.txt:{n}: {rule}: a register expected"
                     assert kind.rstrip("@") != "split" or arg[0] == "r", f"tick_rules.txt:{n}: split takes an integer register"
+                    assert kind.rstrip("@") != "lag" or arg[0] == "f", f"tick_rules.txt:{n}: lag takes a float register (lagi: mulli)"
                     value = arg
                 assert self.function_containing(ea) is not None, f"tick_rules.txt:{n}: {ea:08X} is in no function"
                 assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"

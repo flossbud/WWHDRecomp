@@ -289,6 +289,17 @@
 02509BBC    k:f31       fdivs           talktoCamera: f31 = (N - count) / W, the approach's factor
 02509CE8    late        stfs            talktoCamera: W -= N - count
 0250B2A0    late        stw             talktoCamera: the cut's count (work +0x44) + 1
+# the rolling event camera (f_025369BC, the warp light's rise circling Link, bug B20; the decomp has a
+# stub; its data names are TP's rollingEvCamera's: Eye, Center, CtrCus, TransType, RadiusAdd, Latitude,
+# Timer, RelActor; work area at r30 = dCamera +0x37C): a call moves the centre (+0x44) toward its target
+# by CtrCus (work +0x58), then puts the eye on a globe around it whose longitude is the start's plus
+# m11C x the speed (work +0x4C) and radius the start's plus m11C x RadiusAdd (work +0x50): k@ on the
+# centre's factor, and the count lags half a tick on the whole tick's step (m11C is late)
+02537120    k@f1        bl 0201ae48     rollingEvCamera: centre += (target - centre) x CtrCus (TransType 1/2, 'o')
+02537218    k@f1        bl 0201ae48     rollingEvCamera: the same ('n')
+02537364    k@f1        bl 0201ae48     rollingEvCamera: the same (the others)
+025373E8    lag@f0      fmuls           rollingEvCamera: the longitude's turn, m11C x speed
+02537444    lag@f12     fmadds          rollingEvCamera: the radius, m11C x RadiusAdd + radius
 # the letterbox (f_024FF8A0: dCamera +0x5FC, GC's mTrimSize: 0 to 90 when Z-targeting, by its mode
 # m600): it approaches its size by 0.25 a call, or 0
 024FF940    k@f31       fmadds          trim: size += (size' (+0x7A8) - size) * 0.25
