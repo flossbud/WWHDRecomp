@@ -111,3 +111,18 @@
 024DCA3C    late        bl 025d7a58     warpls eventOrder: fopAcM_orderOtherEventId (activation)
 024DCACC    late        bl 025d7a58     warpls eventOrder: fopAcM_orderOtherEventId (warp, the tower's)
 024DCB08    late        bl 025d7a58     warpls eventOrder: fopAcM_orderOtherEventId (warp)
+#
+# ---- lava (434 makes a floor in the scene's dMagma_packet and deletes itself: no process): the packet's calc,
+# executeMagma, runs every frame at 60 with a time step (sixty.cpp's scene packets, as the plants; it was held
+# to whole ticks): the texture's scroll and the glow's color cycle (a float += a constant a tick: *h@), the
+# bubbles' bob (a phase += 200 a tick: spliti; their wait, cLib_calcTimer, is stepped). A bubble respawns
+# (setup: a random place, size and phase) once its phase has wrapped below 0; split, the phase wraps on a
+# half step, so the respawn and its resets go on whole ticks (the phase is an angle: it goes on through the
+# wrap as 30's does), and the respawn's random draws come when 30's do. Its trial (WWHD_60FPS_TRIAL_MAGMA=1
+# at 30; trial.py --all, as its stores are globals and heap) is clean but for rounding and the scratch matrix.
+0258C800    *h@f11      fadds           dMagma_packet_c::calc: the scroll += 0.001
+0258C8DC    *h@f31      fadds           dMagma_packet_c::calc: the color cycle's timer += 1
+02589EF4    spliti      addi            dMagma_ballPath_c::calc: a bubble's phase += 200
+02589EC8    whole       bctrl           dMagma_ballPath_c::calc: setup (a respawn) when the phase is below 0
+02589ED0    whole       sth             dMagma_ballPath_c::calc: the phase = 0 after it
+02589ED4    whole       stb             dMagma_ballPath_c::calc: the wait = 0 after it

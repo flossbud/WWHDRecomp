@@ -30,9 +30,9 @@
 025AF944    whole       bl 024ee9c8     dComIfG_Bgsp()->ClrMoveFlag()
 025AF95C    whole:r3=1  bl 025202f8     dComIfG_resetToOpening (1: skips the next-stage requests)
 025B00C0    whole       bl 025cbb90     vibration Run()
-025B00CC    whole       bl 02524ca0     executeMagma
 025B0124    whole       bl 02516e1c     dComIfG_Ccsp()->PrepareMass()
-# (executeGrass, executeTree, executeWood, executeFlower: overrides now, sixty.cpp's plants)
+# (executeMagma at 025B00CC, executeGrass, executeTree, executeWood, executeFlower: overrides now, sixty.cpp's
+# scene packets)
 025B0158    whole       bl 0256c8fc     dKyr_poison_light_colision
 025B0170    whole       bctrl           dComIfG_Bgsp()->Move(): moving collision
 025B0174    whole       bl 025be8dc     dSnap_Execute

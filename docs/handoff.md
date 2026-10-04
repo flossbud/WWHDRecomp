@@ -926,10 +926,17 @@ it in a window; D21 "Step 2"):**
       bounces through a 60-tick cycle with Link on it, height and speed equal to 30's at every tick;
     - fires Fire 424 (Cave01 room 1's six) and warp lights WARPLIGHT 106 (Cave01 room 0): two countdowns
       `keep` and the event orders `late` (made every tick until the event starts); 100% equal to 30's.
+    - lava (shared: `sixty.cpp`, `overrides.txt`, `tick_rules.txt`): 434 makes a floor in the scene's
+      dMagma_packet and deletes itself (no process), and the packet's calc, `executeMagma` (f_02524CA0),
+      was held to whole ticks by a frame-level rule. It is an override now, as the plants are (their
+      helper is now `ScenePacket(ctx, fn, converted, trial)`): every frame at 60 with a time step,
+      `WWHD_60FPS_MAGMA=0` keeps it at 30, `WWHD_60FPS_TRIAL_MAGMA=1` (at 30) is its trial (read it with
+      `trial.py --all`: its stores are globals and heap, which trial_filter drops). Steps in objects.txt:
+      the scroll and the glow's color cycle `*h@`, the bubbles' phase `spliti`, and a bubble's respawn
+      (random) `whole` with its resets, since the split phase wraps on a half step. Trial in Cave01 room
+      1: clean but for the scroll's last place;
     - Not converted: the Hyoi seagull NPC_KAM 195 (idle, it matches; its flight with a Hyoi Pear isn't
-      tested), and lava (434 makes a floor in the scene's dMagma_packet and deletes itself: no process; its
-      calc, `executeMagma`, is held to whole ticks by a frame-level rule, so the lava's scroll, color cycle
-      and bubbles step at 30; it would take an override like the plants').
+      tested).
   - **Two 60 fps crashes in the Forbidden Woods, fixed (session top; shared, `sixty.cpp` `LiveStore`)**: at
     every warp there with Link converted (the defaults). Both came from half ticks putting back or hiding
     words in .data/.bss that head lists whose nodes are on the heap (which a half tick never puts back):

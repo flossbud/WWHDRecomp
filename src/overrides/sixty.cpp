@@ -1614,15 +1614,17 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 // back. They ran on whole ticks (tick rules). At 60 they now run every frame with a time step of half a
 // tick (WWHD_60FPS_PLANTS=0: whole ticks only), their stores standing (config/US_v0/tick_rules.txt has their steps);
 // at 30 with the probe, WWHD_60FPS_TRIAL_PLANTS=1 runs them as the step-doubling trial.
+// The lava (executeMagma, f_02524CA0; the play scene's draw calls it at 025B00CC): dMagma_packet_c's calc
+// scrolls the lava's texture, cycles its glow's color and bobs its bubbles; the same, with
+// WWHD_60FPS_MAGMA and WWHD_60FPS_TRIAL_MAGMA (config/US_v0/tick_rules/objects.txt has its steps).
 namespace
 {
-	void Plants(PPCInterpreter_t* ctx, void (*fn)(PPCInterpreter_t*))
+	// a scene packet's calc (converted: every frame at 60 with a time step; trial: the step-doubling trial at 30)
+	void ScenePacket(PPCInterpreter_t* ctx, void (*fn)(PPCInterpreter_t*), bool converted, bool trial)
 	{
-		static const bool converted = [] { const char* e = getenv("WWHD_60FPS_PLANTS"); return !e || atoi(e) == 1; }();   // on unless =0
 		const uint32 from = wwhd::rt::SixtyFrom();
 		if (from == ~0u)
 		{
-			static const bool trial = [] { const char* e = getenv("WWHD_60FPS_TRIAL_PLANTS"); return Probe() && e && atoi(e) == 1; }();
 			if (trial && s_trialPhase == 0)
 				TrialExecute(ctx, fn);
 			else
@@ -1642,6 +1644,19 @@ namespace
 		s_converting--;
 		g_rtStep = step;
 	}
+
+	void Plants(PPCInterpreter_t* ctx, void (*fn)(PPCInterpreter_t*))
+	{
+		static const bool converted = [] { const char* e = getenv("WWHD_60FPS_PLANTS"); return !e || atoi(e) == 1; }();   // on unless =0
+		static const bool trial = [] { const char* e = getenv("WWHD_60FPS_TRIAL_PLANTS"); return Probe() && e && atoi(e) == 1; }();
+		ScenePacket(ctx, fn, converted, trial);
+	}
+}
+void f_02524CA0(PPCInterpreter_t* __restrict ctx)
+{
+	static const bool converted = [] { const char* e = getenv("WWHD_60FPS_MAGMA"); return !e || atoi(e) == 1; }();   // on unless =0
+	static const bool trial = [] { const char* e = getenv("WWHD_60FPS_TRIAL_MAGMA"); return Probe() && e && atoi(e) == 1; }();
+	ScenePacket(ctx, orig_f_02524CA0, converted, trial);
 }
 void f_02524DA0(PPCInterpreter_t* __restrict ctx) { Plants(ctx, orig_f_02524DA0); }
 void f_02524EA0(PPCInterpreter_t* __restrict ctx) { Plants(ctx, orig_f_02524EA0); }
