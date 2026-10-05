@@ -1258,6 +1258,19 @@ it in a window; D21 "Step 2"):**
     type (38) switched 44 ticks early at 60 (f1293 against f1338): requested by name only by the Gyorg
     controller (GY_CTRL 229/230, f_0216BBBC) and NPC_SO (f_022E06A4), so the Gyorg attack's trigger fires
     early (told session top, sea life). The camera's type is at camera +0x248+0x51C, its style +0x514.
+  - **The follow camera's turn ramp a count ahead at 60, fixed (shared: tick_rules.txt; regress.sh
+    rerun)**: followCamera's m38C (a hang's or crawl's turn ramp: m3B8 = m38C / 30, then m38C + 1, and
+    its countdown and resets) and m392 (a spin's charge ticks: a ratio of m392, then m392 + 1) were
+    `whole`: the change landed on the whole tick's step, so the half step, the tick's end, read the next
+    count (the crawl route's trial: m3B8 0.4 against 0.367, "twice"). `late` now, as the other cameras'
+    counts: both frames of a tick read the tick's count. Route `crawl` (Link over the Outset dock's end
+    and hanging): the camera's turn round to the ledge, 12 degrees a tick, equal to 30's within 0.75
+    degrees at every tick and its count with 30's (before: a count behind at each tick's end, 6-7
+    degrees). Two things there aren't the camera: Link reaches the edge 2 ticks sooner at 60 (his crawl's
+    speed follows its animation, whose phase is ahead, and the edge is found on a half step), and while
+    he hangs at the edge the forward check (forwardCheckAngle: lines ahead along the camera's yaw, the
+    ground's height where they land) sits on the dock's edge, so a degree of yaw flips it (the pitch
+    bumps to 20 degrees at 60 for ten ticks).
   - **Item gets at 60 (shared: sixty.cpp's StepInEvents, tick_rules.txt; regress.sh rerun)**: opening a
     chest (Link's action 0xAD, DEMO_OPEN_TREASURE) and holding up what he got (0xAE, DEMO_GET_ITEM) held
     their events to whole ticks, as talks did (B18). Both added, and three cameras ruled (no decomp,

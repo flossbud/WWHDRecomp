@@ -120,15 +120,19 @@
 02503DC8    whole       stfs            followCamera: m3B8 = (1 - m3B8) * ratio (charging)
 02503E20    k@f10       fmadds          followCamera: m3B8 += (1 - m3B8) * 0.2
 02503EC8    k@f7        fmadds          followCamera: m3B8 += (0.5 - m3B8) * 0.05
-02504084    whole       stw             followCamera: m38C = -1 (turn ramp start)
-025040AC    whole       stw             followCamera: m38C - 1
-025040CC    whole       stw             followCamera: m38C = 16
-02504148    whole       stw             followCamera: m38C = 1 (turn ramp start)
-025041A0    whole       stw             followCamera: m38C + 1 (m3B8 = m38C / 30)
+# m38C (the turn ramp's count: m3B8 = m38C / 30, then m38C + 1) and m392 (the charge's ticks: a ratio of
+# m392, then m392 + 1) are read before they change: late, so both frames of a tick read the tick's
+# count (whole put the change on the whole tick's step, and the half step, the tick's end, read the
+# next count: m3B8 one thirtieth ahead, the crawl's trial "twice")
+02504084    late        stw             followCamera: m38C = -1 (turn ramp start)
+025040AC    late        stw             followCamera: m38C - 1
+025040CC    late        stw             followCamera: m38C = 16
+02504148    late        stw             followCamera: m38C = 1 (turn ramp start)
+025041A0    late        stw             followCamera: m38C + 1 (m3B8 = m38C / 30)
 025042F8    k75@f1      bl 0200693c     followCamera: U += (U' - U) * m3B8 cos V
 025043C8    k75@f1      bl 0200693c     followCamera: U += (U' - U) * m3B8 cos V
 0250447C    k75@f1      bl 0200693c     followCamera: U += (U' - U) * m3B8 cos V
-02504550    whole       sth             followCamera: m392 + 1 (charge ticks)
+02504550    late        sth             followCamera: m392 + 1 (charge ticks)
 02504620    k@f8        fmadds          followCamera: m3A0 += m3B8 * (dVar28 - m3A0)
 02504660    k@f18       fmadds          followCamera: m3E0 += (fVar40 - m3E0) * 0.5
 025046C0    k@f23       fmadds          followCamera: m3BC += dVar27 * (dVar28 - m3BC)
