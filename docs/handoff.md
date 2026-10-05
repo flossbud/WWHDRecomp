@@ -1104,9 +1104,29 @@ it in a window; D21 "Step 2"):**
     so a copy is needed, not a put-back). The boat's sail as seen sailing isn't SAIL 172's packet (its
     draw, f_0245FAAC, returns early while sailing: the boat's +0x3E4 is 0): the visible sail is drawn
     elsewhere, to find. The Stalfos' loincloth (its pose set in the execute, nun_pos_set: its angle steps
-    on whole ticks, its anchor every step), the rope bridges' ropes (89, the other line class: to test
-    with Link crossing). Other users of the two line classes (ropes, ships' lines, vines) can be opted in
-    once tested.
+    on whole ticks, its anchor every step). Other users of the two line classes (ropes, ships' lines,
+    vines) can be opted in once tested; the rope bridges' ropes step with their bridge, now converted.
+  - **Rope bridges (BRIDGE 89) in the defaults (session top; earth.txt)**: Link walked across two at 30
+    and 60, from spawn points facing them with the stick held up: Dragon Roost Cavern room 2's top bridge
+    (`M_NewD2,8,2,-1`) and Outset's cliff bridge in the wind (`sea,8,44,0`: layers 0 and 2 have it, -1's
+    hasn't). The planks track 30's within a mean of 2.0-2.3 units (at most ~20 in the dip under Link: the
+    planks' chain, two passes a tick at 60, follows his weight a little sooner) and make half their motion
+    on half ticks; Link's height on them is a mean 5 and 1.4 units from 30's. Unconverted, the planks and
+    their collision moved on whole ticks under a Link who steps every frame. On the way: a stage warp's
+    point is the low byte of its spawn entry's (PLYR) angle z, a point the room hasn't gives its first
+    entry (`stage_actors.py STAGE ROOM --spawns` lists them); `WWHD_DEBUG_PLACE` in play moves Link along a
+    line from where he was and stops at the first wall (it left him over Dragon Roost's lava), and a
+    `WWHD_DEBUG_POKE` of his facing didn't hold there; capture.sh's extra input lines are game frames (its
+    header said swaps; its shots are swaps). events_test.sh's back and talk routes now start from the
+    warps their headers name (before, they ran from Outset's dock without their door and talk).
+  - **`splitd@REG` (shared: generate.py; the Morth's spin, tick_rules.txt)**: `split@` while the process
+    steps, and the instruction doesn't run on a half tick's draw (a half tick with h 1: only stepping
+    processes run then). The Morth's draw_SUB (f_021A6F64, its body's spin m2FA += m2FE) runs from its
+    execute, which sets m2CD, and from its draw when m2CD is 0 (no execute since the last draw). A half
+    tick's draws are put back afterwards (WWHD_60FPS_ROLLBACK) for every process that executed on the
+    whole tick, unless it's converted and stepping (whose half-tick execute set m2CD), so only a process
+    the manager doesn't execute but still draws was left: at the pause menu's first frames the spin moved
+    2200 at 60 against 30's 1100 (session bottom's audit of rules a draw reaches); now 1100.
   - **A tick that began stepping in an event finishes its half step (shared: sixty.cpp, 2026-10-05)**: the
     half tick's stop for a running event read Link's action again (StepInEvents), so where it left the
     list during the whole tick's step every process that had begun stepping lost the tick's other half:

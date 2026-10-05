@@ -148,12 +148,16 @@
 #
 # ---- rope bridges (BRIDGE 89, d_a_bridge.cpp; execute f_020E11E8 with bridge_move and the planks' chain
 # inlined; the bridge's fields the GameCube's + 0x268, its planks (br_s) 0x680 apart): in the Earth Temple
-# (room 9), Dragon Roost Cavern, Ganon's Tower and on the sea. NOT in the defaults yet: ruled from the
-# decomp and the trial in M_Dai room 9 (warp M_Dai,12,0,-1: the stage's spawn list's 13th entry, point
-# 0x0A, at the bridge's far end), where Link never got onto it; converted, it settled from its start in
-# fewer ticks (its planks' chain, placed in a pass from each end with no time step, relaxes twice a tick)
-# and rested where 30's did. Wanted before converting: Link walking across one (outdoors, for the sway). Its sway's and
-# bob's phases (+= 0x578 and 3000 a tick), the shake's phase (+ 3000 a tick, + 4000 once cut), a tick
+# (room 9), Dragon Roost Cavern, Ganon's Tower and on the sea. Ruled from the decomp and the trial in M_Dai
+# room 9 (warp M_Dai,12,0,-1: the stage's spawn list's 13th entry, point 0x0A, at the bridge's far end);
+# converted, a bridge settles from its start in fewer ticks (its planks' chain, placed in a pass from each
+# end with no time step, relaxes twice a tick) and rests where 30's does. In the defaults (session top) since
+# Link walked across two at 30 and 60, from spawn points facing them with the stick held up: Dragon Roost
+# Cavern room 2's top bridge (M_NewD2,8,2,-1) and Outset's cliff bridge, outdoors in the wind (sea,8,44,0:
+# layers 0 and 2 have it, -1's hasn't). Its planks (0-17) at 60's half ticks against 30's ticks: a mean of
+# 2.0-2.3 units, at most 18-21 in the dip under Link (the chain follows his weight a little sooner); Link's
+# height on them a mean 5 and 1.4 units apart (at most 20); half their motion falls on half ticks. Its sway's
+# and bob's phases (+= 0x578 and 3000 a tick), the shake's phase (+ 3000 a tick, + 4000 once cut), a tick
 # count (a phase x 0x578 for the ropes), the stress count (+ 2 a tick while Link stands on a weak plank,
 # the bridge breaks past 100; - 1 a tick), a shake's push on the planks' tilt, and countdowns. The planks
 # and the ropes are chains placed in a pass from each end, the planks' sag and tilt approach by
