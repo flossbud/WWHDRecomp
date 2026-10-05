@@ -294,60 +294,35 @@
     "460": "ice block",
     "64": "table"
   },
-  "queue_note": "Round 2 (2026-10-04; round 1's nine areas are done). 'top' takes items from the top down, 'bottom' from the bottom up; claim before starting (tools/progress/publish.sh claim ID) and stop where the other session's claims begin. The owner's bugs are session qa's (the Bugs list): where an item touches one (named in it), leave the bug to qa or agree with qa first (SendMessage). Stage names are to be confirmed with tools/sixty/tests/room_list.sh.",
+  "queue_note": "Round 3 (2026-10-05; rounds 1 and 2 are done). 'top' takes items from the top down, 'bottom' from the bottom up; claim before starting (tools/progress/publish.sh claim ID) and stop where the other session's claims begin. The owner's bugs are session qa's (the Bugs list). Keep the claim's note and your status line current.",
   "queue": [
     {
-      "id": "objects",
-      "name": "World objects, leftovers (top's batch in progress: barrels, heat haze, floor switches, fires, warp lights); then lava/magma 434 (dMagma_packet: an override like the plants'), light bridges 427/428 (animation frames drift), the hot floor 231, Hys 450, mailbox 67, door knobs 305, item stands 462, Windfall's night-only lights 128 and shutters 259"
+      "id": "drawposed",
+      "name": "Models posed in their draw (palms, grass tufts and 16 actor kinds) show the half frame's pose on whole frames: the HD renderer's matrix upload (top's, in progress)"
     },
     {
-      "id": "rito",
-      "name": "Dragon Roost Island's village (Rito Aerie): the Rito NPCs, Komali, Quill, the postman and mail sorting, Valoo (DR 222), the island's objects; Medli (367) where a save state has her",
-      "where": "Adanmae / Atorizk (to confirm)"
+      "id": "hz30-outdoors",
+      "name": "hz30 sweep outdoors: tools/sixty/tests/hz30.py over the islands, Windfall (day and night, WWHD_DEBUG_TIME), the sea and its weather states: what still moves at 30 Hz; convert or record each"
     },
     {
-      "id": "islands",
-      "name": "The other islands and caves: Tingle Island, Fire and Ice islands, Islet of Steel, Bomb Island, Mother & Child, Private Oasis, Great Fairy fountains, Savage Labyrinth, the Ghost Ship, submarines and platforms, Windfall at night (its night lights and shutters if 'objects' didn't take them)"
+      "id": "leftovers",
+      "name": "Known leftovers: Fire Mountain's objects left at 30, the Hyoi seagull's flight with a Hyoi Pear, Orca's look-at, Tingle's tower; Medli and Makar (need a save state where they're with Link: the debug menu or a poke could make one)"
     },
     {
-      "id": "sealife",
-      "name": "Sea creatures in action: Octoroks 227 and Gyorgs 228 woken (attacks, projectiles), Seahats, Big Octo 225/226, the Hyoi seagulls 195 with a Hyoi Pear, hanging flower platforms KITA 97, the hanging house KOKIIE 98"
+      "id": "perf",
+      "name": "60 fps cost: measure the frame time at 60 on the owner's desktop (~/wwhd-test, real time) across routes; find what the half frames cost (rollback journal, held items, plants) and trim it (the Android goal: low CPU)"
     },
     {
-      "id": "chains",
-      "name": "Cloths and chains (shared code): a time step for one-pass cloth/chain solvers (pirate flag 173, sails 172, tapestries 289, Stalfos' hair and cloth, rats' tails), rope bridges 89 (ruled in earth.txt; test with Link crossing one, e.g. Dragon Roost Cavern's)"
+      "id": "hz30-dungeons",
+      "name": "hz30 sweep in the dungeons and boss rooms (bottom's next after the dungeons item): what still moves at 30 Hz; convert or record each"
     },
     {
-      "id": "enemies",
-      "name": "Enemy gaps (shared code): hand-made gravity arcs g/4 a tick higher (hand posMove the gravity added by hand), enemies falling into water (hang ~2 ticks at 30), Morths 205 (a helper moves them 1.63x), getting hit, dying and dropped weapons for Bokoblins/Moblins/Darknuts, Mothula and Octorok attacks. Bug B14 (Moblin's spear) is qa's"
-    },
-    {
-      "id": "debugmenu",
-      "name": "The owner's idea: an in-game debug menu on the test aids: warp to any stage/room, spawn any actor, refight bosses (WWHD_DEBUG_STAGE/SPAWN/BOSS) as a boss rush; usable from a controller"
-    },
-    {
-      "id": "events",
-      "name": "Events and cutscenes at 60: converted processes step in events only for Link's wait/move/conducting actions; make cutscenes (dDemo), talks and item gets step at 60 (the Ballad of Gales warp cyclone, door events). Bugs B18 (NPC talks at 30) and B20 (warp light rise at 30) are qa's: agree with qa who takes them"
-    },
-    {
-      "id": "linkitems",
-      "name": "Link and his items (bottom's batch in progress: hat, swim bob, Deku Leaf glide, Ballad of Gales cyclone); then the boomerang's lock-ons, the hookshot's pull and rope swinging, the bait bag ESA 221, pots and stones carried and thrown (carried.txt). Bugs B2 (grapple swing black screen), B11 (Deku Leaf flicker), B21 (hookshot reticle) are qa's: coordinate"
+      "id": "weather",
+      "name": "Weather and sky effects: dust motes, rain, snow, stars, mist, fog, clouds (bottom's, in progress)"
     },
     {
       "id": "cutscenes",
-      "name": "JStudio cutscenes (dDemo) at 60: Link's cutscene action steps, the cutscene's values evaluated for both steps of a tick (first: Ganondorf's arrival in Ganon's Tower); next: other cutscenes, an unconverted cast's half-tick lag"
-    },
-    {
-      "id": "npcs",
-      "name": "NPCs still at 30 where players go (a stage survey): Windfall's houses (bomb shop BMS1 and P1, the auction AUCTION/KP1/GP1/KF1, Lenzo PHOTO, school HO, Kaisen KG1), Outset (YM1, LS1 Aryll, P1/P2, AH), island stalls ROTEN, Koroks BJ1-9 on the islands, HR, FA1, Beedle's shop BS1, Carlov's MT/MN"
-    },
-    {
-      "id": "outdoors",
-      "name": "Moving types still at 30 outdoors (session top's census of every stage's placements, 2026-10-05): the flags at the Flight Control Platform and the boating course (Goal_Flag 291), Fire Mountain's eruption (Obj_Volcano 51, Obj_Yboil 276), Ice Ring Isle (Obj_Iceisland 55, Obj_Dragonhead 56, ICE_LIFT 93), the cafe's and school's lamps (Obj_Cafelmp 280), Beedle's shop curtain (Obj_Bscurtain 152), the auction's flowers (Obj_Rflw 277), Tingle Island's Obj_Vtil 459, the gong 284, liftable rocks (Stone2 455), ladders (85), Coming3 271"
-    },
-    {
-      "id": "dungeons",
-      "name": "Moving types still at 30 in dungeons (the same census): fire jets (Obj_Flame 267: Dragon Roost Cavern, Ganon's Tower), spikes (TOGE 122: Wind Temple room 9, GanonC), the Wind Temple's statues and hooks (Obj_Homen 129, Obj_Hfuck1 148, Obj_Vmc 52, Obj_Hami2-4, Obj_Hbrf1), Ganon's Tower's waterfalls (Obj_Gtaki 275, Obj_Gnnbtaki 140, Obj_Gnntakis/e 138/139), the Earth Temple's leftovers (tapestries 289, coffins 159, mirrors 272), Asoko's lifts (Obj_Hlift 46)"
+      "name": "Cutscenes (JStudio, dDemo) at 60: more of them checked against 30 (the opening, the Great Deku Tree, Valoo, Jabun, the Master Sword, the ending) (bottom's, in progress)"
     }
   ],
   "later": [
@@ -362,6 +337,18 @@
     "fortress",
     "earth",
     "wind",
-    "ganon"
+    "ganon",
+    "objects",
+    "rito",
+    "islands",
+    "sealife",
+    "chains",
+    "enemies",
+    "debugmenu",
+    "events",
+    "linkitems",
+    "npcs",
+    "outdoors",
+    "dungeons"
   ]
 }
