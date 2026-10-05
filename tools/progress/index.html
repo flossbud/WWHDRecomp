@@ -58,6 +58,21 @@ ul.ms li:last-child { border: 0; }
 .chip.rules { border-color: var(--warn); color: var(--warn); }
 .chip.todo { color: var(--muted); }
 details summary { cursor: pointer; color: var(--accent); margin-top: 10px; }
+/* the bugs and the queue: side by side on wide screens, stacked on phones; each folds */
+.pair { display: grid; gap: 14px; grid-template-columns: 1fr; align-items: start; margin-bottom: 14px; }
+.pair > .card { margin-bottom: 0; min-width: 0; }
+@media (min-width: 900px) {
+  .pair { grid-template-columns: 1fr 1fr; }
+  .pair .foldBody { max-height: 70vh; overflow-y: auto; padding-right: 4px; }
+}
+.fold > summary { list-style: none; display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap;
+  margin: 0; color: var(--ink); cursor: pointer; user-select: none; position: relative; padding-right: 28px; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary h2 { margin: 0; }
+.fold > summary .chev { position: absolute; right: 6px; top: 6px; width: 10px; height: 10px; border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .15s; }
+.fold:not([open]) > summary .chev { transform: rotate(-45deg); }
+.fold[open] > summary { margin-bottom: 10px; }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .tabs button { font: inherit; font-size: .85rem; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line);
   background: var(--bg); color: var(--ink); cursor: pointer; }
@@ -116,18 +131,23 @@ footer { color: var(--muted); font-size: .8rem; text-align: center; margin: 10px
     </section>
   </div>
 
-  <section class="card">
-    <h2>Bugs <span class="sub" id="bugCounts"></span></h2>
-    <ol class="queue bugs" id="bugs"><li class="empty">None reported yet.</li></ol>
-    <details id="bugsClosedWrap" hidden><summary id="bugsClosedSum"></summary><ol class="queue bugs" id="bugsClosed"></ol></details>
-  </section>
-
-  <section class="card">
-    <h2>Work queue</h2>
-    <p class="sub" id="queueNote"></p>
-    <ol class="queue" id="queue"></ol>
-    <p class="sub" id="later"></p>
-  </section>
+  <div class="pair">
+    <details class="card fold" id="bugsCard" open>
+      <summary><h2>Bugs</h2><span class="sub" id="bugCounts"></span><span class="chev" aria-hidden="true"></span></summary>
+      <div class="foldBody">
+        <ol class="queue bugs" id="bugs"><li class="empty">None reported yet.</li></ol>
+        <details id="bugsClosedWrap" hidden><summary id="bugsClosedSum"></summary><ol class="queue bugs" id="bugsClosed"></ol></details>
+      </div>
+    </details>
+    <details class="card fold" id="queueCard" open>
+      <summary><h2>Work queue</h2><span class="sub" id="queueCounts"></span><span class="chev" aria-hidden="true"></span></summary>
+      <div class="foldBody">
+        <p class="sub" id="queueNote"></p>
+        <ol class="queue" id="queue"></ol>
+        <p class="sub" id="later"></p>
+      </div>
+    </details>
+  </div>
 
   <section class="card">
     <h2>Numbers</h2>
@@ -206,6 +226,8 @@ function render() {
   $("log").innerHTML = d.commits.map(m => `<li><time>${ago(m.time)}</time><code>${m.hash}</code>${esc(m.subject.replace(/^WW-4: /, ""))}</li>`).join("");
   const cl = claims || {};
   $("queueNote").textContent = d.queue_note || "";
+  const qs = (d.queue || []).map(q => cl[q.id] ? cl[q.id].state : "open");
+  $("queueCounts").textContent = `${qs.filter(x => x === "done").length} done · ${qs.filter(x => x === "working").length} working · ${qs.filter(x => x === "open").length} open`;
   $("queue").innerHTML = (d.queue || []).map(q => {
     const c = cl[q.id];
     const badge = c ? `<span class="badge ${c.state}">${c.state === "done" ? "done" : "working"} · ${esc(c.session)}</span>` : `<span class="badge">open</span>`;
@@ -250,6 +272,11 @@ async function refresh() {
     <div><b>${esc(x.session)}:</b> <span class="sub">${esc(x.text || "idle")} · ${ago(x.time)}${c > x.time ? ` · last commit ${ago(c)}` : ""}</span></div></div>`;
   }).join("");
   if (s && s.length) $("shots").innerHTML = s.map(x => `<figure><img loading="lazy" src="${esc(x.file)}" alt="${esc(x.caption)}"><figcaption>${esc(x.caption)} · ${ago(x.time)}</figcaption></figure>`).join("");
+}
+for (const id of ["bugsCard", "queueCard"]) {
+  const el = $(id);
+  try { const v = localStorage.getItem("fold:" + id); if (v !== null) el.open = v === "1"; } catch (e) {}
+  el.addEventListener("toggle", () => { try { localStorage.setItem("fold:" + id, el.open ? "1" : "0"); } catch (e) {} });
 }
 refresh(); setInterval(refresh, 20000);
 </script>
