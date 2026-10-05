@@ -66,8 +66,9 @@
 # WWHD_DEBUG_BOSS, WWHD_DEBUG_SPAWN=1000:218,23,0,299,200: Molgera's own params): at 60 it went 10951 units
 # against 6617. Its moves: pos += speed (PSVECAdd, seven places: six of its states and a knockback along
 # +0x440), speed.y's falls, its spin, the tick count its body's scale wobble reads, and its countdowns.
-# Its falls are hand-made (speed.y -= g, then the shared pos += speed): their arcs part from 30's as the known
-# hand-made gravity's do (arc@ would need a note on every path into that add).
+# Its falls are hand-made, gravity first (speed.y -= g, then the shared pos += speed, vec@): `keep` on the
+# gravity puts a tick's on the whole step and none on the half step, so the two half moves add up to 30's arc
+# at every whole tick (session bottom's finding for gravity-first code; *h left it g/4 a tick high).
 02106A0C    vec@r4      bl 028e8d88     bwds: pos += speed
 02106D18    vec@r4      bl 028e8d88     bwds: pos += speed
 02106F84    vec@r4      bl 028e8d88     bwds: pos += speed
@@ -75,8 +76,8 @@
 02107248    vec@r4      bl 028e8d88     bwds: pos += speed
 021072E8    vec@r4      bl 028e8d88     bwds: pos += speed
 02107658    vec@r4      bl 028e8d88     bwds: pos += a knockback (+0x43C along +0x440)
-021066CC    *h@f12      fsubs           bwds: speed.y -= its fall a tick (2.7, jumping out of the sand)
-021068F4    *h@f7       fsubs           bwds: speed.y -= its fall a tick (3.0, hopping about)
+021066CC    keep:f8     fsubs           bwds: speed.y -= its fall a tick (2.7, jumping out of the sand)
+021068F4    keep:f9     fsubs           bwds: speed.y -= its fall a tick (3.0, hopping about)
 02106144    whole       sthx            bwds: its timers m0314[5] (+0x430) count down
 02106164    whole       sth             bwds: its hit's cooldown m031E (+0x43A) - 1
 02106174    whole       sth             bwds: its hit's shake m0328 (+0x442: x 500) - 1

@@ -689,8 +689,8 @@
 # ---- step rules: Chuchus (CC, process 206, d_a_cc.cpp). Found with the step-doubling trial on one
 # spawned on the Outset dock (WWHD_DEBUG_SPAWN=950:206,0,-201622,190,312700, route save).
 0210DF90    whole       sthx            cc execute: its timers count down
-021101B0    *h@f7       fadds           cc move: speed.y += gravity (+0x374) by hand (session top, 2026-10-04: at 60 it took
-#                                       a full tick's gravity each half tick, so a jump had half its height and airtime)
+021101B0    fall@f7     fadds           cc move: speed.y += gravity (+0x374) by hand, then fopAcM_posMove: fall@ hands the
+#                                       posMove override what it added (its arc then 30's at whole ticks; *h, session top 2026-10-04, left it g/4 high)
 # two phases a call (the trial on one in the fight route): its body's squash (1.1, 1.0, 0.9) turned by m31C
 # (+0x424, d_a_cc.cpp's model matrix, from the execute) and a hit's shake by sin(m348) (+0x450, action
 # 0x29): at 60 the jelly's wobble and the shake ran twice as fast
