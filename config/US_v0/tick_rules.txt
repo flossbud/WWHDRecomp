@@ -586,7 +586,23 @@
 025A94AC    *h:f9       lfs             wave executeAfter: the speed's change per step, at most mVelSpeed (+0x10)
 # ---- the sea (d_a_sea.cpp). WWHD's sea makes its waves on the GPU; the height table its execute
 # makes (daSea_packet_c::execute f_0246C088, from four tick counters) stays flat (1.0) all along the
-# sail route, so nothing in it is converted.
+# sail route. Its waves' phases (aOffsAnimTable, 0x10000 (ratio - 1/2) for the GPU) come from four counts
+# (daSea_WaveInfo +0x14 = the packet's +0x104, each to its 180-210, AddCounter f_0246C03C once an
+# execute) through GetRatio (f_0246B7A4, count / max). Unconverted, the sea (process 38) computed them
+# once a tick, so its foam stepped at 30 Hz on every sea (session top's 30 Hz scan: 220 blocks of
+# Greatfish Isle's screen; with it converted, 1); converted with these, the counts go on once a tick at
+# its end (late) and a whole step reads half a count back (lag): the phases move every frame at 30's
+# speed and equal 30's at half ticks (converted plainly, the waves ran twice as fast: the screen's sea
+# 13-37 off 30's at the same game frame against 0.5-0.8 unconverted).
+0246B7EC    lag:f13     fsub            sea GetRatio: a wave's count as a float, half a count back on a whole step
+0246C05C    late        stwx            sea AddCounter: a wave's count + 1
+0246C074    late        stwx            sea AddCounter: a wave's count back to 0 at its max
+# CalcFlatInter (f_0246BD4C): the waves' flatness (+0x130) goes to its target (+0x134, or the land's near
+# the player) linearly over a float count (+0x138): x += (target - x) / n, n -= 1 an execute; h of each a step.
+0246BDB8    *h@f12      fadds           sea CalcFlatInter: flatness += (its set target - it) / the count
+0246BDB0    *h@f31      fsubs           sea CalcFlatInter: the count - 1
+0246BE44    *h@f12      fadds           sea CalcFlatInter: flatness += (the land's target - it) / the count
+0246BE3C    *h@f31      fsubs           sea CalcFlatInter: the count - 1 (that branch)
 # the sea's draw (f_0246C7C8): its ripple texture scrolls by a counter (+0x22C, 1 a draw to 300): at
 # 60 every frame draws, so it counts on whole ticks (converted or not). The scroll is (count + 1) / k, so
 # a half tick's draw, seeing the whole tick's count, drew a whole count on and the scroll moved only on

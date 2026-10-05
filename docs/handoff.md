@@ -1202,6 +1202,20 @@ it in a window; D21 "Step 2"):**
     ("long blue streaks across the screen" in Windfall, never reproduced by day): session qa's streak.py
     over 600 consecutive swaps at night (and 120 at the town centre) finds no one-frame glitch; the night
     sky's shooting stars (HD-only) draw long thin trails, as long at 30 (`CAPTURE_30=1`) as at 60.
+  - **The sea's foam at 60 (session top; tick_rules.txt's sea; shared: generate.py's `drawlag`)**: found with
+    a 30 Hz scan (scratch hz30.py, worker: 60 consecutive swaps of a still view, screen blocks that change
+    on one parity only): 220 blocks of Greatfish Isle's view, Dragon Roost's shore, Windfall's quay and
+    Outset's horizon stepped at 30 Hz. Two layers: the ripple texture's scroll (the sea draw's count,
+    `whole` on its store, so a half tick's draw drew a whole count on: `drawlag`, -1/2 in a half tick's
+    draw) and the waves' phases, which the sea process (38, not converted: it matched 30 by day) computed
+    once a tick from four counts (AddCounter f_0246C03C, GetRatio f_0246B7A4, for the GPU's waves).
+    Converted plainly the waves ran twice as fast (the sea 13-37 per pixel off 30's at the same game frame,
+    0.5-0.8 unconverted); with `late` on the counts and `lag` on GetRatio (and CalcFlatInter's linear fade
+    stepped `*h`) the scan finds 1 block (a HUD corner), swap-to-swap change even (0.81/0.80 against
+    1.20/0.76 unconverted). The sea is still 2.4-7.5 per pixel off 30's at the same game frame and no
+    offset of a few swaps closes it: the ripple equals 30's on the whole tick's frame and the waves on the
+    half tick's, half a count apart; not seen otherwise. Wind Temple's dust motes (env update, rolled back
+    after a half tick) are session bottom's.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next
