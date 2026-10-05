@@ -1,354 +1,358 @@
 {
-  "title": "WWHD Recomp",
-  "ticket": "WW-4: native 60 fps, then uncapped",
-  "milestones": [
-    {
-      "name": "Link, camera, the sea and sailing at 60",
-      "done": true
-    },
-    {
-      "name": "Effects, grass and plants at 60",
-      "done": true
-    },
-    {
-      "name": "Camera overshoot, torch flicker, held items fixed",
-      "done": true
-    },
-    {
-      "name": "Songs (Wind Waker) and events step at 60",
-      "done": true
-    },
-    {
-      "name": "Dragon Roost: mountain actors, chests, doors, sky",
-      "done": true
-    },
-    {
-      "name": "Test aids: stage warp, actor spawn, boss refight",
-      "done": true
-    },
-    {
-      "name": "Enemies: Dragon Roost set (Bokoblin, Keese, Chuchu, Magtail, Moblin, Kargaroc)",
-      "done": true
-    },
-    {
-      "name": "Bosses: Gohma",
-      "done": true
-    },
-    {
-      "name": "Forbidden Woods enemies (Peahat, Boko Baba, Mothula, Kalle Demos)",
-      "done": true
-    },
-    {
-      "name": "Enemies in every dungeon (round 1 areas)",
-      "done": true
-    },
-    {
-      "name": "Bosses (all but Phantom Ganon, absent on the finished save)",
-      "done": true
-    },
-    {
-      "name": "NPCs and town actors (Medli and Makar left: no save state with them)",
-      "done": true
-    },
-    {
-      "name": "Cutscenes (demo frames) at 60 (in progress: JStudio cutscenes step at 60)",
-      "done": false
-    },
-    {
-      "name": "Door and talk events at 60",
-      "done": true
-    },
-    {
-      "name": "Uncapped frame rate",
-      "done": false
-    },
-    {
-      "name": "In-game debug menu / boss rush (first version)",
-      "done": true
-    }
-  ],
-  "groups": [
-    {
-      "name": "Enemies",
-      "ids": [
-        181,
-        187,
-        188,
-        189,
-        190,
-        191,
-        204,
-        205,
-        206,
-        207,
-        208,
-        209,
-        210,
-        212,
-        213,
-        214,
-        215,
-        216,
-        220,
-        224,
-        227,
-        228,
-        232,
-        233
-      ]
-    },
-    {
-      "name": "Bosses & minibosses",
-      "ids": [
-        217,
-        218,
-        211,
-        225,
-        234
-      ]
-    },
-    {
-      "name": "Link, camera & boat",
-      "ids": [
-        168,
-        476,
-        165,
-        171,
-        172,
-        169
-      ]
-    }
-  ],
-  "known_issues": [
-    "Link: an action set up in a whole step can start half a tick early (fixed for the turn in place and waiting, so a turn and walk now keeps 30's ticks); actions ending on an animation may end a tick early",
-    "The Wind Waker song's conducting and playback end half a tick early (a beat is crossed on a half tick); its wind change and end are on 30's ticks",
-    "Random-driven enemies (Magtail waits, Peahat flights) drift from the 30 fps run, as expected",
-    "Pots, sidling and ladders still need a hands-on check",
-    "Windfall at night (WWHD_DEBUG_TIME gives night): the lights converted; the shutters (259) not seen running, the auction's bidders and the auction (361, 382) run by night but wait for a test of the auction's event (pots, barrels, door knobs, item stands: converted)",
-    "Enemies falling into water: at 30 they hang at the surface about 2 ticks before sinking, at 60 they don't (the shared enemy move's ground check)",
-    "Hand-made gravity still ruled *h arcs about g/4 a tick off 30's; the exact rules: late on the speed.y store where the position moves first, keep on the add where gravity comes first, fall@ before fopAcM_posMove (done: Ganondorf, Puppet Ganon, Molgera's larvae, Chuchus)"
-  ],
-  "labels": {
-    "168": "Link",
-    "165": "King of Red Lions",
-    "181": "Kargaroc",
-    "210": "Princess Zelda",
-    "218": "Molgera larva",
-    "188": "Moblin",
-    "189": "Bokoblin",
-    "190": "Stalfos",
-    "191": "Darknut",
-    "204": "Mothula",
-    "206": "Chuchu",
-    "208": "Wizzrobe",
-    "209": "Peahat",
-    "212": "Poe",
-    "214": "Boko Baba",
-    "215": "Keese",
-    "216": "Magtail",
-    "224": "ReDead",
-    "227": "Octorok",
-    "228": "Gyorg",
-    "233": "Beamos",
-    "234": "Gohma",
-    "217": "Molgera",
-    "225": "Big Octo",
-    "211": "Jalhalla",
-    "223": "Valoo's tail",
-    "463": "Bokoblin's weapon",
-    "437": "Sky",
-    "438": "Sky (2)",
-    "292": "Treasure chest",
-    "300": "Door",
-    "43": "Push block",
-    "435": "Grass",
-    "174": "Flags (Hyrule, Windfall)",
-    "192": "Darknut / Phantom Ganon cape",
-    "193": "Moblin's lantern",
-    "243": "Puppet Ganon",
-    "244": "Puppet Ganon (spider)",
-    "245": "Puppet Ganon (snake)",
-    "246": "Ganondorf",
-    "247": "Miniblin",
-    "207": "Bubble",
-    "114": "Wind Temple fan",
-    "135": "Blade trap",
-    "202": "Armos",
-    "203": "Armos Knight",
-    "254": "Moving platform (MACHINE)",
-    "119": "Floormaster",
-    "431": "Anchor (IKARI)",
-    "456": "Barrel",
-    "447": "Rope (HIMO3)",
-    "426": "Tetra (NPC_ZL1)",
-    "198": "Rat (NZ)",
-    "232": "Beamos beam",
-    "40": "Tower lift (Hmlif)",
-    "111": "Balance lift",
-    "458": "Statue (Obj_Try)",
-    "240": "Gohdan",
-    "238": "Helmaroc King",
-    "185": "Torch",
-    "367": "Medli (NPC_MD)",
-    "453": "Pot",
-    "454": "Stone",
-    "472": "Arrow",
-    "473": "Ice arrow's ice",
-    "474": "Magic arrow's glow",
-    "432": "Boomerang",
-    "169": "Hookshot",
-    "446": "Grappling hook",
-    "443": "Ballad of Gales cyclone",
-    "123": "Windfall windmill wheel",
-    "220": "Pig",
-    "353": "Mila",
-    "170": "Ivan",
-    "368": "Killer Bees",
-    "374": "Mila's father",
-    "364": "Tott",
-    "373": "Townsfolk",
-    "352": "Zunari",
-    "121": "Market stall",
-    "445": "Distant models",
-    "309": "Item stand",
-    "118": "Fishman",
-    "68": "Great Sea ships (Beedle)",
-    "73": "Palm tree",
-    "200": "Crab",
-    "255": "Item (rupee, heart)",
-    "71": "Grotto",
-    "67": "mailbox",
-    "335": "Grandma",
-    "319": "Joel",
-    "320": "Zill",
-    "331": "Rose",
-    "461": "Dishes",
-    "45": "Shelf",
-    "63": "Sea cannon",
-    "179": "Warship",
-    "230": "Gyorg spawner",
-    "269": "Sea barrel spawner (Obj_Coming)",
-    "164": "Lookout platform",
-    "391": "Wind tag",
-    "176": "Ship flag",
-    "294": "Bomb",
-    "187": "Firefly (Forest Haven)",
-    "313": "Forest firefly",
-    "120": "Lily pad",
-    "213": "Baba bud",
-    "407": "Tree (Lwood)",
-    "83": "Obj_Ojtree",
-    "105": "Warp out (WARPFOUT)",
-    "116": "Deku Tree",
-    "101": "Hanging vine (SK)",
-    "102": "Vine (SK2)",
-    "398": "Fence (SAKU)",
-    "297": "Acorn leaf",
-    "65": "Warp pot",
-    "304": "Forbidden Woods door (KDDOOR)",
-    "144": "Leaf pile",
-    "99": "Ceiling tentacle (Forbidden Woods)",
-    "103": "Small vine (SSK)",
-    "235": "Kalle Demos (core)",
-    "236": "Kalle Demos (ceiling tentacles)",
-    "237": "Kalle Demos (floor tentacles)",
-    "186": "Wall lamp",
-    "97": "Hanging flower platform",
-    "98": "Hanging house (Forbidden Woods)",
-    "182": "Sign",
-    "226": "Big Octo eye",
-    "205": "Morth",
-    "457": "floating barrel",
-    "397": "heat haze",
-    "27": "floor switch",
-    "424": "fire",
-    "106": "warp light",
-    "427": "light bridge",
-    "428": "light stair",
-    "231": "hot floor",
-    "450": "eye switch",
-    "462": "item stand",
-    "295": "bomb flower bomb",
-    "423": "Stalfos head",
-    "91": "flame lift",
-    "90": "swinging platform",
-    "84": "post box",
-    "326": "Rito",
-    "327": "Rito",
-    "328": "Rito",
-    "329": "Rito",
-    "330": "Rito",
-    "348": "mail sorter",
-    "371": "Komali",
-    "222": "Valoo",
-    "369": "Great Fairy",
-    "42": "magma rock",
-    "33": "Kryu00",
-    "199": "rat hole",
-    "143": "Jabun's water",
-    "274": "plant",
-    "262": "papers",
-    "332": "Sturgeon",
-    "287": "labyrinth trap",
-    "87": "Obj_Akabe",
-    "460": "ice block",
-    "64": "table"
+ "title": "WWHD Recomp",
+ "ticket": "WW-4: native 60 fps, then uncapped",
+ "milestones": [
+  {
+   "name": "Link, camera, the sea and sailing at 60",
+   "done": true
   },
-  "queue_note": "Round 3 (2026-10-05; rounds 1 and 2 are done). 'top' takes items from the top down, 'bottom' from the bottom up; claim before starting (tools/progress/publish.sh claim ID) and stop where the other session's claims begin. The owner's bugs are session qa's (the Bugs list). Keep the claim's note and your status line current.",
-  "queue": [
-    {
-      "id": "drawposed",
-      "name": "The plants (palms, grass tufts, flowers) swayed at 30 Hz: their sway read g_Counter.mTimer a tick ahead on half ticks (top's: drawlag in plants.txt; the palms' ground shadows still step, weather)"
-    },
-    {
-      "id": "hz30-outdoors",
-      "name": "hz30 sweep outdoors: tools/sixty/tests/hz30.py over the islands, Windfall (day and night, WWHD_DEBUG_TIME), the sea and its weather states: what still moves at 30 Hz; convert or record each"
-    },
-    {
-      "id": "leftovers",
-      "name": "Known leftovers: Fire Mountain's objects left at 30, the Hyoi seagull's flight with a Hyoi Pear, Orca's look-at, Tingle's tower; Medli and Makar (need a save state where they're with Link: the debug menu or a poke could make one)"
-    },
-    {
-      "id": "perf",
-      "name": "60 fps cost: measure the frame time at 60 on the owner's desktop (~/wwhd-test, real time) across routes; find what the half frames cost (rollback journal, held items, plants) and trim it (the Android goal: low CPU)"
-    },
-    {
-      "id": "hz30-dungeons",
-      "name": "hz30 sweep in the dungeons and boss rooms (bottom's next after the dungeons item): what still moves at 30 Hz; convert or record each"
-    },
-    {
-      "id": "weather",
-      "name": "Weather and sky effects: dust motes, rain, snow, stars, mist, fog, clouds (bottom's, in progress)"
-    },
-    {
-      "id": "cutscenes",
-      "name": "Cutscenes (JStudio, dDemo) at 60: more of them checked against 30 (the opening, the Great Deku Tree, Valoo, Jabun, the Master Sword, the ending) (bottom's, in progress)"
-    }
-  ],
-  "later": [
-    "Uncapped frame rate (D21 step 4): the owner's call when to start it"
-  ],
-  "queue_done": [
-    "windfall",
-    "outset",
-    "sea",
-    "forest",
-    "tower",
-    "fortress",
-    "earth",
-    "wind",
-    "ganon",
-    "objects",
-    "rito",
-    "islands",
-    "sealife",
-    "chains",
-    "enemies",
-    "debugmenu",
-    "events",
-    "linkitems",
-    "npcs",
-    "outdoors",
-    "dungeons"
-  ]
+  {
+   "name": "Effects, grass and plants at 60",
+   "done": true
+  },
+  {
+   "name": "Camera overshoot, torch flicker, held items fixed",
+   "done": true
+  },
+  {
+   "name": "Songs (Wind Waker) and events step at 60",
+   "done": true
+  },
+  {
+   "name": "Dragon Roost: mountain actors, chests, doors, sky",
+   "done": true
+  },
+  {
+   "name": "Test aids: stage warp, actor spawn, boss refight",
+   "done": true
+  },
+  {
+   "name": "Enemies: Dragon Roost set (Bokoblin, Keese, Chuchu, Magtail, Moblin, Kargaroc)",
+   "done": true
+  },
+  {
+   "name": "Bosses: Gohma",
+   "done": true
+  },
+  {
+   "name": "Forbidden Woods enemies (Peahat, Boko Baba, Mothula, Kalle Demos)",
+   "done": true
+  },
+  {
+   "name": "Enemies in every dungeon (round 1 areas)",
+   "done": true
+  },
+  {
+   "name": "Bosses (all but Phantom Ganon, absent on the finished save)",
+   "done": true
+  },
+  {
+   "name": "NPCs and town actors (Medli and Makar left: no save state with them)",
+   "done": true
+  },
+  {
+   "name": "Cutscenes (demo frames) at 60 (in progress: JStudio cutscenes step at 60)",
+   "done": false
+  },
+  {
+   "name": "Door and talk events at 60",
+   "done": true
+  },
+  {
+   "name": "Uncapped frame rate",
+   "done": false
+  },
+  {
+   "name": "In-game debug menu / boss rush (first version)",
+   "done": true
+  }
+ ],
+ "groups": [
+  {
+   "name": "Enemies",
+   "ids": [
+    181,
+    187,
+    188,
+    189,
+    190,
+    191,
+    204,
+    205,
+    206,
+    207,
+    208,
+    209,
+    210,
+    212,
+    213,
+    214,
+    215,
+    216,
+    220,
+    224,
+    227,
+    228,
+    232,
+    233
+   ]
+  },
+  {
+   "name": "Bosses & minibosses",
+   "ids": [
+    217,
+    218,
+    211,
+    225,
+    234
+   ]
+  },
+  {
+   "name": "Link, camera & boat",
+   "ids": [
+    168,
+    476,
+    165,
+    171,
+    172,
+    169
+   ]
+  }
+ ],
+ "known_issues": [
+  "Link: an action set up in a whole step can start half a tick early (fixed for the turn in place and waiting, so a turn and walk now keeps 30's ticks); actions ending on an animation may end a tick early",
+  "The Wind Waker song's conducting and playback end half a tick early (a beat is crossed on a half tick); its wind change and end are on 30's ticks",
+  "Random-driven enemies (Magtail waits, Peahat flights) drift from the 30 fps run, as expected",
+  "Pots, sidling and ladders still need a hands-on check",
+  "Windfall at night (WWHD_DEBUG_TIME gives night): the lights converted; the shutters (259) not seen running, the auction's bidders and the auction (361, 382) run by night but wait for a test of the auction's event (pots, barrels, door knobs, item stands: converted)",
+  "Enemies falling into water: at 30 they hang at the surface about 2 ticks before sinking, at 60 they don't (the shared enemy move's ground check)",
+  "Hand-made gravity still ruled *h arcs about g/4 a tick off 30's; the exact rules: late on the speed.y store where the position moves first, keep on the add where gravity comes first, fall@ before fopAcM_posMove (done: Ganondorf, Puppet Ganon, Molgera's larvae, Chuchus)"
+ ],
+ "labels": {
+  "168": "Link",
+  "165": "King of Red Lions",
+  "181": "Kargaroc",
+  "210": "Princess Zelda",
+  "218": "Molgera larva",
+  "188": "Moblin",
+  "189": "Bokoblin",
+  "190": "Stalfos",
+  "191": "Darknut",
+  "204": "Mothula",
+  "206": "Chuchu",
+  "208": "Wizzrobe",
+  "209": "Peahat",
+  "212": "Poe",
+  "214": "Boko Baba",
+  "215": "Keese",
+  "216": "Magtail",
+  "224": "ReDead",
+  "227": "Octorok",
+  "228": "Gyorg",
+  "233": "Beamos",
+  "234": "Gohma",
+  "217": "Molgera",
+  "225": "Big Octo",
+  "211": "Jalhalla",
+  "223": "Valoo's tail",
+  "463": "Bokoblin's weapon",
+  "437": "Sky",
+  "438": "Sky (2)",
+  "292": "Treasure chest",
+  "300": "Door",
+  "43": "Push block",
+  "435": "Grass",
+  "174": "Flags (Hyrule, Windfall)",
+  "192": "Darknut / Phantom Ganon cape",
+  "193": "Moblin's lantern",
+  "243": "Puppet Ganon",
+  "244": "Puppet Ganon (spider)",
+  "245": "Puppet Ganon (snake)",
+  "246": "Ganondorf",
+  "247": "Miniblin",
+  "207": "Bubble",
+  "114": "Wind Temple fan",
+  "135": "Blade trap",
+  "202": "Armos",
+  "203": "Armos Knight",
+  "254": "Moving platform (MACHINE)",
+  "119": "Floormaster",
+  "431": "Anchor (IKARI)",
+  "456": "Barrel",
+  "447": "Rope (HIMO3)",
+  "426": "Tetra (NPC_ZL1)",
+  "198": "Rat (NZ)",
+  "232": "Beamos beam",
+  "40": "Tower lift (Hmlif)",
+  "111": "Balance lift",
+  "458": "Statue (Obj_Try)",
+  "240": "Gohdan",
+  "238": "Helmaroc King",
+  "185": "Torch",
+  "367": "Medli (NPC_MD)",
+  "453": "Pot",
+  "454": "Stone",
+  "472": "Arrow",
+  "473": "Ice arrow's ice",
+  "474": "Magic arrow's glow",
+  "432": "Boomerang",
+  "169": "Hookshot",
+  "446": "Grappling hook",
+  "443": "Ballad of Gales cyclone",
+  "123": "Windfall windmill wheel",
+  "220": "Pig",
+  "353": "Mila",
+  "170": "Ivan",
+  "368": "Killer Bees",
+  "374": "Mila's father",
+  "364": "Tott",
+  "373": "Townsfolk",
+  "352": "Zunari",
+  "121": "Market stall",
+  "445": "Distant models",
+  "309": "Item stand",
+  "118": "Fishman",
+  "68": "Great Sea ships (Beedle)",
+  "73": "Palm tree",
+  "200": "Crab",
+  "255": "Item (rupee, heart)",
+  "71": "Grotto",
+  "67": "mailbox",
+  "335": "Grandma",
+  "319": "Joel",
+  "320": "Zill",
+  "331": "Rose",
+  "461": "Dishes",
+  "45": "Shelf",
+  "63": "Sea cannon",
+  "179": "Warship",
+  "230": "Gyorg spawner",
+  "269": "Sea barrel spawner (Obj_Coming)",
+  "164": "Lookout platform",
+  "391": "Wind tag",
+  "176": "Ship flag",
+  "294": "Bomb",
+  "187": "Firefly (Forest Haven)",
+  "313": "Forest firefly",
+  "120": "Lily pad",
+  "213": "Baba bud",
+  "407": "Tree (Lwood)",
+  "83": "Obj_Ojtree",
+  "105": "Warp out (WARPFOUT)",
+  "116": "Deku Tree",
+  "101": "Hanging vine (SK)",
+  "102": "Vine (SK2)",
+  "398": "Fence (SAKU)",
+  "297": "Acorn leaf",
+  "65": "Warp pot",
+  "304": "Forbidden Woods door (KDDOOR)",
+  "144": "Leaf pile",
+  "99": "Ceiling tentacle (Forbidden Woods)",
+  "103": "Small vine (SSK)",
+  "235": "Kalle Demos (core)",
+  "236": "Kalle Demos (ceiling tentacles)",
+  "237": "Kalle Demos (floor tentacles)",
+  "186": "Wall lamp",
+  "97": "Hanging flower platform",
+  "98": "Hanging house (Forbidden Woods)",
+  "182": "Sign",
+  "226": "Big Octo eye",
+  "205": "Morth",
+  "457": "floating barrel",
+  "397": "heat haze",
+  "27": "floor switch",
+  "424": "fire",
+  "106": "warp light",
+  "427": "light bridge",
+  "428": "light stair",
+  "231": "hot floor",
+  "450": "eye switch",
+  "462": "item stand",
+  "295": "bomb flower bomb",
+  "423": "Stalfos head",
+  "91": "flame lift",
+  "90": "swinging platform",
+  "84": "post box",
+  "326": "Rito",
+  "327": "Rito",
+  "328": "Rito",
+  "329": "Rito",
+  "330": "Rito",
+  "348": "mail sorter",
+  "371": "Komali",
+  "222": "Valoo",
+  "369": "Great Fairy",
+  "42": "magma rock",
+  "33": "Kryu00",
+  "199": "rat hole",
+  "143": "Jabun's water",
+  "274": "plant",
+  "262": "papers",
+  "332": "Sturgeon",
+  "287": "labyrinth trap",
+  "87": "Obj_Akabe",
+  "460": "ice block",
+  "64": "table"
+ },
+ "queue_note": "Round 3 (2026-10-05; rounds 1 and 2 are done). 'top' takes items from the top down, 'bottom' from the bottom up; claim before starting (tools/progress/publish.sh claim ID) and stop where the other session's claims begin. The owner's bugs are session qa's (the Bugs list). Keep the claim's note and your status line current.",
+ "queue": [
+  {
+   "id": "drawposed",
+   "name": "The plants (palms, grass tufts, flowers) swayed at 30 Hz: their sway read g_Counter.mTimer a tick ahead on half ticks (top's: drawlag in plants.txt; the palms' ground shadows still step, weather)"
+  },
+  {
+   "id": "hz30-outdoors",
+   "name": "hz30 sweep outdoors: tools/sixty/tests/hz30.py over the islands, Windfall (day and night, WWHD_DEBUG_TIME), the sea and its weather states: what still moves at 30 Hz; convert or record each"
+  },
+  {
+   "id": "leftovers",
+   "name": "Known leftovers: Fire Mountain's objects left at 30, the Hyoi seagull's flight with a Hyoi Pear, Orca's look-at, Tingle's tower; Medli and Makar (need a save state where they're with Link: the debug menu or a poke could make one)"
+  },
+  {
+   "id": "perf",
+   "name": "60 fps cost: measure the frame time at 60 on the owner's desktop (~/wwhd-test, real time) across routes; find what the half frames cost (rollback journal, held items, plants) and trim it (the Android goal: low CPU)"
+  },
+  {
+   "id": "hz30-dungeons",
+   "name": "hz30 sweep in the dungeons and boss rooms (bottom's next after the dungeons item): what still moves at 30 Hz; convert or record each"
+  },
+  {
+   "id": "weather",
+   "name": "Weather and sky effects: dust motes, rain, snow, stars, mist, fog, clouds (bottom's, in progress)"
+  },
+  {
+   "id": "cutscenes",
+   "name": "Cutscenes (JStudio, dDemo) at 60: more of them checked against 30 (the opening, the Great Deku Tree, Valoo, Jabun, the Master Sword, the ending) (bottom's, in progress)"
+  },
+  {
+   "id": "ui30",
+   "name": "The HUD and message box at 30 Hz: the message box's spinning \"next\" icon (bottom's observation) and the HUD's corner block every hz30 scan shows; the HD UI's update runs on whole ticks (tick_rules.txt 020359AC)"
+  }
+ ],
+ "later": [
+  "Uncapped frame rate (D21 step 4): the owner's call when to start it"
+ ],
+ "queue_done": [
+  "windfall",
+  "outset",
+  "sea",
+  "forest",
+  "tower",
+  "fortress",
+  "earth",
+  "wind",
+  "ganon",
+  "objects",
+  "rito",
+  "islands",
+  "sealife",
+  "chains",
+  "enemies",
+  "debugmenu",
+  "events",
+  "linkitems",
+  "npcs",
+  "outdoors",
+  "dungeons"
+ ]
 }
