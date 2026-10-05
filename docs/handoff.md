@@ -1415,7 +1415,8 @@ it in a window; D21 "Step 2"):**
     track's (name, address) key then spans both.) Spawn an enemy: a Bokoblin, Moblin, Darknut (shield
     and cape), Chuchu, Keese, ReDead or Kargaroc 150 units ahead of Link, facing him, on the next game
     frame (wwhd::debug::RequestSpawn; WWHD_DEBUG_SPAWN's creation): the scratch route's DOWN three times
-    and A, A spawns a Bokoblin there. Next: the Xboss refight rooms, more enemies.
+    and A, A spawns a Bokoblin there. The Bosses page also has Ganon's Tower's four refight rooms (Xboss0-3:
+    Gohma with Valoo's tail, Kalle Demos, Jalhalla, Molgera; each boss present after the warp).
   - **Counts a call without a rule, in session bottom's types (shared enemy code too; regress.sh rerun)**:
     session qa's `tools/sixty/counter_audit.py` lists every field loaded, +-1 and stored back with no
     rule. For my processes (and the enemies item) each site was classified from its code (a scratch
@@ -1502,7 +1503,10 @@ it in a window; D21 "Step 2"):**
     WWHD_DEBUG_BOSS=1; a JStudio cutscene f971-8200): Link's actions identical, his animation frame 13.5 and
     14 against 30's 14 (his own stepped animations' halves alike), the camera's four moves (f2598, f2811,
     f4145, f7928) exact at whole frames and half way at half frames (before: the half frames repeated the
-    whole). events_test.sh's routes (none has a JStudio cutscene) identical; checks and regress identical.
+    whole). The title screen's opening at boot (a JStudio cutscene; at 60 from boot as play-60.sh runs, Link
+    in wait 4, so the cast steps): its camera pan exact at whole frames and half way at half frames (it moved
+    on the half frames only, a 30 Hz pan, before). events_test.sh's routes (none has a JStudio cutscene)
+    identical; checks and regress identical.
     WWHD_60FPS_DEMOS=0 turns it off. How it was found: the demo manager's globals (m_control 101D5FE8,
     current file 101D6004, frame 101D6008) by d_demo.cpp's asserts; watching 101D6004 tells whether a
     cutscene is JStudio (the boss refights' intros are event cameras, not JStudio). Open: other JStudio

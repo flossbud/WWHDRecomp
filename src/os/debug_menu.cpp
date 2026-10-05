@@ -38,6 +38,12 @@ namespace
 		{ "Molgera (Wind Temple)", "kazeB", 0, 0, -1, true },
 		{ "Puppet Ganon (Ganon's Tower)", "GanonK", 0, 0, -1, true },
 		{ "Ganondorf (Ganon's Tower)", "GTower", 0, 0, -1, true },
+		// Ganon's Tower's rooms where four bosses are fought again (each boss placed there and present
+		// after the warp: stage_actors.py, a tracked run)
+		{ "Gohma again (Ganon's Tower)", "Xboss0", 0, 0, -1, true },
+		{ "Kalle Demos again (Ganon's Tower)", "Xboss1", 0, 0, -1, true },
+		{ "Jalhalla again (Ganon's Tower)", "Xboss2", 0, 0, -1, true },
+		{ "Molgera again (Ganon's Tower)", "Xboss3", 0, 0, -1, true },
 	};
 
 	// enemies to spawn ahead of Link (each spawned so in a test: docs/handoff.md); anglex is more
