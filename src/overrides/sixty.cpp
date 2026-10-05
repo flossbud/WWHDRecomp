@@ -1746,6 +1746,22 @@ void f_025B7A2C(PPCInterpreter_t* __restrict ctx)
 	orig_f_025B7A2C(ctx);
 }
 
+// dComIfGs_checkGetItem(item r3): Makar (NPC_CB1 334) is created only in Molgera's room once the Master Sword
+// has its full power (0x3E). WWHD_DEBUG_COMPANION=1 answers "no" for that item to his code alone (the caller in
+// his functions, 0221CD78-022273A8), so a finished save creates him as the Wind Temple's companion (kaze).
+void orig_f_02520C0C(PPCInterpreter_t* __restrict ctx);
+void f_02520C0C(PPCInterpreter_t* __restrict ctx)
+{
+	static const bool companion = [] { const char* e = getenv("WWHD_DEBUG_COMPANION"); return e && *e == '1'; }();
+	const uint32 lr = ctx->spr.LR;
+	if (companion && ctx->gpr[3] == 0x3E && lr >= 0x0221CD78u && lr < 0x022273A8u)
+	{
+		ctx->gpr[3] = 0;
+		return;
+	}
+	orig_f_02520C0C(ctx);
+}
+
 // dSv_memBit_c::onDungeonItem(mem, item): item 3 set is a boss beaten (onStageBossEnemy), which the debug
 // menu's boss rush waits for (wwhd::debug::RushBossBeaten)
 void f_025B9098(PPCInterpreter_t* __restrict ctx)

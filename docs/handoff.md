@@ -2474,8 +2474,11 @@ it in a window; D21 "Step 2"):**
     thrown from his hands too. **Medli converted** (leftovers.txt): her hair chain's pull and turn a step (`vec@`, `*h`),
     a count `keep`, her move's inlined gravity `fall@` (thrown, she lost the throw's rise twice as fast).
     Route medli: within 18.6 units of 30's path (mean 7), down 5 units from 30's spot. Not tested: her
-    flight with Link (the wing glide), the light reflected off her harp, talking. Makar (NPC_CB1 334) is created by checkGetItem(MASTER_SWORD_3) instead: the same aid would
-    need that check for his code.
+    flight with Link (the wing glide), the light reflected off her harp, talking. Makar (NPC_CB1 334): `WWHD_DEBUG_COMPANION=1` also answers "no" to his code's checkGetItem(0x3E, the
+    full-power Master Sword; f_02520C0C), so the finished save creates him in the Wind Temple (`kaze,0,0,-1`
+    lists 334), but as the companion before he joins Link: he stays at 14067,-4540,1040 (no placement there;
+    a poke of his position doesn't hold), not at the entrance. Getting him to follow needs his story state
+    (his events' bits) as well. Not converted.
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
