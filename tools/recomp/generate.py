@@ -90,7 +90,8 @@ rules, for the code of processes that run every frame with a time step h
                rM/2 (rM read before the instruction, which may write it)
   exact:fS     a frame truncated to whole frames (an s16: fctiwz, stored and read back as an integer) that would
                hold a stepping process's animation to whole ticks: in its steps the instruction's float
-               destination gets fS, the untruncated value, instead (DEMO00's frame)
+               destination gets fS, the untruncated value, instead (DEMO00's frame); exact:note takes the
+               value a note:fREG noted before the truncation's code reused the register (dDemo_setDemoData)
   lag:fREG     the same for a tick count made a float (count x speed with fmuls, count x speed + base
                with fmadds; lag@ for that instruction only): on the whole tick's step the float REG is
                REG - 1/2
@@ -288,7 +289,12 @@ class Program:
                         value = v if re.fullmatch(r"r([12]?[0-9]|3[01])", v) else int(v, 0)
                 else:
                     assert kind.rstrip("@") in ("keep", "split", "splitd", "note", "vec", "arc", "fall", "ssplit", "lagw", "exact") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
-                    assert kind != "exact@" and (kind != "exact" or arg[0] == "f"), f"tick_rules.txt:{n}: exact:fS takes a float register"
+                    assert kind != "exact@" and (kind != "exact" or arg[0] == "f" or arg == "note"), f"tick_rules.txt:{n}: exact:fS takes a float register or note"
+                    if kind == "exact" and arg == "note":
+                        assert self.function_containing(ea) is not None, f"tick_rules.txt:{n}: {ea:08X} is in no function"
+                        assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
+                        rules[ea] = (kind, arg, expect, what)
+                        continue
                     assert kind != "lagw@", f"tick_rules.txt:{n}: lagw takes :, not @"
                     assert kind not in ("ssplit", "splitd"), f"tick_rules.txt:{n}: {kind} takes @: {kind}@rN"
                     assert kind != "fall", f"tick_rules.txt:{n}: fall takes @: fall@fREG"
@@ -599,8 +605,9 @@ def apply_tick_rule(rule, i, lines):
         half = emit.hx((int(i.simm / 2)) & 0xFFFFFFFF)
         return lines + [f"if (RT_STEPPED() && RT_WHOLE_TICK()) GPR({i.rD}) = GPR({i.rD}) - {half};   // step rule: {what}"]
     if kind == "exact":
-        return ([f"if (RT_STEPPED()) {{   // step rule: {what}", f"\tFPR({i.frD}) = {reg_expr(arg)};", "} else {"]
-                + ["\t" + l for l in lines] + ["}"])
+        src = (f"\tFPR({i.frD}).fp0 = (double)g_rtNote; FPR({i.frD}).fp1 = FPR({i.frD}).fp0;" if arg == "note"
+               else f"\tFPR({i.frD}) = {reg_expr(arg)};")
+        return [f"if (RT_STEPPED()) {{   // step rule: {what}", src, "} else {"] + ["\t" + l for l in lines] + ["}"]
     if kind == "lagw":
         return ([f"{{ const sint32 lagw_ = (sint32)GPR({arg[1:]});   // step rule: {what}"] + ["\t" + l for l in lines]
                 + [f"\tif (RT_STEPPED() && RT_WHOLE_TICK()) GPR({i.rD}) = GPR({i.rD}) - (uint32)(lagw_ / 2);", "}"])

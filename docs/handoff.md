@@ -1727,6 +1727,16 @@ it in a window; D21 "Step 2"):**
     midpoints but at cuts' teleports), their animation frames 9.5, 10 at a tick 30 shows 10; hz30 at
     four moments 122, 35, 51, 67 blocks before, 0, 29, 7, 0 after (the rest: the foreground grass
     blades, top's grass fix, and the message box's spinning next icon).
+    The cast's NPCs take their cutscene animation through dDemo_setDemoData (f_02527028), which does the
+    same: mDoExt_McaMorf::setFrame truncates to an s16 (the GameCube's too), then plays; a converted NPC's
+    cutscene animation stepped once a tick (Grandma in TALE_DEMO, Link's birthday: 91, 107, 41, 133 hz30
+    blocks). The same rules there (the truncation's code reuses f0 for its constant, so `note:f0` keeps
+    f - h for `exact:note`: exact takes the noted value): 0, 0, 0, 4. Jabun (NPC_JB1 358) converted: his
+    cutscene's 377 and 97 blocks 0 (his brk animations' s16 frame counts `late`, `drawlag` in his draw).
+    A batch of the story's cutscenes (scratch cutall.sh: stage, layer, the event by WWHD_DEBUG_EVENT, A
+    every 90 frames, hz30 at four moments): the opening's Outset awake, the Deku Tree's pearl, Valoo's
+    (dragontale, howling), Komali's pearl, the King of Red Lions' meeting, Zelda's awakening, epilogue:
+    nothing but the grass (top's fix) and the HUD.
   - **Weather (the work queue's "weather", `tick_rules/weather.txt`)**: top's hz30 scan
     (scratch hz30.py: 60 consecutive swaps, screen blocks changing on one parity only) found the Wind
     Temple's floating dust at 30 Hz (16 and 29 blocks in kaze rooms 2 and 9). All the environment's

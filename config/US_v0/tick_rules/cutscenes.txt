@@ -13,3 +13,22 @@
 02120F90    whole       bl 0254da38     demo00 execute: an item get (prm 5)
 021210A0    whole       bl 025cb374     demo00 execute: a vibration's shock (prm 7)
 021210E4    whole       bl 025cb408     demo00 execute: a quake (prm 7)
+#
+# ---- dDemo_setDemoData (f_02527028, d_demo.cpp): a cutscene's actor (an NPC, Link's partners, enemies in
+# their intros) takes its place, angles and animation from its demo actor with it; the frame as DEMO00's:
+# mDoExt_McaMorf::setFrame truncates to an s16 (the GameCube's too) then the morf plays, so a converted
+# actor's cutscene animation stepped once a tick (Grandma's in TALE_DEMO). The truncation's code reuses f0
+# for its constant: the frame - h is noted first.
+02527330    *h@f31      fsubs           dDemo_setDemoData: the frame - 1 (then played +1): - h
+02527338    note:f0     fctiwz          dDemo_setDemoData: the frame - h, noted before f0 holds the constant
+02527364    exact:note  frsp            dDemo_setDemoData: the morf's frame, (s16)(f - h): untruncated
+#
+# ---- NPC_JB1 (358, d_a_npc_jb1.cpp: Jabun, in Pjavdou; execute f_02248444, setMtx f_02247B7C, draw
+# f_022485C4). Converted: in his cutscene (getperl_jab) his place, angles and animation come from
+# dDemo_setDemoData (above), his light lure's model from his joint. His two brk animations' frames are s16
+# counts (playBrkAnm f_02247A58: + 1, then 0 at the end): counted once a tick at its end (late on both
+# stores: the end's test reads the register) and drawn half a count back in the half tick's draw.
+02247A84    late        sth             jb1 playBrkAnm: the brk's frame count + 1
+02247AA8    late        sth             jb1 playBrkAnm: the count back to 0 at the animation's end
+0224864C    drawlag:f1  frsp            jb1 draw: the lamp brk's frame (the count at +0xC04)
+0224868C    drawlag:f1  frsp            jb1 draw: the light brk's frame (+0xC88)
