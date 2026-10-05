@@ -8,9 +8,10 @@
 #                           parallel sessions never take the same one; done when it's converted and
 #                           committed; release to hand it back
 #   publish.sh bug add TITLE [DETAILS]       record a bug the owner reported (prints its id, B1...)
-#   publish.sh bug start|fixed|verified|wontfix|reopen ID [NOTE]
-#                           its state: open -> working (by this session) -> fixed (in ww-4 and
-#                           deployed, waiting for the owner's retest) -> verified (the owner
+#   publish.sh bug start|ready|fixed|verified|wontfix|reopen ID [NOTE]
+#                           its state: open -> working (by this session) -> ready (the fix is in ww-4,
+#                           waiting to be deployed) -> fixed (deployed, waiting for the owner's
+#                           retest) -> verified (the owner
 #                           confirmed); wontfix with the reason; reopen if the retest fails
 #   publish.sh bug note ID TEXT              add a finding to it
 #   publish.sh bug list                      the bugs, newest first (also on the page)
@@ -72,7 +73,7 @@ else:
     if op == "note":
         x["notes"].append({"text": b, "session": session, "time": t})
     else:
-        state = {"start": "working", "fixed": "fixed", "verified": "verified", "wontfix": "wontfix", "reopen": "open"}.get(op)
+        state = {"start": "working", "ready": "ready", "fixed": "fixed", "verified": "verified", "wontfix": "wontfix", "reopen": "open"}.get(op)
         if not state:
             sys.exit(f"unknown bug command {op}")
         x["state"] = state
@@ -93,7 +94,7 @@ case "${1:-}" in
 			cd $dir/now && python3 -c 'import json,glob; json.dump([json.load(open(f)) for f in sorted(glob.glob(\"*.json\"))], open(\"../sessions.json.tmp\",\"w\"))' && mv ../sessions.json.tmp ../sessions.json"
 		;;
 	bug)
-		bugs "${2:?bug add|start|fixed|verified|wontfix|reopen|note|list}" "${3:-}" "${4:-}"
+		bugs "${2:?bug add|start|ready|fixed|verified|wontfix|reopen|note|list}" "${3:-}" "${4:-}"
 		;;
 	claim|done|release)
 		claims "$1" "${2:?item id}" "${3:-}"
