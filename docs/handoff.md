@@ -1054,9 +1054,9 @@ it in a window; D21 "Step 2"):**
     later: islands.txt): his wobble's phase (its step made from how far a vector moved: /h on the length,
     then split) and a count stepped while a countdown is out (on a half step the helper still says "out":
     `whole:r3=1` on the call); his look-at needs nothing (it adds only its steps' own changes); the phase
-    keeps 30's rate. Not converted: a Korok in Ocrogh
-    (NPC_BJ7 342: an old heading copied each step, its use unknown; the Korok decomp is stubs), Tingle's
-    tower's Tpota (394: trial clean but different everywhere, unexplained). Not present on the 100% save:
+    keeps 30's rate. A Korok in Ocrogh (NPC_BJ7 342: trial clean, within 3.8 units of 30's) and Tingle's
+    tower's Tpota (394: its waterfall's ripples, a table mirroring the particles, which move every frame at
+    60) are converted with no rules. Not present on the 100% save:
     Forest Haven's Koroks (NPC_BJ1-9) and Makar (NPC_CB1), Jabun (NPC_JB1 358); Cave08's propellers,
     fans and nets never loaded at the spawn points tried (point 0 of rooms 1-3: they need the stage's
     spawn list).

@@ -39,7 +39,10 @@
 # ---- no rules, equal to 30's (trials clean): Jabun's cave's water (Obj_AjavW 143, Pjavdou), Orca's and
 # Sturgeon's house's plants and papers (Obj_Plant 274, 262, Ojhous room 1), Sturgeon (NPC_AJ1 332: only a
 # value set from the random stream at its creation differs), the Savage Labyrinth's traps (Obj_TnTrap 287,
-# Cave10 room 17: 81% of ticks equal, the rest the traps' phases).
+# Cave10 room 17: 81% of ticks equal, the rest the traps' phases), a Korok in Ocrogh (NPC_BJ7 342: within 3.8
+# units of 30's, 88 units moved against 90), Tingle's tower's waterfall (Tpota 394, Otkura: a ripple where a
+# drop crosses the pool's surface since its last step; its table mirrors the particles', which move every
+# frame at 60, so it differs everywhere and its ripples come on the frame a drop crosses).
 # Not present on the 100% save, so untested: Forest Haven's Koroks (NPC_BJ1-9, 336-344, Omori) and Makar
 # (NPC_CB1 334 there), Jabun (NPC_JB1 358).
 #
