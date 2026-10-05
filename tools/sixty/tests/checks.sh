@@ -2,20 +2,33 @@
 # checks.sh NAME: the switch-off checks after a build (they must all match before a commit): both
 # routes' OS-call traces, command streams and sound; diff mode on the save route; renderer captures
 # (llvmpipe) against the G3 ones (byte-identical). Outputs are per checkout and NAME.
-# One check run at a time on the worker (the sessions share its CPU): a run waits for the lock
-# /wwhd/data/m6/.checks.lock, printing a line a minute (so `job wait` doesn't call it stalled).
+# A worker takes a set number of check runs at once (the sessions share its CPU): a run waits for a
+# free slot, printing a line a minute (so `job wait` doesn't call it stalled).
 # The references (/wwhd/data/gx2/*.txt, traces, g3 captures) are on both workers.
 set -uo pipefail
 source "$(dirname "$0")/common.sh"
 name=$(basename "$ROOT")-${1:?name}
 [ -f /wwhd/data/gx2/save-cemu.txt ] || { echo "checks.sh: no references on this worker"; exit 2; }
-exec 9>/wwhd/data/m6/.checks.lock
+# slots: how many check runs this worker takes at once (/wwhd/data/m6/.checks.slots, default 1:
+# the worker; the desktop's file says 3). Slot 0's lock is .checks.lock, so older copies of this
+# script still wait for it.
+slots=$(cat /wwhd/data/m6/.checks.slots 2>/dev/null || echo 1)
 waited=0
-until flock -w 60 9; do
+while :; do
+    got=
+    for ((i = 0; i < slots; i++)); do
+        lock=/wwhd/data/m6/.checks.lock; [ $i -gt 0 ] && lock=$lock.$i
+        exec 9>"$lock"
+        if flock -n 9; then got=$i; break; fi
+        exec 9>&-
+    done
+    [ -n "$got" ] && break
     waited=$((waited + 1))
-    echo "checks.sh: waiting for the check run of $(cat /wwhd/data/m6/.checks.holder 2>/dev/null || echo another session) (${waited} min)"
+    echo "checks.sh: waiting for a check slot ($slots here: $(cat /wwhd/data/m6/.checks.holder* 2>/dev/null | tr '\n' ';')) (${waited} min)"
+    sleep 60
 done
-echo "$name since $(date +%H:%M)" > /wwhd/data/m6/.checks.holder
+holder=/wwhd/data/m6/.checks.holder; [ "$got" -gt 0 ] && holder=$holder.$got
+echo "$name since $(date +%H:%M)" > "$holder"
 [ $waited -gt 0 ] && echo "checks.sh: started after waiting ${waited} min"
 echo "== save"; tools/reference/stream_check.sh save $name-save 2>&1 | tail -4
 echo "== route"; tools/reference/stream_check.sh route $name-route 2>&1 | tail -4

@@ -56,8 +56,9 @@ WW-4's actor conversion is split between two sessions working side by side:
   old: sync and build there first. `WWHD_ON=worker` / `WWHD_ON=desktop` force one. Only main (or
   the session the owner asks) runs `desktop.sh stop`/`start`. While it's on, a user unit
   (`wwhd-awake`) keeps the desktop from sleeping.
-- **One check run at a time per worker**: `tools/sixty/tests/checks.sh` waits for a lock and prints
-  whose run it waits for each minute. Integrate in turn; a check run can cover several commits.
+- **Check slots per worker**: `tools/sixty/tests/checks.sh` waits for a free slot (the desktop takes 3
+  runs at once, the worker 1: `/wwhd/data/m6/.checks.slots`) and prints whose runs hold them each
+  minute. A check run can cover several commits.
 - **Disk**: `tools/worker/cleanup.sh` (cron on the worker, a systemd user timer on the desktop, every
   6 h) deletes check outputs in `/wwhd/data/gx2/<run>/` untouched for 12 h and test outputs in
   `/wwhd/data/m6/*/<dir>/` untouched for 48 h; references, traces, captures and saves never. Write
