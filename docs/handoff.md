@@ -1773,6 +1773,19 @@ it in a window; D21 "Step 2"):**
     while one runs (an ending event is EventEnding's): 0, 0, 0, 0. The chamber's knight statues (zouK 396)
     converted too (they come alive by dDemo_setDemoData; `whole` on its roll-crash check; idle in the
     cutscene, their places exact).
+    A second batch (scratch cutall2.sh: on a crash, Link's cutscene animation from the wrong LkD, the run
+    goes again with bit 0x2D01 the other way; 25 events): clean (0-4 blocks) for warp_in, runaway_majuto,
+    meet_tetra, dance_kokiri, to_roof, warp_out, get_shield, attack_ganon, pray_zola, awake_kokiri,
+    pray_kokiri, fairy, awake_zola; bombshop and rescue static as ordered (nothing moves: not judged).
+    Left: towerd (ADMumi layer 8; 887 blocks at one moment): the goddess statue Obj_Doguu (265) isn't
+    converted (it reads its demo actor itself, an untruncated setFrame; converting it needs `whole` on its
+    privateCut calls, its eye pulse's sound, late on its event orders); stolensister (131): Aryll
+    (NPC_LS1 321, a 2668-line NPC: its timers want the trial) and the Helmaroc (167, "Dk"); departure_DEMO
+    (122 at every moment): Tetra's pirate ship (Obj_Pirateship 57), now converted (its bob phase split, its
+    sounds once a tick; the cutscene's three moments 0 blocks, its place exact); dance_zola (19): the
+    conducting trail's ribbon; kugutu_ganon (37), seal (8), warphole (22): specks not read.
+    rebirth_hyral's 3170 blocks are the test's own: ordered in place, Link stands where the cutscene moves
+    him off the ground and falls (0x27) every other tick at 30 as at 60, and a fall isn't in StepInEvents.
   - **Weather (the work queue's "weather", `tick_rules/weather.txt`)**: top's hz30 scan
     (scratch hz30.py: 60 consecutive swaps, screen blocks changing on one parity only) found the Wind
     Temple's floating dust at 30 Hz (16 and 29 blocks in kaze rooms 2 and 9). All the environment's

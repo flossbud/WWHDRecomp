@@ -37,3 +37,12 @@
 # f_023BFA38). Converted: in master_sword they come alive by dDemo_setDemoData (above); its pose is set
 # before the demo's update (set_mtx), so its whole frames show 30's tick and its half frames half way.
 023BFA64    whole       bl 025d69fc     zouk execute: fopAcM_rollPlayerCrash (a roll into it: once a tick)
+#
+# ---- Obj_Pirateship (57, d_a_obj_pirateship.cpp: Tetra's ship, in Outset's departure and the story's sea
+# scenes; execute f_02385B70). Converted: in a cutscene it moves by dDemo_setDemoData (above; no morf), else
+# along its path (dLib_pathMove's callback: cLib_addCalcAngleS, cLib_chasePos, stepped) bobbing on a phase
+# (+0x4BE += its speed +0x4C0, s16: split) for its height; its two sounds (sound_proc: the cruise and the sail,
+# mDoAud_seStart) once a tick.
+02385D08    split@r12   add             pirateship: the bob's phase += its speed (one branch)
+02385D60    split@r12   add             pirateship: the bob's phase += its speed (the other)
+02385F20    whole       bl 02384a78     pirateship: sound_proc (the cruise's and the sail's sounds)
