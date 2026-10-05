@@ -88,6 +88,9 @@ rules, for the code of processes that run every frame with a time step h
   lag:fREG     the same for a tick count made a float (count x speed with fmuls, count x speed + base
                with fmadds; lag@ for that instruction only): on the whole tick's step the float REG is
                REG - 1/2
+  drawlag:fREG a draw's count kept to whole ticks (a `whole` store), made a float: in a half tick's draw
+               (step 1, so not the step rules above) the float REG is REG - 1/2, so the half tick's frame
+               draws half a count on from the whole tick's, not a whole one (the sea's ripple scroll)
   OP@REG       the same, for this instruction only: REG has its value back afterwards (unless the
                instruction writes it), as in `x += (t - x) * k` with k@f2 on its fmadds
   note:REG     after the instruction, the float REG is noted (g_rtNote) for an arc@ later in the step
@@ -232,7 +235,7 @@ class Program:
 
     STEP_OPS = {"*h": "rt_step_mul", "/h": "rt_step_div", "k": "rt_step_approach", "d": "rt_step_damp",
                 "k75": "rt_step_approach75", "*hh": "rt_step_mul(rt_step_mul({}))",
-                "lag": "({} - (RT_WHOLE_TICK() ? 0.5 : 0.0))"}
+                "lag": "({} - (RT_WHOLE_TICK() ? 0.5 : 0.0))", "drawlag": "({} - 0.5)"}
 
     def load_tick_rules(self, path):
         """address -> (rule, argument, expected instruction text, what): see the docstring. rule is
@@ -283,6 +286,7 @@ class Program:
                     assert re.fullmatch(r"[rf]([12]?[0-9]|3[01])", arg), f"tick_rules.txt:{n}: {rule}: a register expected"
                     assert kind.rstrip("@") not in ("split", "splitd") or arg[0] == "r", f"tick_rules.txt:{n}: split takes an integer register"
                     assert kind.rstrip("@") != "lag" or arg[0] == "f", f"tick_rules.txt:{n}: lag takes a float register (lagi: mulli)"
+                    assert kind.rstrip("@") != "drawlag" or arg[0] == "f", f"tick_rules.txt:{n}: drawlag takes a float register"
                     value = arg
                 assert self.function_containing(ea) is not None, f"tick_rules.txt:{n}: {ea:08X} is in no function"
                 assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
@@ -611,7 +615,8 @@ def apply_tick_rule(rule, i, lines):
         change = f"if (RT_STEPPED()) {reg} = rt_step_split({reg});"
     elif arg[0] == "f":
         call = step_call(op, f"{reg}.fp0")
-        change = f"if (RT_STEPPED()) {{ {reg}.fp0 = {call}; {reg}.fp1 = {reg}.fp0; }}"
+        gate = "g_rtHalfTick" if op == "drawlag" else "RT_STEPPED()"   # drawlag: a half tick's draw (step 1)
+        change = f"if ({gate}) {{ {reg}.fp0 = {call}; {reg}.fp1 = {reg}.fp0; }}"
     else:
         call = step_call(op, f"(double)(sint32){reg}")
         change = f"if (RT_STEPPED()) {reg} = (uint32)(sint32){call};"

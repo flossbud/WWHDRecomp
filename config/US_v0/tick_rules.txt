@@ -588,7 +588,11 @@
 # makes (daSea_packet_c::execute f_0246C088, from four tick counters) stays flat (1.0) all along the
 # sail route, so nothing in it is converted.
 # the sea's draw (f_0246C7C8): its ripple texture scrolls by a counter (+0x22C, 1 a draw to 300): at
-# 60 every frame draws, so it counts on whole ticks (converted or not)
+# 60 every frame draws, so it counts on whole ticks (converted or not). The scroll is (count + 1) / k, so
+# a half tick's draw, seeing the whole tick's count, drew a whole count on and the scroll moved only on
+# half ticks' frames: the sea's foam stepped at 30 Hz everywhere (session top's 30 Hz scan, hz30.py, on
+# Greatfish Isle, Dragon Roost's shore, Outset). drawlag takes half a count off in a half tick's draw.
+0246C930    drawlag:f10 fsub            sea draw: the scroll's count + 1 as a float, - 1/2 in a half tick's draw
 0246C950    whole       sth             sea draw: the ripple texture's scroll counter
 #
 # ---- step rules: the seagulls (KAMOME, process 194, d_a_kamome.cpp: methods 0x02185AE0-0x02188D84).
