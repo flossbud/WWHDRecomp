@@ -33,6 +33,10 @@
 02358BE8    keep:r12    addi            homen: the item's timer (+0x908) - 1, the item at 0
 0235977C    keep:r12    addi            homen process_wait_main: its wait (+0x8F6) - 1, the next state at 0
 023593B8    late        sth             homen process_wait_falldown_main: its count (+0x8F2) + 1, to 3
+# FLOOR (96; d_a_floor.cpp, Execute f_0214000C): the Wind Temple's floors the iron boots break: a countdown
+# (+0x3F2, - 1 a tick, the break at 0: effect, sound, switch, delete) keep; AMI_PROP (94; d_a_amiprop.cpp:
+# the propeller's grate turning with cLib_addCalcAngleS, stepped) needs no rules
+02140038    keep:r11    addi            floor Execute: the break's countdown (+0x3F2) - 1, the break at 0
 # Obj_Hfuck1 (148; the hookshot's hooks) and TOGE (122; the spikes: cLib_calcTimer<u8> and cLib_addCalc,
 # both stepped helpers) need no rules
 # Obj_Jump (166, "Hjump"; d_a_obj_jump.cpp): the iron-boots spring pad. Its spring (calc_vib_pos f_02366668:
@@ -103,6 +107,14 @@
 023688A0    *h@f13      fsubs           kanoke executeEffectYoko: the effect's alpha (+0x994) - c a tick
 02368D54    late        sth             kanoke executeEffectTate: the effect's countdown - 1, its end at 0
 02368D80    *h@f0       fsubs           kanoke executeEffectTate: the effect's alpha - c a tick
+# Obj_Mkie (75; d_a_obj_mkie.cpp): statues that melt in light: their light count (+0x10D6, + 1 a tick lit,
+# the melt past 20) late; the melt's wait (+0x10D4, - 1 a tick, its effect, sound and switch at 0) keep
+02370DD0    late        sth             mkie mode_wait: the light's count (+0x10D6) + 1, the melt past 20
+02370FC0    keep:r11    addi            mkie mode_demo: the melt's wait (+0x10D4) - 1, its effect at 0
+# 469 (d_a_tag_light.cpp, "LTag1"; execute f_024AE0E8): the Earth Temple's light tags. A beam's alpha chases with
+# cLib_chaseF and its texture animation plays (stepped); a receiver counts light (+0x422, + or - 1 a tick, 0
+# to 20, its switch on past 10): late, so both steps see the tick's count
+024AE164    late        sth             tag light (a receiver): its light's count (+0x422) +- 1 a tick
 # Obj_Mmrr (272; the mirrors on push blocks): cLib_chaseF and its animations, stepped helpers: no rules
 #
 # ---- Dragon Roost Cavern and Ganon's Tower: Obj_Flame (267; d_a_obj_flame.cpp, stubs; execute f_023455E0): the

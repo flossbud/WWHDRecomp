@@ -1650,8 +1650,11 @@ it in a window; D21 "Step 2"):**
     in GTower); Asoko's lifts (Obj_Hlift 46, layer 0: Asoko,0,0,0): poked into a rise, smooth but up
     to 16 units behind 30 mid-move and ending ~2 ticks early (their speed and height both chase with
     cLib_chaseF, a semi-implicit step that a half step takes a quarter of the speed's gain in: close,
-    not exact). Census types not done: 75 Obj_Mkie and 469 (Earth Temple, 62% and 71% idle),
-    94 AMI_PROP and 96 FLOOR (Wind Temple, 100% idle).
+    not exact). The third batch: the Earth Temple's light statues (Obj_Mkie 75: light count late, the
+    melt's wait keep) and light tags (469: a receiver's light count late; beams stepped helpers), the
+    Wind Temple's propeller grates (AMI_PROP 94, no rules) and breakable floors (FLOOR 96: its break
+    countdown keep). Idle: 94 and 96 match 100%; 75 and 469 as before converting (62%, 71%: collider
+    flag bits, 0x10 in a few of Mkie's tri colliders, set at other moments; nothing of their state).
   - **Houses' doors open at 60 (`tick_rules/doors.txt`, sixty.cpp)**: KNOB00 (305) converted and Link's
     door-open action 0xC1 (dProcDoorOpen) steps in events. The door's animation and Link's go through
     stepped helpers; one hand-made step, the exit's pull to the door's front (adjustmentProc f_021A3E90:
