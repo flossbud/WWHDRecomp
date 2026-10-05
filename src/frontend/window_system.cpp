@@ -18,6 +18,7 @@
 #include "../gpu/vk/renderer.h"
 #include "../os/input.h"
 #include "../os/swkbd.h"
+#include "../os/debug_menu.h"
 #include "../os/erreula.h"
 #include "input/InputManager.h"
 #include "audio/CubebAPI.h"
@@ -342,6 +343,8 @@ static void PrepareShaders(SDL_Window* window)
 				SDL_SetWindowFullscreen(window, !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN));
 			else if (!ev.key.repeat && ev.key.key == SDLK_F9)
 				wwhd::sixty::FlightDump();         // the flight recorder's last frames (WWHD_FLIGHT)
+			else if (!ev.key.repeat && (ev.key.key == SDLK_F1 || (ev.key.key == SDLK_ESCAPE && wwhd::os::debug_menu::IsOpen())))
+				wwhd::os::debug_menu::Toggle();    // the debug menu, as clicking both sticks opens it
 			else if (wwhd::os::swkbd::Current().open)
 			{
 				if (ev.key.key == SDLK_BACKSPACE)

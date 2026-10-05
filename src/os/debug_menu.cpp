@@ -205,6 +205,22 @@ namespace wwhd::debug
 
 namespace wwhd::os::debug_menu
 {
+	void Toggle()
+	{
+		std::lock_guard lock(s_lock);
+		s_open = !s_open;
+		s_page = kTop;
+		s_cursor = 0;
+		s_swallow = true;                        // the game sees nothing until the keys are let go
+		s_version++;
+	}
+
+	bool IsOpen()
+	{
+		std::lock_guard lock(s_lock);
+		return s_open;
+	}
+
 	input::Pad Filter(const input::Pad& pad)
 	{
 		std::lock_guard lock(s_lock);
@@ -230,7 +246,7 @@ namespace wwhd::os::debug_menu
 				s_cursor = (s_cursor + count - 1) % count;
 			if (pressed & B::DOWN)
 				s_cursor = (s_cursor + 1) % count;
-			if (pressed & B::A)
+			if (pressed & (B::A | B::PLUS))            // + is Enter on the keyboard
 				Choose();
 			else if (pressed & B::B)
 			{
@@ -268,7 +284,7 @@ namespace wwhd::os::debug_menu
 		v.title = ListOf(s_page).title;
 		v.items = Items();
 		v.cursor = s_cursor;
-		v.hint = s_page == kTop ? "D-pad: move   A: choose   B or both sticks: close"
+		v.hint = s_page == kTop ? "D-pad: move   A: choose   B, both sticks or F1: close"
 		                        : "D-pad: move   A: warp   B: back";
 		return v;
 	}

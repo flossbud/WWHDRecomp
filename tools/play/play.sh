@@ -11,7 +11,8 @@
 # Other switches pass through (src/README.md): WWHD_EXIT_FRAME, CEMU_INPUT_SCRIPT, CEMU_SHOT_FRAMES,
 # CEMU_VIRTUAL_CLOCK, WWHD_PROFILE. Keys (the Pro Controller): A=X B=Z X=S Y=A L=Q R=W ZL=1 ZR=2
 # +=Return -=Backspace, D-pad on the arrows, left stick I/J/K/L, right stick T/F/G/H; F11 or
-# Alt+Enter toggles fullscreen. A gamepad's buttons go by their printed labels.
+# Alt+Enter toggles fullscreen. F1 (or both sticks) opens the debug menu: arrows move, X or Enter
+# chooses, Z goes back, Escape or F1 closes. A gamepad's buttons go by their printed labels.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 export WWHD_NATIVE=${WWHD_NATIVE-on} WWHD_RENDER=${WWHD_RENDER-vk} WWHD_CEMU_DATA=$here/cemu CEMU_NO_GAMEPAD=1

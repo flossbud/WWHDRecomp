@@ -1,6 +1,6 @@
 // The debug menu (the owner's idea: the test aids from a controller): a panel over the game that
 // warps to islands, dungeons and boss rooms (the bosses' refights on), runs a boss rush and spawns
-// enemies ahead of Link. Clicking both sticks at once opens and closes it; while it is open the D-pad (or the left
+// enemies ahead of Link. Clicking both sticks at once, or F1, opens and closes it; while it is open the D-pad (or the left
 // stick) moves, A chooses, B goes back, and the game sees no input. debug_menu.cpp; the overlay
 // (src/frontend/overlay.cpp) draws it.
 #pragma once
@@ -12,6 +12,10 @@ namespace wwhd::os::debug_menu
 {
 	// The pad the game reads, after the menu has taken what it needs (KPADReadEx, input.cpp).
 	input::Pad Filter(const input::Pad& pad);
+	// F1 on the keyboard (the owner's ask): opens or closes the menu as both sticks do; Escape closes
+	// it (window_system.cpp). On the keyboard the arrows move, X (A) or Enter (+) chooses, Z (B) goes back.
+	void Toggle();
+	bool IsOpen();
 
 	struct View
 	{
