@@ -1822,7 +1822,11 @@ it in a window; D21 "Step 2"):**
     decomp's daPyProc order. One more, found later (the execute keeps Link + 0x448 in r26, so the audit
     printed its field as +0x652A of r26): m3522 (+0x6972), the window to continue a sword combo, set by
     each cut and counted in the execute; at 0 the combo's step is cleared. 12 ticks at 60 against 24:
-    combos dropped where 30 continued them (B27). `late` on its store (0240D640).
+    combos dropped where 30 continued them (B27). `late` on its store (0240D640). Looked at and left: his
+    face (playTextureAnime f_023FBCEC, from the execute at 0240D78C: the texture frames m3530/m3532 go
+    + 1 a call in some branches and a blink starts at random): standing on the dock he blinks as often and
+    as long at both rates (27 and 25 blinks of 47 ticks in 2995), the frames there come from a frame
+    control. If a face is seen running fast in some action, `whole` on that call is the fix.
   - **`tools/sixty/counter_audit.py`** (new): per converted process, every stored counter (a field loaded,
     +-1, stored back) with no rule on its store or add. Run it after converting a type and after a fix;
     with no argument it lists every converted process that still has such a countdown (79 lines on
