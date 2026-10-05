@@ -2,7 +2,8 @@
 # desktop.sh start|stop|status: the second worker on the owner's desktop (24 threads, 31 GB),
 # the same wwhd-worker image under rootless podman, /wwhd being ~/wwhd-desk there
 # (tools/worker/target.sh: WWHD_ON=desktop sends sync.sh, w and job to it).
-#   start   (re)create the container, capped at 16 threads and 20 GB so the desktop stays usable,
+#   start   (re)create the container: all 24 threads (the owner lends the whole desktop), 28 GB of
+#           the 31 (an out-of-memory job dies inside the container, the desktop stays up),
 #           and keep the desktop from sleeping while it runs (a user unit, wwhd-awake)
 #   stop    the owner wants the desktop: stop the container (its running jobs end) and let it sleep
 #           again. Jobs then go to the worker (`job start` refuses the desktop while it's off).
@@ -18,7 +19,7 @@ start)
 podman rm -f wwhd-worker >/dev/null 2>&1 || true
 mkdir -p ~/wwhd-desk/logs ~/wwhd-desk/data/m6
 podman run -d --name wwhd-worker --init --userns=keep-id --group-add keep-groups \
-    --cpus 16 --memory 20g --memory-swap 20g --pids-limit 4096 --shm-size 2g \
+    --cpus 24 --memory 28g --memory-swap 28g --pids-limit 4096 --shm-size 2g \
     --device /dev/dri -v "$HOME/wwhd-desk:/wwhd:z" --hostname wwhd-desk \
     wwhd-worker:latest >/dev/null
 systemctl --user stop wwhd-awake 2>/dev/null || true

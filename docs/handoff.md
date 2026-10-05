@@ -43,8 +43,8 @@ WW-4's actor conversion is split between two sessions working side by side:
 ### Two workers: the owner's desktop first, the worker as the fallback (from 2026-10-05)
 
 - **The desktop worker is the default** while the owner lends it (`desktop`, desktop CPU, 24
-  threads, AMD GPU): the same `wwhd-worker` image under rootless podman, capped at 16 threads and
-  20 GB, `/wwhd` being `~/wwhd-desk` there, with the game, saves, tools, caches, the checks'
+  threads, AMD GPU): the same `wwhd-worker` image under rootless podman, with all 24 threads and
+  28 GB of 31, `/wwhd` being `~/wwhd-desk` there, with the game, saves, tools, caches, the checks'
   references (gx2 streams, the save/route/tour/sail/menus/warp traces, the g3 captures) and the
   Ghidra project. `tools/worker/sync.sh`, `w`, `job start` and `publish.sh shot` go there by
   themselves while its worker runs (`tools/worker/target.sh`); `job wait/status/stop/tail` find a

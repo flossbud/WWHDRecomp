@@ -80,7 +80,7 @@ image, then `sudo mount /wwhd`.
 ## The second worker: the owner's desktop (the default while it's lent)
 
 `tools/worker/desktop.sh start|stop|status` runs the same image on desktop under rootless podman
-(`/wwhd` = `~/wwhd-desk`; 16 threads, 20 GB; a `wwhd-awake` user unit blocks sleep while it runs). While
+(`/wwhd` = `~/wwhd-desk`; all 24 threads, 28 GB; a `wwhd-awake` user unit blocks sleep while it runs). While
 it runs, `sync.sh`, `w`, `job start` and `publish.sh shot` use it by themselves (`tools/worker/target.sh`);
 otherwise the worker. `WWHD_ON=worker|desktop` forces one. It has the checks' references and the Ghidra
 project, so everything runs there. `tools/worker/cleanup.sh [--apply] [install]` frees old test outputs on

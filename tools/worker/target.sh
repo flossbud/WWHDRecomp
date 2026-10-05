@@ -1,6 +1,6 @@
 # Sourced by sync.sh, w, job and publish.sh shot: which worker a command goes to. Two machines run
 # the same container image (wwhd-worker) with the same paths inside (/wwhd/...):
-#   desktop    podman on the owner's desktop (24 threads; the worker capped at 16), /wwhd
+#   desktop    podman on the owner's desktop (24 threads, all the worker's), /wwhd
 #              being ~/wwhd-desk there: everything runs there while the owner lends it (builds,
 #              tests, captures, checks: its references give the same verdicts as the worker's, Ghidra).
 #   worker   docker on the worker (10 of 12 threads), /wwhd on the host too: the fallback.
