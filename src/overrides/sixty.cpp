@@ -1602,7 +1602,10 @@ void f_025B9100(PPCInterpreter_t* __restrict ctx)
 void f_025B9098(PPCInterpreter_t* __restrict ctx)
 {
 	if (ctx->gpr[4] == 3)
+	{
+		cemuLog_log(LogType::Force, "wwhd debug: a boss beaten (its dungeon's bit set)");
 		wwhd::debug::RushBossBeaten();
+	}
 	[[clang::musttail]] return orig_f_025B9098(ctx);
 }
 
