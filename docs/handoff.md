@@ -1111,8 +1111,13 @@ it in a window; D21 "Step 2"):**
     before) is made afresh each tick from a wave phase, now split: its vertices equal 30's at every half
     tick; its flag (PIRATE_FLAG 173) is a mass-spring cloth like Hyrule's flags (vec@/d@ on PSVECAdd and
     PSVECScale): its points move 14.9 units a tick against 30's 14.6; both packets' random shading wobble
-    (setCorrectNrmAngle) on whole ticks, so the random stream is 30's. Not done: tapestries (289). The
-    Stalfos' loincloth (its pose set in the execute, nun_pos_set: its angle steps
+    (setCorrectNrmAngle) on whole ticks, so the random stream is 30's. Not done: tapestries (Obj_Tapestry
+    289, the Earth Temple's curtains in rooms 2, 5, 10 and 13; `M_Dai,22,2,-1` puts Link among room 2's
+    four): unconverted they wave on whole ticks; converted as they are, twice as fast (the trial: the eye
+    point and vectors made from the cloth, x2). The cloth is a packet stepped by f_0239C574 through eight
+    helpers (per point accelerations: springs, gravity, a wave, hits, in f_0239B71C's six; speeds, a
+    position correction, normals in f_0239B85C; wind, hits, fire) and the decomp has their names only, so
+    its rules need the code read. The Stalfos' loincloth (its pose set in the execute, nun_pos_set: its angle steps
     on whole ticks, its anchor every step). Other users of the two line classes (ropes, ships' lines,
     vines) can be opted in once tested; the rope bridges' ropes step with their bridge, now converted.
   - **Rope bridges (BRIDGE 89) in the defaults (session top; earth.txt)**: Link walked across two at 30

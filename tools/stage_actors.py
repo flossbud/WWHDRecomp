@@ -13,8 +13,9 @@ the RPX's data by its first two names. Prints, per room, the process numbers pre
 profile names (NAMES.tsv, default /wwhd/data/ghidra-out/actor_names.tsv) and stage names. ROOM limits
 the rooms (numbers; "stage" for the stage file). --pos PROC prints that process's placements instead
 (name, parameters, position, angle y): where to put Link (WWHD_DEBUG_PLACE) or spawn one. --spawns prints
-the rooms' player spawn points (PLYR) instead: a stage warp's point (WWHD_DEBUG_STAGE=tick:STAGE,point,
-room,layer) is the low byte of the entry's angle z, and a point the room hasn't gives its first entry. A
+the player spawn points (PLYR; some stages keep them in the stage file) instead: a stage warp's point
+(WWHD_DEBUG_STAGE=tick:STAGE,point,room,layer) is the low byte of the entry's angle z, its room the low byte
+of its parameters, and a point the room hasn't gives its first entry. A
 spawn point facing an actor gets Link to it more surely than WWHD_DEBUG_PLACE, which in play moves him along
 a line from where he was and stops at the first wall.
 """
@@ -246,7 +247,7 @@ def main():
             if args.spawns:
                 for dz in tables:
                     for point, x, y, z, ay, prm in spawn_points(dz):
-                        print(f"{args.stage} room {room} spawn point {point} at {x:.0f},{y:.0f},{z:.0f} angle {ay} (params {prm:08x})")
+                        print(f"{args.stage} ({room}) spawn point {point} in room {prm & 0xFF} at {x:.0f},{y:.0f},{z:.0f} angle {ay} (params {prm:08x})")
                 continue
             if args.pos is not None:
                 for dz in tables:
