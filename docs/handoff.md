@@ -1258,6 +1258,29 @@ it in a window; D21 "Step 2"):**
     type (38) switched 44 ticks early at 60 (f1293 against f1338): requested by name only by the Gyorg
     controller (GY_CTRL 229/230, f_0216BBBC) and NPC_SO (f_022E06A4), so the Gyorg attack's trigger fires
     early (told session top, sea life). The camera's type is at camera +0x248+0x51C, its style +0x514.
+  - **The Ballad of Gales' flight at 60 (shared: sixty.cpp's StepInEvents, tick_rules.txt; regress.sh
+    rerun)**: the whole warp (the cyclone lifting the boat, the flight, setting it down) is an event with
+    Link sitting in the boat (0x89 SHIP_PADDLE; steering is 0x88), not in the event-stepping list, so
+    it ran at 30 (route `warp`, f1929-2425). Both added; then what steps there: the boat's lift
+    (procTactWarp f_02482438) and arrival (procStartModeWarp f_02481FAC): the spin added to the heading
+    (split@), speed.y + 1 and y += speed.y (*h@), the cyclone lowered 12 a call (*h@); their chases are
+    cLib_chaseS/F's, already time-stepped by sixty_step.cpp's overrides (rules on those calls halved
+    the spin-up twice: the flight took 160 ticks longer). The flight's camera (tornadoWarpEvCamera
+    f_025383D0; no decomp): 100 calls bringing the eye to a view of the boat by (1 / countdown) x 0.15
+    (k@ on 0.15, as on its fovy and bank: exact at the end, ~4% fast early), the centre after the boat by
+    0.25 (k@), then 200 calls easing eye and fovy by 0.05 and the bank by 0.02 (k@); its countdowns and
+    state changes late. And the camera's NotRun path (f_024FF6C0, while gameInfo +0x52E4 is set: the
+    arrival, the ship setting the camera itself) counted m07C, m118, m11C, m108 and shook every call:
+    Run's rules there too (late counts, the shake once a tick). Route `warp`: the flight lasts the same
+    (ends f2424 against f2425), the boat's spin and climb tick for tick with 30's, the camera from f2055
+    within a degree and 1-2% of distance (in its first 100 calls up to 7 degrees ahead: it starts from
+    the ride camera's view, 17 units off, and closes about half the gap). After 40 turns of spin the
+    boat lands facing 28 degrees differently (a fraction of a tick in when the spin starts and stops),
+    so the route's timed steering misses the ring of light; with the heading poked to 30's on landing
+    (`WWHD_DEBUG_POKE=2440:165,32a,2,a1df;2440:165,322,2,a1df`) the descent into Hyrule steps at 60
+    too: in the courtyard within a few units and 0.3 degrees, in Hyrule the boat sinks at 30's 14-15 a
+    tick, 2-4 ticks ahead (done f3401 against f3405). The boat's other event procedure, procZevDemo,
+    moves by c_lib's approaches and speedF (all time-stepped).
   - **The follow camera's turn ramp a count ahead at 60, fixed (shared: tick_rules.txt; regress.sh
     rerun)**: followCamera's m38C (a hang's or crawl's turn ramp: m3B8 = m38C / 30, then m38C + 1, and
     its countdown and resets) and m392 (a spin's charge ticks: a ratio of m392, then m392 + 1) were

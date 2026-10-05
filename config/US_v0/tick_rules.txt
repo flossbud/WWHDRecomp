@@ -330,6 +330,34 @@
 02533374    k@f1        bl 0201ae48     transEvCamera: eye, the others
 025333A4    k@f11       fmadds          transEvCamera: fovy, the others
 025333E8    k@f1        bl 0200693c     transEvCamera: bank += (target - bank) x Cushion
+# the Ballad of Gales' flight camera (f_025383D0, the decomp's tornadoWarpEvCamera stub; work area at r29
+# = dCamera +0x37C: a state, a countdown at +4; the boat, SHIP 165, found by name): state 1 for 100
+# calls brings the eye to a clear view of the boat by (1 / countdown) x 0.15 a call, fovy toward 70 and
+# the bank toward sin(6 / countdown) the same way, the centre after the boat by 0.25; state 2 for 200
+# calls eases eye 0.05, fovy toward 90 by 0.05, the bank back by 0.02 a call. k@ on each approach's
+# constant (1 / countdown is a progress too: the bank's sine); the countdowns and the states' changes
+# late, as 30 ticks them (the change's call runs the next state's first call as well)
+02538774    k@f1        bl 0201ae48     tornadoWarpEvCamera: centre += (boat's - centre) x 0.25
+02538828    k@f1        bl 0201ae48     tornadoWarpEvCamera: eye += (step to the view - eye) x 0.15
+02538854    k@f31       fmadds          tornadoWarpEvCamera: fovy += (step toward 70 - fovy) x 0.15
+025388BC    k@f1        bl 0200693c     tornadoWarpEvCamera: bank += (sin(6 / countdown) bank - bank) x 0.15
+025388E0    late        stw             tornadoWarpEvCamera: countdown - 1 (state 1)
+025388F0    late        stw             tornadoWarpEvCamera: state = 2
+025388F4    late        stw             tornadoWarpEvCamera: countdown = 200
+0253892C    k@f1        bl 0201ae48     tornadoWarpEvCamera: centre += (boat's - centre) x 0.25 (state 2)
+02538990    k@f1        bl 0201ae48     tornadoWarpEvCamera: eye += (view - eye) x 0.05 (state 2)
+025389B8    k@f7        fmadds          tornadoWarpEvCamera: fovy += (90 - fovy) x 0.05 (state 2)
+025389EC    k@f1        bl 0200693c     tornadoWarpEvCamera: bank -= bank x 0.02 (state 2)
+02538A10    late        stw             tornadoWarpEvCamera: countdown - 1 (state 2)
+02538A1C    late        stw             tornadoWarpEvCamera: state = 3
+# the camera's other per-frame path (f_024FF6C0, "NotRun": while gameInfo +0x52E4 is set, as in the
+# Ballad of Gales' flight): it runs the type's engine (f_024FF164) and counts m07C, m118, m11C, m108
+# and shakes as Run does; Run's rules (late counts, the shake once a tick, B19) here too
+024FF780    late        stw             NotRun: m07C + 1
+024FF788    late        stw             NotRun: m118 + 1
+024FF790    late        stw             NotRun: m11C + 1
+024FF794    late        stw             NotRun: m108 + 1
+024FF804    whole       bl 024fc108     NotRun: shakeCamera(), once a tick
 # the B-spline path an event camera steps along (f_025C0C80, GC's d2DBSplinePath::Step; called by
 # transEvCamera with BSpCurve and by bSplineEvCamera f_0253A704 only): a count of calls (+0) x a speed
 # (+0x1C) is the curve's segment and its weights; the count late, lag@ on it
@@ -442,6 +470,16 @@
 0247526C    split@r10   add             ship setControllAngle: m036C += m036E
 0247528C    split@r0    add             ship setControllAngle: m036E += force
 024752A0    split@r10   add             ship setControllAngle: m036C += m036E
+# the boat in the Ballad of Gales' cyclone (an event, stepped at 60 with Link's 0x88/0x89): the lift,
+# procTactWarp f_02482438 (the cyclone 443 at r31): its spin m03A6 (+0x68E) added to the heading,
+# speed.y + 1 a call (to 50) and y += speed.y; the arrival, procStartModeWarp f_02481FAC: the spin
+# added, the cyclone lowered 12 a call. Their chases (the spin up and down by 0x40, x, z and the
+# cyclone's y by 50 and 20) are cLib_chaseS/F's override's (sixty_step.cpp: the step x h)
+0248247C    split@r10   add             ship tact warp: heading + m03A6 (the spin)
+02482594    *h@f13      fadds           ship tact warp: speed.y + 1
+024825B0    *h@f12      fadds           ship tact warp: y += speed.y
+0248201C    split@r6    add             ship start mode warp: heading + m03A6 (the spin)
+02482398    *h@f0       fsubs           ship start mode warp: the cyclone's y - 12
 # ---- step rules: the King of Red Lions' sail (GRID 171, daGrid_c, d_a_grid.cpp; WWHD's fields 0x978
 # on from the GameCube's, 0x984 past a flap the GameCube's hasn't, +0x2B84 to +0x2B8C). _execute
 # (f_021642D4):
