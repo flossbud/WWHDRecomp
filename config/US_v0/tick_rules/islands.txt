@@ -115,3 +115,18 @@
 # the other islands: NPC_BJ1 336 (room 19), BJ2 337 (42), BJ3 338 (2, sea,100,2,-1), BJ4 339 (33), BJ8 343
 # (29): trials clean. In room 41 (BJ1, BJ8, NPC_MN) none ran.
 022DC800    whole:r3=1  bl 02055b64     sarace blink: its countdown (+0x86A)
+#
+# ---- the islands' trees (Obj_Ftree 131, d_a_obj_ftree.cpp, mostly stubs; one in each Korok's island room;
+# area_test.sh sea,0,23,-1 1000 1400 131 walk; session top). Its sway (f_02349B50): while its count m810
+# (+0x810, read at entry, + 1 at the end) is under its length (or for ever), two amplitudes (+0x814, +0x816)
+# from sin(m812), and the phase m812 (+0x812) + 3000 a tick (the trial: the count and the phase twice). In
+# states the trial didn't reach: two countdowns held at 1 (+0x7C4, +0x7C2, read elsewhere), a countdown that
+# acts at 0 at once (+0x7F8), a count read at entry like m810 (+0x806); +0x800 counts drops, one each time
+# its animation passes a frame (f_0234855C), not ticks: no rule. Left: the Triangle Islands' statues
+# (Obj_Doguu 265: no doubling in the trial, but their glow wanders by a random draw each step, as torches).
+02349BDC    spliti      addi            ftree: the sway's phase m812 + 3000
+02349C10    late        sth             ftree: the sway's tick count m810 + 1 (read at entry)
+02347E50    whole       sth             ftree: a countdown (+0x7C4) - 1 while > 1
+02347E64    whole       sth             ftree: a countdown (+0x7C2) - 1 while > 1
+02349378    keep:r11    addi            ftree: a countdown (+0x7F8) - 1, then 0 acts at once
+02349AE0    late        sth             ftree: a tick count (+0x806) + 1 (read at entry)

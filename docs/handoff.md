@@ -1184,7 +1184,10 @@ it in a window; D21 "Step 2"):**
     sea), or the sea's height under them. Left at 30: Fire Mountain's volcano (51: idle on this save; a
     count in a state it never entered) and Obj_Yboil 276 (didn't run), liftable rocks (Stone2 455) and
     ladders (Obj_Ladder 85: knocked down in an event; on this save they lie fallen), Outset's gong (284) and
-    the Flight Control Platform's goal flag (didn't run).
+    the Flight Control Platform's goal flag (didn't run). Later: the islands' trees (Obj_Ftree 131: the
+    sway's count `late`, its phase `spliti`; its amplitudes, sin(phase) before the add, show a half step's
+    sampling in the trial, x1.6). Left: the Triangle Islands' statues (Obj_Doguu 265: a glow drawn at random
+    each step, as torches), AYUSH 178 and Obj_Rcloud 141 (didn't run in rooms 23, 34, 13).
   - **Night (session top; sixty.cpp's `WWHD_DEBUG_TIME=tick:degrees`, windfall.txt)**: WWHD's day clock is
     the float at +0x44 of the save info the pointer at 0x101F84DC holds (dKy_getdaytime_hour f_02556C34
     divides it by 15; 1490 functions load that pointer; in this run it was 0x145B7BA4, on the heap). The
