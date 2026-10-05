@@ -46,6 +46,7 @@
 bool g_rtJournalOn = false;
 void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc) = nullptr;
 const uint32* g_rtStorePages = nullptr;
+bool g_rtStoreAll = false;
 uint64 g_rtStoresPassed = 0;
 
 namespace wwhd::rt
@@ -62,7 +63,8 @@ void rt_journal_store(uint32 ea, uint32 size, uint32 pc)
 {
 	using namespace wwhd::rt;
 	// the half tick's journal takes only stores into the pages it marked (most of a frame's stores are
-	// into the heap: matrices, display lists, packets), unless a fast path's watch needs them all
+	// into the heap: matrices, display lists, packets), unless a fast path's watch needs them all (RT_STORE
+	// checks this too, without the call; this is for the stores made by calling here directly)
 	if (const uint32* pages = g_rtStorePages)
 		if (!pages[ea >> 12] && !pages[(ea + size - 1) >> 12] && !g_quiet.token)
 		{

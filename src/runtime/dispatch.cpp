@@ -430,6 +430,7 @@ namespace wwhd::rt
 	{
 		g_quiet = { ++s_quietTokens, ctx, low, high, coreinit::OSGetCurrentThread()->wakeUpCount, 0, false };
 		g_rtJournalOn = true;
+		g_rtStoreAll = true;                      // every store, past the half tick journal's page filter
 		return g_quiet.token;
 	}
 
@@ -438,6 +439,7 @@ namespace wwhd::rt
 		if (g_quiet.token != token)               // another thread's watch began since: others ran
 			return -1;
 		g_rtJournalOn = g_rtStoreCensus != nullptr;   // the 60 fps hook's journaling goes on
+		g_rtStoreAll = false;
 		g_quiet.token = 0;
 		if (!g_quiet.visible && coreinit::OSGetCurrentThread()->wakeUpCount != g_quiet.wakeUps)
 			QuietVisible("left the core", 0);

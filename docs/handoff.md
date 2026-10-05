@@ -1306,6 +1306,17 @@ it in a window; D21 "Step 2"):**
     tick's frame at level 2, off while a held actor's draw runs and during a fast path's watch; the frame
     log still counts them). Sail A/B: the scheduler 68-69% -> 61-63%, a half frame's CPU 13.6-13.8 ->
     11.2-11.6 ms, late frames 16-20% -> 3-4%. Checks and regress the same (the journal's saves unchanged).
+    Then RT_STORE (ppc_ops.h) looks the pages up itself and calls only for a marked page (or for every
+    store while a fast path's quiet watch runs: `g_rtStoreAll`): a half frame's CPU over a whole frame's
+    2.7-2.9 -> 2.0-2.1 ms, and 170 thousand stores a half frame still reach the journal (the frame log's
+    count is these now). Those are stores into marked pages, nearly all over bytes already saved that
+    frame (the matrix stack and other .bss the draws rewrite; under a thousand saves a frame): each costs
+    the call, HalfTickStore's checks and the saved-bits lookup, ~1 ms a half frame. Ideas not taken:
+    saving a page whole at its first store and dropping its mark (then no store into it calls again) would
+    also put back what a converted step writes there after that store (the plants' and particles' calcs run
+    as converted steps inside the draw pass); an already-saved test before the indirect call needs
+    s_converting kept out (HalfTickStore notes converted executes' global stores for the draw pass's
+    hiding before it looks at the saved bits).
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next

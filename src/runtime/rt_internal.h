@@ -17,6 +17,7 @@ void rt_bad_branch(PPCInterpreter_t* ctx, uint32 ea, uint32 target);
 void rt_trap(PPCInterpreter_t* ctx, uint32 ea);
 void rt_dcache_flush(uint32 ea);
 extern bool g_rtJournalOn;
+extern bool g_rtStoreAll;                          // every store to rt_journal_store, past RT_STORE's page filter (ppc_ops.h)
 void rt_journal_store(uint32 ea, uint32 size, uint32 pc);
 extern void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc);   // the 60 fps tools' store hook (diff.cpp)
 void rt_yield(PPCInterpreter_t* ctx, uint32 pc);

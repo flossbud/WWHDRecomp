@@ -42,7 +42,7 @@ namespace wwhd::rt
 // hand-written code; src/runtime/diff.cpp)
 extern bool g_rtJournalOn;
 extern void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc);
-// With it, a table of the 4 KB pages it wants (an entry per page: 0 for none): stores into other pages
-// don't reach g_rtStoreCensus (unless a fast path's watch runs), only g_rtStoresPassed counts them
-extern const uint32* g_rtStorePages;
+// With it, a table of the 4 KB pages it wants (an entry per page: 0 for none; g_rtStorePages, ppc_ops.h):
+// stores into other pages don't reach it (unless a fast path's watch runs); g_rtStoresPassed counts
+// those that called rt_journal_store directly
 extern uint64 g_rtStoresPassed;
