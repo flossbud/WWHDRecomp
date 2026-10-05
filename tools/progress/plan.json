@@ -121,13 +121,13 @@
   ],
   "known_issues": [
     "Link: an action set up in a whole step can start half a tick early (fixed for the turn in place and waiting, so a turn and walk now keeps 30's ticks); actions ending on an animation may end a tick early",
-    "The Wind Waker song ends 2.5 ticks early",
+    "The Wind Waker song's conducting and playback end half a tick early (a beat is crossed on a half tick); its wind change and end are on 30's ticks",
     "A burst of draw-buffer asserts late in the warp route at 60 (never at 30)",
     "Random-driven enemies (Magtail waits, Peahat flights) drift from the 30 fps run, as expected",
     "Pots, sidling and ladders still need a hands-on check",
-    "Pots and barrels: thrown, rolling and floating ones still move at 30 (resting ones are identical); Windfall's night-only light and shutters, knobs, item stands unchecked",
+    "Windfall's night-only light and shutters, knobs, item stands unchecked (pots and barrels, thrown, rolling and floating: converted, carried.txt)",
     "Enemies falling into water: at 30 they hang at the surface about 2 ticks before sinking, at 60 they don't (the shared enemy move's ground check)",
-    "Hand-made gravity (speed.y += g, ruled *h) arcs about g/4 a tick higher than at 30: posMove's exact arc only knows fopAcM_calcSpeed's gravity"
+    "Hand-made gravity still ruled *h arcs about g/4 a tick off 30's; the exact rules: late on the speed.y store where the position moves first, keep on the add where gravity comes first, fall@ before fopAcM_posMove (done: Ganondorf, Puppet Ganon, Molgera's larvae, Chuchus)"
   ],
   "labels": {
     "168": "Link",
