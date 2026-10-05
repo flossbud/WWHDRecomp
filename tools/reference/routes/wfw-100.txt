@@ -1,0 +1,12 @@
+# Route: from Windfall's dock onto the quay by the gate (session qa, B16), after a warp to the dock
+# (WWHD_DEBUG_STAGE=920:sea,0,11,-1: Link at 668,95,-197304 facing -55 degrees): with ZL held (the camera
+# stays behind Link, so the stick's directions are fixed) strafe right along the dock, then back-right:
+# at 30 Link ends at 310,89,-198376, 160 units from the man by the tree (Sa3) and the mailbox beyond. At
+# 60 his path is ~5 units off and he slips off the quay's edge at f1091: shorten the first leg for 60.
+# FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start; gameplay from ~f870 (the warp at f920)
+1000 ZL+LRIGHT 75        # along the dock
+1077 ZL+LDOWN+LRIGHT 40  # onto the quay

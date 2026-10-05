@@ -1529,12 +1529,27 @@ it in a window; D21 "Step 2"):**
     of its own as `CEMU_BIN`, `CEMU_SHOT_FRAMES=2400-5400/100`) is B5's run: warp, Puppet Ganon's three
     forms, its death. Processes are found by name in the heap; they sat at the same addresses as in our
     runs.
+  - **The glide's flicker (B11): the Mirror Shield's glint, fixed (`link_qa.txt`)**. Link, the leaf and
+    the camera move evenly in a glide at 60 (`tools/sixty/tests/judder.py`), but a bright halo flashed on
+    the shield on his back on some frames (the brightness around the shield over twelve consecutive
+    captures: 559 551 563 568 546...; flat with Link unconverted). setItemModel (f_02403C24, from Link's
+    execute) runs the shield's glint by hand: a texture animation that starts at random (`cM_rnd() < 0.02`
+    a call) and then advances a frame a call (WWHD: two live copies, frames at Link +0xE0C, 30 long, and
+    +0xF1C, 60 long; a third at +0x4814). On both frames of a tick it started twice as often and played
+    twice as fast. Rules: the frame's + 1 `*h@`, the start's 2% `*h@` on its fcmpu (the two tests of a tick
+    are independent: other processes draw from the stream in between); the hookshot's frame (+0x6A44) and
+    two more hand-run frames (f_0240B7F4: +0x5618, +0x5708) the same. 2995 ticks idle on the dock: 44 and
+    28 glints of 28.7 and 59.0 ticks at 30, 32 and 27 of 29.1 and 59.5 at 60. Not found yet: the decomp's
+    other simpleAnmPlay callers (the sword's glow, the magic armour, the leaf's gust, the water ring), if
+    WWHD keeps them: look for `fadds` of the 1.0 register with an `fsel` or a frame-count compare after.
   - **Open (session qa)**: B16 (Windfall's streaks: the colours of the man by the gate's clothes; not
-    reproduced from the dock in consecutive frames or after a talk); B11 (the glide: Link, leaf and camera
-    move evenly, but at 60 a bright halo flashes on the Mirror Shield on some frames, never at 30; no
-    field of Link's singles those frames out: the draw); B8 (the bow's pull at 30: Link's and the arrow's
-    fields all change on both kinds of frame while aiming; the pull's pose is elsewhere); B10 (Beedle's
-    ship measured the same at both rates: needs the owner's where and what).
+    reproduced from the dock, on the quay by the gate over 20 s, or after a talk; route `wfw` strafes Link
+    from the dock to the quay at 30, at 60 he slips off its edge: his path is 5 units off); B8 (the bow's
+    pull at 30: Link's and the arrow's fields all change on both kinds of frame while aiming; needs the
+    owner's view and moment); B10 (Beedle's ship measured the same at both rates: needs the owner's where
+    and what). After a talk ends the next A starts a new talk ~30 ticks sooner at 60 (session bottom's
+    note; no countdown of Link's or the townsperson's steps twice in the trial there: the message
+    window's own closing, probably).
 - Real-time measuring: `WWHD_FRAME_LOG=path` (every frame's work, GX2DrawDone wait, both threads'
   CPU, vsyncs missed; `tools/sixty/frames.py` summarises), `WWHD_PROFILE` (`tools/profile_report.py`
   on the worker with the same build). On the desktop, `~/wwhd-test` is ours to deploy to and run

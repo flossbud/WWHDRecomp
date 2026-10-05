@@ -21,3 +21,23 @@
 # 237.6, 246.4 where 30 has 250, 258.8, 263.8). The look ahead and the slope's allowance are a step's move.
 023FF514    *h:f7       lfs             setStepsOffset: speedF, the look ahead for a step (x and z)
 023FF57C    *h:f10      lfs             setStepsOffset: speedF, the slope's own rise over the move
+#
+# ---- texture animations Link advances by hand (B11: "gliding, Link flickers more than he should"). The
+# decomp's simpleAnmPlay and its kin add 1 to an animation's frame a call, and setItemModel (f_02403C24,
+# called from Link's execute) has them inlined: the Mirror Shield's glint (it starts at random, cM_rnd() <
+# 0.02, then runs a frame a call to its end; WWHD has three copies, the frames at Link +0x4814, +0xE0C and
+# +0xF1C) and the hookshot's own frame (+0x6A44). On both frames of a tick the glint played at twice the
+# speed: a flash on the shield on Link's back, most visible gliding. f_0240B7F4 runs two more frames up
+# and down by 1 a call (+0x5618, +0x5708). The random start is tested on both frames of a tick too (other
+# processes draw from the stream in between, so the two tests are independent): its 2% a call is 1% a step.
+02403E34    *h@f30      fcmpu           setItemModel: the glint's start, cM_rnd() < 0.02 a tick
+02404E2C    *h@f30      fcmpu           setItemModel: the second copy's start
+024050CC    *h@f30      fcmpu           setItemModel: the third copy's start
+02403E60    *h@f29      fadds           setItemModel: the Mirror Shield's glint frame (+0x4814) + 1
+02404E58    *h@f29      fadds           setItemModel: the glint's second copy (+0xE0C) + 1
+024050F8    *h@f29      fadds           setItemModel: the glint's third copy (+0xF1C) + 1
+02404768    *h@f29      fadds           setItemModel: the hookshot's frame (+0x6A44) + 1
+0240BA90    *h@f29      fadds           f_0240B7F4: an effect's frame (+0x5618) + 1
+0240BB10    *h@f29      fadds           f_0240B7F4: its second frame (+0x5708) + 1
+0240BC0C    *h@f29      fsubs           f_0240B7F4: the frame (+0x5618) - 1
+0240BC28    *h@f29      fsubs           f_0240B7F4: the second frame (+0x5708) - 1
