@@ -564,6 +564,24 @@
 0209DA70    *h@f8       fadds           bk: +0x13A0 += +0x498 a tick
 0209E13C    whole       sth             bk: a counter (+0x138E) + 1
 020A1D78    *h@f11      fadds           bk: a float timer (+0xCC4) + its rate
+# Its fight (session qa, after B14's Moblin: the same trap). After the timers' loop the execute counts
+# eight fields down by hand; the trial found the two that run while it wanders (+0x42C, +0x42E). The rest
+# are zero until it fights: m0310 (+0x428; d_a_bk.cpp: 25 when Link's sword lands, and its defence waits
+# for 0), m030E (+0x426: it can't be hit), m030A, m02CC, the damage reaction's m48A, m0B78. Poked to 25
+# on an idle one (WWHD_DEBUG_POKE=1000:189,428,2,19): 24 ticks at 30, 12 at 60, 24 with these.
+0209C65C    whole       sth             bk: m030A (+0x422) - 1
+0209C66C    whole       sth             bk: m02CC (+0x3E8) - 1
+0209C684    whole       sth             bk: the damage reaction's m48A (+0x95A) - 1
+0209C698    whole       sth             bk: m030E (+0x426) - 1: it can't be hit while this runs
+0209C6AC    whole       sth             bk: m0310 (+0x428) - 1: it can't block while this runs
+0209C6C0    whole       sth             bk: m0B78 (+0xCD8) - 1
+0209CB9C    whole       sth             bk: the blink's m02CA (+0x3E6) - 1
+0209E158    whole       sth             bk: m030C (+0x424) - 1
+0209EE98    keep:r10    addi            bk: m0336 (+0x44E) - 1, then a particle at 0
+020A171C    keep:r4     addi            bk fight_run: m02FC (+0x414) + 1, the ticks Link stands close: its jump at 25
+020A61F0    keep:r9     addi            bk move: m122C (+0x138C) - 1, then its stun (action 18) at 0
+# Not ruled: m034C (+0x464, 020A0758), the ground smoke's count (a puff a call while it runs), and a
+# countdown at +0x3FB (0209BF2C) the decomp does not have.
 02041FF0    whole       stw             enemy common update: its tick count (+0xC) + 1
 02042004    whole       sthx            enemy common update: its three timers (+0x60) count down
 02042030    whole       sth             enemy common update: a countdown (+0x66) - 1
@@ -683,6 +701,26 @@
 024BD53C    whole       sthx            tn: its timers (+0x4F8) count down
 024BC4E4    whole       sth             tn (f_024BC3EC): a part's counter + 1
 024BD2E8    keep:r8     addi            tn: a countdown (+0x1670) - 1, then == 0 acts (keep: rule_audit.py)
+# Its fight (session qa, after B14's Moblin: the same trap). The execute's six countdowns after the timers'
+# loop are zero until it fights: m03F2 (+0x50A; d_a_tn.cpp: 25 when Link's sword lands, and its guard waits
+# for 0), m03F0 (+0x508: it can't be hit), m1402 (+0x1552: the armour's shake after a hit, its size and
+# phase), m03EA, m03FC, the damage reaction's m48A. Poked to 25 on one in the Savage Labyrinth
+# (WWHD_DEBUG_STAGE=920:Cave09,0,16,-1, WWHD_DEBUG_POKE=1040:191,50a,2,19): 24 ticks at 30, 12 at 60, 24 now.
+024BD55C    whole       sth             tn: m03EA (+0x502) - 1
+024BD570    whole       sth             tn: m03FC (+0x514) - 1
+024BD584    whole       sth             tn: m1402 (+0x1552) - 1: the armour's shake after a hit
+024BD598    whole       sth             tn: the damage reaction's m48A (+0xA4E) - 1
+024BD5AC    whole       sth             tn: m03F0 (+0x508) - 1: it can't be hit while this runs
+024BD5C4    whole       sth             tn: m03F2 (+0x50A) - 1: it can't block while this runs
+024BD8F8    whole       stb             tn damage_check: m1444 (+0x1594) - 1: its guard sphere's ticks
+024BECC8    whole       sth             tn: m03EE (+0x506) - 1
+024C0120    whole       sth             tn: m14F6 (+0x1646) - 1
+024BC4FC    whole       stb             tn part: a flying armour piece's m44 - 1 (beside its tick count, ruled above)
+024BF5BC    keep:r10    addi            tn: m041A (+0x536) - 1, then a particle at 0
+024BEAAC    keep:r5     addi            tn demo camera: m14FA (+0x164A) + 1, then compared with 150
+# Tn_move (f_024C3E64)
+024C40B8    whole       sth             tn move: m1436 (+0x1584) - 1
+024C41B4    keep:r12    addi            tn move: m1434 (+0x1583) - 1, then its stun (action 18) at 0
 #
 # ---- step rules: Kargarocs (BB, process 181, d_a_bb.cpp; execute f_0205EA58).
 0205ED04    whole       sth             bb: a counter (+0x4C6) + 1

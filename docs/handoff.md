@@ -1668,9 +1668,25 @@ it in a window; D21 "Step 2"):**
     a flat round room: a good arena, the Outset dock is not, a hit knocks either side into the sea): before
     the rules a Moblin went to its defence 13.5 ticks after a hit, now 33.5 (26 at 30). Moblin fields
     (WWHD): the action +0x8C2 (4 fight_run, 5 fight, 7 shove, 10 defence), its mode +0x8C4, the timers
-    +0x848. **The same trap for every enemy tested idle** (Darknut, Bokoblin, Stalfos...): countdowns that
-    only run in a fight; `tools/sixty/tests/` has no fight test yet. The fights are chaotic (the random
-    stream), so compare counts and delays, not paths.
+    +0x848. **The same trap for every enemy tested idle**: countdowns that only run in a fight. The
+    fights are chaotic (the random stream), so compare counts and delays, not paths.
+  - **The same for Bokoblins and Darknuts (session qa; top agreed: qa takes the land enemies, top the sea's)**.
+    d_a_bk.cpp and d_a_tn.cpp are the Moblin's file twice over: after the timers' loop the execute counts
+    six to eight fields down by hand, the "can't block" one (bk m0310 +0x428, tn m03F2 +0x50A) 25 on a hit,
+    the "can't be hit" one (bk +0x426, tn +0x508) 5; tn's m1402 (+0x1552) is the armour's shake. All `whole`
+    now, with the counts before a jump attack or a stun (`keep`). Poked to 25: 24 ticks at both rates
+    (12 before). Arenas (Savage Labyrinth, `WWHD_DEBUG_STAGE=920:Cave09,0,ROOM,-1`, Link lands in the
+    middle): room 13 Bokoblins, 14 Moblins, 16 a Darknut; Cave10 room 10 Stalfos. Route `mob` fights
+    whatever ZL targets; scratch summary per enemy: hits (the no-block field rising), the delay to its next
+    defence, Link's cuts and bounces (proc 0x41/0x46, 0x5A). Fields: bk action +0x4A2, mode +0x4A0; tn
+    action +0x596, mode +0x594 (10 its defence). **How to find them in any enemy**: list every stored
+    +-1 in its functions (a field loaded, +-1, stored back) and tick off those with a rule; the trial only
+    sees what runs in its test. **Not done: the Stalfos** (ST 190, session bottom's rules in earth.txt): its
+    head's 500-tick life m02F8 (+0x414, f_024963A4 at 02496644, then == 0: `keep`), and the execute's byte
+    countdowns at +0x20CD, +0x25AC, +0x202C, +0x21A8, +0x21C8 (HD's layout past the GameCube's fields:
+    read them first). Not looked at: ChuChus, Keese, ReDeads, Poes, Wizzrobes, Floormasters, Bubbles,
+    Peahats, Armos, Miniblins, Magtails, Kargarocs, Mothulas. The ground smoke's count of bk, mo2 and tn
+    (a puff a call while it runs) is left alone: as many puffs as at 30 in half the time.
   - **Open (session qa)**: B16 (Windfall's streaks: the colours of the man by the gate's clothes; not
     reproduced from the dock, on the quay by the gate over 20 s, or after a talk; route `wfw` strafes Link
     from the dock to the quay at 30, at 60 he slips off its edge: his path is 5 units off); B8 (the bow's
