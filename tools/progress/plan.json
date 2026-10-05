@@ -342,6 +342,14 @@
     {
       "id": "npcs",
       "name": "NPCs still at 30 where players go (a stage survey): Windfall's houses (bomb shop BMS1 and P1, the auction AUCTION/KP1/GP1/KF1, Lenzo PHOTO, school HO, Kaisen KG1), Outset (YM1, LS1 Aryll, P1/P2, AH), island stalls ROTEN, Koroks BJ1-9 on the islands, HR, FA1, Beedle's shop BS1, Carlov's MT/MN"
+    },
+    {
+      "id": "outdoors",
+      "name": "Moving types still at 30 outdoors (session top's census of every stage's placements, 2026-10-05): the flags at the Flight Control Platform and the boating course (Goal_Flag 291), Fire Mountain's eruption (Obj_Volcano 51, Obj_Yboil 276), Ice Ring Isle (Obj_Iceisland 55, Obj_Dragonhead 56, ICE_LIFT 93), the cafe's and school's lamps (Obj_Cafelmp 280), Beedle's shop curtain (Obj_Bscurtain 152), the auction's flowers (Obj_Rflw 277), Tingle Island's Obj_Vtil 459, the gong 284, liftable rocks (Stone2 455), ladders (85), Coming3 271"
+    },
+    {
+      "id": "dungeons",
+      "name": "Moving types still at 30 in dungeons (the same census): fire jets (Obj_Flame 267: Dragon Roost Cavern, Ganon's Tower), spikes (TOGE 122: Wind Temple room 9, GanonC), the Wind Temple's statues and hooks (Obj_Homen 129, Obj_Hfuck1 148, Obj_Vmc 52, Obj_Hami2-4, Obj_Hbrf1), Ganon's Tower's waterfalls (Obj_Gtaki 275, Obj_Gnnbtaki 140, Obj_Gnntakis/e 138/139), the Earth Temple's leftovers (tapestries 289, coffins 159, mirrors 272), Asoko's lifts (Obj_Hlift 46)"
     }
   ],
   "later": [

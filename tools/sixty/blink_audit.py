@@ -6,11 +6,13 @@ NPCs blink with a countdown in one of the shared helpers cLib_calcTimer<s16> (f_
 are `keep` in tick_rules.txt (a half step returns the count as it is), so on a half step an out countdown
 still says 0 and the frame steps twice a tick. The trial only sees the blinks its test reaches: many NPCs
 blink in a mode (talking, an event) a walk past never starts. This lists, per process converted by default
-(-a: every process), each call of a helper followed by a compare of r3 and, within 30 instructions, a field
-+ 1 stored back, with no rule on the call, the add or the store. The fix used: `keep:REG` on the frame's add
-(Outset's NPCs; covers a mode with no countdown too), or `whole:r3=1` on the call plus `whole` on the
-store (Windfall's houses). Not every hit is a blink: a state's number + 1 once a countdown is out moves on to
-other code (at most half a tick early), and a random wait's `rand & 1` + 1 is no count; read each one.
+(-a: every process), each call of a helper followed by a compare of r3 and, within 64 instructions (a blink
+may test its frame's end before the + 1), a field + 1 stored back, with no rule on the call, the add or the
+store. The fixes used: `keep:REG` on the frame's add (Outset's NPCs; covers a mode with no countdown too), or
+`whole:r3=1` on the call (the islands' NPCs; a reset at the frame's end then waits for the whole tick, as
+at 30), plus `whole` on the frame's store where a mode steps it with no countdown (Windfall's houses). Not
+every hit is a blink: a state's number + 1 once a countdown is out moves on to other code (at most half a
+tick early), and a random wait's `rand & 1` + 1 is no count; read each one.
 Code ranges and dumps as tools/sixty/counter_audit.py's. The output names the game's instructions: keep it
 on the worker.
 """
@@ -35,7 +37,7 @@ def sites(path):
             continue
         if not any(len(x) == 3 and x[1] in ("cmpwi", "cmpw") and x[2].startswith("r3,") for x in lines[i + 1:i + 4]):
             continue
-        for j in range(i + 1, min(len(lines), i + 30)):
+        for j in range(i + 1, min(len(lines), i + 64)):
             x = lines[j]
             m = re.match(r"addi (r\d+),(r\d+),0x1$", x[1] + " " + x[2].strip()) if len(x) == 3 else None
             if not m:

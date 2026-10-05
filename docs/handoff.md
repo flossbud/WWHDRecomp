@@ -1144,7 +1144,9 @@ it in a window; D21 "Step 2"):**
     Converted: Windfall's houses (the auction house's KP1 355, GP1 357, KF1 359; Kaisen's KG1 362; Lenzo, PHOTO
     375; the school's HO 366; the pirate ship's hold, Obombh: P1 322 and BMS1 347), the islands' (stalls ROTEN
     372, HR 365, the Koroks planting on islands BJ5/6/9 340/341/344, the fairies FA1 360, AC1 376, the Tingle
-    brothers TC 325, KG2 363, AH 381, BMCON1 346), Beedle's shopkeeper BS1 345 (Obshop) and DS1 351 (Pdrgsh).
+    brothers TC 325, KG2 363, AH 381, BMCON1 346; the other Koroks planting on islands, BJ1-4 336-339 and BJ8
+    343; the boating course's SARACE 324, sea,100,48,-1), Beedle's shopkeeper BS1 345 (Obshop) and DS1 351
+    (Pdrgsh).
     Nearly all blink the same way: a countdown (cLib_calcTimer<s16> f_02055B64, `keep` in tick_rules.txt) that,
     once out, steps the blink's frame until its length, then draws a new wait; on a half step the helper still
     returns 0 and the frame stepped twice a tick: `whole:r3=1` on that call (r3 = 1: not out; Orca's count is
@@ -1158,11 +1160,13 @@ it in a window; D21 "Step 2"):**
     (on the worker) lists each converted process's helper calls whose 0 steps a field + 1 with no rule; it found
     Outset's YW1 317, Sturgeon AJ1 332, AC1 376, KF1 359 (a blink, and a count up in what looks like the
     auction's bidding) and Zelda PZ 210 (modes 0/7 count down, 3/4/8+ step the frame with no countdown), now
-    `keep` on the frame's add. What it still lists is no blink: NPC_SO 118's state number (+0xCEC, + 1 once
+    `keep` on the frame's add, and with a window of 64 instructions (some blinks test the frame's end
+    before the + 1, as SARACE's, which the trial caught) BMS1 347 and DS1 351 (`whole:r3=1`). What it still
+    lists is no blink: NPC_SO 118's state number (+0xCEC, + 1 once
     a countdown is out: phases 1 and 5 go on to 2 and 6, at most half a tick early), process 198's random
     wait (rand & 1 + 1) and Gyorg's +0xA44 (behind its tuning data's +0x99, set at run time). With -a, the
-    unconverted NPCs above blink the same way (LS1, PF1 356, CO1, HI1, MT, MN): give them the rule when
-    converting.
+    unconverted NPCs above blink the same way (LS1, PF1 356, CO1, HI1, MT, MN, BTSW 349, BTSW2, AUCTION 361
+    and Medli MD 367): give them the rule when converting.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next

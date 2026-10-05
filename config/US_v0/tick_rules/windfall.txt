@@ -147,3 +147,5 @@
 # its data's +0x44 in the other: by its look the auction's bidding, at night.
 02261B20    keep:r12    addi            kf1 blink (f_02261AD0): its frame (+0x864) + 1, then >= the length
 022601CC    keep:r12    addi            kf1 (f_022600FC): a count (+0xBA2) + 1, held at its data's +0x44
+# BMS1's blink (f_0220A160) is the boating course's SARACE's (islands.txt), out of the trial's reach as KF1's.
+0220A178    whole:r3=1  bl 02055b64     bms1 blink: its countdown (+0x4C2)

@@ -108,3 +108,10 @@
 0222F54C    whole       bl 025e1a40     ds1: a sound, each step
 0222F55C    whole       stb             ds1: a count (+0x9AB) + 1
 0222F580    whole       bl 025e1a40     ds1: the other sound, the count past 50
+0222EB34    whole:r3=1  bl 02055b64     ds1 blink: its countdown (+0x432; the frame +0x430 steps below its length, else
+#                                       wraps and draws a new wait: blink_audit.py's wider window)
+# The boating course's NPC_SARACE 324 (sea,100,48,-1) blinks as DS1 does (the trial: its frame + 1 twice); its
+# +0x37C and +0x390 are copies of +0x86C and +0x878 (an eye and an attention point). The Koroks planting on
+# the other islands: NPC_BJ1 336 (room 19), BJ2 337 (42), BJ3 338 (2, sea,100,2,-1), BJ4 339 (33), BJ8 343
+# (29): trials clean. In room 41 (BJ1, BJ8, NPC_MN) none ran.
+022DC800    whole:r3=1  bl 02055b64     sarace blink: its countdown (+0x86A)
