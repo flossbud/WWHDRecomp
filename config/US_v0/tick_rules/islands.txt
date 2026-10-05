@@ -73,3 +73,29 @@
 0236ECE8    late        stw             magma rock: the countdown (+0x750) - 1 in its other states
 0236ECEC    late        stw             magma rock: a count (+0x754) + 1 (with it)
 02093A50    keep:r9     addi            bigelf: a countdown (+0x528) - 1 while > 0, its value used after
+#
+# ---- the islands' NPCs (the npcs item, session top; area_test.sh sea,0,ROOM,-1 1000 1400 TYPES walk): the
+# stall keepers NPC_ROTEN 372 (rooms 9, 23, 34), NPC_HR 365 (9, 13, 18, 38), the Koroks planting on islands
+# (NPC_BJ6 341 room 9, NPC_BJ9 344 room 23, NPC_BJ5 340 room 38), the fairies NPC_FA1 360 (room 9, five), NPC_AC1
+# 376 (13), the Tingle brothers' NPC_TC 325 (17, four), NPC_KG2 363 (10), NPC_AH 381 and NPC_BMCON1 346 (14).
+# Their blinks count twice a tick as Orca's did (a countdown, the shared s16 helper, that once out steps the
+# blink's frame; on a half step the helper still says "out"): whole:r3=1 on its call. HR and TC count a byte
+# up to 255 (late), ROTEN a countdown tested at once (keep). BJ6, BJ9, BJ5, FA1 (a constant 1.6 off 30's from
+# their start), AC1, BMCON1: trials clean. ROTEN rides its raft (f_024EE658, carried by the floor's move: the
+# trial doubles it, its floor not stepping there; its paths at 30 and 60 are alike).
+022D50EC    whole:r3=1  bl 02055b64     roten blink: its countdown (+0xB1E)
+022D5D7C    keep:r10    addi            roten: a countdown (+0xB1A) - 1, tested at once
+02242600    whole:r3=1  bl 02055b64     hr blink: its countdown (+0x452)
+022410C4    late        stb             hr: a count (+0x77B) + 1 a tick up to 255
+022E9004    whole:r3=1  bl 02055b64     tc blink: its countdown (+0x8D6)
+022E76C8    late        stb             tc: a count (+0x8F0) + 1 a tick up to 255
+02268A9C    whole:r3=1  bl 02055b64     kg2 blink: its countdown (+0x8DA)
+021E6528    whole:r3=1  bl 02055b64     ah blink: its countdown (+0x8AE)
+# Beedle's shop inside (Obshop,0,1,-1: NPC_BS1 345) blinks the same way. NPC_DS1 351 (Pdrgsh): a count each step
+# with a sound each step, and another sound at 50: once a tick, sounds and count. Not running on this save by
+# day: Carlov's NPC_MT 379 and NPC_MN 380 (Pfigure), NPC_CO1 370 (Comori), NPC_HI1 377 (kenroom), Outset's
+# NPC_YM1 315, NPC_LS1 321, NPC_P2 323, NPC_BTSW2 350.
+02213934    whole:r3=1  bl 02055b64     bs1 blink: its countdown (+0x43E)
+0222F54C    whole       bl 025e1a40     ds1: a sound, each step
+0222F55C    whole       stb             ds1: a count (+0x9AB) + 1
+0222F580    whole       bl 025e1a40     ds1: the other sound, the count past 50

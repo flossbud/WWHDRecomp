@@ -1139,6 +1139,20 @@ it in a window; D21 "Step 2"):**
     `WWHD_DEBUG_POKE` of his facing didn't hold there; capture.sh's extra input lines are game frames (its
     header said swaps; its shots are swaps). events_test.sh's back and talk routes now start from the
     warps their headers name (before, they ran from Outset's dock without their door and talk).
+  - **NPCs (the npcs item, session top; windfall.txt, islands.txt)**: a stage survey (every stage's placements
+    against the defaults, by `stage_actors.py`'s functions) listed the NPCs still unconverted where players go.
+    Converted: Windfall's houses (the auction house's KP1 355, GP1 357, KF1 359; Kaisen's KG1 362; Lenzo, PHOTO
+    375; the school's HO 366; the pirate ship's hold, Obombh: P1 322 and BMS1 347), the islands' (stalls ROTEN
+    372, HR 365, the Koroks planting on islands BJ5/6/9 340/341/344, the fairies FA1 360, AC1 376, the Tingle
+    brothers TC 325, KG2 363, AH 381, BMCON1 346), Beedle's shopkeeper BS1 345 (Obshop) and DS1 351 (Pdrgsh).
+    Nearly all blink the same way: a countdown (cLib_calcTimer<s16> f_02055B64, `keep` in tick_rules.txt) that,
+    once out, steps the blink's frame until its length, then draws a new wait; on a half step the helper still
+    returns 0 and the frame stepped twice a tick: `whole:r3=1` on that call (r3 = 1: not out; Orca's count is
+    the same pattern; `whole` on the frame's store alone breaks the reset, which compares the register). A few
+    count a byte to 255 (late) or a countdown tested at once (keep). Tested by area_test.sh in their rooms
+    (`STAGE,point,room,-1`, walk), trials clean after. Not running on this save by day, so left: the auction's
+    bidders (AUCTION 361, 382), Carlov's MT/MN 379/380, CO1 370, HI1 377, Outset's YM1 315, LS1 321, P2 323,
+    BTSW2 350. Medli and Makar are session bottom's.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next
