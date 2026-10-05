@@ -858,7 +858,7 @@
 021A8B24    spliti      addi            205: its spin (shape angle z) + 0x500 a tick
 021A8BE8    spliti      addi            205: its spin (shape angle z) + 0x500 a tick
 021A8D58    split@r9    add             205: its spin += its speed (+0x56E) a tick
-021A7080    split@r0    add             205: a phase (+0x576) += its speed (+0x57A) a tick
+021A7080    splitd@r0   add             205 draw_SUB: its body's spin m2FA (+0x576) += m2FE (+0x57A) a tick; the draw calls it too when the execute hasn't run since the last draw (m2CD +0x549): at 60 a held or frozen Morth spun twice as fast
 021A8DCC    whole       sth             205: a counter (+0x56C) + 1
 021A8DF4    whole       sth             205: a counter (+0x56C) + 1
 021A956C    whole       sth             205: a counter (+0x56C) + 1

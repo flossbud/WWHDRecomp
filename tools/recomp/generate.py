@@ -73,6 +73,9 @@ rules, for the code of processes that run every frame with a time step h
   d:REG        after it, REG = REG^h (a damping factor)
   split:REG    after it, an integer per-tick amount split between the whole tick and the half tick
                (REG - REG/2, then REG/2: the two add up to the 30 Hz step exactly)
+  splitd@REG   split@, and on a half tick's frame with a step of 1 (a draw: only stepping processes
+               run on a half tick) the instruction doesn't run: a per-tick add in code that the draw
+               calls too when the process hasn't run since the last draw (the Morth's spin, draw_SUB)
   spliti       the same for an `addi rD, rA, IMM`'s immediate: rD = rA + (IMM - IMM/2), then
                rA + IMM/2 (a phase that adds a constant a tick)
   lagi         for a `mulli rD, rA, IMM` of a tick count (a phase as count x IMM, the count kept to whole
@@ -247,7 +250,7 @@ class Program:
                 kind, sep, arg = rule.partition(":")
                 if "@" in rule:
                     kind, sep, arg = rule.partition("@")
-                    assert kind in ("split", "vec", "arc", "fall", "ssplit") or kind in self.STEP_OPS, f"tick_rules.txt:{n}: {rule}: @ takes a step operation"
+                    assert kind in ("split", "splitd", "vec", "arc", "fall", "ssplit") or kind in self.STEP_OPS, f"tick_rules.txt:{n}: {rule}: @ takes a step operation"
                     assert kind != "fall" or arg[0] == "f", f"tick_rules.txt:{n}: {rule}: fall@ takes the gravity's float register"
                     assert kind not in ("vec", "arc", "ssplit") or (arg[0] == "r" and words[2] == "bl"), f"tick_rules.txt:{n}: {rule}: a call's pointer register"
                     kind += "@"
@@ -269,12 +272,12 @@ class Program:
                         assert key == "r3", f"tick_rules.txt:{n}: unknown rule argument {arg}"
                         value = v if re.fullmatch(r"r([12]?[0-9]|3[01])", v) else int(v, 0)
                 else:
-                    assert kind.rstrip("@") in ("keep", "split", "note", "vec", "arc", "fall", "ssplit") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
-                    assert kind != "ssplit", f"tick_rules.txt:{n}: ssplit takes @: ssplit@rN"
+                    assert kind.rstrip("@") in ("keep", "split", "splitd", "note", "vec", "arc", "fall", "ssplit") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert kind not in ("ssplit", "splitd"), f"tick_rules.txt:{n}: {kind} takes @: {kind}@rN"
                     assert kind != "fall", f"tick_rules.txt:{n}: fall takes @: fall@fREG"
                     assert kind != "note" or arg[0] == "f", f"tick_rules.txt:{n}: note takes a float register"
                     assert re.fullmatch(r"[rf]([12]?[0-9]|3[01])", arg), f"tick_rules.txt:{n}: {rule}: a register expected"
-                    assert kind.rstrip("@") != "split" or arg[0] == "r", f"tick_rules.txt:{n}: split takes an integer register"
+                    assert kind.rstrip("@") not in ("split", "splitd") or arg[0] == "r", f"tick_rules.txt:{n}: split takes an integer register"
                     assert kind.rstrip("@") != "lag" or arg[0] == "f", f"tick_rules.txt:{n}: lag takes a float register (lagi: mulli)"
                     value = arg
                 assert self.function_containing(ea) is not None, f"tick_rules.txt:{n}: {ea:08X} is in no function"
@@ -597,7 +600,7 @@ def apply_tick_rule(rule, i, lines):
         return ([f"{{ const uint32 vecEa_ = {reg}; float vecSaved_[3]; const bool vec_ = RT_STEPPED();   // step rule: {what}",
                  f"\tif (vec_) rt_step_vec_begin(vecEa_, vecSaved_, {arc});"]
                 + ["\t" + l for l in lines] + ["\tif (vec_) rt_step_vec_end(vecEa_, vecSaved_);", "}"])
-    if op == "split":
+    if op in ("split", "splitd"):
         change = f"if (RT_STEPPED()) {reg} = rt_step_split({reg});"
     elif arg[0] == "f":
         call = step_call(op, f"{reg}.fp0")
@@ -612,7 +615,11 @@ def apply_tick_rule(rule, i, lines):
     call = (i.op == "b" or i.op == "bcctr") and i.lk           # a call: the argument registers are the callee's
     writes = call or any(assign.search(l) for l in lines)     # (or the instruction's own code assigns it)
     out = [f"{{ const auto saved_ = {reg}; {change}   // step rule: {what}"] + ["\t" + l for l in lines]
-    return out + (["}"] if writes else [f"\t{reg} = saved_;", "}"])
+    out += ["}"] if writes else [f"\t{reg} = saved_;", "}"]
+    if op == "splitd":
+        # not on a half tick's draw (a half tick runs only stepping processes, with h 1/2)
+        out = ["if (RT_WHOLE_TICK() || RT_STEPPED()) {"] + ["\t" + l for l in out] + ["}"]
+    return out
 
 
 def generate_function(prog, em, start, end, errors):
