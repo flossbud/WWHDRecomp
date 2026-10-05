@@ -253,6 +253,14 @@ namespace
 	// whole ticks as before; so does the half tick after an event starts, is ordered or is asked to end.
 	// WWHD_60FPS_EVENTS=0: no stepping in events at all.
 	uint32 s_link = 0;                              // Link (168) as he last executed
+	// Cutscenes at 60 (below, "cutscenes at 60"; WWHD_60FPS_DEMOS=0 turns it off): Link's cutscene action
+	// (0xA9, dProcTool f_0241FD7C: his place, angle and animation's frame from the cutscene's data) steps
+	// in events, and the cutscene's values are evaluated for both of the tick's steps
+	bool DemoSixty()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_DEMOS"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
 	bool StepInEvents()
 	{
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_EVENTS"); return !(e && atoi(e) == 0); }();
@@ -261,7 +269,7 @@ namespace
 		const uint32 action = rd32(s_link + 0x65F0);
 		return action == 4 || action == 6 || action == 0x88 || action == 0x89 || action == 0x9A || action == 0x9B ||
 			action == 0x9C || action == 0xAA || action == 0xAD || action == 0xAE || action == 0xB8 || action == 0xC4 ||
-			action == 0xCE || action == 0xCF || action == 0xD2;
+			action == 0xCE || action == 0xCF || action == 0xD2 || (action == 0xA9 && DemoSixty());
 	}
 	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0, s_edgeFinishes = 0;
 	void StepStats()
@@ -1538,6 +1546,96 @@ void f_025B9100(PPCInterpreter_t* __restrict ctx)
 	orig_f_025B9100(ctx);
 }
 
+// ---- cutscenes at 60 (D21) ------------------------------------------------------------------------
+// A cutscene (dDemo_manager_c: its update, f_025291C8, calls JStudio's stb::TControl::forward(1),
+// f_0283D514, on whole ticks) moves its cast and camera by values JStudio evaluates once a tick: each
+// TVariableValue a curve or a rate of the time, its age (whole frames, +0x4) times the control's
+// seconds a frame, handed by the objects' adaptors to the cast's demo actors (dDemo_actor_c: place,
+// angle, animation frame) and the camera's. While the cast steps at 60 in the event (Link's cutscene
+// action, StepInEvents), the whole tick's update is followed by forward(0) (as the manager's start calls
+// it: no frame passes, so the sequence's waits and commands stay on whole ticks) evaluating them at age
+// - 1/2 (update_time_ f_02839DB4, update_functionValue_ f_02839DF4, below: (2 age - 1) x spf / 2), and
+// the half tick begins with them at age again: the cast reads half way on its whole step and the tick's
+// own values on its half step, as stepped processes are (Ganondorf's arrival in GTower: Link's frame
+// 13.5 and 14 against 30's 14, his own stepped animations' halves alike). The camera shows a step late
+// what it read, so its whole frames equal 30's ticks and its half frames lie half way. Made as a step's
+// stores (s_converting), so the half tick's rollback keeps them.
+void f_0283D514(PPCInterpreter_t* __restrict ctx);
+namespace
+{
+	bool s_demoHalf = false;                         // the values being evaluated at age - 1/2
+	bool s_demoBehind = false;                       // the whole tick's cast got them at age - 1/2
+
+	// the cutscene's values evaluated again (forward(0)), at age - 1/2 if half; true if a cutscene runs
+	bool DemoEvaluate(PPCInterpreter_t* ctx, bool half)
+	{
+		const uint32 control = rd32(0x101D5FE8u);    // dDemo_manager_c's m_control (its create, f_025286E0)
+		if (!control || !rd32(0x101D6004u))          // no cutscene loaded (its current file)
+			return false;
+		Registers regs;
+		regs.Save(ctx);
+		const uint32 sp = (ctx->gpr[1] - 0x200) & ~0xFu;
+		wr32(sp, ctx->gpr[1]);                     // a back chain
+		ctx->gpr[1] = sp;
+		ctx->gpr[3] = control;
+		ctx->gpr[4] = 0;
+		s_demoHalf = half;
+		s_converting++;
+		f_0283D514(ctx);
+		s_converting--;
+		s_demoHalf = false;
+		regs.Restore(ctx);
+		return true;
+	}
+
+	// a half tick's start: the values the whole tick's cast got at age - 1/2 are the tick's own again
+	void DemoHalfTick(PPCInterpreter_t* ctx)
+	{
+		if (!s_demoBehind)
+			return;
+		s_demoBehind = false;
+		DemoEvaluate(ctx, false);
+	}
+
+	// a TVariableValue's update at age - 1/2: (2 age - 1) x spf / 2 (at age 0, age 0's)
+	void HalfAge(PPCInterpreter_t* ctx, void (*orig)(PPCInterpreter_t*))
+	{
+		const uint32 v = GPR(3);
+		const uint32 age = rd32(v + 4);
+		wr32(v + 4, age ? age * 2 - 1 : 0);
+		FPR(1).fp0 *= 0.5;
+		FPR(1).fp1 = FPR(1).fp0;
+		orig(ctx);
+		wr32(v + 4, age);
+	}
+}
+
+// dDemo_manager_c::update (a cutscene's tick: JStudio's forward(1)); while the cast steps at 60 in its
+// event, the values at age - 1/2 for the whole tick's step (above)
+void f_025291C8(PPCInterpreter_t* __restrict ctx)
+{
+	orig_f_025291C8(ctx);
+	if (DemoSixty() && wwhd::rt::SixtyFrom() != ~0u && wwhd::os::SwapCount() >= wwhd::rt::SixtyFrom() && !g_rtHalfTick &&
+		StepInEvents())
+		s_demoBehind = DemoEvaluate(ctx, true);
+}
+
+// JStudio::TVariableValue::update_time_ (its value: age x spf x its rate)
+void f_02839DB4(PPCInterpreter_t* __restrict ctx)
+{
+	if (!s_demoHalf)
+		[[clang::musttail]] return orig_f_02839DB4(ctx);
+	HalfAge(ctx, orig_f_02839DB4);
+}
+
+// JStudio::TVariableValue::update_functionValue_ (its value: its function at age x spf)
+void f_02839DF4(PPCInterpreter_t* __restrict ctx)
+{
+	if (!s_demoHalf)
+		[[clang::musttail]] return orig_f_02839DF4(ctx);
+	HalfAge(ctx, orig_f_02839DF4);
+}
+
 // a late store that a stepping process's whole step passed over (ppc_ops.h's late_wr32 and on; while
 // g_rtLateNotes is set, by f_025DE58C below): noted for its half step (s_lateNoted)
 void rt_late_note(uint32 ea, uint32 size, uint64 value)
@@ -1556,6 +1654,7 @@ void f_025F172C(PPCInterpreter_t* __restrict ctx)
 		s_lateNoted.clear();                        // only a tick's own notes are made at its half step
 	if (g_rtHalfTick)
 	{
+		DemoHalfTick(ctx);                          // a cutscene's values the tick's own again, before the cast steps
 		static const bool skip = [] { const char* e = getenv("WWHD_60FPS_HALF"); return e && strcmp(e, "none") == 0; }();
 		if (skip)
 			return;

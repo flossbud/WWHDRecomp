@@ -1488,6 +1488,26 @@ it in a window; D21 "Step 2"):**
     held half step's late stores are made there (below, "Late stores at an event's edge"), and the save's
     8 stores are whole (a first call on a half step, its count late, would save again after moving the
     eye). Now: written once (f1004w), m11C in step, the end view yaw -10.5 at both by f1468.
+  - **Cutscenes at 60 (shared: sixty.cpp, overrides.txt; names in symbols.csv)**: JStudio cutscenes (dDemo)
+    held everything at 30: Link's cutscene action (0xA9, daPy_lk_c::dProcTool f_0241FD7C: his place, angle
+    and animation frame from his demo actor) wasn't in StepInEvents' list, and the cutscene's values change
+    once a tick (dDemo_manager_c::update f_025291C8 calls stb::TControl::forward(1), f_0283D514; each
+    TVariableValue is a curve or rate of age (whole frames, +0x4) x seconds a frame). Now 0xA9 steps, and
+    while it does the whole tick's update is followed by forward(0) (no frame passes: the sequence's waits
+    and commands stay on whole ticks) evaluating the values at age - 1/2 (update_time_ f_02839DB4 and
+    update_functionValue_ f_02839DF4 overridden: (2 age - 1) x spf / 2), and the half tick starts with them
+    at age again. The cast reads half way at its whole step and the tick's own values at its half step, as
+    stepped processes do; the camera shows what it read a step late, so its whole frames equal 30's ticks.
+    Test: Ganondorf's arrival in GTower (route gtower with WWHD_DEBUG_STAGE=920:GTower,0,0,-1 and
+    WWHD_DEBUG_BOSS=1; a JStudio cutscene f971-8200): Link's actions identical, his animation frame 13.5 and
+    14 against 30's 14 (his own stepped animations' halves alike), the camera's four moves (f2598, f2811,
+    f4145, f7928) exact at whole frames and half way at half frames (before: the half frames repeated the
+    whole). events_test.sh's routes (none has a JStudio cutscene) identical; checks and regress identical.
+    WWHD_60FPS_DEMOS=0 turns it off. How it was found: the demo manager's globals (m_control 101D5FE8,
+    current file 101D6004, frame 101D6008) by d_demo.cpp's asserts; watching 101D6004 tells whether a
+    cutscene is JStudio (the boss refights' intros are event cameras, not JStudio). Open: other JStudio
+    cutscenes (the 100% save replays few); an unconverted cast member reads the half way values at its
+    whole step and keeps them (half a tick behind at whole ticks).
   - **Late stores at an event's edge (shared: generate.py, ppc_ops.h, sixty.cpp)**: an event that
     begins, is ordered or ends during a whole tick holds the half step of the event's own processes
     that took a stepping whole step (sixty.cpp's edge, above). A `late` store waits for the half step,
