@@ -1330,8 +1330,8 @@ it in a window; D21 "Step 2"):**
     early (told session top, sea life). The camera's type is at camera +0x248+0x51C, its style +0x514.
   - **The debug menu (the owner's idea; round 2 debugmenu, session bottom)**: click both sticks at once
     and a panel opens over the game (src/os/debug_menu.cpp; drawn by src/frontend/overlay.cpp as the
-    system's dialogs are, so never in captures): Islands, Dungeons, Bosses (refights on), "Boss
-    refights: ON/OFF", Close. The D-pad or the left stick moves, A chooses, B goes back (or closes);
+    system's dialogs are, so never in captures): Islands, Dungeons, Bosses (refights on), Spawn an
+    enemy, "Boss refights: ON/OFF", Close. The D-pad or the left stick moves, A chooses, B goes back (or closes);
     while it is open, and until the buttons that closed it are let go, the game reads no input. A
     destination asks for the stage change on the next game frame, as WWHD_DEBUG_STAGE does
     (wwhd::debug::RequestStage in sixty.cpp); a boss turns the refights on first (WWHD_DEBUG_BOSS's
@@ -1345,7 +1345,10 @@ it in a window; D21 "Step 2"):**
     (M_Dai, kaze), Hyrule (Hyrule), Ganon's Tower (GanonA); Gohma (M_DragB), Kalle Demos (kinBOSS),
     Gohdan (SirenB), Helmaroc King (M2tower,22,0,3), Jalhalla (M_DaiB), Molgera (kazeB), Puppet Ganon
     (GanonK), Ganondorf (GTower). (A warp to the stage Link is in reuses his process's address: the
-    track's (name, address) key then spans both.) Next: spawning actors, the Xboss refight rooms.
+    track's (name, address) key then spans both.) Spawn an enemy: a Bokoblin, Moblin, Darknut (shield
+    and cape), Chuchu, Keese, ReDead or Kargaroc 150 units ahead of Link, facing him, on the next game
+    frame (wwhd::debug::RequestSpawn; WWHD_DEBUG_SPAWN's creation): the scratch route's DOWN three times
+    and A, A spawns a Bokoblin there. Next: the Xboss refight rooms, more enemies.
   - **Counts a call without a rule, in session bottom's types (shared enemy code too; regress.sh rerun)**:
     session qa's `tools/sixty/counter_audit.py` lists every field loaded, +-1 and stored back with no
     rule. For my processes (and the enemies item) each site was classified from its code (a scratch

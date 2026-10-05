@@ -1364,6 +1364,53 @@ void f_025E14A8(PPCInterpreter_t* __restrict ctx);
 namespace
 {
 	struct Spawn { int tick, proc, subtype; uint32 param; float x, y, z; uint32 anglex, angley, anglez; };
+	// creates the actor as fopAcM_create does (the creation record, then fpcM_Create)
+	void SpawnNow(PPCInterpreter_t* ctx, const Spawn& w)
+	{
+		Registers regs;
+		regs.Save(ctx);
+		const uint32 sp = (ctx->gpr[1] - 0x200) & ~0xFu;
+		const uint32 pos = sp + 0x100;
+		wr32(pos, std::bit_cast<uint32>(w.x));
+		wr32(pos + 4, std::bit_cast<uint32>(w.y));
+		wr32(pos + 8, std::bit_cast<uint32>(w.z));
+		const uint32 angle = sp + 0x110;           // csXyz: x, y, z
+		wr16(angle, (uint16)w.anglex);
+		wr16(angle + 2, (uint16)w.angley);
+		wr16(angle + 4, (uint16)w.anglez);
+		wr32(sp, ctx->gpr[1]);                     // a back chain
+		ctx->gpr[1] = sp;
+		ctx->gpr[3] = w.param;
+		ctx->gpr[4] = pos;
+		ctx->gpr[5] = (uint32)(sint32)(sint8)rd8(s_link + 0x326);   // Link's room
+		ctx->gpr[6] = w.anglex || w.angley || w.anglez ? angle : 0;
+		ctx->gpr[7] = 0;
+		ctx->gpr[8] = (uint32)(sint32)w.subtype;
+		ctx->gpr[9] = ~0u;
+		f_025D5678(ctx);
+		const uint32 append = ctx->gpr[3];
+		uint32 id = ~0u;
+		if (append)
+		{
+			ctx->gpr[1] = sp;
+			ctx->gpr[3] = rd32(0x101F3AE8u);
+			ctx->gpr[4] = (uint32)w.proc;
+			ctx->gpr[5] = 0;
+			ctx->gpr[6] = 0;
+			ctx->gpr[7] = append;
+			f_025E14A8(ctx);
+			id = ctx->gpr[3];
+		}
+		regs.Restore(ctx);
+		cemuLog_log(LogType::Force, "wwhd debug: spawned process {}/{} param {:08x} at {} {} {}: id {:x}", w.proc, w.subtype, w.param, w.x, w.y, w.z, id);
+	}
+
+	// the debug menu's spawn (wwhd::debug::RequestSpawn): one waiting for the next game frame, placed
+	// 150 units ahead of Link and facing him
+	std::mutex s_spawnLock;
+	bool s_spawnWaiting = false;
+	Spawn s_spawnAsked{};
+
 	void DebugSpawn(PPCInterpreter_t* ctx)
 	{
 		static const std::vector<Spawn> spawns = [] {
@@ -1388,50 +1435,39 @@ namespace
 				}
 			return v;
 		}();
-		if (spawns.empty() || g_rtHalfTick || !s_link)
+		if (g_rtHalfTick || !s_link || rd16(s_link + 0x08) != 168)
+			return;
+		{
+			std::lock_guard lock(s_spawnLock);
+			if (s_spawnWaiting)
+			{
+				s_spawnWaiting = false;
+				Spawn w = s_spawnAsked;
+				const sint16 heading = (sint16)rd16(s_link + 0x32A);   // shape_angle.y
+				const double a = heading * (3.14159265358979 / 32768.0);
+				w.x = std::bit_cast<float>(rd32(s_link + 0x314)) + 150.0f * (float)std::sin(a);
+				w.y = std::bit_cast<float>(rd32(s_link + 0x318));
+				w.z = std::bit_cast<float>(rd32(s_link + 0x31C)) + 150.0f * (float)std::cos(a);
+				w.angley = (uint16)(heading + 0x8000);
+				SpawnNow(ctx, w);
+			}
+		}
+		if (spawns.empty())
 			return;
 		const int now = (int)wwhd::rt::GameFrame(wwhd::os::SwapCount());
 		for (const Spawn& w : spawns)
-		{
-			if (w.tick != now)
-				continue;
-			Registers regs;
-			regs.Save(ctx);
-			const uint32 sp = (ctx->gpr[1] - 0x200) & ~0xFu;
-			const uint32 pos = sp + 0x100;
-			wr32(pos, std::bit_cast<uint32>(w.x));
-			wr32(pos + 4, std::bit_cast<uint32>(w.y));
-			wr32(pos + 8, std::bit_cast<uint32>(w.z));
-			const uint32 angle = sp + 0x110;           // csXyz: x, y, z
-			wr16(angle, (uint16)w.anglex);
-			wr16(angle + 2, (uint16)w.angley);
-			wr16(angle + 4, (uint16)w.anglez);
-			wr32(sp, ctx->gpr[1]);                     // a back chain
-			ctx->gpr[1] = sp;
-			ctx->gpr[3] = w.param;
-			ctx->gpr[4] = pos;
-			ctx->gpr[5] = (uint32)(sint32)(sint8)rd8(s_link + 0x326);   // Link's room
-			ctx->gpr[6] = w.anglex || w.angley || w.anglez ? angle : 0;
-			ctx->gpr[7] = 0;
-			ctx->gpr[8] = (uint32)(sint32)w.subtype;
-			ctx->gpr[9] = ~0u;
-			f_025D5678(ctx);
-			const uint32 append = ctx->gpr[3];
-			uint32 id = ~0u;
-			if (append)
-			{
-				ctx->gpr[1] = sp;
-				ctx->gpr[3] = rd32(0x101F3AE8u);
-				ctx->gpr[4] = (uint32)w.proc;
-				ctx->gpr[5] = 0;
-				ctx->gpr[6] = 0;
-				ctx->gpr[7] = append;
-				f_025E14A8(ctx);
-				id = ctx->gpr[3];
-			}
-			regs.Restore(ctx);
-			cemuLog_log(LogType::Force, "wwhd debug: spawned process {}/{} param {:08x} at {} {} {}: id {:x}", w.proc, w.subtype, w.param, w.x, w.y, w.z, id);
-		}
+			if (w.tick == now)
+				SpawnNow(ctx, w);
+	}
+}
+
+namespace wwhd::debug
+{
+	void RequestSpawn(int process, uint32 param, uint32 anglex)
+	{
+		std::lock_guard lock(s_spawnLock);
+		s_spawnAsked = Spawn{ 0, process, 0, param, 0, 0, 0, anglex, 0, 0 };
+		s_spawnWaiting = true;
 	}
 }
 

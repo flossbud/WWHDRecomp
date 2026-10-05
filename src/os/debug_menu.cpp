@@ -40,7 +40,15 @@ namespace
 		{ "Ganondorf (Ganon's Tower)", "GTower", 0, 0, -1, true },
 	};
 
-	enum Page { kTop, kIslandPage, kDungeonPage, kBossPage };
+	// enemies to spawn ahead of Link (each spawned so in a test: docs/handoff.md); anglex is more
+	// parameters for some (a Darknut's 0x80: a shield and a cape)
+	struct Foe { const char* label; int process; uint32 param, anglex; };
+	constexpr Foe kFoes[] = {
+		{ "Bokoblin", 189, 0, 0 }, { "Moblin", 188, 0, 0 }, { "Darknut", 191, 0, 0x80 }, { "Chuchu", 206, 0, 0 },
+		{ "Keese", 215, 0, 0 }, { "ReDead", 224, 0, 0 }, { "Kargaroc", 181, 0, 0 },
+	};
+
+	enum Page { kTop, kIslandPage, kDungeonPage, kBossPage, kFoePage };
 	struct List { const Dest* dests; int count; const char* title; };
 	List ListOf(Page p)
 	{
@@ -49,6 +57,7 @@ namespace
 		case kIslandPage: return { kIslands, (int)std::size(kIslands), "Warp: islands" };
 		case kDungeonPage: return { kDungeons, (int)std::size(kDungeons), "Warp: dungeons" };
 		case kBossPage: return { kBosses, (int)std::size(kBosses), "Warp: bosses (refights on)" };
+		case kFoePage: return { nullptr, (int)std::size(kFoes), "Spawn an enemy ahead of Link" };
 		default: return { nullptr, 0, "Debug menu" };
 		}
 	}
@@ -62,9 +71,16 @@ namespace
 	std::vector<std::string> Items()
 	{
 		if (s_page == kTop)
-			return { "Islands", "Dungeons", "Bosses (refights on)",
+			return { "Islands", "Dungeons", "Bosses (refights on)", "Spawn an enemy",
 				std::string("Boss refights: ") + (wwhd::debug::BossRefight() ? "ON" : "OFF"), "Close" };
 		std::vector<std::string> items;
+		if (s_page == kFoePage)
+		{
+			for (const Foe& f : kFoes)
+				items.push_back(f.label);
+			items.push_back("Back");
+			return items;
+		}
 		List l = ListOf(s_page);
 		for (int i = 0; i < l.count; i++)
 			items.push_back(l.dests[i].label);
@@ -91,7 +107,8 @@ namespace
 			case 0: s_page = kIslandPage; s_cursor = 0; break;
 			case 1: s_page = kDungeonPage; s_cursor = 0; break;
 			case 2: s_page = kBossPage; s_cursor = 0; break;
-			case 3: wwhd::debug::SetBossRefight(!wwhd::debug::BossRefight()); break;
+			case 3: s_page = kFoePage; s_cursor = 0; break;
+			case 4: wwhd::debug::SetBossRefight(!wwhd::debug::BossRefight()); break;
 			default: s_open = false; break;
 			}
 			return;
@@ -100,6 +117,13 @@ namespace
 		{
 			s_cursor = (int)s_page - 1;
 			s_page = kTop;
+			return;
+		}
+		if (s_page == kFoePage)
+		{
+			const Foe& f = kFoes[s_cursor];
+			wwhd::debug::RequestSpawn(f.process, f.param, f.anglex);
+			s_open = false;
 			return;
 		}
 		const Dest& d = ListOf(s_page).dests[s_cursor];
