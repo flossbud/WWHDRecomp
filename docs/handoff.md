@@ -1225,7 +1225,17 @@ it in a window; D21 "Step 2"):**
     (`WWHD_60FPS_SKIPDRAW=481,73`) the palms still show on half frames. So on a half frame a draw-time
     calc doesn't reach the screen: a guard on J3DModel::calc keyed to whole ticks, or the HD renderer
     keeping the whole tick's joint matrices, is to find (no J3D symbols yet). NPCs, which calc their
-    models in their execute (mpMorf->calc), animate at 60.
+    models in their execute (mpMorf->calc), animate at 60. Found since: a half tick's frame is drawn afresh
+    (`WWHD_60FPS_SKIPDRAW=all` leaves it black but the HUD); the palm's node callback (f_0236C290, a
+    probe override) runs on whole and half draws alike (24 calls each), yet the fronds change only from a
+    whole tick's frame to the next half tick's (a shot shows the draw of the swap before it); viewCalc
+    (f_027F55FC) turns a model's draw-matrix buffer index (+0x6C, mod its model data's +0x6: 2) each
+    call, but holding it on half-tick draws changed nothing; nor did WWHD_60FPS_ROLLBACK=0. 16 of the
+    decomp's actors pose joints in a draw-time node callback this way (d_a_obj_lpalm, d_a_obj_plant,
+    d_a_obj_rflw, d_a_npc_bs1, d_a_npc_p1, d_a_npc_btsw2, d_a_obj_swpush, d_a_obj_swhammer,
+    d_a_obj_swlight, d_a_canon, d_a_daiocta_eye, d_a_obj_hami3, d_a_obj_jump, d_a_obj_mknjd,
+    d_a_obj_shmrgrd, d_a_tornado), and the grass tufts by Dragon Roost's beach rock and on Forest
+    Haven's ledges look the same (session bottom's scans).
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next
