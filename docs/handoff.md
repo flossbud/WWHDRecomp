@@ -1216,6 +1216,16 @@ it in a window; D21 "Step 2"):**
     offset of a few swaps closes it: the ripple equals 30's on the whole tick's frame and the waves on the
     half tick's, half a count apart; not seen otherwise. Wind Temple's dust motes (env update, rolled back
     after a half tick) are session bottom's.
+  - **Open: a model posed in its draw shows its whole tick's pose on half frames (session top, 2026-10-05)**:
+    Bomb Island's palms (Obj_Lpalm 73, converted with Outset) sway at 30 Hz on screen (hz30.py: 195
+    blocks, the fronds changing on one parity only) though they step every frame: `WWHD_60FPS_WATCH` on one
+    (47c42b74 +0x3F4, +0x3D0) shows mAnimWave and mBaseQuat change on w and h frames alike. Their fronds
+    are posed in a node callback during the model's calc, which mDoExt_modelUpdateDL (their draw) runs;
+    the scan is the same with 73 left unconverted, and with its half-tick draw skipped
+    (`WWHD_60FPS_SKIPDRAW=481,73`) the palms still show on half frames. So on a half frame a draw-time
+    calc doesn't reach the screen: a guard on J3DModel::calc keyed to whole ticks, or the HD renderer
+    keeping the whole tick's joint matrices, is to find (no J3D symbols yet). NPCs, which calc their
+    models in their execute (mpMorf->calc), animate at 60.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next
