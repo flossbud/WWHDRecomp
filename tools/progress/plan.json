@@ -47,24 +47,24 @@
       "done": true
     },
     {
-      "name": "NPCs and town actors",
-      "done": false
+      "name": "NPCs and town actors (Medli and Makar left: no save state with them)",
+      "done": true
     },
     {
-      "name": "Cutscenes (demo frames) at 60",
+      "name": "Cutscenes (demo frames) at 60 (in progress: JStudio cutscenes step at 60)",
       "done": false
     },
     {
       "name": "Door and talk events at 60",
-      "done": false
+      "done": true
     },
     {
       "name": "Uncapped frame rate",
       "done": false
     },
     {
-      "name": "In-game debug menu / boss rush",
-      "done": false
+      "name": "In-game debug menu / boss rush (first version)",
+      "done": true
     }
   ],
   "groups": [
@@ -217,7 +217,7 @@
     "200": "Crab",
     "255": "Item (rupee, heart)",
     "71": "Grotto",
-    "67": "Mailbox",
+    "67": "mailbox",
     "335": "Grandma",
     "319": "Joel",
     "320": "Zill",
@@ -267,7 +267,6 @@
     "428": "light stair",
     "231": "hot floor",
     "450": "eye switch",
-    "67": "mailbox",
     "462": "item stand",
     "295": "bomb flower bomb",
     "423": "Stalfos head",
