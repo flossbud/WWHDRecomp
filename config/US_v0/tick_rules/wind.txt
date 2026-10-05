@@ -24,6 +24,10 @@
 # ---- 252 (unmatched: 10-12 in the Wind Temple's rooms, a wave of floats from its tick count; f_0248EEEC)
 0248EF10    whole       sth             252: its tick count (+0x3D8) + 1
 0248EF24    whole       sthx            252: its timers count down
+# in its state 3, near Link and with g_dComIfG_gameInfo +0x34 set, every 32 ticks of that count ((n & 0x1F)
+# == 0, f_0248F484) it takes 1 from gameInfo +0x5B60 (s16): the count is whole, so at 60 its half step
+# passed the test again (counter_audit.py listed it under ST, 190: the code's place)
+0248FC6C    whole       sth             252: gameInfo +0x5B60 - 1, every 32 ticks
 #
 # ---- BWD (217, d_a_bwd.cpp: Molgera, stage kazeB; execute f_020FA614): its tick count (its phases are
 # the count times a step: m18FE, m1900 in the decomp), counters and timers
@@ -31,6 +35,8 @@
 020FA9DC    whole       sthx            bwd: its timers (+0x1B50) count down
 020FA91C    keep:r5     addi            bwd: a timer (+0x187C) - 1 (keep: compared at once)
 020FA9FC    whole       sth             bwd: a timer (+0x1B5A) - 1
+# not ruled: bwd health (fopAc +0x3A1) - 1 at 020FBFCC, once a hit: the hit check waits for +0x1B5A (6 after
+# a hit; a whole tick's collision pass leaves its hits for the half step and the next whole step too)
 020FAA0C    whole       sth             bwd: a timer (+0x1B74) - 1
 020FB008    whole       stb             bwd: a timer (+0x1E2B) - 1
 020FB238    whole       stb             bwd: a timer (+0x1E29) - 1

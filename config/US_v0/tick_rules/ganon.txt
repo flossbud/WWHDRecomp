@@ -213,6 +213,9 @@
 02155554    whole       sth             gnd execute: a timer (+0x178C) - 1
 02158CBC    whole       sth             gnd: a count (+0x3EC) + 1
 021595E8    whole       stb             gnd: a count (+0x609) + 1
+# the execute's countdown at +0x60B (counter_audit.py): while it runs his two colliders' bit 0 (+0x1138,
+# +0x1268) is off; tested before the - 1 (at 0 they go back on), so late
+021558EC    late        stb             gnd execute: a countdown (+0x60B) - 1, his colliders off while it runs
 0215CD90    *h@f10      fadds           gnd: pos.x += a move (+0x10E4) a tick
 0215CDA0    *h@f6       fadds           gnd: pos.y += a move
 0215CDB0    *h@f10      fadds           gnd: pos.z += a move

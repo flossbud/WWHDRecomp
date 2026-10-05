@@ -659,6 +659,7 @@
 0209BF2C    keep:r4     addi            bk: a count (0x3fb(r30)) - 1 a call, tested after (f_0209BD1C)
 0209C0BC    late        sthx            bk: a count (r22,r7) - 1 a call, tested before (f_0209BD1C)
 024BEB54    keep:r9     addi            tn: a count (0x54c(r30)) - 1 a call, tested after (f_024BD170)
+# not ruled: tn +0x3F4 - 1 (f_024BC3EC, three paths): the armour pieces left, once as each flies off
 021CB1B8    keep:r11    addi            mo2: a count (0x898(r29)) - 1 a call, tested after (f_021C9B1C)
 020C0814    keep:r8     addi            boko: a count (0x492(r31)) - 1 a call, tested after (f_020C0624)
 020C1734    late        sth             boko: a count (0x444(r25)) - 1 a call, tested before (f_020C1684)

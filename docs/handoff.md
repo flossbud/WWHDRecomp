@@ -1393,10 +1393,18 @@ it in a window; D21 "Step 2"):**
     Ganondorf (ganon.txt, 14), rats, Helmaroc King, the ropes and barrels (fortress.txt), the Tower's
     statues (tower.txt), stakes (link_items.txt), Armos, Molgera and 252 (wind.txt), stones. Left on
     purpose: a ReDead's escape count (+0x4F4: stick-driven), stores setting a count from another value
-    or a constant (Molgera +0x3A1 at 020FBFCC, 02047BE8), a global (gameInfo +0x5B60 from the Stalfos),
-    and not yet understood: the Stalfos' +0x3A8/+0x3A9 around f_025D9000, Gohdan's indexed store
-    020E682C, Ganondorf's +0x60B (021558EC), the shared enemy timers loop 02041A1C, the Darknut's +0x3F4
-    (024BC7AC/83C/868, plain stores after an unrelated test).
+    or a constant (02047BE8). The "not yet understood" ones, since read: Gohdan's 020E682C and the shared
+    timers loop 02041A1C (late, 41c74c0); Ganondorf's +0x60B (021558EC), a countdown that keeps his two
+    colliders' bit 0 off while it runs, tested before the - 1: late (poked to 20 on the gtower route at
+    f8300: 20 ticks at both rates, 10 before); process 252's gameInfo +0x5B60 - 1 every 32 ticks of its
+    whole-ruled count ((n & 0x1F) == 0, so its half step passed the test too; counter_audit filed it
+    under the Stalfos by its code's place): whole (needs gameInfo +0x34 set: not run); once an event,
+    not timers: Molgera's health (+0x3A1, a hit: her hit check waits for +0x1B5A, 6 after a hit, whole),
+    the Stalfos' +0x3A9/+0x3A8 (stealItemLeft/BitNo: the grappling hook's steal; the hit check waits for
+    m02F6, +0x412, 5 after a hit), the Darknut's +0x3F4 (armour pieces left, once as each flies off).
+    Hits: a whole tick's collision pass (cCcS::ChkAtTg clears and sets the hit flags) leaves its hits for
+    the half step and the next whole step; each of these waits for a post-hit window, so one hit counts
+    once.
   - **A ReDead's scream and grab at 60 (shared: sixty.cpp's StepInEvents, tick_rules.txt; regress.sh
     rerun)**: the same fight route against a ReDead (`WWHD_DEBUG_SPAWN=950:224,0,-201599,168,312125,0,
     f82d`): it screams, Link is startled (0xB8), frozen (0xCE) and held (0xCF, 150 ticks), all events

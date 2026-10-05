@@ -19,7 +19,9 @@
 0249663C    keep:r11    addi            st head: its life (+0x414, 500 ticks) - 1, tested
 # tools/sixty/counter_audit.py 190 after those: +0xFEE (s8) counted a call in f_024925B8, tested before
 # the change (if (n) n--; if (n < 25) n++): late on the stores. Not ruled: +0x20CF and +0x21CB (+ 1 on a
-# hit, a state's step), +0x3A8/+0x3A9 around f_025D9000 and 0x5B60(r3) in f_0248F484 (not yet read)
+# hit, a state's step); +0x3A9 - 1 and +0x3A8 + 1 (fopAc's stealItemLeft and stealItemBitNo: an item
+# stolen by the grappling hook's hit, once a hit: the hit check waits for m02F6, +0x412, whole, which a
+# hit sets to 5). 0x5B60(r3) in f_0248F484 is process 252's (wind.txt).
 024927A4    late        stb             st: +0xFEE - 1 (tested before)
 02492934    late        stb             st: +0xFEE - 1 (tested before; the other path)
 02492D78    late        stb             st: +0xFEE + 1, up to 25 (tested before)
