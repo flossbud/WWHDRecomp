@@ -333,6 +333,20 @@
 # the song camera (f_0253754C, the decomp's tactEvCamera stub: eye and centre at set offsets from Link,
 # fovy set): its count of calls (work +0x4, dCamera +0x380), late
 02537730    late        stw             tactEvCamera: count + 1
+# its first call (dCamera +0x11C, the event camera's count, 0) saves the view it is about to replace in
+# the restore slot (dComIfGp's 0x1046F0B0 +0x5B0C: centre, eye, fovy, bank; the song's last camera,
+# f_02534964 with TargetType 9, returns to it). The count is late, so at 60 a first call on a whole step
+# comes again on its half step, after the eye moved in front of Link: saved on whole ticks only. (On the
+# Wind's Requiem the order's edge holds that half step; its repeat was on the next whole tick, its late
+# count lost, until a held half step's late stores were made: docs/handoff.md, the view after a song.)
+025375C0    whole       stw             tactEvCamera: save the view: centre.x
+025375C8    whole       stw             tactEvCamera: save the view: centre.y
+025375D0    whole       stw             tactEvCamera: save the view: centre.z
+025375DC    whole       stwu            tactEvCamera: save the view: eye.x
+025375E4    whole       stw             tactEvCamera: save the view: eye.y
+025375EC    whole       stw             tactEvCamera: save the view: eye.z
+025375F0    whole       sth             tactEvCamera: save the view: bank
+025375F4    whole       stfs            tactEvCamera: save the view: fovy
 # the Wind's Requiem's camera (f_0253775C; no decomp: its data names BirdFlyDist, Torishita, StopDist,
 # UpCount, FollowCushion, NearFovy, FarFovy, FovyCushion; work area at r30 = dCamera +0x37C): after the
 # direction is chosen it follows the wind's flight; a count of calls (work +4) against UpCount moves its
