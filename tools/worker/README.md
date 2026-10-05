@@ -77,11 +77,11 @@ authorized on the worker only from the editing machine's IPs (`from="EDITING_ADD
 `sudo truncate -s 400G /var/lib/wwhd/wwhd.img`, `sudo e2fsck -f` and `sudo resize2fs` on the
 image, then `sudo mount /wwhd`.
 
-## The second worker: the owner's desktop
+## The second worker: the owner's desktop (the default while it's lent)
 
 `tools/worker/desktop.sh start|stop|status` runs the same image on desktop under rootless podman
-(`/wwhd` = `~/wwhd-desk`; 16 threads, 20 GB; a `wwhd-awake` user unit blocks sleep while it runs).
-`WWHD_ON=desktop` sends `sync.sh`, `w` and `job start` there (`tools/worker/target.sh`); the other
-`job` commands find the job by themselves. It has no reference traces: checks run on the worker.
-`tools/worker/cleanup.sh [--apply] [install]` frees old test outputs on both (cron on the worker).
-
+(`/wwhd` = `~/wwhd-desk`; 16 threads, 20 GB; a `wwhd-awake` user unit blocks sleep while it runs). While
+it runs, `sync.sh`, `w`, `job start` and `publish.sh shot` use it by themselves (`tools/worker/target.sh`);
+otherwise the worker. `WWHD_ON=worker|desktop` forces one. It has the checks' references and the Ghidra
+project, so everything runs there. `tools/worker/cleanup.sh [--apply] [install]` frees old test outputs on
+both (cron on the worker, a user timer on the desktop).

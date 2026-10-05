@@ -1,12 +1,20 @@
-# Sourced by sync.sh, w and job: which worker a command goes to. Two machines run the same
-# container image (wwhd-worker) with the same paths inside (/wwhd/...):
-#   worker (default)        docker on the worker; /wwhd on the host too. Has everything, including the
-#                             reference traces and captures the checks compare with (~140 GB).
-#   desktop (WWHD_ON=desktop) podman on the owner's desktop (24 threads); /wwhd is
-#                             ~/wwhd-desk there. Builds and tests (spawn/stage/route tests, captures,
-#                             regress) run there; checks.sh runs on the worker only. The owner may
-#                             take it back: tools/worker/desktop.sh status says whether it's on.
-WWHD_ON=${WWHD_ON:-worker}
+# Sourced by sync.sh, w, job and publish.sh shot: which worker a command goes to. Two machines run
+# the same container image (wwhd-worker) with the same paths inside (/wwhd/...):
+#   desktop    podman on the owner's desktop (24 threads; the worker capped at 16), /wwhd
+#              being ~/wwhd-desk there: everything runs there while the owner lends it (builds,
+#              tests, captures, checks: its references give the same verdicts as the worker's, Ghidra).
+#   worker   docker on the worker (10 of 12 threads), /wwhd on the host too: the fallback.
+# Without WWHD_ON the desktop is used when its worker is running (tools/worker/desktop.sh status),
+# else the worker. WWHD_ON=worker or WWHD_ON=desktop forces one. When the owner takes the desktop
+# back, commands go to the worker by themselves: sync and build there first (its build may be old).
+if [ -z "${WWHD_ON:-}" ]; then
+    if ssh -o BatchMode=yes -o ConnectTimeout=4 owner@DESKTOP_ADDR \
+        "podman container inspect -f '{{.State.Running}}' wwhd-worker 2>/dev/null" 2>/dev/null | grep -q true; then
+        WWHD_ON=desktop
+    else
+        WWHD_ON=worker
+    fi
+fi
 case "$WWHD_ON" in
     worker) W_SSH=worker; W_ENGINE=docker; W_ROOT=/wwhd ;;
     desktop)  W_SSH=owner@DESKTOP_ADDR; W_ENGINE=podman; W_ROOT=/home/owner/wwhd-desk ;;

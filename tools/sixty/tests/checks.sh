@@ -4,11 +4,11 @@
 # (llvmpipe) against the G3 ones (byte-identical). Outputs are per checkout and NAME.
 # One check run at a time on the worker (the sessions share its CPU): a run waits for the lock
 # /wwhd/data/m6/.checks.lock, printing a line a minute (so `job wait` doesn't call it stalled).
-# the worker only: the references (/wwhd/data/gx2, traces, g3 captures) aren't on the desktop worker.
+# The references (/wwhd/data/gx2/*.txt, traces, g3 captures) are on both workers.
 set -uo pipefail
 source "$(dirname "$0")/common.sh"
 name=$(basename "$ROOT")-${1:?name}
-[ -f /wwhd/data/gx2/save-cemu.txt ] || { echo "checks.sh: no references here: run it on the worker (without WWHD_ON=desktop)"; exit 2; }
+[ -f /wwhd/data/gx2/save-cemu.txt ] || { echo "checks.sh: no references on this worker"; exit 2; }
 exec 9>/wwhd/data/m6/.checks.lock
 waited=0
 until flock -w 60 9; do
