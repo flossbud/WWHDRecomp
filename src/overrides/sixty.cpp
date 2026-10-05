@@ -206,6 +206,7 @@ namespace
 	}
 	std::unordered_map<uint32, bool> s_stepping;    // process -> stepping at 60 this tick
 	std::unordered_map<uint32, bool> s_eventAtWhole;   // process -> an event ran at its whole step
+	std::unordered_map<uint32, bool> s_stepInEventAtWhole;   // process -> Link's action stepped in events at it
 	// Converted processes step at 60 in an event too while Link's action is one checked in events
 	// (D21): his procedure's index (daPy_lk_c +0x65F0, the function at +0x65F8) in this list: 4 wait,
 	// 6 move (an entrance's walk out matches the 30-tick run, the camera too), 0x88 and 0x89 steering
@@ -1805,13 +1806,18 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 		if (!g_rtHalfTick)
 		{
 			s_eventAtWhole[proc] = EventRunning();
-			s_stepping[proc] = StepInEvents() || !s_eventAtWhole[proc];
+			s_stepInEventAtWhole[proc] = StepInEvents();
+			s_stepping[proc] = s_stepInEventAtWhole[proc] || !s_eventAtWhole[proc];
 		}
 		else if (s_stepping[proc])
 		{
 			static bool once = [] { atexit(StepStats); at_quick_exit(StepStats); return true; }();
 			(void)once;
-			const bool running = EventRunning() && !(s_eventAtWhole[proc] && StepInEvents());
+			// a tick that began stepping in a running event finishes its half step, though Link's action left
+			// the list in the whole tick (the Wind's Requiem's wind change, 0xC4, turning to wait, 0x17: his
+			// turn took half a step there, lost the other, and the event ended a tick late, the camera then
+			// taking the view saved at the song's start); an event that began, is ordered or ends still stops it
+			const bool running = EventRunning() && !(s_eventAtWhole[proc] && s_stepInEventAtWhole[proc]);
 			const bool ordered = !running && EventOrdered();
 			const bool ending = !running && !ordered && EventEnding();
 			const bool edge = running || ordered || ending;

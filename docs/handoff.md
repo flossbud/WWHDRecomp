@@ -1084,6 +1084,16 @@ it in a window; D21 "Step 2"):**
       perch is 8000 away and WWHD_DEBUG_PLACE under it didn't move Link). Next: a route to a perch.
     - Shared: `reloadh:fD=rB+O` (generate.py), `reload:` in a stepped process's steps only (`reload:`
       applies at 60 fps even to a process that isn't stepping); `WWHD_DEBUG_SPAWN=tick:proc/subtype,...`.
+  - **A tick that began stepping in an event finishes its half step (shared: sixty.cpp, 2026-10-05)**: the
+    half tick's stop for a running event read Link's action again (StepInEvents), so where it left the
+    list during the whole tick's step every process that had begun stepping lost the tick's other half:
+    the Wind's Requiem's change of wind (0xC4) handing over to turning to wait (0x17) at f1423 left Link's
+    turn half done (8186 -> 12186 against 30's 16186), the event ended a tick late. Each process's
+    stepping in a running event is now decided once a tick at its whole step (s_stepInEventAtWhole), the
+    half tick using that; the turn and the event's end are on 30's ticks. The routes back, door2, talk,
+    cuts, items, warp and door are unchanged by it. The camera's view after the song (the view saved at
+    the song's start against behind Link) is the camera's own stepping in the song: with it unconverted
+    the view equals 30's (session bottom has it).
   - **Countdowns in session top's types (the counter audit, 2026-10-05)**: session qa's
     `tools/sixty/counter_audit.py` lists every stored countdown with no rule, the ones a trial sees only if
     its test runs them. Of the 94 in session top's types (and the boat, Kargarocs, Keese, Gohma), ~70 are
