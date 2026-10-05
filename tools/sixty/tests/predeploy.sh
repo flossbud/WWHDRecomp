@@ -7,7 +7,8 @@
 # Also printed: the farthest apart on the way and his action at the end. Exit status 1 on a FAIL.
 # Default routes: warp (the Ballad of Gales to the Tower of the Gods), back and door (dungeon doors), talk,
 # items (a chest), cuts, leaf, hook, ladder, crawl, carry, spin, bow, shield, swing, land, sidle, pot, plants,
-# slash, sail, menus, tour; back and talk start from their stage warps. On 2026-10-05 (ww-4 14a98dd) all
+# slash, sail, menus, tour, house (out of a Windfall house's door and back in); back, talk and house start
+# from their stage warps. On 2026-10-05 (ww-4 14a98dd) all
 # passed but warp (262,106 units: B28; 17 with its fix, 29b66d9); the largest others were land 99, swing 70,
 # sail 65, sidle 53, plants 46 (WARN: known small drifts), the rest under 33. Not in it: walk without a stage warp (Link swims off the
 # dock for 1900 ticks with camera-relative strokes: 7000 units apart, the runs' headings drift) and mob (a
@@ -18,14 +19,14 @@
 # Output: game state, it stays on the worker.
 set -e
 source "$(dirname "$0")/common.sh"
-routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door talk items cuts leaf hook ladder crawl carry spin bow shield swing land sidle pot plants slash sail menus tour)
+routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land sidle pot plants slash sail menus tour)
 P=$OUT/predeploy; mkdir -p "$P"
 jobs=${PREDEPLOY_JOBS:-4}
 run_one() {
     local r=$1 slot=$2 w= rates=60 n=
     # warp ends at its arrival (f2460): the cyclone sets the boat down facing 28 degrees elsewhere at 60 (its
     # spin's last turns), so the route's sail into the tower after it goes another way: a heading, not a failure
-    case $r in back) w=920:M_NewD2,5,14,-1 ;; talk) w=920:sea,0,11,-1 ;; warp) n=2460 ;; esac
+    case $r in back) w=920:M_NewD2,5,14,-1 ;; talk) w=920:sea,0,11,-1 ;; house) w=920:sea,9,11,-1 ;; warp) n=2460 ;; esac
     mkdir -p "$P/bin$slot"; cp build/wwhd/wwhd-null "$P/bin$slot/"
     { [ -f "$P/$r/30/track.bin" ] && [ -z "${REDO30:-}" ]; } || rates="30 60"
     env ${w:+WWHD_DEBUG_STAGE=$w} ${n:+SIXTY_FRAMES=$n} WWHD_STATE_TRACK=168 CEMU_BIN="$P/bin$slot/wwhd-null" SIXTY_OUT="$P/slot$slot" \

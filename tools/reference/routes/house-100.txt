@@ -1,0 +1,12 @@
+# Route: back into a house through its door (session qa: house doors, KNOB00). After a stage warp to a spawn
+# point that is a house's door on Windfall (WWHD_DEBUG_STAGE=920:sea,9,11,-1: Link walks out of the door,
+# the camera in front of him), turn back to the door and press A: the door's event, then the house's stage.
+# FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start; gameplay from ~f870 (the warp at f920)
+1040 LUP 30    # back toward the door (the camera faces Link as he comes out, so up is away from it)
+1075 A 3       # Open
+1085 A 3
+1095 A 3
