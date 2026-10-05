@@ -121,3 +121,23 @@
 022C4CE8    late        sth             npc_people: a countdown (+0x8E8) - 1 while > 0
 022C4D54    keep:r11    addi            npc_people: a countdown (+0x8E6) - 1, tested after
 02235578    keep:r12    addi            npc_gk1: its timer helper (u16): *t - 1 while > 0
+#
+# ---- Windfall's houses (the npcs item, session top; area_test.sh STAGE,point,0,-1 1000 1400 TYPES walk): the
+# auction house (Orichh,1,0,-1: NPC_KP1 355, NPC_GP1 357, NPC_KF1 359; the bidders NPC_AUCTION 361 and the
+# auction's process 382 didn't run there by day: not converted), the sinking-ships game (Kaisen: NPC_KG1 362),
+# Lenzo (Ocmera: NPC_PHOTO 375), the school (Nitiyou: NPC_HO 366) and the pirate ship's hold (Obombh: NPC_P1
+# 322, NPC_BMS1 347). Each blinks as Orca does: a countdown (the shared s16 helper) that, once out, has the
+# blink's frame + 1 a tick until its length, then a new wait; on a half step the helper still says "out", so
+# its call is skipped there (r3 = 1: not out). KP1, GP1 and P1 also count the frame without the countdown in
+# another mode (eyes closing): whole on that store. HO counts a byte up to 255 (+0x7F7): late. KF1 and BMS1:
+# trials clean.
+0227B888    whole:r3=1  bl 02055b64     kp1 blink: its countdown (+0x86E)
+0227B8AC    whole       stb             kp1 blink: its frame (+0x86C) + 1
+02238D34    whole:r3=1  bl 02055b64     gp1 blink: its countdown (+0x862)
+02238D50    whole       stb             gp1 blink: its frame (+0x860) + 1
+022B16C0    whole:r3=1  bl 02055b64     p1 blink: its countdown (+0x456)
+022B16DC    whole       stb             p1 blink: its frame (+0x454) + 1
+022665E0    whole:r3=1  bl 02055b64     kg1 blink: its countdown (+0x956)
+022CEDA8    whole:r3=1  bl 02055b64     photo blink: its countdown (+0xB28)
+0223F008    whole:r3=1  bl 02055b64     ho blink: its countdown (+0x436)
+0223E5A8    late        stb             ho: a count (+0x7F7) + 1 a tick up to 255
