@@ -1344,7 +1344,11 @@ it in a window; D21 "Step 2"):**
     step to the next state, once; a `keep` there would drop a step taken on a half tick), path-point
     indices and random turns: actor_rmw.py's `whole` suggestions include these, check each against the
     decomp. Not converted: Medli (NPC_MD 367: her code moves positions a tick, but this save has no
-    companion Medli to test), torches (EP 185: a random flicker target each step, as session top found
+    companion Medli to test; on it she only stands in Jalhalla's room, M_DaiB, where the trial shows her
+    hair, a one-pass chain in a joint callback during the model's calc (f_02283A78: joints' places at
+    +0x4290, directions +0x42F0, lengths +0x4380), stepped twice a tick: it writes joint matrices, so the
+    chains item's draw-time arrays don't fit it as they are; Makar likewise stands only in Molgera's room,
+    kazeB, his trial idle clean; both need a save where they are companions), torches (EP 185: a random flicker target each step, as session top found
     for Outset), tapestries (289: a cloth), mirrors (272), coffins (159), the rope bridge (89),
     light switches (30), pots.
   - **The Forsaken Fortress** (`fortress`; `config/US_v0/tick_rules/fortress.txt`): `MajyuE` (outside: its
