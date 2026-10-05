@@ -18,6 +18,9 @@ dir: its NAND, save and log; a test's `rm -rf` of its outputs would also hit the
   worker's GPU for the progress page (quick; comparisons use llvmpipe).
 - `paths.py DIR FROM TO [OFFSET]`: 30 against 60 by half frame (positions, or e.g. 0x390, the eye).
 - `regress.sh`: every converted enemy again, after shared changes.
+- `events_test.sh BASE_BIN NEW_BIN [ROUTE...]`: the event routes (doors, a talk, cutscenes, a chest, the warp, a
+  dungeon door) at 30 and at 60 with two builds: the camera's view and Link's path against 30, base then new,
+  after a change to the event stepping.
 - `checks.sh NAME`: the switch-off checks every commit needs (all MATCH, diff 0 mismatches,
   captures identical).
 - `shots.sh ROUTE FRAMES`, `framediff.sh ROUTE FIRST LAST`: captures; frame-by-frame change.
