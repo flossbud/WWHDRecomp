@@ -210,7 +210,8 @@ namespace
 	// and sitting in the boat (the Ballad of Gales' flight; its camera ruled), 0x9A conducting, 0x9B
 	// and 0x9C playing a song back and its end (his melody's countdown and the song camera ruled), 0xAA
 	// talking (bug B18; the talk camera ruled), 0xAD opening a chest and 0xAE holding up an item he got
-	// (their cameras ruled), 0xC4 the Wind's Requiem's change of wind (its camera ruled), 0xD2 rising
+	// (their cameras ruled), 0xB8, 0xCE and 0xCF startled, frozen and held by a ReDead (its two-actor
+	// camera ruled), 0xC4 the Wind's Requiem's change of wind (its camera ruled), 0xD2 rising
 	// in a warp light (bug B20; his rise and the rolling event camera ruled). Others hold the event to
 	// whole ticks as before; so does the half tick after an event starts, is ordered or is asked to end.
 	// WWHD_60FPS_EVENTS=0: no stepping in events at all.
@@ -222,7 +223,8 @@ namespace
 			return false;
 		const uint32 action = rd32(s_link + 0x65F0);
 		return action == 4 || action == 6 || action == 0x88 || action == 0x89 || action == 0x9A || action == 0x9B ||
-			action == 0x9C || action == 0xAA || action == 0xAD || action == 0xAE || action == 0xC4 || action == 0xD2;
+			action == 0x9C || action == 0xAA || action == 0xAD || action == 0xAE || action == 0xB8 || action == 0xC4 ||
+			action == 0xCE || action == 0xCF || action == 0xD2;
 	}
 	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0, s_edgeFinishes = 0;
 	void StepStats()

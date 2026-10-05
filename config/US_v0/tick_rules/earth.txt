@@ -17,6 +17,12 @@
 024951DC    keep:r6     addi            st: a count (+0x21A8) - 1
 02495364    keep:r5     addi            st: a count (+0x21C8) - 1, compared with 10
 0249663C    keep:r11    addi            st head: its life (+0x414, 500 ticks) - 1, tested
+# tools/sixty/counter_audit.py 190 after those: +0xFEE (s8) counted a call in f_024925B8, tested before
+# the change (if (n) n--; if (n < 25) n++): late on the stores. Not ruled: +0x20CF and +0x21CB (+ 1 on a
+# hit, a state's step), +0x3A8/+0x3A9 around f_025D9000 and 0x5B60(r3) in f_0248F484 (not yet read)
+024927A4    late        stb             st: +0xFEE - 1 (tested before)
+02492934    late        stb             st: +0xFEE - 1 (tested before; the other path)
+02492D78    late        stb             st: +0xFEE + 1, up to 25 (tested before)
 # speed_pos_calc (f_024961B8) moves it itself: pos += speed, then speed.y -= 5 (the explicit order: at 60
 # with gravity h of itself a step it would fall g/4 a tick too far). Gravity once a tick instead (late):
 # two half steps of h speed then add up to the 30 Hz step exactly.

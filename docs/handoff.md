@@ -1286,6 +1286,14 @@ it in a window; D21 "Step 2"):**
     type (38) switched 44 ticks early at 60 (f1293 against f1338): requested by name only by the Gyorg
     controller (GY_CTRL 229/230, f_0216BBBC) and NPC_SO (f_022E06A4), so the Gyorg attack's trigger fires
     early (told session top, sea life). The camera's type is at camera +0x248+0x51C, its style +0x514.
+  - **A ReDead's scream and grab at 60 (shared: sixty.cpp's StepInEvents, tick_rules.txt; regress.sh
+    rerun)**: the same fight route against a ReDead (`WWHD_DEBUG_SPAWN=950:224,0,-201599,168,312125,0,
+    f82d`): it screams, Link is startled (0xB8), frozen (0xCE) and held (0xCF, 150 ticks), all events
+    with those actions, so all at 30. Added, and the two-actor event camera of the scream ruled
+    (f_0253B168, TP's twoActor0EvCamera: k@ on its CtrCus and EyeCus approaches, ten sites); the grab's
+    camera is the trans camera (ruled). At 60 the same timeline (a tick early), the ReDead's half steps
+    through the grab, its joints within a few units of 30's, the scream's camera within 0.2 degree, the
+    grab's swing (160 degrees in ~20 ticks) the same per tick, 1-2 ticks early.
   - **Enemies: a Bokoblin in the sea, the Stalfos' countdowns (round 2 enemies; session bottom)**: a fight
     on the Outset dock (scratch route: the save route, a Bokoblin spawned 120 units ahead facing Link,
     `WWHD_DEBUG_SPAWN=950:189,0,-201599,168,312125,0,f82d`; ZL held from f985, B every 15 frames from
