@@ -823,6 +823,12 @@
 0205EE2C    *h@f12      fadds           bb fly: current.pos.x += its velocity, rotated to its heading
 0205EE38    *h@f6       fadds           bb fly: current.pos.y += its velocity
 0205EE50    *h@f9       fadds           bb fly: current.pos.z += its velocity
+# Its tail (tail_control f_0205D4BC: a one-pass chain of nine links with a velocity, 0.8 of its last move, and
+# a pull along the body) moved twice as far on two half steps as on a tick (session bottom's trial): stepped on
+# whole ticks, its root (+0xC1C, set before the call) every step; on a half tick's frame its places (+0xC1C)
+# and angles (+0xC94) are drawn half a tick on (sixty.cpp's kChainArrays; the draw's inlined tail_draw).
+0205EC1C    whole       bl 0205d4bc     bb execute: tail_control (frozen by an Ice Arrow: enemy_ice)
+02060D60    whole       bl 0205d4bc     bb execute: tail_control
 
 #
 # ---- step rules: a shared int countdown (f_0211D2F8: if (*t) --*t; return *t; 173 callers, a

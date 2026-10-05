@@ -1099,7 +1099,14 @@ it in a window; D21 "Step 2"):**
     a root that follows its actor every step left as it is; angle triplets by half their wrapped change):
     Helmaroc King's tail feathers (BDK 238, four tails at +0x414, 0x17C each, places +0x24 and angles +0x9C,
     tail_draw; `M2tower,22,0,3` with WWHD_DEBUG_BOSS=1): 38% of a feather's motion on half frames (16% of
-    them still: the actor held in its events). Not done: the cloths (the pirate flag 173, tapestries 289,
+    them still: the actor held in its events). A Kargaroc's tail (BB 181: tail_control f_0205D4BC, a one-pass
+    chain with a velocity, now `whole`; places +0xC1C, angles +0xC94; session bottom's trial): spawned on
+    the dock as spawn_test.sh does, its middle relative to the body within 2.8 units of 30's (36.4 when it
+    stepped every frame), half its drawn motion on half frames. (The Boko Baba's eyePos, flagged in the same
+    trials at x1.6, needs nothing: its execute copies the head's place (+0x3FC, +0x444) before its model's
+    calc (draw_SUB, at its end) sets it, so the copy lags a step, a tick at 30 and half a tick at 60, and a
+    double step shrinks the lag; its head moves as far a tick at 30 and 60. A copy made before the step's
+    own update reads as a doubling in the trial.) Not done: the cloths (the pirate flag 173, tapestries 289,
     unconverted; the pirate flag's packet double-buffers its points and the GPU reads them after the draw,
     so a copy is needed, not a put-back). The boat's sail as seen sailing isn't SAIL 172's packet (its
     draw, f_0245FAAC, returns early while sailing: the boat's +0x3E4 is 0): the visible sail is drawn

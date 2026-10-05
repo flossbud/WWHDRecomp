@@ -2293,13 +2293,16 @@ namespace
 	// Chains in an actor that its draw makes models from (a whole tick's solver; its draw reads them): by process
 	// name, the arrays drawn half a tick on in a half tick's draw of the actor (if it stepped) and put back after.
 	// Helmaroc King's tail feathers (BDK 238: four tails at +0x414, 0x17C each; tail_draw reads each one's
-	// places at +0x24 and angles at +0x9C; tail_control on whole ticks but for the roots)
+	// places at +0x24 and angles at +0x9C; tail_control on whole ticks but for the roots); a Kargaroc's tail
+	// (BB 181: places at +0xC1C, angles at +0xC94, read by the draw's inlined tail_draw; tail_control on whole
+	// ticks, its root set every step)
 	struct ChainArray { uint16 name; uint32 offset, count; bool angles; };
 	constexpr ChainArray kChainArrays[] = {
 		{ 238, 0x414 + 0x24, 10, false }, { 238, 0x414 + 0x9C, 10, true },
 		{ 238, 0x590 + 0x24, 10, false }, { 238, 0x590 + 0x9C, 10, true },
 		{ 238, 0x70C + 0x24, 10, false }, { 238, 0x70C + 0x9C, 10, true },
 		{ 238, 0x888 + 0x24, 10, false }, { 238, 0x888 + 0x9C, 10, true },
+		{ 181, 0xC1C, 10, false }, { 181, 0xC94, 10, true },
 	};
 
 	void ChainRestore(const std::vector<std::pair<uint32, uint32>>& saved)
