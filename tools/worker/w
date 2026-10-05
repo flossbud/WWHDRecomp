@@ -6,7 +6,8 @@
 #            tools/worker/w python3 tools/audit_functions.py
 set -euo pipefail
 dir=$(cat "$(cd "$(dirname "$0")/../.." && pwd)/.worker-dir" 2>/dev/null || echo /wwhd/WWHDRecomp)
+source "$(dirname "$0")/target.sh"           # WWHD_ON=desktop: the desktop's worker
 ssh_opts=() exec_opts=(-i)
 if [ "${1:-}" = -t ]; then ssh_opts=(-t); exec_opts=(-it); shift; fi
 [ $# -gt 0 ] || { echo "usage: w [-t] COMMAND..." >&2; exit 2; }
-exec ssh "${ssh_opts[@]}" worker docker exec "${exec_opts[@]}" -w "$dir" wwhd-worker "$(printf '%q ' "$@")"
+exec ssh "${ssh_opts[@]}" "$W_SSH" $W_ENGINE exec "${exec_opts[@]}" -w "$dir" wwhd-worker "$(printf '%q ' "$@")"

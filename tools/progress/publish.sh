@@ -16,7 +16,8 @@
 #   publish.sh bug note ID TEXT              add a finding to it
 #   publish.sh bug list                      the bugs, newest first (also on the page)
 #   publish.sh shot PPM CAPTION
-#                           add a capture: PPM is a path on the worker (/wwhd/...); it becomes a JPEG
+#                           add a capture: PPM is a path on the worker (/wwhd/...; WWHD_ON=desktop for
+#                           one made on the desktop worker); it becomes a JPEG
 #                           on the worker, never on the editing machine or in git (captures are game data)
 #   publish.sh serve        start the server if it isn't running (http://TAILNET_IP:8765)
 set -euo pipefail
@@ -101,7 +102,12 @@ case "${1:-}" in
 		;;
 	shot)
 		src=$2; cap=$(json_str "${3:-}"); name=shot-$(date +%Y%m%d-%H%M%S).jpg
-		ssh $host "mkdir -p $dir/shots && docker exec wwhd-worker convert '$src' -resize 960x540 -quality 82 /wwhd/data/progress/shots/$name"
+		if [ "${WWHD_ON:-worker}" = desktop ]; then        # a capture made on the desktop worker
+			ssh -o BatchMode=yes owner@DESKTOP_ADDR "podman exec wwhd-worker convert '$src' -resize 960x540 -quality 82 jpg:-" |
+				ssh $host "mkdir -p $dir/shots && cat > $dir/shots/$name"
+		else
+			ssh $host "mkdir -p $dir/shots && docker exec wwhd-worker convert '$src' -resize 960x540 -quality 82 /wwhd/data/progress/shots/$name"
+		fi
 		ssh $host "python3 - $dir/shots.json $name $(printf %q "$cap") $(date +%s)" <<'PY'
 import json, os, sys
 path, name, cap, t = sys.argv[1], sys.argv[2], json.loads(sys.argv[3]), int(sys.argv[4])

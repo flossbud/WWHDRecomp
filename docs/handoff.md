@@ -40,6 +40,29 @@ WW-4's actor conversion is split between two sessions working side by side:
 - Shared code (sixty.cpp, sixty_step.cpp, generate.py, ppc_ops.h, the helpers): change it only
   when needed, say so in the commit, and rerun `regress.sh`: the other session's actors use it too.
 
+### Two workers: the worker and the owner's desktop (from 2026-10-05)
+
+- **The desktop worker** (`desktop`, desktop CPU, 24 threads, AMD GPU): the same
+  `wwhd-worker` image under rootless podman, capped at 16 threads and 20 GB, `/wwhd` being
+  `~/wwhd-desk` there (the game, saves, tools and caches copied from the worker). Prefix a command
+  with `WWHD_ON=desktop` to use it: `WWHD_ON=desktop tools/worker/sync.sh`, then
+  `WWHD_ON=desktop tools/worker/job start NAME ...` (your `.worker-dir` path, built there once:
+  a full build takes ~5 min there, a spawn test 1.3 min; results are identical to the worker's).
+  `job wait/status/stop/tail` find the job on either worker. `WWHD_ON=desktop tools/worker/w ...`
+  runs a command there; `WWHD_ON=desktop tools/progress/publish.sh shot PPM CAPTION` posts a
+  capture made there. Builds and tests (spawn/stage/route tests, regress, captures, surveys) go
+  there first; **checks.sh runs on the worker only** (the references are there).
+- **The owner may take the desktop back** at any time: `tools/worker/desktop.sh status` says
+  whether it's on; `job start` refuses it when it's off (then use the worker). Only the session the
+  owner asks (or main) runs `desktop.sh stop`/`start`. While it's on, a user unit (`wwhd-awake`)
+  keeps the desktop from sleeping.
+- **One check run at a time**: `tools/sixty/tests/checks.sh` waits for a lock and prints whose run
+  it waits for each minute. Integrate in turn; a check run can cover several commits.
+- **Disk**: `tools/worker/cleanup.sh` (cron on the worker every 6 h, tagged wwhd-cleanup) deletes
+  check outputs in `/wwhd/data/gx2/<run>/` untouched for 12 h and test outputs in
+  `/wwhd/data/m6/*/<dir>/` untouched for 48 h; references, traces, captures, saves never. Write
+  findings down before that, or keep what you need outside those directories.
+
 ### Session `qa` (from 2026-10-04): the owner's bugs
 
 A third session fixes the bugs the owner finds when playing, while `top` and `bottom` carry on:
