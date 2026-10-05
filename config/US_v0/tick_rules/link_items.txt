@@ -226,3 +226,8 @@
 # ---- Link rising in a warp light (dProcWarpShort f_0242583C, daPyProc_DEMO_WARP_SHORT 0xD2; bug B20):
 # speed.y + the HIO's rise (0x10035818) a call up to its cap (0x10036054); his posMove moves him
 0242585C    *h@f0       fadds           link warp short: speed.y += the rise's acceleration a tick
+#
+# ---- Link playing a song back (procTactPlay f_0243AC64, action 0x9B; then 0x9C, procTactPlayEnd: c_lib's
+# approaches only): the melody starts when mTactPlayTimer (+0x6920, 10 from its init) reaches 0, counted a
+# call; the zero test reads the register, so keep (whole ticks only), not late (that would start it twice)
+0243AE60    keep:r7     addi            link tact play: mTactPlayTimer - 1

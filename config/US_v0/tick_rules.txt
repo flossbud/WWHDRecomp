@@ -330,6 +330,25 @@
 02533374    k@f1        bl 0201ae48     transEvCamera: eye, the others
 025333A4    k@f11       fmadds          transEvCamera: fovy, the others
 025333E8    k@f1        bl 0200693c     transEvCamera: bank += (target - bank) x Cushion
+# the song camera (f_0253754C, the decomp's tactEvCamera stub: eye and centre at set offsets from Link,
+# fovy set): its count of calls (work +0x4, dCamera +0x380), late
+02537730    late        stw             tactEvCamera: count + 1
+# the Wind's Requiem's camera (f_0253775C; no decomp: its data names BirdFlyDist, Torishita, StopDist,
+# UpCount, FollowCushion, NearFovy, FarFovy, FovyCushion; work area at r30 = dCamera +0x37C): after the
+# direction is chosen it follows the wind's flight; a count of calls (work +4) against UpCount moves its
+# states; it follows by 0.02 a call (states 3 and 15), eases the eye's height by 0.05, and fovy toward
+# a near/far mix by FovyCushion; state 12 turns its globe by a progress that sums the count each call.
+# The count late, k@ on the approaches, the sum's count h of itself
+02537D30    k@f1        bl 0201ae48     windCamera: followed point += (target - it) x 0.02 (state 3)
+02537E48    k@f0        fmadds          windCamera: eye y += (y' - eye y) x 0.05
+02538088    *h@f9       fadds           windCamera: sum += count (state 12's progress)
+0253823C    k@f1        bl 0201ae48     windCamera: centre += (target - centre) x 0.02 (state 15)
+0253826C    k@f1        bl 0201ae48     windCamera: eye += (target - eye) x 0.02 (state 15)
+0253830C    k@f11       fmadds          windCamera: fovy += (fovy' - fovy) x FovyCushion
+0253836C    k@f11       fmadds          windCamera: fovy += (fovy' - fovy) x FovyCushion (far)
+02537CA4    late        stw             windCamera: count + 1
+02538320    late        stw             windCamera: count + 1
+02538380    late        stw             windCamera: count + 1
 # the Ballad of Gales' flight camera (f_025383D0, the decomp's tornadoWarpEvCamera stub; work area at r29
 # = dCamera +0x37C: a state, a countdown at +4; the boat, SHIP 165, found by name): state 1 for 100
 # calls brings the eye to a clear view of the boat by (1 / countdown) x 0.15 a call, fovy toward 70 and

@@ -206,12 +206,13 @@ namespace
 	std::unordered_map<uint32, bool> s_eventAtWhole;   // process -> an event ran at its whole step
 	// Converted processes step at 60 in an event too while Link's action is one checked in events
 	// (D21): his procedure's index (daPy_lk_c +0x65F0, the function at +0x65F8) in this list: 4 wait,
-	// 6 move (an entrance's walk out matches the 30-tick run, the camera too), 0x9A conducting, 0xAA
-	// talking (bug B18: talks ran at 30; the talk camera is ruled), 0x88 and 0x89 steering and sitting
-	// in the boat (the Ballad of Gales' flight, its camera ruled), 0xAD opening a chest and 0xAE holding
-	// up an item he got (their cameras are ruled), 0xD2 rising in a warp light (bug B20; his rise and
-	// the rolling event camera are ruled). Others hold the event to whole ticks as before; so does the half tick after an event
-	// starts, is ordered or is asked to end.
+	// 6 move (an entrance's walk out matches the 30-tick run, the camera too), 0x88 and 0x89 steering
+	// and sitting in the boat (the Ballad of Gales' flight; its camera ruled), 0x9A conducting, 0x9B
+	// and 0x9C playing a song back and its end (his melody's countdown and the song camera ruled), 0xAA
+	// talking (bug B18; the talk camera ruled), 0xAD opening a chest and 0xAE holding up an item he got
+	// (their cameras ruled), 0xC4 the Wind's Requiem's change of wind (its camera ruled), 0xD2 rising
+	// in a warp light (bug B20; his rise and the rolling event camera ruled). Others hold the event to
+	// whole ticks as before; so does the half tick after an event starts, is ordered or is asked to end.
 	// WWHD_60FPS_EVENTS=0: no stepping in events at all.
 	uint32 s_link = 0;                              // Link (168) as he last executed
 	bool StepInEvents()
@@ -220,8 +221,8 @@ namespace
 		if (!on || !s_link || rd16(s_link + 0x08) != 168)
 			return false;
 		const uint32 action = rd32(s_link + 0x65F0);
-		return action == 4 || action == 6 || action == 0x88 || action == 0x89 || action == 0x9A || action == 0xAA ||
-			action == 0xAD || action == 0xAE || action == 0xD2;
+		return action == 4 || action == 6 || action == 0x88 || action == 0x89 || action == 0x9A || action == 0x9B ||
+			action == 0x9C || action == 0xAA || action == 0xAD || action == 0xAE || action == 0xC4 || action == 0xD2;
 	}
 	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0, s_edgeFinishes = 0;
 	void StepStats()

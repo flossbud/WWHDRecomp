@@ -1286,6 +1286,23 @@ it in a window; D21 "Step 2"):**
     type (38) switched 44 ticks early at 60 (f1293 against f1338): requested by name only by the Gyorg
     controller (GY_CTRL 229/230, f_0216BBBC) and NPC_SO (f_022E06A4), so the Gyorg attack's trigger fires
     early (told session top, sea life). The camera's type is at camera +0x248+0x51C, its style +0x514.
+  - **Songs at 60: the playback, its end and the Wind's Requiem's change of wind (shared: sixty.cpp's
+    StepInEvents, tick_rules.txt; regress.sh rerun)**: after conducting (0x9A, already stepping) Link
+    plays the song back (0x9B, procTactPlay f_0243AC64), ends it (0x9C) and, for the Wind's Requiem,
+    sends the wind (0xC4): about 400 ticks per song held at 30. All three added. Ruled: procTactPlay's
+    countdown to the melody (mTactPlayTimer +0x6920, 10 calls; its zero test reads the register, so
+    `keep`, not late, which would start the melody twice), the song camera's count (tactEvCamera
+    f_0253754C: eye and centre at set offsets from Link) late, and the wind's camera (f_0253775C; no
+    decomp; data names BirdFlyDist, UpCount, FollowCushion, FovyCushion...): k@ on its follows (0.02),
+    the eye's height (0.05) and fovy (FovyCushion), its count late, and state 12's progress, a sum of
+    the count each call, *h@. Scratch route (save route): UP 5 at f1000, RUP 24 at 1022, RLEFT 25 at
+    1046, RRIGHT 24 at 1071 (3/4: no meter input), LLEFT 10 at 1300 and A at 1320 (the direction), A
+    every 40 frames after: the same timeline at both rates (0xC4 f1363-1423), the playback and the
+    overhead view equal, the wind's camera within 0.1 degree and 0.1 of fovy, half way at mid-tick.
+    Open, older (also without these): when the event ends (f1423) the camera at 30 resets behind Link
+    (yaw -11, pitch 0, fovy 60); at 60 it takes no half steps f1423-1427 and comes back with the view
+    the song camera saved at the song's start (gameInfo +0x5B0C-+0x5B28: yaw 178, pitch -11, fovy 55),
+    so after a song it faces the other way (told session top: the event's edge).
   - **The Ballad of Gales' flight at 60 (shared: sixty.cpp's StepInEvents, tick_rules.txt; regress.sh
     rerun)**: the whole warp (the cyclone lifting the boat, the flight, setting it down) is an event with
     Link sitting in the boat (0x89 SHIP_PADDLE; steering is 0x88), not in the event-stepping list, so
