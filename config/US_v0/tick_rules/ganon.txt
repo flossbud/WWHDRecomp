@@ -236,3 +236,8 @@
 0252B3A4    whole       stfs            door rattle: x offset += the shake
 0252B3B0    whole       stfs            door rattle: z offset += the shake
 0252B3C0    whole       stb             door rattle: started (+0x35)
+# A barred door's wait after its room's last enemy dies (daDoor10_c / daKddoor_c m2A1, +0x3BD: 65 ticks from
+# 0x41, tested then counted, the switch set at 0). Counted on both frames the bars lifted after 32 ticks
+# (session qa, tools/sixty/counter_audit.py).
+02126E80    late        stb             door10: the wait before a cleared room's bars lift (+0x3BD) - 1
+02197E60    late        stb             kddoor: the same wait (+0x3BD) - 1

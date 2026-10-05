@@ -24,9 +24,9 @@ sess=$(cat "$(cd "$(dirname "$0")/../.." && pwd)/.session" 2>/dev/null || true)
 here=$(cd "$(dirname "$0")" && pwd)
 if [ "$cmd" != start ] && [ -z "${WWHD_ON:-}" ]; then
     WWHD_ON=worker
-    dt=$(ssh -o BatchMode=yes -o ConnectTimeout=5 owner@DESKTOP_ADDR "stat -c %Y /home/owner/wwhd-desk/logs/$name.log 2>/dev/null" 2>/dev/null || true)
+    dt=$(ssh -n -o BatchMode=yes -o ConnectTimeout=5 owner@DESKTOP_ADDR "stat -c %Y /home/owner/wwhd-desk/logs/$name.log 2>/dev/null" 2>/dev/null || true)
     if [ -n "$dt" ]; then
-        mt=$(ssh -o BatchMode=yes worker "stat -c %Y /wwhd/logs/$name.log 2>/dev/null" || true)
+        mt=$(ssh -n -o BatchMode=yes worker "stat -c %Y /wwhd/logs/$name.log 2>/dev/null" || true)
         if [ -z "$mt" ] || [ "$dt" -gt "$mt" ]; then WWHD_ON=desktop; fi
     fi
 fi

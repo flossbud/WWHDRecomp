@@ -7,8 +7,8 @@
 # Without WWHD_ON the desktop is used when its worker is running (tools/worker/desktop.sh status),
 # else the worker. WWHD_ON=worker or WWHD_ON=desktop forces one. When the owner takes the desktop
 # back, commands go to the worker by themselves: sync and build there first (its build may be old).
-if [ -z "${WWHD_ON:-}" ]; then
-    if ssh -o BatchMode=yes -o ConnectTimeout=4 owner@DESKTOP_ADDR \
+if [ -z "${WWHD_ON:-}" ]; then              # -n: the probe must not read the caller's stdin (w python3 - < script)
+    if ssh -n -o BatchMode=yes -o ConnectTimeout=4 owner@DESKTOP_ADDR \
         "podman container inspect -f '{{.State.Running}}' wwhd-worker 2>/dev/null" 2>/dev/null | grep -q true; then
         WWHD_ON=desktop
     else
