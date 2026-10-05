@@ -88,3 +88,7 @@
 0243B7B4    keep:r9     addi            procTactPlayOriginal: m34D6 (+0x691C) - 1, then the next swing at 0
 # Left: procTactPlay's melody count (+0x6920, 0243AE60: session bottom's keep), a count at +0x652A of r26
 # in f_0240CDD0 (0240D640, not identified), makeBgWait's m352E (his creation, on whole ticks anyway).
+# The window to continue a sword combo (m3522, Link +0x6972: set by each cut from the HIO, counted in the
+# execute f_0240CDD0, whose r26 is Link + 0x448; at 0 the combo's step m34C4 is cleared). Tested then
+# counted. On both frames of a tick the window was half as long: a combo dropped where 30 continued it.
+0240D640    late        sth             execute: m3522 (+0x6972) - 1, the sword combo's window

@@ -1819,7 +1819,10 @@ it in a window; D21 "Step 2"):**
     (`WWHD_DEBUG_POKE=1000:168,3b0,2,19`): 24 ticks at both rates (12 before); route `cuts` (a spin
     attack, two jump attacks): procCutTurn 17 and procJumpCutLand 14 ticks at both (16.5 and 13 before).
     His action table: 12-byte entries at 0x10036DF4 (.rodata), the function in the third word, in the
-    decomp's daPyProc order.
+    decomp's daPyProc order. One more, found later (the execute keeps Link + 0x448 in r26, so the audit
+    printed its field as +0x652A of r26): m3522 (+0x6972), the window to continue a sword combo, set by
+    each cut and counted in the execute; at 0 the combo's step is cleared. 12 ticks at 60 against 24:
+    combos dropped where 30 continued them (B27). `late` on its store (0240D640).
   - **`tools/sixty/counter_audit.py`** (new): per converted process, every stored counter (a field loaded,
     +-1, stored back) with no rule on its store or add. Run it after converting a type and after a fix;
     with no argument it lists every converted process that still has such a countdown (79 lines on
