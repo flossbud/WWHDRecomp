@@ -1266,7 +1266,17 @@ it in a window; D21 "Step 2"):**
     calculated twice a frame (4 calls: 2 joints x 2 calcs; the buffer index ends each frame where it
     began), and the callback sets bit 0x10 in the matrix buffer's flags (model +0x2C, +0x4): so a whole
     tick's frame computes its own pose but shows the previous half frame's. Where the HD renderer takes
-    a model's joint matrices for the GPU is the next thing to find.
+    a model's joint matrices for the GPU is the next thing to find. Probes on viewCalc (f_027F55FC) and
+    the two shape draws that read the index (f_027F16E8, f_027F1FA8: model at +0x9C, the index handed to
+    f_027E13B4, which sets the uniform block to the buffer at base + stride x index): per frame one
+    viewCalc, then the draws with the index it left (whole frames 0, half frames 1, as at 30), so each
+    frame's draws take a freshly turned buffer; yet freezing a palm's index (restored after viewCalc) left
+    the scan as it was (195 blocks), so the fronds' pose doesn't reach the GPU through those buffers: the
+    fronds are likely skinned on the CPU into a vertex buffer, whose upload (Cemu's buffer cache, told of
+    changes only by dcbf/dcbst and GX2Invalidate's CPU flag: the recomp's DC*Range imports do nothing)
+    is the next place to look. Tried and no change: making DCFlushRange, DCFlushRangeNoSync and
+    DCStoreRangeNoSync notify the buffer cache (as Cemu's coreinit does) still leaves 195 blocks. Left
+    paused there (session top, 2026-10-05).
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next
