@@ -1697,6 +1697,20 @@ it in a window; D21 "Step 2"):**
     021210E4); and after a string compare (r27) HD sets a frame (+0x9C of the model at +0x3F0) through
     an s16 (fctiwz at 02122434), whole frames only: if that is the skeleton's, its pose would still
     change once a tick. To read before converting it. Not done.
+  - **Weather (the work queue's "weather", `tick_rules/weather.txt`)**: top's hz30 scan
+    (scratch hz30.py: 60 consecutive swaps, screen blocks changing on one parity only) found the Wind
+    Temple's floating dust at 30 Hz (16 and 29 blocks in kaze rooms 2 and 9). All the environment's
+    weather effects are moved once a tick in KYEFF's execute (478 = GameCube 0x1E4; the offset to WWHD's
+    numbers isn't constant: the camera 0x1E2 is 476, KYEFF2 479): dKyw_wether_move (thunder, the wind
+    lines) and dKyw_wether_move_draw f_0257ACAC (setups inlined; movers called: sun, lens flare, rain,
+    snow, the volcano's ash, stars, poison mist, f_02560E08, f_0256DC04, the dust motes). KYEFF is
+    converted with every mover but the dust's held `whole`; the dust motes (dKyr_housi_move f_02567F68:
+    300 motes at the env packet +0xA78; g_env_light is static at 0x10475A68) step: drift, wobble, fall,
+    phases, wind kicks and the move a step's share, the put-back wait kept, the alpha phase split. Now the
+    scan finds only the HUD (1 block each). A mote watched (WWHD_60FPS_WATCH on the packet, 0x45299C00
+    in kaze room 9): its phase + 0.03 a tick at 30, + 0.015 a frame at 60. Next: the wind lines, rain,
+    snow, stars, the ash, the mist, then KYEFF2's clouds (vrkumo); top: the sea's own process (38) is
+    theirs, KYEFF's wave glitter is ours.
   - **Dungeons (the work queue's "dungeons", from session top's census): the Wind Temple
     (`tick_rules/dungeons.txt`)**: converted Obj_Hami2/3/4 (47-49, grates turning or sliding in their
     switch's event), Obj_Hbrf1 (50, a lift), Obj_Vmc (52, the soil Makar's seeds grow in), TOGE (122,

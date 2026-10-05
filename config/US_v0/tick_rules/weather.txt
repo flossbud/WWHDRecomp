@@ -1,0 +1,55 @@
+# Step and tick rules for the environment's weather effects (the work queue's "weather"; session bottom). Format:
+# ../tick_rules.txt and tools/recomp/generate.py.
+#
+# KYEFF (478, GameCube 0x1E4; d_kyeff.cpp's dKyeff_c::execute f_02585B40) moves them all once a tick: the wind
+# lines and thunder (dKyw_wether_move f_0257836C), then dKyw_wether_move_draw (f_0257ACAC, each effect's setup
+# inlined, its mover called: the sun and its lens flare, rain, snow, the volcano's ash, stars, poison mist,
+# the dust motes...). Unconverted, all of them stepped at 30 Hz (top's hz30 scan: the Wind Temple's dust).
+# KYEFF is converted, and each effect's mover is held to whole ticks until it has its own steps (the
+# effects' setups run on both steps: a packet is made in the step its flag is set).
+02585D14    whole       bl 0257836c     kyeff execute: dKyw_wether_move (thunder, the wind lines) once a tick
+02585C78    *h@f0       fadds           kyeff execute (the title screen): its sky's time (env +0x1020) + c a tick
+0257B354    whole       bl 02565e0c     wether_move_draw: the sun's move once a tick
+0257B358    whole       bl 02565b70     wether_move_draw: the lens flare's move once a tick
+0257B3B8    whole       bl 02565e0c     wether_move_draw: the sun's move (its other branch)
+0257B3BC    whole       bl 02565b70     wether_move_draw: the lens flare's move (its other branch)
+0257B46C    whole       bl 02566b88     wether_move_draw: the rain's move once a tick
+0257B4F4    whole       bl 02566b88     wether_move_draw: the rain's move (its other branch)
+0257B6A8    whole       bl 02569408     wether_move_draw: the volcano's ash (kazanbai) once a tick
+0257B7A4    whole       bl 02569408     wether_move_draw: the volcano's ash (its other branch)
+0257B70C    whole       bl 02568bd4     wether_move_draw: the snow's move once a tick
+0257B7FC    whole       bl 02568bd4     wether_move_draw: the snow's move (its other branch)
+0257BAC4    whole       bl 02560e08     wether_move_draw: f_02560E08 once a tick
+0257BE08    whole       bl 0256a388     wether_move_draw: the stars' move once a tick
+0257BE80    whole       bl 0256a388     wether_move_draw: the stars' move (its other branch)
+0257C0F4    whole       bl 0256dc04     wether_move_draw: f_0256DC04 once a tick
+0257C11C    whole       bl 0256ca54     wether_move_draw: the poison mist's move once a tick
+#
+# ---- the dust motes (housi; dKyr_housi_move f_02567F68, d_kankyo_rain.cpp; 300 of 0x50 bytes in the packet at
+# env +0xA78, from +0x9C): each drifts with the wind and its own speed factor (+0x34), wobbles on three
+# phases (+0x28/+0x2C/+0x30, + 0.03/0.02/0.01 a tick), falls 0.6 x its factor a tick, takes a point wind's
+# kick into its speed (+0x1C, x 9 a tick; the speed then approaches 0 with cLib_addCalc, stepped) and moves
+# by it; far from the camera it is put back near it after a 10-tick wait (+0x3C); its alpha's phase
+# (+0x4C, s16) + 600 a tick. A step takes h of each
+02568410    *h@f8       fmadds          housi: x += wind.x x 5 x its factor a tick
+02568424    *h@f8       fmadds          housi: y += wind.y x 5 x its factor a tick
+0256843C    *h@f8       fmadds          housi: z += wind.z x 5 x its factor a tick
+02568430    *h@f8       fmadds          housi: x += sin(phase x) x its factor a tick
+02568444    *h@f8       fnmsubs         housi: y -= its factor x 0.6 a tick (its fall)
+02568474    *h@f7       fmadds          housi: y += sin(phase y) x its factor x 0.5 a tick
+025684A0    *h@f10      fmadds          housi: z += sin(phase z) x its factor a tick
+025684A8    *h@f30      fadds           housi: phase x (+0x28) + 0.03 a tick
+025684B0    *h@f26      fadds           housi: phase y (+0x2C) + 0.02 a tick
+025684B8    *h@f29      fadds           housi: phase z (+0x30) + 0.01 a tick
+0256852C    *h@f23      fmadds          housi: speed.x (+0x1C) += a point wind's x x 9 a tick
+02568544    *h@f23      fmadds          housi: speed.y += a point wind's y x 9 a tick
+02568558    *h@f23      fmadds          housi: speed.z += a point wind's z x 9 a tick
+025685BC    *h@f0       fadds           housi: x += speed.x
+025685C4    *h@f7       fadds           housi: y += speed.y
+025685CC    *h@f9       fadds           housi: z += speed.z
+02568794    keep:r12    addi            housi: the wait before it is put back (+0x3C) - 1
+02568294    spliti      addi            housi: its alpha's phase (+0x4C) + 600 a tick (a new one)
+025683C8    spliti      addi            housi: its alpha's phase + 600 a tick (moving)
+025686DC    spliti      addi            housi: its alpha's phase + 600 a tick (put back near)
+0256877C    spliti      addi            housi: its alpha's phase + 600 a tick (put back)
+025687D0    spliti      addi            housi: its alpha's phase + 600 a tick (waiting)
