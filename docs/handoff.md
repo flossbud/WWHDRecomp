@@ -1776,6 +1776,16 @@ it in a window; D21 "Step 2"):**
     (f_0256CA54, ~20 per-tick stores), the clouds' shadows (f_0256BB6C, ~21, several states), thunder (its
     flashes start on a random draw a tick: whole is right). Two calls must not be held: f_02560E08 (a
     getter: its f1 result would be stale) and f_0256DC04 (the mist's packet setup).
+    Session top's outdoor sweep left weather leads (its handoff entry). Read so far: the day clock
+    (dScnKy_env_light_c::setDaytime, mCurTime += mTimeAdv once a tick in exeKankyo, the KANKYO process's
+    execute, with the weather's state machine and CalcTevColor) moves the sun, so ground shadows' edges
+    creep about a pixel on whole ticks: a half step there means converting KANKYO (its weather counters,
+    the gather ratios), for a change of under a pixel a tick: not done. Thorned Fairy Island's sky (sea,0,28,-1,
+    18 blocks): two cloud layers' edges out of step by 1-2 px (a crop's shift alternates +2 then -1.3 px a
+    frame, ~0.7 a tick): VRBOX2 scrolls its cloud layers' texture matrices in its draw (daVrbox2_color_set,
+    HD f_024D1D44: the speed at +0x3C8, six fadds), which runs on half frames too, its matrices on the heap;
+    skipping its half-frame draws (WWHD_60FPS_SKIPDRAW=481,438) left the whole frames as they were. Not
+    resolved.
   - **hz30 sweep of the dungeons and boss rooms (the work queue's "hz30-dungeons")**: top's hz30.py
     (scratch hzscan.sh: 60 swaps from game frame 1100 after the warp) at 13 dungeon places (each
     dungeon's entrance; Dragon Roost rooms 3 and 12, the Earth Temple's room 8, the Wind Temple's room 2,
