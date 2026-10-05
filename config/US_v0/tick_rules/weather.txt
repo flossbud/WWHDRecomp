@@ -10,12 +10,6 @@
 # effects' setups run on both steps: a packet is made in the step its flag is set).
 02578404    whole       bl 02577138     dKyw_wether_move (f_0257836C): the thunder's move once a tick
 02585C78    *h@f0       fadds           kyeff execute (the title screen): its sky's time (env +0x1020) + c a tick
-0257B46C    whole       bl 02566b88     wether_move_draw: the rain's move once a tick
-0257B4F4    whole       bl 02566b88     wether_move_draw: the rain's move (its other branch)
-0257B6A8    whole       bl 02569408     wether_move_draw: the volcano's ash (kazanbai) once a tick
-0257B7A4    whole       bl 02569408     wether_move_draw: the volcano's ash (its other branch)
-0257B70C    whole       bl 02568bd4     wether_move_draw: the snow's move once a tick
-0257B7FC    whole       bl 02568bd4     wether_move_draw: the snow's move (its other branch)
 0257C11C    whole       bl 0256ca54     wether_move_draw: the poison mist's move once a tick
 025837FC    whole       bl 0256bb6c     f_02583678 (the fog's setup): the clouds' shadows' move once a tick
 0258392C    whole       bl 0256bb6c     f_02583678: the clouds' shadows' move (another branch)
@@ -101,3 +95,46 @@
 # and the camera each call, nothing summed (their fades are cLib_addCalc's): no rules, every step
 # ---- the stars (dKyr_star_move f_0256A388): their twinkle's phase (+0xCA) + 200 + rndFX a tick
 0256A42C    split@r9    add             stars: the twinkle's phase (+0xCA) + 200 + rndFX a tick
+#
+# ---- rain (dKyr_rain_move f_02566B88): each drop moves by its fall and the wind times a per-tick scale (f19, a
+# constant); a step takes h of it
+02567AB8    *h@f19      fmadds          rain: a drop's x += its move a tick
+02567AEC    *h@f19      fmadds          rain: a drop's y += its move a tick
+02567B1C    *h@f19      fmadds          rain: a drop's z += its move a tick
+# ---- snow (dKyr_snow_move f_02568BD4): each flake drifts with the wind by its speed (+0x28) and falls (+0x24), sways
+# on two phases (+0x1C/+0x20, + a constant a tick) by sin x f18; a step takes h of each
+02569030    *h@f6       fmadds          snow: a flake's x += wind x its speed a tick
+02569040    *h@f6       fmadds          snow: a flake's z += wind x its speed a tick
+02569058    *h@f11      fadds           snow: a flake's y += wind x its speed + its fall a tick
+0256907C    *h@f18      fmadds          snow: a flake's x += sin(phase) x its sway a tick
+025690AC    *h@f18      fmadds          snow: a flake's z += sin(phase) x its sway a tick
+025690A4    *h@f23      fadds           snow: a flake's phase (+0x1C) + c a tick
+025690B0    *h@f23      fadds           snow: a flake's phase (+0x20) + c a tick
+# ---- the volcano's ash (dKyr_kazanbai_move f_02569408, snow's twin; its piles' part from 0256A0xx): each flake drifts
+# with the wind by its speed (+0x28) and falls (+0x24), sways on two phases (+0x1C/+0x20) by sin; a step takes h
+02569960    *h@f12      fmadds          ash: a flake's x += wind x its speed a tick
+02569970    *h@f12      fmadds          ash: a flake's z += wind x its speed a tick
+02569988    *h@f0       fadds           ash: a flake's y += wind x its speed + its fall a tick
+025699AC    *h@f24      fmadds          ash: a flake's x += sin(phase) x its sway a tick
+025699D8    *h@f9       fmadds          ash: a flake's z += sin(phase) x its sway a tick
+02569A04    *h@f13      fadds           ash: a flake's y += sin(phase) a tick
+02569A0C    *h@f22      fadds           ash: a flake's phase (+0x1C) + c a tick
+02569A14    *h@f22      fadds           ash: a flake's phase (+0x20) + c a tick
+02569C48    *h@f8       fmadds          ash: a flake's x += wind x its speed x c a tick (its other state)
+02569C6C    *h@f8       fmadds          ash: a flake's z += wind x its speed x c a tick (its other state)
+0256A0DC    *h@f0       fmadds          ash piles: x += their drift a tick
+0256A0F4    *h@f0       fmadds          ash piles: z += their drift a tick
+# ---- thunder (dKyr_thunder_move f_02577138): its flashes start on a random draw a tick; held whole (above)
+#
+# ---- the sky's clouds (vrkumo): KYEFF2 (479, GameCube 0x1E5; its execute f_02586BE4 only calls wether_move_vrkumo
+# f_0257C5B0) is converted. vrkumo_move (f_0256DDF8): the sky's scroll (+0x11D4 of the packet) + c a tick and
+# each cloud's drift with the wind by its band's speed (four bands, x and z; a wrap negates them): a step's share
+0256E8A4    *h@f30      fadds           clouds: the sky's scroll (+0x11D4) + c a tick
+0256EAD8    *h@f9       fmadds          clouds: x += wind x speed a tick (a band)
+0256EAEC    *h@f11      fadds           clouds: z += wind x speed a tick (a band)
+0256EB78    *h@f9       fmadds          clouds: x += wind x speed a tick (a band)
+0256EB8C    *h@f11      fadds           clouds: z += wind x speed a tick (a band)
+0256EC08    *h@f9       fmadds          clouds: x += wind x speed a tick (a band)
+0256EC1C    *h@f11      fadds           clouds: z += wind x speed a tick (a band)
+0256EC8C    *h@f9       fmadds          clouds: x += wind x speed a tick (a band)
+0256ECAC    *h@f11      fadds           clouds: z += wind x speed a tick (a band)

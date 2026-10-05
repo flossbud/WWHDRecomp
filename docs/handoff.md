@@ -1728,9 +1728,15 @@ it in a window; D21 "Step 2"):**
     btk frame from the wave frame ENVSE counts, a u16: `lag:f0` at 0207A0A4). hz30 after them: Forest
     Haven inside 35 -> 1 block, Outset's sea 13 -> 0, Windfall's quay 100 -> 1; Dragon Roost's beach 14
     and Forest Haven's island 18 left are grass tufts posed in their draw (session top's finding).
-    Still held whole: rain, snow, the volcano's ash, the poison mist, the clouds' shadows, thunder; not
-    converted: KYEFF2 (479, the sky's clouds). Two calls must not be held: f_02560E08 (a getter: its f1
-    result would be stale) and f_0256DC04 (the mist's packet setup).
+    Then rain (3 moves), snow (drift, fall, sway and phases: 7), the volcano's ash (snow's twin and its
+    piles: 12) and the sky's clouds (KYEFF2 479 converted: its scroll and four bands' drift, 9). Tested
+    with the counts poked (WWHD_DEBUG_POKE 0:0x104764A8 rain, 0x104764B4 snow, every 10 ticks: the env
+    update lowers them): hz30 at the Outset dock in rain 355 blocks (held) -> 0, in snow 816 -> 0; a drop
+    -60 a tick at 30, -30 a frame at 60; a flake's phase 0.02 a tick, 0.01 a frame; the sky's scroll
+    +100 a tick, +50 a frame, 60's half frames equal to 30's ticks. Still held whole: the poison mist
+    (f_0256CA54, ~20 per-tick stores), the clouds' shadows (f_0256BB6C, ~21, several states), thunder (its
+    flashes start on a random draw a tick: whole is right). Two calls must not be held: f_02560E08 (a
+    getter: its f1 result would be stale) and f_0256DC04 (the mist's packet setup).
   - **Dungeons (the work queue's "dungeons", from session top's census): the Wind Temple
     (`tick_rules/dungeons.txt`)**: converted Obj_Hami2/3/4 (47-49, grates turning or sliding in their
     switch's event), Obj_Hbrf1 (50, a lift), Obj_Vmc (52, the soil Makar's seeds grow in), TOGE (122,
