@@ -294,28 +294,8 @@
     "460": "ice block",
     "64": "table"
   },
-  "queue_note": "Round 3 (2026-10-05; rounds 1 and 2 are done). 'top' takes items from the top down, 'bottom' from the bottom up; claim before starting (tools/progress/publish.sh claim ID) and stop where the other session's claims begin. The owner's bugs are session qa's (the Bugs list). Keep the claim's note and your status line current.",
+  "queue_note": "Round 4 (2026-10-05; rounds 1-3 are done). 'top' takes items from the top down, 'bottom' from the bottom up, 'main' takes free items one at a time; claim before starting (tools/progress/publish.sh claim ID) and stop where another session's claims begin. Session qa is retired: the main session triages the owner's bugs (the Bugs list) and deploys. Keep the claim's note and your status line current.",
   "queue": [
-    {
-      "id": "drawposed",
-      "name": "The plants (palms, grass tufts, flowers) swayed at 30 Hz: their sway read g_Counter.mTimer a tick ahead on half ticks (top's: drawlag in plants.txt; the palms' ground shadows still step, weather)"
-    },
-    {
-      "id": "hz30-outdoors",
-      "name": "hz30 sweep outdoors: tools/sixty/tests/hz30.py over the islands, Windfall (day and night, WWHD_DEBUG_TIME), the sea and its weather states: what still moves at 30 Hz; convert or record each"
-    },
-    {
-      "id": "leftovers",
-      "name": "Known leftovers: Fire Mountain's objects left at 30, the Hyoi seagull's flight with a Hyoi Pear, Orca's look-at, Tingle's tower; Medli and Makar (need a save state where they're with Link: the debug menu or a poke could make one)"
-    },
-    {
-      "id": "perf",
-      "name": "60 fps cost: measure the frame time at 60 on the owner's desktop (~/wwhd-test, real time) across routes; find what the half frames cost (rollback journal, held items, plants) and trim it (the Android goal: low CPU)"
-    },
-    {
-      "id": "hz30-dungeons",
-      "name": "hz30 sweep in the dungeons and boss rooms (bottom's next after the dungeons item): what still moves at 30 Hz; convert or record each"
-    },
     {
       "id": "weather",
       "name": "Weather and sky effects: dust motes, rain, snow, stars, mist, fog, clouds (bottom's, in progress)"
@@ -327,6 +307,26 @@
     {
       "id": "ui30",
       "name": "The HUD and message box at 30 Hz: the message box's spinning \"next\" icon (bottom's observation) and the HUD's corner block every hz30 scan shows; the HD UI's update runs on whole ticks (tick_rules.txt 020359AC)"
+    },
+    {
+      "id": "doors",
+      "name": "Dungeon doors and shutters still at 30: DOOR12 301 (22 in the Earth Temple alone), ATDOOR 302, MDOOR 303, SHUTTER 112/113, MBDOOR 115 (their opening and closing, door routes back/door2) (main's)"
+    },
+    {
+      "id": "sea-objects",
+      "name": "On the sea, still at 30: the salvage arm (Salvage 401, SALVAGE_TBOX 402), the rudder (Kaji 60), Tetra's ship (Obj_Pirateship 57), Ganon's ships (Obj_Gaship 125/127), the buoy race (Obj_Buoyrace 268, Obj_Buoyflag 465), sea cannons (Canon 61)"
+    },
+    {
+      "id": "npcs-left",
+      "name": "NPCs still at 30 (blink rules per blink_audit.py -a): NPC_OS 314, YM1 315, LS1 321, P2 323, KM1 333, BTSW 349/350, PM1 354, PF1 356, the auction (361, 382), CO1 370, HI1 377, SV 378, Carlov's MT/MN 379/380"
+    },
+    {
+      "id": "objects-left",
+      "name": "Moving objects still at 30: the gong (Obj_Gong 284), ladders (Obj_Ladder 85), liftable rocks (Stone2 455), fire walls (Obj_Firewall 286), barriers (Obj_Barrier 285), Iball 399, the Triangle statues (Obj_Doguu 265), the Wind Temple's fans (FAN 299: its joint callback), Obj_Tribox 44"
+    },
+    {
+      "id": "companions",
+      "name": "Companions and the Hyoi seagull: Medli's glide with Link and Makar's (WWHD_DEBUG_COMPANION; Makar needs his story state to follow), the Hyoi seagull (NPC_KAM 195: route hyoi, it never answers the pear yet)"
     }
   ],
   "later": [
@@ -353,6 +353,11 @@
     "linkitems",
     "npcs",
     "outdoors",
-    "dungeons"
+    "dungeons",
+    "drawposed",
+    "hz30-outdoors",
+    "leftovers",
+    "perf",
+    "hz30-dungeons"
   ]
 }
