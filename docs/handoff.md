@@ -216,7 +216,7 @@ startup time and CPU use matter (phones throttle when hot). Design D19 and D20 h
   - `~/wwhd-play`: **the owner's** copy (program, Cemu's data files, the game, the test save, and in
     `portable/` their emulated NAND, saves and shader cache). Don't reset their saves or cache.
   - `~/wwhd-test`: the agents' copy for headless tests (its `game/wwhd.wua` links to wwhd-play's).
-  - `tools/play/deploy.sh owner@DESKTOP_ADDR [DIR]` (from the editing machine, after `src/build.sh`)
+  - `tools/play/deploy.sh owner@DESKTOP_ADDR [DIR]` (from the editing machine, after `tools/recomp/build.sh && src/build.sh`: src/build.sh alone keeps the old generated code, so new tick rules would be missing while sixty.cpp converts their types)
     streams the build there. It replaces the binary by rename (a running game is untouched) and
     rewrites `play.sh`, `portable/settings.xml` and the game profile.
   - Headless test: `cd ~/wwhd-test && WWHD_WINDOW=0 WWHD_SAVE=saves/wwhd_100
