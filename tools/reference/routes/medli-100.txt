@@ -1,0 +1,15 @@
+# Route: Medli as the Earth Temple's companion (NPC_MD 367; session main, the leftovers item): picked up, carried
+# and thrown. Run with WWHD_DEBUG_COMPANION=1 (she is created at the entrance on a finished save; sixty.cpp),
+# WWHD_DEBUG_STAGE=920:M_Dai,0,0,-1 (Link at -7000,-150,5700 facing -z) and her moved 80 units before him, facing
+# him, once the warp-in is over (WWHD_DEBUG_PLACE doesn't move Link after a stage warp; walks are camera-relative):
+# WWHD_DEBUG_POKE=1100:367,314,4,c5dac000;1100:367,318,4,c3160000;1100:367,31c,4,45afa000;1100:367,32a,2,0
+# FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start; gameplay from ~f870 (the warp at f920)
+1110 A 5         # pick her up
+1160 LDOWN 40  # carry her back the way he came
+1220 LLEFT 30
+1270 A 5       # throw her (she flutters down)
+1360 LUP 20    # walk on

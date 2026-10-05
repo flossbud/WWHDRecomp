@@ -1,0 +1,13 @@
+# Route: the Hyoi seagull (NPC_KAM 195) called with a Hyoi Pear and flown (session main, the leftovers item).
+XX and the pear on X:
+# WWHD_DEBUG_POKE=990:0,1046F12E,1,83;990:0,1046F154,1,5;990:0,1046F0B9,1,24;990:0,10474C6B,1,83
+# FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start; gameplay from ~f870 (the warp at f920)
+1100 X 5       # the Hyoi Pear: the seagull's call
+1500 LLEFT 40  # steer it
+1600 A 5       # flap
+1700 LRIGHT 40
+1800 A 5

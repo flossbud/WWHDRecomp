@@ -2390,6 +2390,29 @@ it in a window; D21 "Step 2"):**
 - Adding an override rebuilds all generated code (12 min); a tick or step rule rebuilds one shard;
   `tools/recomp/runtime/ppc_ops.h` rebuilds everything.
 
+- **Session main: the queue's "leftovers" item (2026-10-05; `config/US_v0/tick_rules/leftovers.txt`)**:
+  - Fire Mountain: Obj_Volcano 51 and Obj_Yboil 276 converted (51b5e51); the volcano's tests poke its state
+    (+0x738: 4 erupts, 1 freezes; the rules file has the numbers). Yboil isn't created on the finished save.
+  - Orca's look-at and Tingle's tower were done already (round 1: islands.txt, Tpota 394).
+  - The Hyoi seagull (NPC_KAM 195): still not called. Its range is scale.x (13000 on the perches read) and its
+    attention entry 38 is 15000 across, +-10000 up; the pear (on X with the poke in
+    `tools/reference/routes/hyoi-100.txt`) is raised on Windfall's top (among townsfolk, which may take
+    the item's target) and on Star Island (`sea,0,2,-1`: no NPCs), and no seagull came in 900 ticks. Left:
+    its callDemoStartCheck's 16 line checks (BG LineCross around the pear) or the item's target choice; a
+    flight recording from the owner would settle it.
+  - Medli (NPC_MD 367): `WWHD_DEBUG_COMPANION=1` (sixty.cpp's isCollect override, for her code only) creates
+    her as the Earth Temple's companion on the finished save (`M_Dai,0,0,-1`: she stands at -7215,-200,5259,
+    450 units before Link). She becomes liftable (fopAc_Attn_ACTION_CARRY) when her chkAttention sees Link
+    before her: route `medli` pokes her 80 units before Link, facing him, after the warp-in (its header);
+    A lifts her, he carries her and throws her at the wall behind the entrance. **Bug B29 found there**:
+    at 30 she meets the wall (z 6380) and drops; at 60 she is past it on the throw's first half frame
+    (6412) and falls out of the world, converted or not, and also with `WWHD_60FPS_ATTACHED=0`; with Link
+    left at 30 (the default list minus 168) she meets the wall as at 30. So Link's half steps
+    (setGrabItemPos: her position = his hands' midpoint, each step; procGrabThrow's release) carry her
+    past the wall, where at 30 her own wall check (once a tick) holds her. Not converted yet (256 functions; actor_rmw lists 162
+    stores). Makar (NPC_CB1 334) is created by checkGetItem(MASTER_SWORD_3) instead: the same aid would
+    need that check for his code.
+
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.

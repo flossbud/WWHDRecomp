@@ -1679,6 +1679,25 @@ void f_025B9100(PPCInterpreter_t* __restrict ctx)
 	orig_f_025B9100(ctx);
 }
 
+// dSv_player_collect_c::isCollect(collect, field, bit): field 0's bits are the Master Sword's powers (1 the
+// Earth Temple's, 2... as d_menu_collect.cpp reads them). Medli (NPC_MD 367) is created only in her boss
+// room once bit 2 is set, so a finished save never has her with Link. A test aid: WWHD_DEBUG_COMPANION=1
+// answers "no" for field 0 to her code alone (the caller's address in her functions, 02280508-02295870),
+// so she is created as the Earth Temple's companion (M_Dai); Link's sword and the menus still read the
+// save. Nothing is written to the save.
+void orig_f_025B7A2C(PPCInterpreter_t* __restrict ctx);
+void f_025B7A2C(PPCInterpreter_t* __restrict ctx)
+{
+	static const bool companion = [] { const char* e = getenv("WWHD_DEBUG_COMPANION"); return e && *e == '1'; }();
+	const uint32 lr = ctx->spr.LR;
+	if (companion && ctx->gpr[4] == 0 && lr >= 0x02280508u && lr < 0x02295870u)
+	{
+		ctx->gpr[3] = 0;
+		return;
+	}
+	orig_f_025B7A2C(ctx);
+}
+
 // dSv_memBit_c::onDungeonItem(mem, item): item 3 set is a boss beaten (onStageBossEnemy), which the debug
 // menu's boss rush waits for (wwhd::debug::RushBossBeaten)
 void f_025B9098(PPCInterpreter_t* __restrict ctx)
