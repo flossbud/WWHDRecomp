@@ -20,5 +20,7 @@ args=(-DCEMU_SRC="${CEMU_SRC:-/wwhd/opt/cemu-src}" -DWWHD_SDL3="${SDL3_DIR:-/wwh
       -DWWHD_RECOMP_DIR="${RECOMP_DIR-$root/build/recomp}" -DWWHD_FORKS="$([ "${WWHD_FORKS:-1}" = 0 ] && echo OFF || echo ON)")
 [ -f "$out/CMakeCache.txt" ] || args+=(-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)
 cmake -S "$root" -B "$out" "${args[@]}"
-cmake --build "$out" -j "${JOBS:-10}"
+# parallel compiles: JOBS, else the worker's setting (/wwhd/data/m6/.build.jobs: 8 on the desktop, where
+# three sessions may build at once on 24 threads; a big shard takes ~0.8 GB to compile), else 10
+cmake --build "$out" -j "${JOBS:-$(cat /wwhd/data/m6/.build.jobs 2>/dev/null || echo 10)}"
 echo "wwhd: built $out/wwhd-null"

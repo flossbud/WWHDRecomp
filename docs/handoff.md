@@ -56,6 +56,10 @@ WW-4's actor conversion is split between two sessions working side by side:
   old: sync and build there first. `WWHD_ON=worker` / `WWHD_ON=desktop` force one. Only main (or
   the session the owner asks) runs `desktop.sh stop`/`start`. While it's on, a user unit
   (`wwhd-awake`) keeps the desktop from sleeping.
+- **Three sessions at once on the desktop** (tested 2026-10-05: three full builds from scratch
+  together, 13.5 min each, peak 9.8 GB of the worker's 28 GB, with the sessions' jobs running): builds
+  default to 8 parallel compiles there (`/wwhd/data/m6/.build.jobs`; `JOBS=` overrides; the worker 10),
+  so three builds fill the 24 threads; the process limit is 16384.
 - **Check slots per worker**: `tools/sixty/tests/checks.sh` waits for a free slot (the desktop takes 3
   runs at once, the worker 1: `/wwhd/data/m6/.checks.slots`) and prints whose runs hold them each
   minute. A check run can cover several commits.

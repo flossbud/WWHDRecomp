@@ -19,7 +19,7 @@ start)
 podman rm -f wwhd-worker >/dev/null 2>&1 || true
 mkdir -p ~/wwhd-desk/logs ~/wwhd-desk/data/m6
 podman run -d --name wwhd-worker --init --userns=keep-id --group-add keep-groups \
-    --cpus 24 --memory 28g --memory-swap 28g --pids-limit 4096 --shm-size 2g \
+    --cpus 24 --memory 28g --memory-swap 28g --pids-limit 16384 --shm-size 4g \
     --device /dev/dri -v "$HOME/wwhd-desk:/wwhd:z" --hostname wwhd-desk \
     wwhd-worker:latest >/dev/null
 systemctl --user stop wwhd-awake 2>/dev/null || true
