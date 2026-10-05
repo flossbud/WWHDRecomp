@@ -88,21 +88,24 @@
 0208A964    whole       bl 025a8d40     bgn part_control_0Z: a ripple where the tail touches the water (every 8 ticks)
 # the actions the first test doesn't reach (body_attack, tail_attack, damage, hensin: f_02084804,
 # f_02084B90, f_02084D6C, f_02086130): the height mC728.y (+0x14E98) += speed.y, speed.y -= 10 (each
-# inlined copy), the spins
+# inlined copy), the spins. Each copy moves by speed.y before its gravity (explicit Euler): the gravity
+# is stored once a tick at its end (late), so both half steps move by the tick's speed and the arc is
+# 30's at every tick (with *h on the gravity add instead it ran g/4 a tick off: Ganondorf's leap, below,
+# peaked 5.5 units higher); the same in the spider's and the snake's copies
 020848B0    *h@f13      fadds           bgn: mC728.y += speed.y
-020848C8    *h@f0       fsubs           bgn: speed.y -= 10 + REG0_F(4)
+020848CC    late        stfs            bgn: speed.y -= 10 + REG0_F(4), stored once a tick at its end
 02084960    *h@f13      fadds           bgn: mC728.y += speed.y
-02084978    *h@f0       fsubs           bgn: speed.y -= 10
-020849C8    *h@f0       fsubs           bgn: speed.y -= 10
+0208497C    late        stfs            bgn: speed.y -= 10, stored once a tick at its end
+020849CC    late        stfs            bgn: speed.y -= 10, stored once a tick at its end
 02084A34    *h@f13      fadds           bgn: mC728.y += speed.y
-02084A4C    *h@f0       fsubs           bgn: speed.y -= 10
-02084AB8    *h@f0       fsubs           bgn: speed.y -= 10
+02084A50    late        stfs            bgn: speed.y -= 10, stored once a tick at its end
+02084ABC    late        stfs            bgn: speed.y -= 10, stored once a tick at its end
 02084EA0    *h@f9       fadds           bgn: mC728.y += speed.y
-02084EB8    *h@f10      fsubs           bgn: speed.y -= 10
+02084EC0    late        stfs            bgn: speed.y -= 10, stored once a tick at its end
 02088094    *h@f13      fadds           bgn: mC728.y += speed.y
-020880AC    *h@f0       fsubs           bgn: speed.y -= 10
+020880B0    late        stfs            bgn: speed.y -= 10, stored once a tick at its end
 02088214    *h@f8       fadds           bgn: mC728.y += speed.y
-0208822C    *h@f9       fsubs           bgn: speed.y -= 10
+02088234    late        stfs            bgn: speed.y -= 10, stored once a tick at its end
 02084C50    spliti      addi            bgn: shape_angle.y + 0x200 a tick
 02084D0C    spliti      addi            bgn: shape_angle.y - 0x400 a tick
 02084688    split@r12   add             bgn tail_attack: shape_angle.y += mC764 (its spin)
@@ -125,33 +128,34 @@
 # its fall and jumps (execute inlines its actions: one pair per copy): pos.y += speed.y, speed.y +=
 # l_HIO.m14 (gravity); plesattack's hover takes the gravity back while a timer runs
 0208BD20    *h@f6       fadds           bgn2: pos.y += speed.y
-0208BD30    *h@f8       fadds           bgn2: speed.y += gravity
+0208BD38    late        stfs            bgn2: speed.y += gravity, stored once a tick at its end
 0208BE90    *h@f6       fadds           bgn2: pos.y += speed.y
-0208BEA0    *h@f8       fadds           bgn2: speed.y += gravity
-0208BFA8    *h@f8       fsubs           bgn2 plesattack: speed.y -= gravity (the hover)
+0208BEA8    late        stfs            bgn2: speed.y += gravity, stored once a tick at its end
+0208BFAC    late        stfs            bgn2 plesattack: speed.y -= gravity (the hover), stored once a tick at its end
 0208C2B0    *h@f6       fadds           bgn2: pos.y += speed.y
-0208C2C0    *h@f8       fadds           bgn2: speed.y += gravity
+0208C2C8    late        stfs            bgn2: speed.y += gravity, stored once a tick at its end
 0208C3E4    *h@f6       fadds           bgn2: pos.y += speed.y
-0208C3F4    *h@f8       fadds           bgn2: speed.y += gravity
+0208C3FC    late        stfs            bgn2: speed.y += gravity, stored once a tick at its end
 0208C47C    *h@f6       fadds           bgn2: pos.y += speed.y
-0208C48C    *h@f8       fadds           bgn2: speed.y += gravity
+0208C494    late        stfs            bgn2: speed.y += gravity, stored once a tick at its end
 0208C5A4    *h@f6       fadds           bgn2: pos.y += speed.y
-0208C5B4    *h@f8       fadds           bgn2: speed.y += gravity
+0208C5BC    late        stfs            bgn2: speed.y += gravity, stored once a tick at its end
 0208C6B8    *h@f6       fadds           bgn2: pos.y += speed.y
-0208C6C8    *h@f8       fadds           bgn2: speed.y += gravity
+0208C6D0    late        stfs            bgn2: speed.y += gravity, stored once a tick at its end
 0208CB64    *h@f0       fadds           bgn2: pos.y += speed.y
-0208CB7C    *h@f6       fsubs           bgn2: speed.y -= gravity
+0208CB8C    late        stfs            bgn2: speed.y -= gravity, stored once a tick at its end (above f29)
+0208CC10    late        stfs            bgn2: speed.y = f29 (its floor) instead, once a tick at its end
 0208D33C    *h@f10      fadds           bgn2: pos.y += speed.y
-0208D348    *h@f12      fadds           bgn2: speed.y += gravity
+0208D354    late        stfs            bgn2: speed.y += gravity, stored once a tick at its end
 0208D444    *h@f10      fadds           bgn2: pos.y += speed.y
-0208D454    *h@f12      fadds           bgn2: speed.y += gravity
-0208D544    *h@f12      fadds           bgn2: speed.y = 0 + gravity
+0208D45C    late        stfs            bgn2: speed.y += gravity, stored once a tick at its end
+0208D54C    late        stfs            bgn2: speed.y = 0 + gravity, stored once a tick at its end
 0208D6A4    *h@f10      fadds           bgn2: pos.y += speed.y
-0208D6B0    *h@f12      fadds           bgn2: speed.y += gravity
+0208D6BC    late        stfs            bgn2: speed.y += gravity, stored once a tick at its end
 0208D7B4    *h@f10      fadds           bgn2: pos.y += speed.y
-0208D7C0    *h@f12      fadds           bgn2: speed.y += gravity
+0208D7CC    late        stfs            bgn2: speed.y += gravity, stored once a tick at its end
 0208D9E8    *h@f10      fadds           bgn2: pos.y += speed.y
-0208D9F8    *h@f12      fadds           bgn2: speed.y += gravity
+0208DA00    late        stfs            bgn2: speed.y += gravity, stored once a tick at its end
 0208C72C    split@r0    add             bgn2 move: shape_angle.y += m2E80 (its spin)
 #
 # ---- BGN3 (245, bgn3_class, d_a_bgn3.cpp: Puppet Ganon's snake form; execute f_02090680). Tested by
@@ -168,7 +172,7 @@
 02091A70    split@r0    add             bgn3 move0: current.angle.y += its turn a tick
 # pos_move (f_020903xx): current.pos += speed, speed.y += -5
 020903E8    vec@r4      bl 028e8d88     bgn3 pos_move: current.pos += speed
-02090404    *h@f0       fadds           bgn3 pos_move: speed.y += gravity
+02090408    late        stfs            bgn3 pos_move: speed.y += gravity, stored once a tick at its end
 # part_control: the body's chain, a position-based (Verlet) step as the capes': its forces (the pull
 # down m0FDBC... -5, the pull behind) take h^2, its velocity (the move times m0FDB8) m0FDB8^h
 020933D8    *hh@f24     fadds           bgn3 part_control: a part's y + the pull down
@@ -228,7 +232,9 @@
 # gravity (+0x374): his walks and leaps (the fight's opening leap at f8213 on route gtower)
 02154D3C    vec@r4      bl 028e8d88     gnd pos_move: pos += speed
 02154D4C    *h@f13      fadds           gnd pos_move: pos.y += speed.y
-02154D54    *h@f12      fadds           gnd pos_move: speed.y += gravity (+0x374)
+02154D60    late        stfs            gnd pos_move: speed.y += gravity (+0x374), stored once a tick at its end: pos.y took
+#                                       speed.y before it (explicit Euler), so both half steps move by the tick's speed (with *h
+#                                       on the add instead the leap peaked 5.5 units higher than 30's)
 02154A60    *hh@f23     fadds           gnd ke_control: a hair point's y + the pull down
 02154B34    d@f24       fmuls           gnd ke_control: velocity.x = move * damping
 02154B48    d@f24       fmuls           gnd ke_control: velocity.y = move * damping
