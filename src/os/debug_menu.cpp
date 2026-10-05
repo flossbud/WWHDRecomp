@@ -74,9 +74,12 @@ namespace
 	int s_cursor = 0;
 	uint32 s_version = 1, s_prev = 0;
 
-	// the boss rush (the owner's idea: the bosses again from a finished save, one after another): kBosses
-	// in order, refights on; when the boss being fought is beaten (the game sets its dungeon's "boss beaten"
+	// the boss rush (the owner's idea: the bosses again from a finished save, one after another): kBosses'
+	// first eight in order (not Ganon's Tower's refight rooms, where a beaten boss sends Link on by itself:
+	// Gohma's death there changes the stage instead of setting the bit, d_a_btd.cpp), refights on; when the boss being fought is beaten (the game sets its dungeon's "boss beaten"
 	// bit, wwhd::debug::RushBossBeaten) the game's next stage change (its warp out) goes to the next one
+	constexpr int kRushBosses = 8;
+	static_assert(kRushBosses <= (int)std::size(kBosses));
 	std::mutex s_rushLock;
 	int s_rush = -1;                                   // the boss being fought, or -1
 	bool s_rushBeaten = false;
@@ -186,7 +189,7 @@ namespace wwhd::debug
 		if (s_rush < 0 || !s_rushBeaten)
 			return false;
 		s_rushBeaten = false;
-		if (++s_rush >= (int)std::size(kBosses))
+		if (++s_rush >= kRushBosses)
 		{
 			s_rush = -1;                                // the last one beaten: the game's own warp
 			return false;
