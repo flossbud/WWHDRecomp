@@ -1201,10 +1201,13 @@ namespace
 		const float step = g_rtStep;
 		g_rtStep = 1.0f;
 		s_attached = true;
+		const uint32* pages = g_rtStorePages;
+		g_rtStorePages = nullptr;                   // every store of its execute and draw is journaled
 		orig_f_025DE58C(ctx);
 		regs.Restore(ctx);
 		const size_t executed = s_saved.size();
 		fn(ctx);                                    // journaled whole too: its draw writes into Link
+		g_rtStorePages = pages;
 		s_attached = false;                         // (the bow's charge, from the arrow's state)
 		g_rtStep = step;
 		s_converting = converting;
@@ -1402,9 +1405,10 @@ namespace wwhd::sixty
 	// the half tick's journal since the last call: stores seen and saved (the frame log, pacing.cpp)
 	void TakeJournalCounts(uint64& seen, uint64& saved)
 	{
-		seen = s_storesSeen;
+		seen = s_storesSeen + g_rtStoresPassed;
 		saved = s_storesSaved;
 		s_storesSeen = s_storesSaved = 0;
+		g_rtStoresPassed = 0;
 	}
 }
 
@@ -1964,12 +1968,17 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		g_rtStoreCensus = HalfTickStore;
 		g_rtJournalOn = true;
 		if (RollbackLevel() == 2)
+		{
 			JournalPages();
+			if (!Census())
+				g_rtStorePages = s_page.data();         // HalfTickStore does nothing with stores into other pages
+		}
 	}
 	orig_f_0274C264(ctx);
 	if (watch)
 	{
 		g_rtJournalOn = wwhd::rt::QuietWatching();   // a fast path's watch may still need it
+		g_rtStorePages = nullptr;
 		g_rtStoreCensus = nullptr;
 		RollbackRestore();
 		JournalPagesClear();

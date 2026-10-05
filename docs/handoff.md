@@ -1290,6 +1290,22 @@ it in a window; D21 "Step 2"):**
     Triangle, Eastern Fairy Island and Three-Eye Reef (not read). The wind's power (env +0xA18, which the
     grass sways by) is steady in these scenes (0.6). Weather's, so passed to session bottom; contact
     sheets of all of them on the progress page.
+  - **60 fps cost (session top; the work queue's "perf"; shared: sixty.cpp's journal, the runtime's
+    rt_journal_store)**: real time, headless, on the desktop (`~/wwhd-test`; its `perf-top.sh` runs routes
+    at 30 then 60 with `WWHD_FRAME_LOG` and each thread's CPU; `perf-ab.sh` alternates two builds at 60;
+    `perf/perfsum.py` and `absum.py` summarise, gameplay only). Other sessions' worker jobs share the
+    desktop, so CPU time per frame is the measure, not frame times. At 30 -> 60 the scheduler thread went
+    from 18-33% of a core to 41-73% (continue 26 -> 67%, sail 33 -> 73%), the GPU thread 8-18% -> 15-31%;
+    a half tick's frame cost ~45% more CPU than a whole tick's (sail: 14.3 against 9.6 ms) though it runs
+    less of the game, and 15-37% of frames at 60 missed their vsync on the heavier routes. A profile
+    (`WWHD_PROFILE`, then `tools/profile_report.py` on the worker with the deployed build's
+    `build/play/wwhd-null`, the profile's exe line rewritten to it) put the half tick's journal at 14% of
+    the main thread (HalfTickStore 10%, rt_journal_store 4%): about 1.2 million stores a half frame went
+    through two calls and a dozen checks, nearly all into pages it doesn't journal. Now the runtime skips
+    a store whose pages the journal hasn't marked before calling it (`g_rtStorePages`, set for the half
+    tick's frame at level 2, off while a held actor's draw runs and during a fast path's watch; the frame
+    log still counts them). Sail A/B: the scheduler 68-69% -> 61-63%, a half frame's CPU 13.6-13.8 ->
+    11.2-11.6 ms, late frames 16-20% -> 3-4%. Checks and regress the same (the journal's saves unchanged).
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next
