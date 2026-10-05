@@ -298,7 +298,7 @@
   "queue": [
     {
       "id": "drawposed",
-      "name": "Models posed in their draw (palms, grass tufts and 16 actor kinds) show the half frame's pose on whole frames: the HD renderer's matrix upload (top's, in progress)"
+      "name": "The plants (palms, grass tufts, flowers) swayed at 30 Hz: their sway read g_Counter.mTimer a tick ahead on half ticks (top's: drawlag in plants.txt; the palms' ground shadows still step, weather)"
     },
     {
       "id": "hz30-outdoors",

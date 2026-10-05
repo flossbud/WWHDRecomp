@@ -1242,41 +1242,40 @@ it in a window; D21 "Step 2"):**
     offset of a few swaps closes it: the ripple equals 30's on the whole tick's frame and the waves on the
     half tick's, half a count apart; not seen otherwise. Wind Temple's dust motes (env update, rolled back
     after a half tick) are session bottom's.
-  - **Open: a model posed in its draw shows its whole tick's pose on half frames (session top, 2026-10-05)**:
-    Bomb Island's palms (Obj_Lpalm 73, converted with Outset) sway at 30 Hz on screen (hz30.py: 195
-    blocks, the fronds changing on one parity only) though they step every frame: `WWHD_60FPS_WATCH` on one
-    (47c42b74 +0x3F4, +0x3D0) shows mAnimWave and mBaseQuat change on w and h frames alike. Their fronds
-    are posed in a node callback during the model's calc, which mDoExt_modelUpdateDL (their draw) runs;
-    the scan is the same with 73 left unconverted, and with its half-tick draw skipped
-    (`WWHD_60FPS_SKIPDRAW=481,73`) the palms still show on half frames. So on a half frame a draw-time
-    calc doesn't reach the screen: a guard on J3DModel::calc keyed to whole ticks, or the HD renderer
-    keeping the whole tick's joint matrices, is to find (no J3D symbols yet). NPCs, which calc their
-    models in their execute (mpMorf->calc), animate at 60. Found since: a half tick's frame is drawn afresh
-    (`WWHD_60FPS_SKIPDRAW=all` leaves it black but the HUD); the palm's node callback (f_0236C290, a
-    probe override) runs on whole and half draws alike (24 calls each), yet the fronds change only from a
-    whole tick's frame to the next half tick's (a shot shows the draw of the swap before it); viewCalc
-    (f_027F55FC) turns a model's draw-matrix buffer index (+0x6C, mod its model data's +0x6: 2) each
-    call, but holding it on half-tick draws changed nothing; nor did WWHD_60FPS_ROLLBACK=0. 16 of the
-    decomp's actors pose joints in a draw-time node callback this way (d_a_obj_lpalm, d_a_obj_plant,
-    d_a_obj_rflw, d_a_npc_bs1, d_a_npc_p1, d_a_npc_btsw2, d_a_obj_swpush, d_a_obj_swhammer,
-    d_a_obj_swlight, d_a_canon, d_a_daiocta_eye, d_a_obj_hami3, d_a_obj_jump, d_a_obj_mknjd,
-    d_a_obj_shmrgrd, d_a_tornado), and the grass tufts by Dragon Roost's beach rock and on Forest
-    Haven's ledges look the same (session bottom's scans). A second probe: the callback reads the palm
-    (model +0xB8) fresh on every draw (its wave phase is the step's, whole and half), each palm model is
-    calculated twice a frame (4 calls: 2 joints x 2 calcs; the buffer index ends each frame where it
-    began), and the callback sets bit 0x10 in the matrix buffer's flags (model +0x2C, +0x4): so a whole
-    tick's frame computes its own pose but shows the previous half frame's. Where the HD renderer takes
-    a model's joint matrices for the GPU is the next thing to find. Probes on viewCalc (f_027F55FC) and
-    the two shape draws that read the index (f_027F16E8, f_027F1FA8: model at +0x9C, the index handed to
-    f_027E13B4, which sets the uniform block to the buffer at base + stride x index): per frame one
-    viewCalc, then the draws with the index it left (whole frames 0, half frames 1, as at 30), so each
-    frame's draws take a freshly turned buffer; yet freezing a palm's index (restored after viewCalc) left
-    the scan as it was (195 blocks), so the fronds' pose doesn't reach the GPU through those buffers: the
-    fronds are likely skinned on the CPU into a vertex buffer, whose upload (Cemu's buffer cache, told of
-    changes only by dcbf/dcbst and GX2Invalidate's CPU flag: the recomp's DC*Range imports do nothing)
-    is the next place to look. Tried and no change: making DCFlushRange, DCFlushRangeNoSync and
-    DCStoreRangeNoSync notify the buffer cache (as Cemu's coreinit does) still leaves 195 blocks. Left
-    paused there (session top, 2026-10-05).
+  - **The plants' sway at 60 (session top; `tick_rules/plants.txt`; shared: generate.py's `drawlag`)**: Bomb
+    Island's palms swayed at 30 Hz on screen (hz30.py: 195 blocks, the fronds changing from a whole tick's
+    frame to the next half tick's only), and so did the grass tufts of Dragon Roost's beach and Forest
+    Haven's island (session bottom's scans). The swaying palms are the scene's small trees (GRASS's
+    dTree_packet_c), not Obj_Lpalm (73): with 73's shape draws hidden they still showed, and 73's own joints
+    (read back from its uniform slices) move evenly every frame at 60. Grass, trees and flowers sway by
+    g_Counter.mTimer (cos((mTimer + i x 250) x speed) per anm, in their calcs: grass f_0254C6C4, tree
+    f_025C9948, flower f_02548370), which cCt_execCounter adds 1 to a tick in the play scene's draw
+    (025B01B8 `whole`) after the plants' calc. At 60 that calc runs every frame (sixty.cpp's Plants), so a
+    half tick's read the next tick's count: the sway jumped at the whole -> half swap and held at the half
+    -> whole one (`WWHD_60FPS_PLANTS=0`, the calc on whole ticks only, moves the jump to the other swap).
+    `drawlag` on the count's float (0254C834, 025C99B8, 025C9A34, 025483D0): on a half tick it is half a
+    tick back, so whole ticks keep 30's sway and half ticks are between two. hz30 after: Bomb Island 195
+    -> 8, Dragon Roost's beach (`sea,0,13,-1`) 14 -> 0, Forest Haven's island (`sea,0,41,-1`) 0 (bottom's: 18);
+    bottom's dungeon spots: the Wind Temple's entrance 12 -> 1 (the HUD's), Forbidden Woods' entrance 75 -> 4
+    (a spiked pod hanging on a vine), Hyrule 73 -> 18 (a frond plant's leaves, the light spots on the floor):
+    those left change at the half -> whole swap, stepped on whole ticks (another cause). The
+    8 left are the palms' shadows on the ground: their edges step (about a pixel) at the half -> whole
+    swap. They are drawn in the ground's own pass (BG's room model), whose vertex constants change only
+    there: entry 18's w, -0.00037 a tick (the sun's angle from the day clock, which steps on whole ticks?);
+    entry 6, a position (the sun's?), changes at the whole -> half swap instead (both session bottom's
+    weather). Not fixed, the other readers of mTimer, which a half tick sees a tick ahead (a scan of .text:
+    the worker's scratch gcscan.py): the cloth packets' once-a-tick guard (`cloth_counter == mTimer`,
+    f_0251ECE8 to f_0251F8D8: flags step once a tick), Link's flash (abs(sin(mTimer x 0x800))), the Boko
+    stick's angle, the hookshot chain's roll (f_021768B0), the ship's random event (f_02475DA8), and
+    f_02190BFC (mTimer & 1), f_0241B32C, f_0241B578, f_02422950, f_02422BA8, f_0243A094, f_0247E0D0,
+    f_023D9820, f_02445A00, f_020C0EF8, f_020C1250. Tools that found it: hiding draws by object (a probe
+    override of the shape draws f_027F16E8 and f_027F1FA8: the model at +0x9C); `WWHD_60FPS_SKIPDRAW` by
+    halves to find a part of the picture's process; the vk renderer's `WWHD_RENDER_TRACE=frame:target:x,y`
+    (the draws that change a pixel; trace frame N is the draw at swap N, shot f(N+1)) and
+    `WWHD_RENDER_TRACE_VS=key` (that vertex shader's constants: only each read's first 256 bytes are
+    printed). The earlier leads (the draw-matrix buffers, DC flushes, the 16 decomp actors that pose joints
+    in a draw-time callback) were on the wrong object; those actors pose from their own state, which is
+    stepped when they are converted.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next
@@ -1727,7 +1726,7 @@ it in a window; D21 "Step 2"):**
     released) and the stars (their twinkle's phase split); the islands' shoreline foam (BG 439's special
     btk frame from the wave frame ENVSE counts, a u16: `lag:f0` at 0207A0A4). hz30 after them: Forest
     Haven inside 35 -> 1 block, Outset's sea 13 -> 0, Windfall's quay 100 -> 1; Dragon Roost's beach 14
-    and Forest Haven's island 18 left are grass tufts posed in their draw (session top's finding).
+    and Forest Haven's island 18 left were grass tufts (0 since the plants' sway at 60, session top's).
     Then rain (3 moves), snow (drift, fall, sway and phases: 7), the volcano's ash (snow's twin and its
     piles: 12) and the sky's clouds (KYEFF2 479 converted: its scroll and four bands' drift, 9). Tested
     with the counts poked (WWHD_DEBUG_POKE 0:0x104764A8 rain, 0x104764B4 snow, every 10 ticks: the env
@@ -1742,7 +1741,7 @@ it in a window; D21 "Step 2"):**
     dungeon's entrance; Dragon Roost rooms 3 and 12, the Earth Temple's room 8, the Wind Temple's room 2,
     Hyrule, Ganon's Tower's two halls) and the 8 boss rooms with WWHD_DEBUG_BOSS=1: 0 or 1 block (the
     HUD's) in 16. Forbidden Woods' entrance (75), Hyrule (73) and the Wind Temple's entrance (12): grass
-    tufts only (d_a_obj_plant: top's draw-posed item); Jalhalla's room and Ganondorf's 4 (not read).
+    tufts only (GRASS's: 4, 18 and 1 since the plants' sway at 60, top's); Jalhalla's room and Ganondorf's 4 (not read).
     Gohdan's room 577: its hands' hover bob. bst's execute moves the model by sines of its tick count
     (+0x1308, kept to whole ticks) times (REG0_S(6) + 700) and so on: a `mullw` (the multiplier a debug
     register plus a constant), which `lagi` (mulli) didn't take. New step rule `lagw:rM` (generate.py):

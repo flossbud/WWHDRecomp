@@ -39,3 +39,15 @@
 025C6E00    *h@f0       fadds           tree animation (shaken): mAnimTimer += -field_0x08
 025C6E08    d@f9        fmuls           tree animation (shaken): mAnimTimer *= 0.9
 025C6E1C    split@r0    add             tree animation (shaken): field_0x08 += (s16)mAnimTimer
+#
+# ---- the plants' sway (session top, the drawposed item): grass tufts, small trees (the islands' palms are these,
+# not Obj_Lpalm) and flowers sway by g_Counter.mTimer (cos((mTimer + i x 250) x speed) per anm). cCt_execCounter
+# adds 1 to it a tick in the play scene's draw (025B01B8 `whole`) after the plants' calc, which at 60 runs every
+# frame (sixty.cpp's Plants): a half tick's calc read the next tick's count, so the sway jumped at the whole ->
+# half swap and held at the half -> whole one (30 Hz in hz30's scan of Bomb Island and Dragon Roost's beach; the
+# calc on whole ticks only, WWHD_60FPS_PLANTS=0, moves the jump to the other swap). On a half tick the count's
+# float is now half a tick back: 30's at whole ticks, between two of them on half ticks.
+0254C834    drawlag:f0  frsp            grass calc (f_0254C6C4): (float)(mTimer + i x 250), the anm's sway angle
+025C99B8    drawlag:f9  frsp            tree calc (f_025C9948): (float)(mTimer + i x 250), x 4000 for the anm's +0x06
+025C9A34    drawlag:f11 frsp            tree calc: (float)(mTimer + i x 250), x 1000 for the anm's +0x04
+025483D0    drawlag:f13 frsp            flower calc (f_02548370): (float)(mTimer + i x 250), x 1000 for the anm's +0x04

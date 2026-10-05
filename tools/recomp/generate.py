@@ -93,7 +93,9 @@ rules, for the code of processes that run every frame with a time step h
                REG - 1/2
   drawlag:fREG a draw's count kept to whole ticks (a `whole` store), made a float: in a half tick's draw
                (step 1, so not the step rules above) the float REG is REG - 1/2, so the half tick's frame
-               draws half a count on from the whole tick's, not a whole one (the sea's ripple scroll)
+               draws half a count on from the whole tick's, not a whole one (the sea's ripple scroll); the
+               same on any half tick, stepped or not (the plants' calc reading g_Counter.mTimer, which the
+               whole tick's draw already moved on)
   OP@REG       the same, for this instruction only: REG has its value back afterwards (unless the
                instruction writes it), as in `x += (t - x) * k` with k@f2 on its fmadds
   note:REG     after the instruction, the float REG is noted (g_rtNote) for an arc@ later in the step
