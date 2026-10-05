@@ -1835,6 +1835,13 @@ it in a window; D21 "Step 2"):**
     session bottom's (done there), the sea's creatures top's. Not looked at: Poes, Wizzrobes, ChuChus (no
     countdown left), Armos, Miniblins, Mothulas, the bosses, NPCs, pots (5), the boat (5): run the audit
     with -v and read each.
+  - **B16's hunt, automated (nothing found)**: Windfall's spawn points (sea room 11's PLYR ids: 0 and 16
+    the dock, 20 the town centre without a door, 1-13 and 15 the buildings' doors; `920:sea,20,11,-1`
+    stands Link among the Killer Bees). 1200 consecutive captures (every second swap for 40 s, the camera
+    turning in steps) scanned by a scratch script: a frame scores min(change from the frame k before,
+    change to the frame k after) - change between those two, for k = 1, 4, 12 captures; a glitch that
+    appears and vanishes scores high, steady motion near 0. Top score 0.036 (people walking): no streaks
+    there. The dock-to-quay walk (route `wfw`) drops Link into the water at 60 now: use spawn 20.
   - **For the owner's recordings**: `~/wwhd-play/play-60-rec.sh` (desktop only, made by qa) is play-60.sh
     with the flight recorder on (Link, the camera, arrows, ships); F9 writes the last 20 s to
     `~/wwhd-play/flight/`. B8, B10 and B16 wait for one.
