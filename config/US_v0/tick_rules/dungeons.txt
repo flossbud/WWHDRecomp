@@ -1,0 +1,58 @@
+# Step and tick rules for the dungeons' leftovers (the work queue's "dungeons"; session bottom). Format:
+# ../tick_rules.txt and tools/recomp/generate.py. Most of these move only in a switch's event (an "other
+# event" whose Link waits: action 4, stepping in events) or when Link acts on them; on the 100% save they
+# stand still, so beside the idle check (types_test.sh: all 100%) each was read in the decomp and
+# checked with its state poked (WWHD_DEBUG_POKE).
+#
+# ---- the Wind Temple (stage kaze) ----
+# Obj_Hami2 (47; d_a_obj_hami2.cpp, stubs in the decomp: f_0234E740 open_demo, f_0234E88C close_demo):
+# a grate turning a quarter turn (+0x3E0) 0x100 a tick in its switch's event, the event's end at 0x4000
+0234E750    spliti      addi            hami2 open_demo: its turn (+0x3E0) + 0x100 a tick, to 0x4000
+0234E8A8    spliti      addi            hami2 close_demo: its turn - 0x100 a tick, to 0
+# Obj_Hami3 (48; d_a_obj_hami3.cpp): the same turn (field_0x2C8, +0x3E0)
+0234F334    spliti      addi            hami3 open_demo: its turn (+0x3E0) + 0x100 a tick, to 0x4000
+0234F4D0    spliti      addi            hami3 close_demo: its turn - 0x100 a tick, to 0
+# Obj_Hami4 (49; d_a_obj_hami4.cpp): a grate sliding (field_0x37C, +0x498) 10 a tick to 1500
+023501F0    *h@f13      fadds           hami4 open_demo: its slide (+0x498) + 10 a tick, to 1500
+# Obj_Hbrf1 (50; d_a_obj_hbrf1.cpp): a lift rising or sinking mYOffset (+0x3E0) a tick to 750 after a
+# 30-tick wait (mTimer, +0x3F8: - 1, then tested at 0: late, so both steps of a tick see its count)
+02351494    *h@f0       fadds           hbrf1 up_demo: y + mYOffset a tick, to home + 750
+023517B8    *h@f0       fsubs           hbrf1 down_demo: y - mYOffset a tick, to home
+02351458    late        stw             hbrf1 up_demo_timer: the wait (+0x3F8) - 1, the rise at 0
+02351784    late        stw             hbrf1 down_demo_timer: the wait - 1, the fall at 0
+# Obj_Vmc (52; d_a_obj_vmc.cpp; f_023B2C24 tree_demo_main): the soil Makar plants a seed in; the tree's
+# growth plays an animation (stepped), its count mTimer (+0x6D0) + 1 a tick cues two sounds (at 10 and
+# 40): the count late (both steps see the tick's), the sounds whole (once a tick: not twice at 10)
+023B2C4C    late        stw             vmc tree_demo_main: mTimer (+0x6D0) + 1
+023B2C74    whole       bl 025e1a40     vmc tree_demo_main: the seed's sprouting sound at mTimer 10
+023B2CA4    whole       bl 025e1a40     vmc tree_demo_main: the tree's growing sound at mTimer 40
+# Obj_Homen (129; d_a_obj_homen.cpp): the stone masks the hookshot pulls down; the fall goes through
+# fopAcM_calcSpeed/posMove and cLib_addCalc2/AngleS2 (stepped). Its countdowns test 0 after the - 1 and
+# then act (an item, the next state): keep on the - 1 (a half step leaves the count), so the act comes
+# once, on 30's tick; the wait before the fall counts 3 ticks, tested before its + 1: late
+02358BE8    keep:r12    addi            homen: the item's timer (+0x908) - 1, the item at 0
+0235977C    keep:r12    addi            homen process_wait_main: its wait (+0x8F6) - 1, the next state at 0
+023593B8    late        sth             homen process_wait_falldown_main: its count (+0x8F2) + 1, to 3
+# Obj_Hfuck1 (148; the hookshot's hooks) and TOGE (122; the spikes: cLib_calcTimer<u8> and cLib_addCalc,
+# both stepped helpers) need no rules
+# Obj_Jump (166, "Hjump"; d_a_obj_jump.cpp): the iron-boots spring pad. Its spring (calc_vib_pos f_02366668:
+# v -= (p - target) k, v -= v d, p += v; +0x404, +0x400) steps its velocity once a tick (keep on both
+# fnmsubs) and its position by h of it a step: exact at 30's ticks. Its kicks to the velocity (a stomp's,
+# a roll's) once a tick too (keep), with their cooldown (+0x416, - 1 a tick, keep). The ride counts
+# (set_push_flag f_0236642C: + 1 a tick while ridden or not, to 0xFF; a pulse when one reaches its
+# attr) late: both steps see the tick's count and the pulse's kick comes once (the cooldown it sets
+# stops the half step's). The launch's wait (mode_upper, +0x3F8) - 1, then tested: keep
+02366690    keep:f11    fnmsubs         jump calc_vib_pos: v -= (p - target) k
+0236669C    keep:f11    fnmsubs         jump calc_vib_pos: v -= v d
+023666A0    *h@f11      fadds           jump calc_vib_pos: p += v
+02366780    keep:f13    fadds           jump Execute: v += the roll's kick (a fast walk over it)
+02366908    keep:f13    fadds           jump mode_wait: v += a ride's kick
+02366A48    keep:f0     fadds           jump mode_lower: v += a ride's kick
+02366938    keep:r10    addi            jump mode_wait: the kicks' cooldown (+0x416) - 1
+02366A74    keep:r11    addi            jump mode_lower: the kicks' cooldown - 1
+02366B80    keep:r12    addi            jump mode_upper: the launch's wait (+0x3F8) - 1
+0236647C    late        stb             jump set_push_flag: ridden count (+0x40B) + 1
+023664F4    late        stb             jump set_push_flag: not-ridden count (+0x40C) + 1
+0236654C    late        stb             jump set_push_flag: hanging count (+0x40F) + 1
+023665AC    late        stb             jump set_push_flag: iron boots count (+0x413) + 1
+0236662C    late        stb             jump set_push_flag: no iron boots count (+0x414) + 1

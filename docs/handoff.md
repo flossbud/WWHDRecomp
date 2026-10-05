@@ -1626,6 +1626,19 @@ it in a window; D21 "Step 2"):**
     cutscene is JStudio (the boss refights' intros are event cameras, not JStudio). Open: other JStudio
     cutscenes (the 100% save replays few); an unconverted cast member reads the half way values at its
     whole step and keeps them (half a tick behind at whole ticks).
+  - **Dungeons (the work queue's "dungeons", from session top's census): the Wind Temple
+    (`tick_rules/dungeons.txt`)**: converted Obj_Hami2/3/4 (47-49, grates turning or sliding in their
+    switch's event), Obj_Hbrf1 (50, a lift), Obj_Vmc (52, the soil Makar's seeds grow in), TOGE (122,
+    spikes), Obj_Homen (129, the masks the hookshot pulls down), Obj_Hfuck1 (148, hooks) and Obj_Jump
+    (166, Hjump: the iron-boots spring pad, not in the census but moving: a damped spring and five
+    ride counts with one-shot kicks). Idle on the 100% save (types_test.sh kaze,2,2 and kaze,9,9) all
+    match 30 at every tick but the pads (float rounding in a decaying spring; a culled pad's count one
+    behind: late stores of a process that stops executing after a whole step are dropped, not made).
+    Their motions poked from the open states the save leaves (WWHD_DEBUG_POKE at f1100, scratch
+    poketrial.sh): the grates' close and Hami4's slide exact at half frames, the spring pad's
+    oscillation within 2e-7; the lift (from point 20, near it) 10 a tick in half steps, its states a
+    half tick early each (a state set on a whole step, the next state's first step on its half step),
+    a tick by the end. Not tested (need Makar or a hookshot pull): Vmc's growth, Homen's fall.
   - **Houses' doors open at 60 (`tick_rules/doors.txt`, sixty.cpp)**: KNOB00 (305) converted and Link's
     door-open action 0xC1 (dProcDoorOpen) steps in events. The door's animation and Link's go through
     stepped helpers; one hand-made step, the exit's pull to the door's front (adjustmentProc f_021A3E90:
