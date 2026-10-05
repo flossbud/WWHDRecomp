@@ -2409,7 +2409,13 @@ it in a window; D21 "Step 2"):**
     (6412) and falls out of the world, converted or not, and also with `WWHD_60FPS_ATTACHED=0`; with Link
     left at 30 (the default list minus 168) she meets the wall as at 30. So Link's half steps
     (setGrabItemPos: her position = his hands' midpoint, each step; procGrabThrow's release) carry her
-    past the wall, where at 30 her own wall check (once a tick) holds her. Not converted yet (256 functions; actor_rmw lists 162
+    past the wall: the half step after the last whole one put her half a tick further through the
+    throw's swing, and the throw let go of her there, where 30 lets go at the last tick's place. **Fixed**:
+    after Link's whole step, the grabbed actor (keep +0x65A0) and its place are noted, and a whole step
+    whose throw (action 0x71) let go of it puts it back there, current and old position (sixty.cpp
+    ThrowPlace; `WWHD_60FPS_THROWPOS=0` turns it off). Route medli: her path is 30's tick for tick
+    (the wall at 6380, down at 6190); predeploy's 24 routes unchanged. It covers pots, bombs and rocks
+    thrown from his hands too. Medli is not converted yet (256 functions; actor_rmw lists 162
     stores). Makar (NPC_CB1 334) is created by checkGetItem(MASTER_SWORD_3) instead: the same aid would
     need that check for his code.
 

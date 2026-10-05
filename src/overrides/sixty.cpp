@@ -1121,6 +1121,37 @@ namespace
 	// journaled and put back after the frame. Before its draw rather than after Link's step: Link's
 	// draw (a converted process's, standing) reads what he holds and would keep what it saw (the bow's
 	// charge, Link +0x46B0, gained a tick).
+	// What Link lets go of in a throw (B29). While he carries something, his steps set its position to his
+	// hands' (setGrabItemPos), so his half step puts it where his hands are half a tick on; at 30 a throw
+	// (procGrabThrow, his action 0x71) lets go of it where the last tick put it. Thrown from a half step's
+	// place, a carried Medli started past the wall she meets at 30 and fell out of the world. So after
+	// each whole step the grabbed actor (keep +0x65A0) and its place are noted, and a whole step whose
+	// throw let go of it puts it back there (current and old position), as at 30. WWHD_60FPS_THROWPOS=0
+	// turns it off.
+	uint32 s_grabbed = 0, s_grabbedId = 0;
+	float s_grabbedPos[3];
+
+	void ThrowPlace(uint32 link)
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_THROWPOS"); return !(e && atoi(e) == 0); }();
+		const uint32 id = rd32(link + 0x65A0), actor = rd32(link + 0x65A4);
+		const bool holding = id != ~0u && actor >= 0x10000000u && actor < 0x50000000u && rd32(actor + 4) == id;
+		if (on && s_grabbed && (!holding || actor != s_grabbed) && rd32(link + 0x65F0) == 0x71 &&
+			rd32(s_grabbed + 4) == s_grabbedId)
+		{
+			for (int i = 0; i < 3; i++)
+			{
+				wr32(s_grabbed + 0x314 + 4 * i, std::bit_cast<uint32>(s_grabbedPos[i]));
+				wr32(s_grabbed + 0x300 + 4 * i, std::bit_cast<uint32>(s_grabbedPos[i]));
+			}
+		}
+		s_grabbed = holding ? actor : 0;
+		s_grabbedId = holding ? id : 0;
+		if (holding)
+			for (int i = 0; i < 3; i++)
+				s_grabbedPos[i] = std::bit_cast<float>(rd32(actor + 0x314 + 4 * i));
+	}
+
 	std::vector<uint32> s_held;                     // the actors Link holds, this half tick
 
 	void NoteHeld(uint32 link)
@@ -2223,6 +2254,8 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	static const bool attached = [] { const char* e = getenv("WWHD_60FPS_ATTACHED"); return !(e && atoi(e) == 0); }();
 	if (g_rtHalfTick && attached && rd16(proc + 0x08) == 168 && Rollback())
 		NoteHeld(proc);
+	if (link && !g_rtHalfTick)
+		ThrowPlace(proc);
 }
 
 // dEvent_manager_c::getIsAddvance (f_025447C8: the staff's mAdvance, set while its cut is in its first
