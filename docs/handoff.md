@@ -1050,8 +1050,11 @@ it in a window; D21 "Step 2"):**
     phases `spliti`, a damped spring, a height history `whole`; paths within ~10% of 30's, 2.4x before),
     the submarines' rat holes (199: countdowns `keep`), and with no rules, trials clean: Jabun's cave's
     water (143), Orca's house's plants and papers (274, 262), Sturgeon (NPC_AJ1 332), the Savage
-    Labyrinth's traps (287), Obj_Akabe (87), Ice Ring Isle's ice (460), tables (64). Not converted: Orca
-    (NPC_JI1 318: a hand-inlined look-at with clamped steps, +0xDD6 at 4x: to analyse), a Korok in Ocrogh
+    Labyrinth's traps (287), Obj_Akabe (87), Ice Ring Isle's ice (460), tables (64). Orca (NPC_JI1 318, converted
+    later: islands.txt): his wobble's phase (its step made from how far a vector moved: /h on the length,
+    then split) and a count stepped while a countdown is out (on a half step the helper still says "out":
+    `whole:r3=1` on the call); his look-at needs nothing (it adds only its steps' own changes); the phase
+    keeps 30's rate. Not converted: a Korok in Ocrogh
     (NPC_BJ7 342: an old heading copied each step, its use unknown; the Korok decomp is stubs), Tingle's
     tower's Tpota (394: trial clean but different everywhere, unexplained). Not present on the 100% save:
     Forest Haven's Koroks (NPC_BJ1-9) and Makar (NPC_CB1), Jabun (NPC_JB1 358); Cave08's propellers,
@@ -1275,7 +1278,12 @@ it in a window; D21 "Step 2"):**
     rules, 1455 against 1455 units), 252 (a wave from its tick count), Armos and Armos Knights (AM
     202, AM2 203, named by their code's place: within 0-4% of 30's distances), Molgera (BWD 217, BWDG
     219: tick counts, timers, a wobble's phase; her pace matches, the fight then diverges with
-    Link's hits). Floormasters (FM 119: rules here, converted with the Earth Temple: one matches 30
+    Link's hits). Her larvae (BWDS 218, session top, wind.txt: made only when her tongue is hit; spawned on
+    the empty arena with `kazeB,1,0,-1` and `WWHD_DEBUG_SPAWN=1000:218,23,0,299,200`): pos += speed by hand
+    in seven places (`vec@`), two hand-made falls, a spin, countdowns, and a 14-segment body placed in one
+    pass from the head (its drag `*h`, its carried velocity's 0.85 `d@`): converted it went 10951 units
+    against 6617, now 5898 (its random waits and turns part from 30's), the body keeping 30's shape while
+    the heads coincide. Floormasters (FM 119: rules here, converted with the Earth Temple: one matches 30
     exactly, the other drifts with a random speed it draws, cM_rndF(9) + 1; tick_rules.txt's "fm"
     rules are process 204's, not FM's). Not converted: Makar (NPC_CB1 334: moves twice as far
     converted), springboards (166: tiny), the propeller switch (430).

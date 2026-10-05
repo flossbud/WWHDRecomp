@@ -23,6 +23,19 @@
 # tick until the lava under it differs (it aims at the lava's height, from the scene's dMagma_packet, whose
 # bubbles respawn at random places: the random stream at 60), then it bobs out of phase.
 #
+# ---- Orca (NPC_JI1 318, d_a_npc_ji1.cpp; Ojhous room 0, Link's spawn facing him; f_0224B268 is his look-at and
+# wobble, f_0224AEF0 his model's calc). A wobble phase (+0xDF8) += a step made each tick from how far a vector
+# it keeps (+0xDEC) moved since the last (PSVECMag: per step at 60, so /h, a tick's), then split. A countdown
+# (+0x55A, the shared s16 helper) that, once out, has a count (+0x558) + 1 a tick until it reaches a length,
+# then - that length and a new wait, 30 + a random: on a half step the helper still says "out", so the call is
+# skipped there (r3 = 1: not out) and the count, the wait and the random number go on whole ticks. The look-at
+# (+0xDD2, +0xDD4: cLib_addCalcAngleS2, then + twice its last step's change x a factor (+0xDDE, +0xDE0) and half
+# its targets' change (+0xDCE, +0xDD0); +0xDD6, +0xDD8 take the changes back and ease to 0) adds only steps'
+# own changes: no rules.
+0224C23C    /h:f1       bl 028f4384     ji1: the vector's move (PSVECMag) made a tick's
+0224C290    split@r9    add             ji1: the wobble's phase (+0xDF8) += its step a tick
+0224B2E8    whole:r3=1  bl 02055b64     ji1: the countdown (+0x55A) whose end steps a count (+0x558) and draws a wait
+#
 # ---- no rules, equal to 30's (trials clean): Jabun's cave's water (Obj_AjavW 143, Pjavdou), Orca's and
 # Sturgeon's house's plants and papers (Obj_Plant 274, 262, Ojhous room 1), Sturgeon (NPC_AJ1 332: only a
 # value set from the random stream at its creation differs), the Savage Labyrinth's traps (Obj_TnTrap 287,

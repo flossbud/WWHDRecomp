@@ -52,6 +52,38 @@
 0210378C    whole       sth             bwd: a tick count (+0x3E98) + 1
 0210377C    keep:r12    addi            bwd: a tick count (+0x3E9A) + 1 (keep: compared at once)
 #
+# ---- BWDS (218, d_a_bwds.cpp: Molgera's larvae, made when her tongue is hit; execute f_0210602C with pos_move,
+# ug_move and body_control inlined; session top). Spawned on the empty arena's sand (kazeB,1,0,-1 without
+# WWHD_DEBUG_BOSS, WWHD_DEBUG_SPAWN=1000:218,23,0,299,200: Molgera's own params): at 60 it went 10951 units
+# against 6617. Its moves: pos += speed (PSVECAdd, seven places: six of its states and a knockback along
+# +0x440), speed.y's falls, its spin, the tick count its body's scale wobble reads, and its countdowns.
+# Its falls are hand-made (speed.y -= g, then the shared pos += speed): their arcs part from 30's as the known
+# hand-made gravity's do (arc@ would need a note on every path into that add).
+02106A0C    vec@r4      bl 028e8d88     bwds: pos += speed
+02106D18    vec@r4      bl 028e8d88     bwds: pos += speed
+02106F84    vec@r4      bl 028e8d88     bwds: pos += speed
+02107028    vec@r4      bl 028e8d88     bwds: pos += speed
+02107248    vec@r4      bl 028e8d88     bwds: pos += speed
+021072E8    vec@r4      bl 028e8d88     bwds: pos += speed
+02107658    vec@r4      bl 028e8d88     bwds: pos += a knockback (+0x43C along +0x440)
+021066CC    *h@f12      fsubs           bwds: speed.y -= its fall a tick (2.7, jumping out of the sand)
+021068F4    *h@f7       fsubs           bwds: speed.y -= its fall a tick (3.0, hopping about)
+02106144    whole       sthx            bwds: its timers m0314[5] (+0x430) count down
+02106164    whole       sth             bwds: its hit's cooldown m031E (+0x43A) - 1
+02106174    whole       sth             bwds: its hit's shake m0328 (+0x442: x 500) - 1
+02106A4C    split@r7    add             bwds: shape_angle.z += its spin (+0x618) a tick
+02106130    whole       sth             bwds: its tick count m02F4 (+0x410) + 1 (the body's scale wobble)
+# Its body (body_control, inlined): 14 segments placed in one pass from the head, each 70 units on from the
+# last toward where it was + its velocity (0.85 of its last move, when +0x60D is 1) + a drag along the head's
+# axis: a pass a step, so the drag x h and the velocity's 0.85 as 0.85^h (the moves themselves already
+# halve), and the body keeps 30's shape at half the step.
+02107DC8    *h@f8       fmadds          bwds body: y + the drag's y x the segment's weight
+02107E4C    *h@f13      fmadds          bwds body: x + the drag's x x the weight
+02107E50    *h@f0       fmadds          bwds body: z + the drag's z x the weight
+02107F2C    d@f23       fmuls           bwds body: velocity x = 0.85 (its last move)
+02107F40    d@f23       fmuls           bwds body: velocity y
+02107F54    d@f23       fmuls           bwds body: velocity z
+#
 # ---- BWDG (219, d_a_bwdg.cpp: Molgera's sand; f_021043EC)
 02104444    whole       sth             bwdg: its tick count (+0x3D4) + 1
 #
