@@ -1235,7 +1235,12 @@ it in a window; D21 "Step 2"):**
     d_a_obj_rflw, d_a_npc_bs1, d_a_npc_p1, d_a_npc_btsw2, d_a_obj_swpush, d_a_obj_swhammer,
     d_a_obj_swlight, d_a_canon, d_a_daiocta_eye, d_a_obj_hami3, d_a_obj_jump, d_a_obj_mknjd,
     d_a_obj_shmrgrd, d_a_tornado), and the grass tufts by Dragon Roost's beach rock and on Forest
-    Haven's ledges look the same (session bottom's scans).
+    Haven's ledges look the same (session bottom's scans). A second probe: the callback reads the palm
+    (model +0xB8) fresh on every draw (its wave phase is the step's, whole and half), each palm model is
+    calculated twice a frame (4 calls: 2 joints x 2 calcs; the buffer index ends each frame where it
+    began), and the callback sets bit 0x10 in the matrix buffer's flags (model +0x2C, +0x4): so a whole
+    tick's frame computes its own pose but shows the previous half frame's. Where the HD renderer takes
+    a model's joint matrices for the GPU is the next thing to find.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next
