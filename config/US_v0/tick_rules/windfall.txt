@@ -141,3 +141,9 @@
 022CEDA8    whole:r3=1  bl 02055b64     photo blink: its countdown (+0xB28)
 0223F008    whole:r3=1  bl 02055b64     ho blink: its countdown (+0x436)
 0223E5A8    late        stb             ho: a count (+0x7F7) + 1 a tick up to 255
+# KF1's trial was clean but two of its functions never ran there (found by a static check of the countdown
+# helpers' callers): a blink as KK1's, and f_022600FC, three s16 countdowns over its look (+0xB88, +0xB98,
+# +0xB9A) armed by pad 0's button (f_02007898), with +0xBA2 a countdown in one branch and a count up to
+# its data's +0x44 in the other: by its look the auction's bidding, at night.
+02261B20    keep:r12    addi            kf1 blink (f_02261AD0): its frame (+0x864) + 1, then >= the length
+022601CC    keep:r12    addi            kf1 (f_022600FC): a count (+0xBA2) + 1, held at its data's +0x44

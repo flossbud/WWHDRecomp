@@ -1152,7 +1152,17 @@ it in a window; D21 "Step 2"):**
     count a byte to 255 (late) or a countdown tested at once (keep). Tested by area_test.sh in their rooms
     (`STAGE,point,room,-1`, walk), trials clean after. Not running on this save by day, so left: the auction's
     bidders (AUCTION 361, 382), Carlov's MT/MN 379/380, CO1 370, HI1 377, Outset's YM1 315, LS1 321, P2 323,
-    BTSW2 350. Medli and Makar are session bottom's.
+    BTSW2 350. Medli and Makar: session bottom left both unconverted (on this save they only stand in their
+    boss rooms; their companion behaviour needs a save from mid-game). The trials only see the blinks their
+    walk reaches, and many NPCs blink in a mode it never starts (talking, an event): `tools/sixty/blink_audit.py`
+    (on the worker) lists each converted process's helper calls whose 0 steps a field + 1 with no rule; it found
+    Outset's YW1 317, Sturgeon AJ1 332, AC1 376, KF1 359 (a blink, and a count up in what looks like the
+    auction's bidding) and Zelda PZ 210 (modes 0/7 count down, 3/4/8+ step the frame with no countdown), now
+    `keep` on the frame's add. What it still lists is no blink: NPC_SO 118's state number (+0xCEC, + 1 once
+    a countdown is out: phases 1 and 5 go on to 2 and 6, at most half a tick early), process 198's random
+    wait (rand & 1 + 1) and Gyorg's +0xA44 (behind its tuning data's +0x99, set at run time). With -a, the
+    unconverted NPCs above blink the same way (LS1, PF1 356, CO1, HI1, MT, MN): give them the rule when
+    converting.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next

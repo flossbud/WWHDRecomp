@@ -91,6 +91,15 @@
 022E76C8    late        stb             tc: a count (+0x8F0) + 1 a tick up to 255
 02268A9C    whole:r3=1  bl 02055b64     kg2 blink: its countdown (+0x8DA)
 021E6528    whole:r3=1  bl 02055b64     ah blink: its countdown (+0x8AE)
+# The same blinks in NPCs whose trials never reached them (a mode switch, by its look talking or an event;
+# found by a static check: the countdown helpers' callers that step a field + 1 while the helper says 0,
+# with no rule; the frame's add kept, as Outset's): Sturgeon (NPC_AJ1 332), AC1 376 and Princess Zelda (PZ
+# 210, Ganondorf's fight's companion, converted with this file's Orca; her trial over the fight shows no
+# blink: modes 0 and 7 count the int helper down, 3, 4 and 8 on step the frame with none).
+021E7C94    keep:r31    addi            aj1 blink (f_021E7C5C): its frame (+0x860) + 1, then >= the length
+021E3268    keep:r31    addi            ac1 blink (f_021E3230): its frame (+0x868) + 1, then >= the length
+02453E68    keep:r11    addi            pz blink (f_02453E00): its frame (+0x1197) + 1 once the countdown +0x7F0 is out
+02453F18    keep:r11    addi            pz blink: its frame + 1 in the modes with no countdown
 # Beedle's shop inside (Obshop,0,1,-1: NPC_BS1 345) blinks the same way. NPC_DS1 351 (Pdrgsh): a count each step
 # with a sound each step, and another sound at 50: once a tick, sounds and count. Not running on this save by
 # day: Carlov's NPC_MT 379 and NPC_MN 380 (Pfigure), NPC_CO1 370 (Comori), NPC_HI1 377 (kenroom), Outset's

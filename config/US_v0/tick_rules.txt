@@ -991,6 +991,10 @@
 #
 # ---- step rules: Outset's NPC_YM2 (process 316; f_022F7918).
 022F7950    keep:r31    addi            ym2: a frame counter (+0x868) + 1, then >= the length restarts it (keep: rule_audit.py)
+#
+# ---- step rules: Outset's NPC_YW1 (process 317; f_022FC138): the blink as NPC_YM2's, in a mode the trials
+# never reached (found by a static check for the countdown helpers' callers stepping a frame at 0; session top).
+022FC170    keep:r31    addi            yw1: the blink's frame (+0x868) + 1, then >= the length restarts it
 
 #
 # ---- step rules: a circling point (f_02587128: its angle +0x20 += its speed +0x22, then the point is the
