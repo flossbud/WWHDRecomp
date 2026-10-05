@@ -1430,6 +1430,15 @@ it in a window; D21 "Step 2"):**
     frame (wwhd::debug::RequestSpawn; WWHD_DEBUG_SPAWN's creation): the scratch route's DOWN three times
     and A, A spawns a Bokoblin there. The Bosses page also has Ganon's Tower's four refight rooms (Xboss0-3:
     Gohma with Valoo's tail, Kalle Demos, Jalhalla, Molgera; each boss present after the warp).
+    **Boss rush** (the owner's idea; top page, "Boss rush (all, in order)"): the Bosses page's list in order
+    with refights on. When the boss being fought is beaten (the game sets its dungeon's "boss beaten" bit:
+    dSv_memBit_c::onDungeonItem(3), f_025B9098, onStageBossEnemy in the decomp) the next stage change the
+    game asks for (the warp out) is turned to the next boss: its destination rewritten, its wipe kept
+    (sixty.cpp's DebugStage); after the last, the game's own. A game over's restart isn't turned (the boss
+    wasn't beaten): the same boss again. Another warp from the menu ends it. Checked with a test aid,
+    WWHD_DEBUG_RUSHBEATEN=tick (the boss beaten at that frame), and a stage change after it: Gohma's room
+    (the menu), then the "beaten" boss's exit to Outset went to Kalle Demos's room, Kalle Demos there. Not yet
+    seen: a boss actually beaten setting the bit (the decomp's onStageBossEnemy; the owner's play will).
   - **Counts a call without a rule, in session bottom's types (shared enemy code too; regress.sh rerun)**:
     session qa's `tools/sixty/counter_audit.py` lists every field loaded, +-1 and stored back with no
     rule. For my processes (and the enemies item) each site was classified from its code (a scratch

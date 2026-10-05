@@ -1,6 +1,6 @@
 // The debug menu (the owner's idea: the test aids from a controller): a panel over the game that
-// warps to islands, dungeons and boss rooms (the bosses' refights on) and spawns enemies ahead of
-// Link. Clicking both sticks at once opens and closes it; while it is open the D-pad (or the left
+// warps to islands, dungeons and boss rooms (the bosses' refights on), runs a boss rush and spawns
+// enemies ahead of Link. Clicking both sticks at once opens and closes it; while it is open the D-pad (or the left
 // stick) moves, A chooses, B goes back, and the game sees no input. debug_menu.cpp; the overlay
 // (src/frontend/overlay.cpp) draws it.
 #pragma once
@@ -34,4 +34,8 @@ namespace wwhd::debug
 	void RequestSpawn(int process, uint32 param, uint32 anglex);
 	void SetBossRefight(bool on);
 	bool BossRefight();
+	// the boss rush: the game set a boss's "beaten" bit (its dungeon item 3, f_025B9098)
+	void RushBossBeaten();
+	// in a rush whose boss is beaten, the next boss for the game's next stage change (and on to it)
+	bool RushNextStage(const char*& name, int& point, int& room, int& layer);
 }

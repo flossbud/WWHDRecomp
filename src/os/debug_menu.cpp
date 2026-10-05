@@ -74,10 +74,33 @@ namespace
 	int s_cursor = 0;
 	uint32 s_version = 1, s_prev = 0;
 
+	// the boss rush (the owner's idea: the bosses again from a finished save, one after another): kBosses
+	// in order, refights on; when the boss being fought is beaten (the game sets its dungeon's "boss beaten"
+	// bit, wwhd::debug::RushBossBeaten) the game's next stage change (its warp out) goes to the next one
+	std::mutex s_rushLock;
+	int s_rush = -1;                                   // the boss being fought, or -1
+	bool s_rushBeaten = false;
+	void StartRush()
+	{
+		{
+			std::lock_guard lock(s_rushLock);
+			s_rush = 0;
+			s_rushBeaten = false;
+		}
+		wwhd::debug::SetBossRefight(true);
+		const Dest& d = kBosses[0];
+		wwhd::debug::RequestStage(d.stage, d.point, d.room, d.layer);
+	}
+	void StopRush()
+	{
+		std::lock_guard lock(s_rushLock);
+		s_rush = -1;
+	}
+
 	std::vector<std::string> Items()
 	{
 		if (s_page == kTop)
-			return { "Islands", "Dungeons", "Bosses (refights on)", "Spawn an enemy",
+			return { "Islands", "Dungeons", "Bosses (refights on)", "Boss rush (all, in order)", "Spawn an enemy",
 				std::string("Boss refights: ") + (wwhd::debug::BossRefight() ? "ON" : "OFF"), "Close" };
 		std::vector<std::string> items;
 		if (s_page == kFoePage)
@@ -92,6 +115,12 @@ namespace
 			items.push_back(l.dests[i].label);
 		items.push_back("Back");
 		return items;
+	}
+
+	// a page's item on the top page (its cursor on the way back)
+	int TopIndex(Page p)
+	{
+		return p == kFoePage ? 4 : (int)p - 1;
 	}
 
 	// the stick as a D-pad, so that either moves the cursor
@@ -113,15 +142,16 @@ namespace
 			case 0: s_page = kIslandPage; s_cursor = 0; break;
 			case 1: s_page = kDungeonPage; s_cursor = 0; break;
 			case 2: s_page = kBossPage; s_cursor = 0; break;
-			case 3: s_page = kFoePage; s_cursor = 0; break;
-			case 4: wwhd::debug::SetBossRefight(!wwhd::debug::BossRefight()); break;
+			case 3: StartRush(); s_open = false; break;
+			case 4: s_page = kFoePage; s_cursor = 0; break;
+			case 5: wwhd::debug::SetBossRefight(!wwhd::debug::BossRefight()); break;
 			default: s_open = false; break;
 			}
 			return;
 		}
 		if (s_cursor == count - 1)
 		{
-			s_cursor = (int)s_page - 1;
+			s_cursor = TopIndex(s_page);
 			s_page = kTop;
 			return;
 		}
@@ -135,8 +165,38 @@ namespace
 		const Dest& d = ListOf(s_page).dests[s_cursor];
 		if (d.boss)
 			wwhd::debug::SetBossRefight(true);
+		StopRush();                                     // a warp of its own ends a rush
 		wwhd::debug::RequestStage(d.stage, d.point, d.room, d.layer);
 		s_open = false;
+	}
+}
+
+namespace wwhd::debug
+{
+	void RushBossBeaten()
+	{
+		std::lock_guard lock(s_rushLock);
+		if (s_rush >= 0)
+			s_rushBeaten = true;
+	}
+
+	bool RushNextStage(const char*& name, int& point, int& room, int& layer)
+	{
+		std::lock_guard lock(s_rushLock);
+		if (s_rush < 0 || !s_rushBeaten)
+			return false;
+		s_rushBeaten = false;
+		if (++s_rush >= (int)std::size(kBosses))
+		{
+			s_rush = -1;                                // the last one beaten: the game's own warp
+			return false;
+		}
+		const Dest& d = kBosses[s_rush];
+		name = d.stage;
+		point = d.point;
+		room = d.room;
+		layer = d.layer;
+		return true;
 	}
 }
 
@@ -175,7 +235,7 @@ namespace wwhd::os::debug_menu
 					s_open = false;
 				else
 				{
-					s_cursor = (int)s_page - 1;
+					s_cursor = TopIndex(s_page);
 					s_page = kTop;
 				}
 			}

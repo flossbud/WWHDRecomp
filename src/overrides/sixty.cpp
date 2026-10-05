@@ -1351,6 +1351,17 @@ namespace
 		wr8(kNext + 0xD, 0);
 		cemuLog_log(LogType::Force, "wwhd debug: next stage {} point {} room {} layer {}", w.name, w.point, w.room, w.layer);
 	}
+	// the boss rush's turn (below): the game's own stage change, its wipe as it asked, to the next boss
+	void RedirectStage(const StageWarp& w)
+	{
+		constexpr uint32 kNext = 0x1046F0B0u + 0x5140u;
+		for (uint32 i = 0; i < 8; i++)
+			wr8(kNext + i, (uint8)w.name[i]);
+		wr16(kNext + 8, (uint16)w.point);
+		wr8(kNext + 0xA, (uint8)w.room);
+		wr8(kNext + 0xB, (uint8)w.layer);
+		cemuLog_log(LogType::Force, "wwhd debug: boss rush: on to {} point {} room {} layer {}", w.name, w.point, w.room, w.layer);
+	}
 	void DebugStage()
 	{
 		if (!g_rtHalfTick)
@@ -1361,6 +1372,22 @@ namespace
 				s_warpWaiting = false;
 				NextStage(s_warp);
 			}
+			// the boss rush (debug_menu.cpp): the stage change the game asks for once a boss is beaten (its
+			// warp out) goes to the next boss instead
+			else if (rd8(0x1046F0B0u + 0x5140u + 0xC) != 0)
+			{
+				const char* name;
+				StageWarp w{ 0, 0, 0, -1, {} };
+				if (wwhd::debug::RushNextStage(name, w.point, w.room, w.layer))
+				{
+					strncpy(w.name, name, 8);
+					RedirectStage(w);
+				}
+			}
+			// WWHD_DEBUG_RUSHBEATEN=tick (a test aid): the boss rush's boss beaten at that game frame
+			static const int beaten = [] { const char* e = getenv("WWHD_DEBUG_RUSHBEATEN"); return e ? atoi(e) : -1; }();
+			if (beaten >= 0 && (int)wwhd::rt::GameFrame(wwhd::os::SwapCount()) == beaten)
+				wwhd::debug::RushBossBeaten();
 		}
 		static const std::vector<StageWarp> warps = [] {
 			std::vector<StageWarp> v;
@@ -1544,6 +1571,15 @@ void f_025B9100(PPCInterpreter_t* __restrict ctx)
 		return;
 	}
 	orig_f_025B9100(ctx);
+}
+
+// dSv_memBit_c::onDungeonItem(mem, item): item 3 set is a boss beaten (onStageBossEnemy), which the debug
+// menu's boss rush waits for (wwhd::debug::RushBossBeaten)
+void f_025B9098(PPCInterpreter_t* __restrict ctx)
+{
+	if (ctx->gpr[4] == 3)
+		wwhd::debug::RushBossBeaten();
+	[[clang::musttail]] return orig_f_025B9098(ctx);
 }
 
 // ---- cutscenes at 60 (D21) ------------------------------------------------------------------------
