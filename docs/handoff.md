@@ -1786,6 +1786,9 @@ it in a window; D21 "Step 2"):**
     conducting trail's ribbon; kugutu_ganon (37), seal (8), warphole (22): specks not read.
     rebirth_hyral's 3170 blocks are the test's own: ordered in place, Link stands where the cutscene moves
     him off the ground and falls (0x27) every other tick at 30 as at 60, and a fall isn't in StepInEvents.
+    The opening in a new game, not ordered (scratch capnew.sh: tools/reference/routes/title-to-game.txt on
+    a fresh NAND, REF_SAVE empty, 60 from swap 900; windows at swaps 3000, 9000, 15000, 19000: the legend's
+    storybook, the pan over Outset, Aryll on the lookout): no block at 30 Hz.
   - **Weather (the work queue's "weather", `tick_rules/weather.txt`)**: top's hz30 scan
     (scratch hz30.py: 60 consecutive swaps, screen blocks changing on one parity only) found the Wind
     Temple's floating dust at 30 Hz (16 and 29 blocks in kaze rooms 2 and 9). All the environment's
