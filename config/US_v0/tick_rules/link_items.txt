@@ -231,6 +231,13 @@
 # approaches only): the melody starts when mTactPlayTimer (+0x6920, 10 from its init) reaches 0, counted a
 # call; the zero test reads the register, so keep (whole ticks only), not late (that would start it twice)
 0243AE60    keep:r7     addi            link tact play: mTactPlayTimer - 1
+# the song's end (procTactPlayEnd f_0243B200, action 0x9C, which steps in events), the Ballad of Gales: its
+# first call asks for the sea map (gameInfo +0x5BDB) and notes it (m3574, +0x69C4); the next reads the
+# destination chosen there and starts the warp, or ends the song without one. At 30 the map stops the
+# game in between; at 60 the tick's half step came before the map opened, found no destination and ended
+# the song: no warp (route warp: Link sailed off at f1850). Both stores once a tick, at its end:
+0243B450    late        stb             procTactPlayEnd (Ballad of Gales): the sea map asked for
+0243B458    late        stw             procTactPlayEnd (Ballad of Gales): m3574 = 1, the map asked for
 #
 # ---- counts a call without a rule, from session qa's tools/sixty/counter_audit.py (2026-10-05, session
 # bottom): keep:REG on the add where the count is tested right after it changes, late on the store where

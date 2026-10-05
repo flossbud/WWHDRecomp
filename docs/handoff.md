@@ -1563,6 +1563,16 @@ it in a window; D21 "Step 2"):**
     cutscene is JStudio (the boss refights' intros are event cameras, not JStudio). Open: other JStudio
     cutscenes (the 100% save replays few); an unconverted cast member reads the half way values at its
     whole step and keeps them (half a tick behind at whole ticks).
+  - **The Ballad of Gales warped nowhere at 60 (since songs stepped at 60, ab879b1), fixed
+    (`link_items.txt`)**: the song's end (procTactPlayEnd f_0243B200, 0x9C, stepping in events) asks for the
+    sea map on its first call (gameInfo +0x5BDB) and notes it (m3574, Link +0x69C4); its next call reads the
+    destination chosen there and starts the warp, or ends the song without one. At 30 the map stops the
+    game in between; at 60 the tick's half step came first, found no destination and ended the song (route
+    warp: 0x9C one tick, then Link steered away at f1850; the Wind's Requiem, which the songs work was
+    tested on, has no map). Both stores `late` now: route warp's song end, flight and arrival at the Tower
+    of the Gods on 30's ticks (0x9C f1664-1928, the new stage at f2240 against f2241, Link within 15-43
+    units). After it the boat lands 28 degrees off (the spin's ends a fraction of a tick apart, above), so
+    the route's steering misses the ring of light at f3224 (a scripted route's matter, not the game's).
   - **Late stores at an event's edge (shared: generate.py, ppc_ops.h, sixty.cpp)**: an event that
     begins, is ordered or ends during a whole tick holds the half step of the event's own processes
     that took a stepping whole step (sixty.cpp's edge, above). A `late` store waits for the half step,
