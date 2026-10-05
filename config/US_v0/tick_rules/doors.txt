@@ -1,0 +1,12 @@
+# Step and tick rules for doors and their events (the work queue's "events"; session bottom). Format:
+# ../tick_rules.txt and tools/recomp/generate.py.
+#
+# ---- KNOB00 (305: a house's door, d_a_knob00.cpp): its open event (Link's 0xC1, dProcDoorOpen, which steps in
+# events now) plays its animation through stepped helpers (J3DFrameCtrl::update, checkPass). One hand-made
+# step, in the event's cut 0xB (adjustmentProc f_021A3E90, from demoProc f_021A3FB8): Link pulled to the door's
+# front, pos = pos x 0.8 + front x 0.2 a tick for m314 (+0x5A8) ticks, then put there. As an approach
+# with a time step (Link's share 0.8^h, the front's 1 - 0.8^h), the count once a tick at its end (late:
+# both steps of a tick pull, and the put comes on 30's tick)
+021A3F24    k:f13       lfs             knob adjustmentProc: f13 = 0.2, the front's share (1 - 0.8^h)
+021A3F30    d:f12       lfs             knob adjustmentProc: f12 = 0.8, Link's own share (0.8^h)
+021A3F68    late        sth             knob adjustmentProc: m314 (+0x5A8) - 1, the pull's ticks left

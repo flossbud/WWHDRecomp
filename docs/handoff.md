@@ -1609,6 +1609,22 @@ it in a window; D21 "Step 2"):**
     cutscene is JStudio (the boss refights' intros are event cameras, not JStudio). Open: other JStudio
     cutscenes (the 100% save replays few); an unconverted cast member reads the half way values at its
     whole step and keeps them (half a tick behind at whole ticks).
+  - **Houses' doors open at 60 (`tick_rules/doors.txt`, sixty.cpp)**: KNOB00 (305) converted and Link's
+    door-open action 0xC1 (dProcDoorOpen) steps in events. The door's animation and Link's go through
+    stepped helpers; one hand-made step, the exit's pull to the door's front (adjustmentProc f_021A3E90:
+    pos x 0.8 + front x 0.2 a tick for 10 ticks, then put there), as an approach (`d:`/`k:` on its two
+    factors) with its count `late`. Scratch route knob (WWHD_DEBUG_STAGE=920:Ojhous2,0,0,-1, Link's
+    house: in through its door, LUP 14 back to it, A: out to Outset and out of the house there): every
+    event and action on 30's tick; Link's entry and both exits on 30's path at whole frames with half
+    frames between (judder.py 968-1014: whole and half moves 2.39 and 2.41 units, against a 30 Hz step
+    before), the pull exact at half frames and put on 30's tick, the doors' frames in half steps (whole
+    frames half a tick behind, Link's own animation half a tick ahead of the door's: not visible).
+    The exit's camera (FIXEDFRM f_025314BC, then UNITRANS f_02531D20 with RelUseMask "or") ends on
+    the door's other side at 60 on this route: its 'r' mode mirrors the eye when the camera's counter
+    m080 (dCamera +0x80, +1 a tick, `late` in Run) is odd at the cut's start, and m080 starts from
+    cM_rndFX(0x7FFF) at the camera's creation (each stage load), so the side is a coin flip at 30 too
+    (30's run: 0x359D, odd; 60's: 0xFFFFFBC2, even; it counts once a tick at 60). Not a 60 fps matter.
+    New probe detail: WWHD_STATE_CENSUS_TRACE's lines now start with the storing instruction ("at PC:").
   - **The Ballad of Gales warped nowhere at 60 (since songs stepped at 60, ab879b1), fixed
     (`link_items.txt`)**: the song's end (procTactPlayEnd f_0243B200, 0x9C, stepping in events) asks for the
     sea map on its first call (gameInfo +0x5BDB) and notes it (m3574, Link +0x69C4); its next call reads the

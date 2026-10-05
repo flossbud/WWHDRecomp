@@ -79,7 +79,7 @@ namespace
 	// switches (Obj_Swflat), its water (Obj_Tide), Obj_Hha, Obj_Htetu1, stakes (KUI), Obj_Hcbh and Gohdan
 	// (BST), rats (NZ), Helmaroc King (BDK), pots (TSUBO), stones (STONE), and Link's arrows (ARROW, ARROW_ICEEFF,
 	// ARROW_LIGHTEFF), boomerang (BOOMERANG), hookshot (HOOKSHOT), grappling hook (HIMO2), the Ballad of Gales'
-	// cyclone (TORNADO) and bait (ESA) (session bottom); Windfall's
+	// cyclone (TORNADO), bait (ESA) and houses' doors (KNOB00) (session bottom); Windfall's
 	// windmill wheel (Obj_Ferris), pigs (KB),
 	// townsfolk (NPC_PEOPLE, NPC_KK1, NPC_MK, NPC_UK, NPC_GK1, NPC_TT, NPC_RSH1), market stalls (Obj_Roten),
 	// its distant models (445) and stands (DAI); Outset's fishman (NPC_SO), Beedle's ship (OBJ_IKADA), palms
@@ -105,7 +105,7 @@ namespace
 	// WWHD_60FPS_CONVERT= (empty) converts none.
 	constexpr const char* kConvertedByDefault =
 		"476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,"
-		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,443,221,"   // session bottom
+		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,443,221,305,"   // session bottom
 		"123,220,353,170,368,374,364,373,352,121,445,309,118,68,73,200,255,71,67,335,319,320,331,461,45,63,179,230,269,164,391,176,294,187,313,120,213,407,83,105,116,383,410,439,470,101,102,398,297,65,304,144,74,307,430,99,103,204,235,236,237,185,186,227,97,98,182,225,226,228,205,457,397,27,424,106,427,428,231,450,67,462,295,423,91,90,84,326,327,328,329,330,348,371,222,369,42,33,199,143,274,262,332,287,87,460,64,89,172,173,318,218,210,342,394,355,357,359,362,375,366,322,347,372,365,341,344,340,360,376,325,363,381,346,345,351,324,336,337,338,339,343,280,277,291,271,93,56,55,459,152";   // session top
 	const char* ConvertList()
 	{
@@ -248,8 +248,9 @@ namespace
 	// and 0x9C playing a song back and its end (his melody's countdown and the song camera ruled), 0xAA
 	// talking (bug B18; the talk camera ruled), 0xAD opening a chest and 0xAE holding up an item he got
 	// (their cameras ruled), 0xB8, 0xCE and 0xCF startled, frozen and held by a ReDead (its two-actor
-	// camera ruled), 0xC4 the Wind's Requiem's change of wind (its camera ruled), 0xD2 rising
-	// in a warp light (bug B20; his rise and the rolling event camera ruled). Others hold the event to
+	// camera ruled), 0xC1 opening a house's door (KNOB00's event, tick_rules/doors.txt), 0xC4 the Wind's
+	// Requiem's change of wind (its camera ruled), 0xD2 rising in a warp light (bug B20; his rise and the
+	// rolling event camera ruled). Others hold the event to
 	// whole ticks as before; so does the half tick after an event starts, is ordered or is asked to end.
 	// WWHD_60FPS_EVENTS=0: no stepping in events at all.
 	uint32 s_link = 0;                              // Link (168) as he last executed
@@ -268,7 +269,7 @@ namespace
 			return false;
 		const uint32 action = rd32(s_link + 0x65F0);
 		return action == 4 || action == 6 || action == 0x88 || action == 0x89 || action == 0x9A || action == 0x9B ||
-			action == 0x9C || action == 0xAA || action == 0xAD || action == 0xAE || action == 0xB8 || action == 0xC4 ||
+			action == 0x9C || action == 0xAA || action == 0xAD || action == 0xAE || action == 0xB8 || action == 0xC1 || action == 0xC4 ||
 			action == 0xCE || action == 0xCF || action == 0xD2 || (action == 0xA9 && DemoSixty());
 	}
 	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0, s_edgeFinishes = 0, s_actionStops = 0;
@@ -477,18 +478,21 @@ namespace
 		return std::string(chain, n);
 	}
 
-	// WWHD_STATE_CENSUS_TRACE=addr: for stores to that address, the guest call chain (8 callers);
+	// WWHD_STATE_CENSUS_TRACE=addr: for stores to that address, the storing instruction and the guest
+	// call chain (8 callers);
 	// WWHD_STATE_CENSUS_CHAINS=1: for every store into an actor or g_dComIfG_gameInfo, the target
 	// and the first 4 callers (dir/census_chains.txt), to find the call sites to put rules on
 	std::unordered_map<std::string, uint64> s_traces, s_chains;
 	constexpr uint32 kGameInfo = 0x1046F0B0u, kGameInfoSize = 0x6000u;   // f_025200D4's singleton
 
-	void CensusTrace(uint32 ea)
+	void CensusTrace(uint32 ea, uint32 pc)
 	{
 		static const uint32 watched = [] { const char* e = getenv("WWHD_STATE_CENSUS_TRACE"); return e ? (uint32)strtoul(e, nullptr, 16) : 0u; }();
 		if (ea != watched || watched == 0)
 			return;
-		s_traces[GuestChain(8)]++;
+		char at[16];
+		snprintf(at, sizeof(at), " at %08x:", pc);
+		s_traces[at + GuestChain(8)]++;
 	}
 
 	uint32 s_drawing = 0;                            // the process whose draw is running (fpcM_Draw), or 0
@@ -512,7 +516,7 @@ namespace
 
 	void CensusStore(uint32 ea, uint32 size, uint32 pc)
 	{
-		CensusTrace(ea);
+		CensusTrace(ea, pc);
 		CensusKey k{ pc, 0, ea };
 		if (ea >= kGlobalsLow && ea < kGlobalsHigh)
 			;
