@@ -1,0 +1,100 @@
+# Route: a lock-on sword fight (session qa, B14): after a warp at f920 into a room with enemies, hold ZL
+# and slash every 14 frames from f1080 to f1700 at whatever ZL targets. Made for the Savage Labyrinth's
+# two Moblins (WWHD_DEBUG_STAGE=920:Cave09,0,14,-1: a flat round room, Link lands in its middle). ZL
+# locks on, which is what lets a Moblin block (its defence needs to be Link's target).
+# FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start; gameplay from ~f870 (the warp at f920)
+1080 ZL+B 3    # the sword out
+1083 ZL 11
+1094 ZL+B 3
+1097 ZL 11
+1108 ZL+B 3
+1111 ZL 11
+1122 ZL+B 3
+1125 ZL 11
+1136 ZL+B 3
+1139 ZL 11
+1150 ZL+B 3
+1153 ZL 11
+1164 ZL+B 3
+1167 ZL 11
+1178 ZL+B 3
+1181 ZL 11
+1192 ZL+B 3
+1195 ZL 11
+1206 ZL+B 3
+1209 ZL 11
+1220 ZL+B 3
+1223 ZL 11
+1234 ZL+B 3
+1237 ZL 11
+1248 ZL+B 3
+1251 ZL 11
+1262 ZL+B 3
+1265 ZL 11
+1276 ZL+B 3
+1279 ZL 11
+1290 ZL+B 3
+1293 ZL 11
+1304 ZL+B 3
+1307 ZL 11
+1318 ZL+B 3
+1321 ZL 11
+1332 ZL+B 3
+1335 ZL 11
+1346 ZL+B 3
+1349 ZL 11
+1360 ZL+B 3
+1363 ZL 11
+1374 ZL+B 3
+1377 ZL 11
+1388 ZL+B 3
+1391 ZL 11
+1402 ZL+B 3
+1405 ZL 11
+1416 ZL+B 3
+1419 ZL 11
+1430 ZL+B 3
+1433 ZL 11
+1444 ZL+B 3
+1447 ZL 11
+1458 ZL+B 3
+1461 ZL 11
+1472 ZL+B 3
+1475 ZL 11
+1486 ZL+B 3
+1489 ZL 11
+1500 ZL+B 3
+1503 ZL 11
+1514 ZL+B 3
+1517 ZL 11
+1528 ZL+B 3
+1531 ZL 11
+1542 ZL+B 3
+1545 ZL 11
+1556 ZL+B 3
+1559 ZL 11
+1570 ZL+B 3
+1573 ZL 11
+1584 ZL+B 3
+1587 ZL 11
+1598 ZL+B 3
+1601 ZL 11
+1612 ZL+B 3
+1615 ZL 11
+1626 ZL+B 3
+1629 ZL 11
+1640 ZL+B 3
+1643 ZL 11
+1654 ZL+B 3
+1657 ZL 11
+1668 ZL+B 3
+1671 ZL 11
+1682 ZL+B 3
+1685 ZL 11
+1696 ZL+B 3
+1699 ZL 11
+1710 ZL+B 3

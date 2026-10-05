@@ -1594,6 +1594,24 @@ it in a window; D21 "Step 2"):**
     28 glints of 28.7 and 59.0 ticks at 30, 32 and 27 of 29.1 and 59.5 at 60. Not found yet: the decomp's
     other simpleAnmPlay callers (the sword's glow, the magic armour, the leaf's gust, the water ring), if
     WWHD keeps them: look for `fadds` of the 1.0 register with an `fsel` or a frame-count compare after.
+  - **The Moblin's block (B14), fixed (`tick_rules.txt`, mo2's section)**. "Its spear blocks attacks that
+    should get through": when Link's sword lands, damage_check sets m05B6 (+0x85A) to 25, and while it
+    counts down the Moblin can't go to its defence (fight_run: `m05B6 == 0`, a cut type it has been hit
+    with before, and being Link's ZL target); so a combo's next cuts land. The execute (f_021C9B1C) counts
+    eight such fields down by hand after its timers' loop, and none had a rule: the trial that found the
+    Moblin's rules ran on one walking the dock, where they are all zero. At 60 the 25 ticks were 13.5.
+    Rules now on those eight (`whole`), on the other counters of its execute (the parry opening's ticks,
+    the blink, the alarm's and the camera's counts) and of Mo2_move (f_021D0A14, its actions inlined: the
+    ticks Link stands close before the shove, whose 87.5-unit guard also bounces the sword, the attack's
+    wait, the stun's count). Tests: the fields poked to 25 on an idle Moblin
+    (`WWHD_DEBUG_POKE=1000:188,85a,2,19`) last 24 ticks at both rates (12 before); route `mob` (hold ZL,
+    slash every 14 frames) with `WWHD_DEBUG_STAGE=920:Cave09,0,14,-1` (the Savage Labyrinth's two Moblins,
+    a flat round room: a good arena, the Outset dock is not, a hit knocks either side into the sea): before
+    the rules a Moblin went to its defence 13.5 ticks after a hit, now 33.5 (26 at 30). Moblin fields
+    (WWHD): the action +0x8C2 (4 fight_run, 5 fight, 7 shove, 10 defence), its mode +0x8C4, the timers
+    +0x848. **The same trap for every enemy tested idle** (Darknut, Bokoblin, Stalfos...): countdowns that
+    only run in a fight; `tools/sixty/tests/` has no fight test yet. The fights are chaotic (the random
+    stream), so compare counts and delays, not paths.
   - **Open (session qa)**: B16 (Windfall's streaks: the colours of the man by the gate's clothes; not
     reproduced from the dock, on the quay by the gate over 20 s, or after a talk; route `wfw` strafes Link
     from the dock to the quay at 30, at 60 he slips off its edge: his path is 5 units off); B8 (the bow's

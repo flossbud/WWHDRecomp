@@ -606,6 +606,34 @@
 021CA0E0    whole       sthx            mo2: its timers (+0x848) count down
 021CA27C    whole       sth             mo2: a countdown (+0x45C) - 1
 021CC2E8    keep:r4     addi            mo2: a counter (+0x2D4C) + 1, then compared (keep: session top's audit, tools/sixty/rule_audit.py)
+# Its fight (session qa, B14: "the Moblin's spear blocks attacks that should get through"). The trial on a
+# Moblin walking the dock never saw these: they are zero until it fights. After the timers' loop the
+# execute counts eight more down by hand, among them m05B6 (+0x85A; d_a_mo2.cpp: set to 25 when Link's
+# sword lands, and while it runs the Moblin can't go to its defence) and m05B4 (+0x858: it can't be hit).
+# On both frames of a tick the 25 ticks were 13.5, so the second and third cuts of a combo met the spear.
+# Poked to 25 on an idle one (WWHD_DEBUG_POKE=1000:188,85a,2,19): 24 ticks at 30, 12 at 60, 24 with these.
+021CA0FC    whole       sth             mo2: m05BA (+0x85E) - 1
+021CA114    whole       sth             mo2: m05BC (+0x860) - 1
+021CA128    whole       sth             mo2: m05AE (+0x852) - 1
+021CA13C    whole       sth             mo2: m02E2 (+0x45E) - 1
+021CA154    whole       sth             mo2: m05B0 (+0x854) - 1
+021CA178    whole       sth             mo2: the damage reaction's m48A (+0xD7A) - 1
+021CA188    whole       sth             mo2: m05B4 (+0x858) - 1: it can't be hit while this runs
+021CA19C    whole       sth             mo2: m05B6 (+0x85A) - 1: it can't block while this runs
+021CB4CC    whole       sth             mo2: m05B2 (+0x856) - 1
+021CC370    whole       sth             mo2: m294E (+0x2D56) - 1 (the parry opening's ticks)
+021CC020    keep:r4     addi            mo2: m05DA (+0x882) - 1, then a particle at 0
+021CA3A0    whole       stb             mo2: the blink's frame m02DC (+0x458) + 1
+021C9E94    keep:r6     addi            mo2: the alarm's m2A4C (+0x2E50) - 1, then compared with 30
+021C9F14    keep:r7     addi            mo2: m2A48 (+0x2E4C) - 1, then its camera at 0
+021CB110    keep:r8     addi            mo2 demo camera: m2A1E (+0x2E22) + 1, then compared with 150
+# Mo2_move with its actions inlined (f_021D0A14). Not ruled: m05F0 (+0x898, 021CB1B8), the ground smoke's
+# count: a puff a call while it runs, so as many puffs as at 30 in half the time.
+021D0D24    whole       sth             mo2 move: m2A0C (+0x2E10) - 1
+021D0E30    keep:r10    addi            mo2 move: m2A0B (+0x2E0F) - 1, then the stun at 0
+021D1F40    whole       stw             mo2 fight_run: m2964 (+0x2D6C) + 1, a tick count
+021D25DC    keep:r9     addi            mo2 fight_run: m05A0 (+0x844) + 1, the ticks Link stands close: the shove at 15
+021D325C    whole       sth             mo2 yari_hit_check: m207C (+0x2484) - 1, the wait before its attack can hit
 #
 # ---- step rules: Darknuts (TN, process 191, d_a_tn.cpp). Found with the trial on one spawned on the
 # dock: its path already matched.
