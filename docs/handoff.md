@@ -614,9 +614,9 @@ it in a window; D21 "Step 2"):**
   with `systemd-run`, had no focus on Wayland, and SDL drops a controller's events then; the
   gamepad now plays without focus (`SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS`), and the log notes
   focus changes. Scripted input was never affected (the game reads the controller on whole ticks
-  only, so no press is lost to a half tick: checked with a probe). Booting at 60 logs six sead
+  only, so no press is lost to a half tick: checked with a probe). Booting at 60 logged six sead
   asserts (J3DDrawBuffer entries, from Link's title-screen draw, and one more), this morning's
-  build too and with nothing converted; not at 30: open.
+  build too and with nothing converted; not at 30: closed since (ef0e205, see the warp route's).
 - The owner's third try (2026-10-02/03, Steam closed: Steam Input had taken the controller). Their
   list: the camera overshoots and snaps back whenever it has far to swing (shield, sidling, a
   ladder); torches' flames flicker; carried things (pots, bombs, rocks, the arrow on the bow)
@@ -673,9 +673,11 @@ it in a window; D21 "Step 2"):**
     countdown `whole`) now steps too; the camera follows the 30-tick run's exactly through the song,
     the warp map comes up and the route ends as before; the song ends 2.5 ticks early (a beat lands
     on the half tick it crosses). Next: door-opening and talking actions; cutscenes (dDemo's frame).
-  - Open: the warp route at 60 logs a burst of 30-40 sead asserts in one frame late in the route
-    (J3DDrawBuffer's `p_pkt->getEntryPtr() == 0`, from Link's draw), with nothing converted too;
-    none at 30. The half tick's draws: to look into (the same assert as the six at a boot at 60).
+  - Closed: the warp route at 60 logged a burst of 30-40 sead asserts in one frame late in the route
+    (J3DDrawBuffer's `p_pkt->getEntryPtr() == 0`, from Link's draw), with nothing converted too; none at
+    30 (the same assert as the six at a boot at 60). It was the half tick's rollback giving a static
+    packet its list slot back, fixed with the Forbidden Woods' crashes (ef0e205, `LiveStore`): on
+    3e9a5a9 the warp route at 60, from f900 and from boot, logs no OSPanic (session top, 2026-10-05).
   - **Seagulls** (KAMOME, 194, d_a_kamome.cpp) converted: position adds `*h`, the tick count and six
     timers `whole`. They fly smoothly at 60 at the 30-tick run's speeds; their paths drift apart over
     time (integer angle approaches round differently by half steps, and they pick random targets), as
