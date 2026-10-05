@@ -56,3 +56,73 @@
 0236654C    late        stb             jump set_push_flag: hanging count (+0x40F) + 1
 023665AC    late        stb             jump set_push_flag: iron boots count (+0x413) + 1
 0236662C    late        stb             jump set_push_flag: no iron boots count (+0x414) + 1
+#
+# ---- the Earth Temple (stage M_Dai) ----
+# Obj_Tapestry (289; d_a_obj_tapestry.cpp, stubs in the decomp; its packet's calc f_0239C574): a cloth of 6 x 8
+# points. A tick: the wind pass (f_02399F9C) decays its wind (+0x2424) x 0.6 and adds to its wave phases
+# (+0x243C 500, +0x244C/E and +0x2450); the hit pass (f_0239A38C) decays a hit's push (+0x24A8) x 0.5; the
+# fire spreads (f_0239A9EC: a cM_rnd per burning cell); each point (f_0239B71C) sums its force into acc
+# (springs to its neighbours, gravity, wind, waves, a hit), speed += acc and speed -= speed x drag
+# (f_0239B498), pos = the old buffer's pos + speed (the buffers +0x106C, flipped each step). A half step
+# takes h of the force and of the move (vec@) and (1 - drag)^h of the damping (k on the drag before
+# its fneg); the decays d, the phases split, the fire's spread once a tick. Its effect's countdown
+# (+0x24EC, f_0239C210) late, the smoke it starts at 0 once
+02399FDC    d@f1        bl 028e8e64     tapestry calc_wind: wind (+0x2424) x 0.6 a tick
+0239A098    spliti      addi            tapestry calc_wind: the wave's phase (+0x243C) + 500 a tick
+0239A0D0    spliti      addi            tapestry calc_wind: the same (its other branch)
+0239A104    spliti      addi            tapestry calc_wind: the same (no wind)
+0239A288    spliti      addi            tapestry calc_wind: a row group's phase (+0x244E) + 0x46D a tick
+0239A294    spliti      addi            tapestry calc_wind: a row group's phase (+0x244C) + 0x556 a tick
+0239A2A8    spliti      addi            tapestry calc_wind: a row group's phase (+0x2450) + 0x32B a tick
+0239A3E4    d@f31       fmuls           tapestry calc_hit: the hit's push (+0x24A8) x 0.5 a tick
+0239C5F4    whole       bl 0239a9ec     tapestry calc: the fire's spread (random draws), once a tick
+0239B4E4    k:f0        lfs             tapestry calc_spd: the drag of a burning point, as 1 - (1 - drag)^h
+0239B4F8    vec@r4      bl 028e8d88     tapestry calc_spd: speed += acc (a burning point)
+0239B520    k:f0        lfs             tapestry calc_spd: the drag, as 1 - (1 - drag)^h
+0239B534    vec@r4      bl 028e8d88     tapestry calc_spd: speed += acc
+0239B7F4    vec@r5      bl 0201ad78     tapestry calc_pos: pos = old pos + speed
+0239C244    late        stw             tapestry: its effect's countdown (+0x24EC) - 1
+0239C250    whole       bl 0239c158     tapestry: the smoke at the countdown's end, once
+# Obj_Kanoke (159; d_a_obj_kanoke.cpp, stubs): coffins that Medli's light opens. The light's count (+0x9A4, +
+# 1 a tick lit, the shake at 21) late; the shakes (executeYure*: a phase +0x2000 a tick, its size - 8 or
+# - 0x20 a tick to 0, the open at 0) split; the lid (executeOpen*): its slide + c a tick a step's share,
+# its angle += its speed then the speed - 100 (sideways) or + 100 (up) a tick, an explicit Euler step: the
+# speed split for the add and its change late, so the arc is 30's exactly at whole ticks; the effect's
+# countdown (+0x9A0, - 1 a tick, its end at 0) late, its fade a step's share
+0236830C    late        sth             kanoke executeNormal: the light's count (+0x9A4) + 1, the shake at 21
+02368558    spliti      addi            kanoke executeYureYoko: the shake's size (+0x9A2) - 8 a tick, the open at 0
+02368564    spliti      addi            kanoke executeYureYoko: the shake's phase (+0x9A0) + 0x2000 a tick
+0236893C    spliti      addi            kanoke executeYureTate: the shake's phase + 0x2000 a tick
+02368944    spliti      addi            kanoke executeYureTate: the shake's size - 0x20 a tick, the open at 0
+02368680    *h@f13      fadds           kanoke executeOpenYoko: the lid's slide (+0x97C) + c a tick
+023686A4    split@r9    add             kanoke executeOpenYoko: the lid's angle (+0x99C) += its speed (+0x99E)
+023686B8    late        sth             kanoke executeOpenYoko: its speed - 100 a tick
+02368A78    split@r12   add             kanoke executeOpenTate: the lid's angle (+0x998) += its speed (+0x99E)
+02368A80    late        sth             kanoke executeOpenTate: its speed + 100 a tick
+02368880    late        sth             kanoke executeEffectYoko: the effect's countdown (+0x9A0) - 1, its end at 0
+023688A0    *h@f13      fsubs           kanoke executeEffectYoko: the effect's alpha (+0x994) - c a tick
+02368D54    late        sth             kanoke executeEffectTate: the effect's countdown - 1, its end at 0
+02368D80    *h@f0       fsubs           kanoke executeEffectTate: the effect's alpha - c a tick
+# Obj_Mmrr (272; the mirrors on push blocks): cLib_chaseF and its animations, stepped helpers: no rules
+#
+# ---- Dragon Roost Cavern and Ganon's Tower: Obj_Flame (267; d_a_obj_flame.cpp, stubs; execute f_023455E0): the
+# fire jets. Their power (+0x55C) counts down a float a tick (- 1, or a size's step) and the flame's height
+# (+0x560), its culling box and its modes follow it; a phase (+0x584) + 400 a tick; found with the
+# step-doubling trial (stage_test.sh 267 M_NewD2,3,12,-1). Its Fire Keese maker (ki_make f_02345068: a
+# count, a wait, fopAcM_create) once a tick
+02344E7C    *h@f0       fsubs           flame: the power (+0x55C) - 1 a tick
+02344EB8    *h@f0       fsubs           flame: the power - its size's step a tick
+0234570C    spliti      addi            flame execute: the phase (+0x584) + 400 a tick
+02345748    spliti      addi            flame execute: the same (its other branch)
+023456CC    whole       bl 02345068     flame execute: ki_make, the Fire Keese's count and wait, once a tick
+#
+# ---- Ganon's Tower's waterfalls: Obj_Gtaki (275), Obj_Gnnbtaki (140), Obj_Gnntakis/e (138/139): a texture
+# animation each (stepped), started at a cutscene's frame: no rules
+#
+# ---- Asoko: Obj_Hlift (46; d_a_obj_hlift.cpp): lifts rising or sinking in their switch's event. Their speed
+# and height chase with cLib_chaseF (stepped); a start lag (+0x40C, - 1 a tick after a > 0 test) and the
+# vibration's count (+0x400) late; the vibration's phase (+0x402, + 0x4000 a tick) split
+02356784    spliti      addi            hlift vib_proc: the vibration's phase (+0x402) + 0x4000 a tick
+023567AC    late        sth             hlift vib_proc: the vibration's count (+0x400) - 1
+02356BF8    late        sth             hlift mode_l_u: the rise's start lag (+0x40C) - 1
+02356F04    late        sth             hlift mode_u_l: the fall's start lag (+0x40C) - 1

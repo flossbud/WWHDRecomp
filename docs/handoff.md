@@ -1639,6 +1639,19 @@ it in a window; D21 "Step 2"):**
     oscillation within 2e-7; the lift (from point 20, near it) 10 a tick in half steps, its states a
     half tick early each (a state set on a whole step, the next state's first step on its half step),
     a tick by the end. Not tested (need Makar or a hookshot pull): Vmc's growth, Homen's fall.
+    The second batch: the Earth Temple's tapestries (Obj_Tapestry 289: a 6 x 8 cloth, its speed and
+    move stepped with vec@ and its drag with k, the wind's decay and hit's decay d, the wave phases
+    split, its random fire spread once a tick; idle in M_Dai room 2 its center sways with 30's within
+    ~1.5 units of a 10-unit swing), coffins (Obj_Kanoke 159: poked into their shake and sideways open
+    in room 8: shake, lid fall exact at half frames, the lid's slide 2 units short of 30's 148 at its
+    end), mirrors (Obj_Mmrr 272, no rules); the fire jets (Obj_Flame 267; the trial, stage_test.sh 267
+    M_NewD2,3,12,-1, found the power's countdown and a phase; now none: the power's steps on 30's
+    ticks, the phase exact); Ganon's Tower's waterfalls (275, 140, 138, 139: texture animations, 100%
+    in GTower); Asoko's lifts (Obj_Hlift 46, layer 0: Asoko,0,0,0): poked into a rise, smooth but up
+    to 16 units behind 30 mid-move and ending ~2 ticks early (their speed and height both chase with
+    cLib_chaseF, a semi-implicit step that a half step takes a quarter of the speed's gain in: close,
+    not exact). Census types not done: 75 Obj_Mkie and 469 (Earth Temple, 62% and 71% idle),
+    94 AMI_PROP and 96 FLOOR (Wind Temple, 100% idle).
   - **Houses' doors open at 60 (`tick_rules/doors.txt`, sixty.cpp)**: KNOB00 (305) converted and Link's
     door-open action 0xC1 (dProcDoorOpen) steps in events. The door's animation and Link's go through
     stepped helpers; one hand-made step, the exit's pull to the door's front (adjustmentProc f_021A3E90:
