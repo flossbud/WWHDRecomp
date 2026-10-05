@@ -271,12 +271,36 @@ namespace
 			action == 0x9C || action == 0xAA || action == 0xAD || action == 0xAE || action == 0xB8 || action == 0xC4 ||
 			action == 0xCE || action == 0xCF || action == 0xD2 || (action == 0xA9 && DemoSixty());
 	}
-	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0, s_edgeFinishes = 0;
+	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0, s_edgeFinishes = 0, s_actionStops = 0;
 	void StepStats()
 	{
-		cemuLog_log(LogType::Force, "wwhd sixty: {} half steps of converted processes; {} stopped by a running event, {} by an ordered one, {} by an ending one; {} finished their tick at an event's edge; {} late stores made for stopped ones",
-			s_halfSteps, s_eventStops, s_orderStops, s_endStops, s_edgeFinishes, s_lateMade);
+		cemuLog_log(LogType::Force, "wwhd sixty: {} half steps of converted processes; {} stopped by a running event, {} by an ordered one, {} by an ending one; {} of Link's left his new action's call out; {} finished their tick at an event's edge; {} late stores made for stopped ones",
+			s_halfSteps, s_eventStops, s_orderStops, s_endStops, s_actionStops, s_edgeFinishes, s_lateMade);
 	}
+
+	// Link's action call (daPy_lk_c::execute's (this->*mCurProcFunc)(); `hold` rules on it, link_actions.txt)
+	// set up a turn in place in his whole step: at 30 that tick only sets the turn up (no turn) and it turns
+	// from the next tick, so his half step leaves the call out (g_rtHold) while the rest of it (the common
+	// move, collision, animation) runs, and the turn's first step comes in the next tick's whole step. Taking
+	// the call there turned half a tick ahead, and the turn's end and the walk after it followed (route door2:
+	// walking a tick and a half early, 25 units ahead; now within 3.2). Only for the turn: other set-ups in the
+	// call (a walk from waiting, a roll from a roll) have their action's step, or its animation's, in the same
+	// tick at 30 in ways the call's edge doesn't show, and holding them lost ground (handoff: Link's actions).
+	// WWHD_60FPS_ACTIONHOLD=0 turns it off.
+	bool ActionHold()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ACTIONHOLD"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	// the actions whose set-up in his action call holds the half step's call: the turn in place (0x17,
+	// procWaitTurn, set up from waiting or moving by checkNextMode with no turn that tick at 30) and waiting
+	// (4, set up when a turn or a move ends, its own step, the stick's check, coming the next tick at 30)
+	bool HoldsAfter(uint32 action)
+	{
+		return action == 0x17 || action == 4;
+	}
+	bool s_linkActionChanged = false;                 // by his action call in the last whole step
+	uint32 s_linkActionAtCall = 0;
 
 	// A process outside the event finishes its tick at an event's edge (D21). The half tick's stops above
 	// (an event that began, was ordered or was asked to end during the whole tick, after the process took
@@ -2041,6 +2065,11 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	const float step = g_rtStep;
 	g_rtStep = 0.5f;
 	s_converting++;
+	if (link && !g_rtHalfTick)
+		s_linkActionChanged = false;                // until his action call changes it (rt_hold_leave)
+	const bool hold = g_rtHalfTick && link && s_linkActionChanged && ActionHold();
+	s_actionStops += hold;
+	g_rtHold = hold;                                // his half step leaves his new action's call out
 	// its whole step: the late stores it passes over are noted for its half step (s_lateNoted)
 	const bool notes = !g_rtHalfTick;
 	const bool notesOuter = g_rtLateNotes;
@@ -2060,6 +2089,7 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 			s_lateNoted[proc].swap(s_lateNotes);
 		s_lateNotes.swap(outer);
 	}
+	g_rtHold = false;
 	s_converting--;
 	g_rtStep = step;
 	if (resetFlags)
@@ -2548,3 +2578,21 @@ void f_025D475C(PPCInterpreter_t* __restrict ctx)
 	[[clang::musttail]] return orig_f_025D475C(ctx);
 }
 
+
+// the `hold` rules' notes on Link's action call (tools/recomp/generate.py; link_actions.txt): whether the call
+// changed his action in his whole step (ActionHold above)
+void rt_hold_enter()
+{
+	if (s_link && !g_rtHalfTick)
+		s_linkActionAtCall = rd32(s_link + 0x65F0);
+}
+
+void rt_hold_leave()
+{
+	if (s_link && !g_rtHalfTick)
+	{
+		const uint32 action = rd32(s_link + 0x65F0);
+		if (action != s_linkActionAtCall && HoldsAfter(action))
+			s_linkActionChanged = true;
+	}
+}

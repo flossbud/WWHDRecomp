@@ -47,6 +47,7 @@ float g_rtStep = 1.0f;
 bool g_rtSixty = false;
 float g_rtNote = 0.0f;
 bool g_rtLateNotes = false;
+bool g_rtHold = false;
 
 namespace wwhd::rt
 {

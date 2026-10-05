@@ -41,6 +41,10 @@ extern bool g_rtSixty;
 extern bool g_rtLateNotes;
 void rt_late_note(uint32 ea, uint32 size, uint64 value);
 #define RT_SIXTY() (g_rtSixty)
+// `hold` tick rules: skipped while g_rtHold is up (src/overrides/sixty.cpp raises it around a step that must
+// leave the instruction out: Link's half step after his whole step changed his action skips the action's call)
+extern bool g_rtHold;
+#define RT_HOLD() (g_rtHold)
 // Step rules (config/US_v0/tick_rules.txt, tools/recomp/generate.py) for code run with a time step
 #define RT_STEPPED() (g_rtStep != 1.0f)
 static inline double rt_step_mul(double x) { return (double)(float)(x * g_rtStep); }

@@ -1,0 +1,8 @@
+# Link's actions at 60 fps: their timing (session top; docs/recompiler-design.md D21). Link is process 168
+# (d_a_player_main.cpp). A tick makes one call to his action (daPy_lk_c::execute's (this->*mCurProcFunc)(),
+# mCurProcFunc at +0x61AC); `hold` rules on it note its entry and exit for src/overrides/sixty.cpp and skip
+# it while g_rtHold is up. When the call sets up a turn in place (0x17, from waiting or moving: no turn in that
+# tick at 30), the half step after it leaves the call out, so the turn starts with the next tick as at 30
+# (route door2: turning half a tick early, then walking a tick and a half early, 25 units ahead).
+0240D6D8    hold        bctrl           link execute: (this->*mCurProcFunc)(), a member function
+0240D6F8    hold        bctrl           link execute: (this->*mCurProcFunc)(), a virtual one

@@ -1084,7 +1084,10 @@ it in a window; D21 "Step 2"):**
       within its range, `scale.x` around its perch, and its talk distance (38) starts its descent;
       `WWHD_DEBUG_POKE=990:0,1046F12E,1,83;990:0,1046F154,1,5;990:0,1046F0B9,1,24;990:0,10474C6B,1,83` puts
       a Hyoi Pear on X (bait slot 0, gameInfo +0x7E/+0xA4 as on the GameCube), but on the Outset dock the
-      perch is 8000 away and WWHD_DEBUG_PLACE under it didn't move Link). Next: a route to a perch.
+      perch is 8000 away and WWHD_DEBUG_PLACE under it didn't move Link). The perches are 2000 units above
+      small islands' spawn points (`stage_actors.py sea ROOM --spawns`; room 19's point 1 is 83 units from
+      its perch, a cave's exit): the pear raised there (X at f1150, after the exit) called no seagull in 200
+      ticks and the seagull's process never moved; its range likely wants Link on the island's top. Left.
     - Shared: `reloadh:fD=rB+O` (generate.py), `reload:` in a stepped process's steps only (`reload:`
       applies at 60 fps even to a process that isn't stepping); `WWHD_DEBUG_SPAWN=tick:proc/subtype,...`.
   - **Chains drawn at 60 (the chains item, session top; shared: sixty.cpp)**: one-pass chain solvers keep
@@ -1136,6 +1139,25 @@ it in a window; D21 "Step 2"):**
     `WWHD_DEBUG_POKE` of his facing didn't hold there; capture.sh's extra input lines are game frames (its
     header said swaps; its shots are swaps). events_test.sh's back and talk routes now start from the
     warps their headers name (before, they ran from Outset's dock without their door and talk).
+  - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
+    at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
+    +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next
+    one's set-up, and for some the new action's own step only comes the next tick. At 60 a set-up made in the
+    whole step ran that action's step in the half step too, half a tick ahead. Route door2 (session bottom's
+    find: Link 25 units ahead at the door): his turn in place (0x17) started turning in f1000's half step while
+    30's tick only set it up, ended a tick early, and waiting (4) and the walk (6) followed, 1.5 ticks early.
+    Fixed for set-ups of the turn in place and of waiting: `hold` rules on the call (the new kind: skipped
+    while g_rtHold is up, its entry and exit noted by rt_hold_enter/leave in sixty.cpp) and g_rtHold raised for
+    Link's half step after a whole step whose call set one of them up; the rest of that half step (the common
+    move, collision, animation) runs. door2: every action on 30's tick, Link within 5.3 units (mean 2.2; was
+    17.1, max 25.6). `WWHD_60FPS_ACTIONHOLD=0` turns it off. Tried and dropped: holding the whole half step
+    after any change (it lost half of a new action's first move: 6.3 behind on door2); leaving the call out
+    after any set-up made inside it (door2 1.7, but a walk from standing, 4 to 6 on Outset's dock, ended 6
+    units behind: the common code after the call changes his speed too, 0.36 in the held half step, and his
+    animation ran ahead of the move's logic; and a roll set up from a roll, 36 to 55, lost a step: at 30 that
+    one's own step came in the same tick). Set-ups made before the call (a roll on A, from checkItemAction and
+    the like) step in the same tick at 30 too and need nothing. A general rule would need to know, per action,
+    whether its set-up's tick at 30 includes its step; the walk from standing and rolls stay half a tick early.
   - **`splitd@REG` (shared: generate.py; the Morth's spin, tick_rules.txt)**: `split@` while the process
     steps, and the instruction doesn't run on a half tick's draw (a half tick with h 1: only stepping
     processes run then). The Morth's draw_SUB (f_021A6F64, its body's spin m2FA += m2FE) runs from its

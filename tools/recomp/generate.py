@@ -51,7 +51,11 @@ its register), and a different instruction at that address is an error. `whole:r
 its result, `whole:r3=rN` sets it to the register rN (a call's own argument: "unchanged"). `late`
 runs it once a tick at the tick's end instead: on the half tick while its process steps at 60 (a
 tick counter, so that both frames of a tick see the tick's count, as `1 / (N - count)` approaches
-need; RT_LATE_TICK), on the whole tick otherwise; it takes the same instructions and r3=. A late
+need; RT_LATE_TICK), on the whole tick otherwise; it takes the same instructions and r3=. `hold` skips
+the instruction while the runtime's hold flag is up (RT_HOLD: src/overrides/sixty.cpp raises it for a step that
+must leave something out, as Link's half step after his whole step changed his action: the new action's own
+first step waits for the next tick, as at 30, while the step's common part still runs); its entry and exit
+call rt_hold_enter and rt_hold_leave (sixty.cpp notes what the call changed); r3= as for whole. A late
 store that a stepping process's whole tick passes over is noted (late_wr32 and on, ppc_ops.h), and
 made on the half tick if an event's edge holds that process's half step (src/overrides/sixty.cpp). Step
 rules, for the code of processes that run every frame with a time step h
@@ -265,7 +269,7 @@ class Program:
                 if kind in ("spliti", "lagi"):
                     assert not arg, f"tick_rules.txt:{n}: {kind} takes no argument"
                     value = None
-                elif kind in ("whole", "late"):
+                elif kind in ("whole", "late", "hold"):
                     value = None
                     if arg:
                         key, _, v = arg.partition("=")
@@ -288,7 +292,7 @@ class Program:
     def check_tick_rule(self, ea, i):
         """The instruction a tick rule expects at ea, or an error message."""
         kind, r3, expect, _ = self.tick_rules[ea]
-        if kind not in ("whole", "late"):
+        if kind not in ("whole", "late", "hold"):
             have = i.op
             if i.op == "b" and i.lk:
                 have = f"bl {self.rel24.get(ea, (ea + i.li) & 0xFFFFFFFF):08x}"
@@ -542,8 +546,11 @@ def step_call(op, x):
 def apply_tick_rule(rule, i, lines):
     """An instruction's generated lines with its tick or step rule (see the docstring)."""
     kind, arg, _, what = rule
-    if kind in ("whole", "late"):
-        test = "RT_WHOLE_TICK()" if kind == "whole" else "RT_LATE_TICK()"
+    if kind in ("whole", "late", "hold"):
+        test = {"whole": "RT_WHOLE_TICK()", "late": "RT_LATE_TICK()", "hold": "!RT_HOLD()"}[kind]
+        if kind == "hold":
+            # its entry and exit are noted (src/overrides/sixty.cpp: whether the call changed what it holds by)
+            lines = ["{ void rt_hold_enter(); rt_hold_enter(); }"] + lines + ["{ void rt_hold_leave(); rt_hold_leave(); }"]
         out = [f"if ({test}) {{   // tick rule: {what}"] + ["\t" + l for l in lines] + ["}"]
         if kind == "late" and i.op in STORES:
             # passed over (a stepping process's whole tick): noted, to be made if its half step is held;
