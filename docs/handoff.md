@@ -1283,7 +1283,12 @@ it in a window; D21 "Step 2"):**
     in seven places (`vec@`), two hand-made falls, a spin, countdowns, and a 14-segment body placed in one
     pass from the head (its drag `*h`, its carried velocity's 0.85 `d@`): converted it went 10951 units
     against 6617, now 5898 (its random waits and turns part from 30's), the body keeping 30's shape while
-    the heads coincide. Floormasters (FM 119: rules here, converted with the Earth Temple: one matches 30
+    the heads coincide. Princess Zelda (PZ 210, the companion in Ganondorf's fight; route gtower with
+    WWHD_DEBUG_BOSS=1, the fight from ~f8200; her decomp is stubs) is converted with no rules: the trial over
+    f8300-11900 shows only her eye point's copy of a joint (+0x834, derived), the wall push-out
+    (dBgW::positionWallCorrect f_024F2514: geometric) and the shared light blend's bytes (+0x1AC); she walks
+    at 30's speeds (10.9 a tick moving against 14.2), and the fight itself parts from 30's (she moved in 372
+    ticks against 85). Floormasters (FM 119: rules here, converted with the Earth Temple: one matches 30
     exactly, the other drifts with a random speed it draws, cM_rndF(9) + 1; tick_rules.txt's "fm"
     rules are process 204's, not FM's). Not converted: Makar (NPC_CB1 334: moves twice as far
     converted), springboards (166: tiny), the propeller switch (430).
