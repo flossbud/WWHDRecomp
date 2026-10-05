@@ -1404,7 +1404,14 @@ it in a window; D21 "Step 2"):**
     m02F6, +0x412, 5 after a hit), the Darknut's +0x3F4 (armour pieces left, once as each flies off).
     Hits: a whole tick's collision pass (cCcS::ChkAtTg clears and sets the hit flags) leaves its hits for
     the half step and the next whole step; each of these waits for a post-hit window, so one hit counts
-    once.
+    once. **In a draw, only whole and keep work**: draws run every frame with a step of 1, where late
+    and the step rules (split, *h, k@...) change nothing, and a converted process's draw stores stand.
+    The Helmaroc King's tail_draw counted its tail's hiding (+0x40A, 020660E0) down every frame: late
+    there (the counts round) was wrong, whole now (session top's catch). An audit of every non-whole/keep
+    rule in code a draw method reaches (a call graph from the asm dumps) found one more, session top's
+    205 (told). The Chuchu (CC 206; the trial in the fight route): two phases a call, its body's
+    squash turned by m31C (+0x424, + 1000) and a hit's shake by sin(m348) (+0x450, + 0x3000), at 60
+    twice as fast: spliti, now equal to 30's at each tick's end, halfway between.
   - **A ReDead's scream and grab at 60 (shared: sixty.cpp's StepInEvents, tick_rules.txt; regress.sh
     rerun)**: the same fight route against a ReDead (`WWHD_DEBUG_SPAWN=950:224,0,-201599,168,312125,0,
     f82d`): it screams, Link is startled (0xB8), frozen (0xCE) and held (0xCF, 150 ticks), all events

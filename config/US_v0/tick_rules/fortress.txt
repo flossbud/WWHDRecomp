@@ -91,7 +91,8 @@
 # input-driven counts (a ReDead's escape count), and a few not yet understood (see the handoff).
 0230C844    late        sth             nz: a count (0x3e8(r30)) - 1 a call, tested before (f_0230BEF4)
 0230E164    late        sth             nz: a count (0x3da(r24)) - 1 a call, tested before (f_0230BEF4)
-020660E0    late        sth             bdk: a count (0x40a(r30)) - 1 a call, tested before (f_02065AB4)
+020660E0    whole       sth             bdk tail_draw (its draw, f_02065AB4): m2F6 (+0x40A) - 1, the tail's hiding: a draw runs
+#                                       every frame with a step of 1, where late is every frame too (session top's catch)
 02066C80    late        stb             bdk: a count (0x2682(r31)) - 1 a call, tested before (f_02066A38)
 02069088    keep:r8     addi            bdk: a count (0x2714(r31)) - 1 a call, tested after (f_02066A38)
 02172ABC    late        sth             himo3: a count (0x3d8(r31)) - 1 a call, tested before (f_02172A00)

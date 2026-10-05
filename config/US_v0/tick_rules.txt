@@ -691,6 +691,11 @@
 0210DF90    whole       sthx            cc execute: its timers count down
 021101B0    *h@f7       fadds           cc move: speed.y += gravity (+0x374) by hand (session top, 2026-10-04: at 60 it took
 #                                       a full tick's gravity each half tick, so a jump had half its height and airtime)
+# two phases a call (the trial on one in the fight route): its body's squash (1.1, 1.0, 0.9) turned by m31C
+# (+0x424, d_a_cc.cpp's model matrix, from the execute) and a hit's shake by sin(m348) (+0x450, action
+# 0x29): at 60 the jelly's wobble and the shake ran twice as fast
+0210BDC8    spliti      addi            cc: m31C (+0x424), the squash's turn, + 1000 a call
+0210F5C4    spliti      addi            cc: m348 (+0x450), a hit's shake phase, + 0x3000 a call
 #
 # ---- step rules: Keese (KI, process 215, d_a_ki.cpp). Found with the trial on one spawned on the dock.
 02199BE8    *h@f11      fadds           ki fly (f_02199A64): current.pos.x += speed.x
