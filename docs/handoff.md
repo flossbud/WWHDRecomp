@@ -1106,11 +1106,13 @@ it in a window; D21 "Step 2"):**
     trials at x1.6, needs nothing: its execute copies the head's place (+0x3FC, +0x444) before its model's
     calc (draw_SUB, at its end) sets it, so the copy lags a step, a tick at 30 and half a tick at 60, and a
     double step shrinks the lag; its head moves as far a tick at 30 and 60. A copy made before the step's
-    own update reads as a doubling in the trial.) Not done: the cloths (the pirate flag 173, tapestries 289,
-    unconverted; the pirate flag's packet double-buffers its points and the GPU reads them after the draw,
-    so a copy is needed, not a put-back). The boat's sail as seen sailing isn't SAIL 172's packet (its
-    draw, f_0245FAAC, returns early while sailing: the boat's +0x3E4 is 0): the visible sail is drawn
-    elsewhere, to find. The Stalfos' loincloth (its pose set in the execute, nun_pos_set: its angle steps
+    own update reads as a doubling in the trial.) The pirate ship's cloths (objects.txt; the ship beside
+    Outset's dock with `sea,0,44,2`), converted: its sail (SAIL 172; the boat's sail is GRID 171, converted
+    before) is made afresh each tick from a wave phase, now split: its vertices equal 30's at every half
+    tick; its flag (PIRATE_FLAG 173) is a mass-spring cloth like Hyrule's flags (vec@/d@ on PSVECAdd and
+    PSVECScale): its points move 14.9 units a tick against 30's 14.6; both packets' random shading wobble
+    (setCorrectNrmAngle) on whole ticks, so the random stream is 30's. Not done: tapestries (289). The
+    Stalfos' loincloth (its pose set in the execute, nun_pos_set: its angle steps
     on whole ticks, its anchor every step). Other users of the two line classes (ropes, ships' lines,
     vines) can be opted in once tested; the rope bridges' ropes step with their bridge, now converted.
   - **Rope bridges (BRIDGE 89) in the defaults (session top; earth.txt)**: Link walked across two at 30

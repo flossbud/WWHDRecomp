@@ -222,6 +222,32 @@
 021D6BE0    keep:r11    addi            msw execute: m844 (+0x960) - 1
 021D6C20    keep:r8     addi            msw execute: a chain's hit shake (m83C[i]) - 1
 #
+# ---- the pirate ship's cloths (the chains item, session top): its sail (SAIL 172, d_a_sail.cpp; execute
+# f_024614EC, sail_move f_02460678 with sail_pos_move inlined) and its flag (PIRATE_FLAG 173, d_a_pirate_flag.cpp;
+# execute f_023D2610, pirate_flag_move f_023D1EA4). Both follow the ship (57; Outset in layers 0 and 2, Windfall
+# in 2 and 3, the Forsaken Fortress), and at 60 both flapped twice as fast. Measured by Outset's dock (sea,0,44,2:
+# the ship beside it). The sail's shape is made afresh each tick from its wave phase and the wind (no state of
+# its own): with its phase split, its vertices at 60's half ticks equal 30's ticks (0.31 units a tick at both,
+# 0.63 at 60 before). The flag is a 5x5 cloth stepped a tick at a time as Hyrule's flags are (ganon.txt's
+# MAJUU_FLAG): a wave phase, then per point speed += force (springs to 8 neighbours, the wind on its normal,
+# gravity), speed *= 0.875, pos += speed (PSVECAdd, PSVECScale; two copies of the loop; the points double-
+# buffered at +0x4A0 and +0x5CC, a step writes the other): with half steps its points move 14.66 units a tick
+# against 30's 14.60 (the shape itself drifts apart: chaotic). Both packets' shading wobble (setCorrectNrmAngle:
+# a phase + 900 + a random 0-200 a call) on whole ticks, the random stream as 30's.
+02460C3C    *h@f11      fmadds          sail pos move: its wave phase m1C40 (+0x3280) += 4000 (1 - 0.95 m1C44) (0.85 f + 0.15) a tick
+0246080C    *h@f13      fsubs           sail move: m1C48 (+0x3288), cLib_addCalc's step while it unfurls, - 0.001 a tick
+0245FFFC    whole       bl 020198d8     sail setCorrectNrmAngle: cM_rndF(200), once a tick
+02460038    whole       sth             sail setCorrectNrmAngle: the shading's phase m1C38 (+0x3278) += 900 + that
+023D1FE8    split@r4    add             pirate flag move: its wave phase m2A8 (+0x3C4) += l_HIO.m08 a tick
+023D23EC    vec@r4      bl 028e8d88     pirate flag move: speed += force
+023D23FC    d@f1        bl 028e8e64     pirate flag move: speed *= 0.875
+023D240C    vec@r4      bl 028e8d88     pirate flag move: pos += speed
+023D2458    vec@r4      bl 028e8d88     pirate flag move (the loop's other copy): speed += force
+023D2468    d@f1        bl 028e8e64     pirate flag move (the other copy): speed *= 0.875
+023D2478    vec@r4      bl 028e8d88     pirate flag move (the other copy): pos += speed
+023D1838    whole       bl 020198d8     pirate flag setCorrectNrmAngle: cM_rndF(200), once a tick
+023D1874    whole       sth             pirate flag setCorrectNrmAngle: the shading's phase m87C (+0xCD8) += 900 + that
+#
 # ---- Countdowns no test had run (round 2's counter audit: session qa's tools/sixty/counter_audit.py lists
 # every countdown with no rule): each counted two a tick at 60 where its code ran. keep on the add where the
 # count is tested right after it (the half tick neither counts nor acts), late on the store where it's tested
