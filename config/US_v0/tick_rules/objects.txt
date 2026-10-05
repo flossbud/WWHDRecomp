@@ -234,3 +234,5 @@
 020517A8    keep:r5     addi            and_sw0: the same (the other path)
 024A99D4    late        sth             taght: a countdown (+0x3BC) - 1 while > 0
 024A9B1C    late        sth             taght: the same (while its check holds)
+# Timer loops (indexed stores) the counter audit lists since session qa's da8b79e:
+021C31A4    keep:r7     addi            mflft: its flames' countdowns (a loop: +0x812 + 2i) - 1 while > 0

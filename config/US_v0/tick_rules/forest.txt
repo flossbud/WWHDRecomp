@@ -207,3 +207,8 @@
 0219733C    late        sth             kddoor: a countdown (+0x19A) - 1 while > 0
 021976CC    late        sth             kddoor: the same (another state)
 02465378    late        stw             saku: a countdown (+0x1008) - 1 while > 0
+# Timer loops (indexed stores) the counter audit lists since session qa's da8b79e:
+0214D958    keep:r4     addi            mothula (204): its seven timers (a loop) - 1 while > 0
+020B04A4    keep:r9     addi            bmd (Kalle Demos): its timers (a loop) - 1 while > 0, tested after
+02464F58    keep:r7     addi            saku: a post's countdown (+0x100C + i, a loop) - 1 while > 0, tested after
+024650EC    keep:r11    addi            saku: the same (the other loop)
