@@ -1167,6 +1167,24 @@ it in a window; D21 "Step 2"):**
     wait (rand & 1 + 1) and Gyorg's +0xA44 (behind its tuning data's +0x99, set at run time). With -a, the
     unconverted NPCs above blink the same way (LS1, PF1 356, CO1, HI1, MT, MN, BTSW 349, BTSW2, AUCTION 361
     and Medli MD 367): give them the rule when converting.
+  - **Outdoors (the outdoors item, session top; windfall.txt, sea.txt)**: the moving types still at 30
+    outdoors, from a census of every stage's placements against the defaults (session top's objsurvey.py on
+    the worker: GRASS 435 spawns the scene's plants, already at 60; tags, switches and static models lead
+    the list). Converted, each with area_test.sh in its place: the cafe's and school's lamps (Obj_Cafelmp 280:
+    a spin, `spliti`), the auction house's flowers (Obj_Rflw 277: a swing's count `keep`, its phase
+    `spliti`), the boating course's goal flag (Goal_Flag 291: the pirate flag's cloth rules, `split@` on its
+    three phases, `vec@`/`d@` on its points; RaceEnd's count `keep`; its race timer is the timer process's),
+    the sea's barrel spawner (Coming3 271: a countdown `keep`; eight of ten follow 30's paths within a few
+    units, two part where their barrels sink and come back), Ice Ring Isle's lifts (ICE_LIFT 93: counts
+    `whole`; the bob reads (count << 10) & 0xFC00, so it stays at 30 Hz; the moving one runs 8.6 units from
+    30's on average, its states changing on a step's exact `==`), dragon head (Obj_Dragonhead 56: its fade
+    `spliti`) and ice (Obj_Iceisland 55: its wind's volume ramp `whole`), Tingle Island's Obj_Vtil 459 and
+    Beedle's shop curtain (Obj_Bscurtain 152; trials clean). Their fields that still differ from 30's are
+    lights their draws set, values set at their creation (after the warp, so from another random stream or
+    sea), or the sea's height under them. Left at 30: Fire Mountain's volcano (51: idle on this save; a
+    count in a state it never entered) and Obj_Yboil 276 (didn't run), liftable rocks (Stone2 455) and
+    ladders (Obj_Ladder 85: knocked down in an event; on this save they lie fallen), Outset's gong (284) and
+    the Flight Control Platform's goal flag (didn't run).
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next

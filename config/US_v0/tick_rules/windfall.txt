@@ -149,3 +149,14 @@
 022601CC    keep:r12    addi            kf1 (f_022600FC): a count (+0xBA2) + 1, held at its data's +0x44
 # BMS1's blink (f_0220A160) is the boating course's SARACE's (islands.txt), out of the trial's reach as KF1's.
 0220A178    whole:r3=1  bl 02055b64     bms1 blink: its countdown (+0x4C2)
+#
+# ---- the outdoors item (session top; area_test.sh STAGE,point,room,-1 1000 1400 TYPES walk). The cafe's and
+# the school's lamps (Obj_Cafelmp 280, d_a_obj_cafelmp.cpp; Opub,0,0,-1 three, Nitiyou,0,0,-1 one) turn
+# current.angle.y += 0xDA a tick (the trial: twice); the auction house's flowers (Obj_Rflw 277,
+# d_a_obj_rflw.cpp; Orichh,1,0,-1, seven) swing when brushed: m40C (+0x528) counts the swing's ticks (tested at
+# once: < 8 picks the phase step, > 256 ends it; the amplitude m408 +0x524 is (256 - m40C) sin(m40A)), m40A
+# (+0x526) a phase + 0x1000 then + 0x800 a tick.
+0232FCC8    spliti      addi            cafelmp: current.angle.y + 0xDA
+02388134    keep:r11    addi            rflw: the swing's tick count m40C (+0x528) + 1, tested at once
+023881B4    spliti      addi            rflw: the swing's phase m40A (+0x526) + 0x1000 (its first 8 ticks)
+02388224    spliti      addi            rflw: the swing's phase + 0x800

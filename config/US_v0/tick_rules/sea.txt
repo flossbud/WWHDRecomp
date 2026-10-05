@@ -182,3 +182,41 @@
 020C2E94    *h@f10      fsubs           bomb: pos.y -= its sink step, each step while the count lasts
 02476D3C    late        stb             ship: a countdown (+0x638) - 1 while > 0
 02476F54    late        stb             ship: the same (another path)
+#
+# ---- the outdoors item (session top; area_test.sh sea,POINT,ROOM,-1 1000 1400 TYPES walk). The boating course's
+# goal flag (Goal_Flag 291, d_a_goal_flag.cpp; sea,100,48,-1; the Flight Control Platform's didn't run): its
+# cloth is the pirate flag's (objects.txt): flag_move (f_0215EA00) adds three phases a tick (mWindScalePhase
+# +0x2A50, mNormalFlutterPhase +0x444, mFlagWavePhase +0x446, by its tuning data's increments), then per point
+# velocity += the cloth's force (PSVECAdd), velocity *= 0.85 (PSVECScale), position += velocity (the trial:
+# every point's velocity ~2x). Its race: the timer is the timer process's (ms); goal_check sees the line
+# crossed on any step; RaceEnd's mCamFramesPassed (+0x2A62) lets A skip the end camera after a count.
+0215EA64    split@r8    add             goal_flag: mWindScalePhase += its increment
+0215EA78    split@r10   add             goal_flag: mNormalFlutterPhase += its increment
+0215EA90    split@r0    add             goal_flag: mFlagWavePhase += its increment
+0215EC14    vec@r4      bl 028e8d88     goal_flag: a point's velocity += the cloth's force
+0215EC24    d@f1        bl 028e8e64     goal_flag: a point's velocity *= 0.85
+0215EC34    vec@r4      bl 028e8d88     goal_flag: a point's position += its velocity
+02160C70    keep:r10    addi            goal_flag RaceEnd: mCamFramesPassed (+0x2A62) + 1, then > the early skip's count
+# The sea's floating-barrel spawner (Coming3 271, d_a_coming3.cpp; sea,0,5,-1, ten): coming_start_main counts
+# unk_47C (+0x594) down from 30 while Link is far, tested at once, then makes a barrel (Obj_Barrel2) it follows.
+02115828    keep:r5     addi            coming3: unk_47C (+0x594) - 1, then 0 makes its barrel
+# Ice Ring Isle's lifts (ICE_LIFT 93, d_a_icelift.cpp, stubs; sea,0,40,-1, five): two tick counts (+0x628,
+# +0x62C: lift_wave f_0217D2A4's bob reads (+0x62C << 10) & 0xFC00, so it can't take a half tick: it bobs
+# at 30 Hz) and a count in its move (+0x65C, f_0217D11C: set, counted, not read).
+0217D510    whole       stw             ice_lift: a tick count (+0x628) + 1
+0217D51C    whole       stw             ice_lift: the bob's tick count (+0x62C) + 1
+0217D1C0    whole       sth             ice_lift move: a count (+0x65C) + 1 (speeding up)
+0217D23C    whole       sth             ice_lift move: the same (slowing down)
+# Ice Ring Isle's dragon head (Obj_Dragonhead 56, d_a_obj_dragonhead.cpp): with its switch on (melted by a
+# fire arrow) mAlpha (+0x520) - 2 a tick to 0, off + 2 to 255: half of it a step (the clamps then land on 30's
+# ticks). The ice island (Obj_Iceisland 55, d_a_obj_iceisland.cpp): its wind sound's volume field_0x396
+# (+0x6EA) - 1 a tick to 0 with the switch on, + 1 to 100 off. Its other fields that differ from 30's (+0x520
+# on) are a light's place its draw sets (as Obj_Vtil's 459 constant 3.7 apart are values set at its creation,
+# after the warp: neither moves twice; trials clean).
+023380D0    spliti      addi            dragonhead: mAlpha - 2 (fading out)
+02338144    spliti      addi            dragonhead: mAlpha + 2 (fading in)
+0235FC20    whole       sth             iceisland: the wind's volume (+0x6EA) - 1 while > 0
+0235FC5C    whole       sth             iceisland: the wind's volume + 1 while < 100
+# Left at 30: Fire Mountain's Obj_Volcano 51 (idle on this save, 100% equal over 400 ticks; a count +0x720
+# compared with 10 in a state it never entered) and Obj_Yboil 276 (didn't run); liftable rocks (Stone2 455:
+# carried and thrown, untested).
