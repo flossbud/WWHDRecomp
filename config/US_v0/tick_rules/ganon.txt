@@ -198,6 +198,10 @@
 # ---- BL (207, d_a_bl.cpp: Bubbles, the flying skulls; f_020AAC08 their hover). Found in GanonB's four.
 020AAC4C    spliti      addi            bl: the hover's phase (+0x420) + 1000 a tick
 020AACB0    spliti      addi            bl: the hover's phase (+0x420) + 500 a tick
+# its turn as it flies (the trial on one spawned on the Outset dock in the fight route): shape angle x and z
+# + its two spin speeds (+0x414, +0x416) a call, in f_020AB020: at 60 it spun twice as fast
+020ACDC4    split@r4    add             bl: shape_angle.x += its x spin (+0x414)
+020ACDD0    split@r6    add             bl: shape_angle.z += its z spin (+0x416)
 020A9974    whole       stb             bl (f_020A9744): a countdown (+0x406) - 1 (`if (n > 0) n--`; session qa's audit, no decomp of d_a_bl.cpp yet)
 020AA2E4    whole       stb             bl (f_020AA068): the same countdown - 1
 #
