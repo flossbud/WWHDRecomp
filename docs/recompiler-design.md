@@ -414,7 +414,7 @@ for that instruction only) with OP `*h`, `/h`, `k` (an approach's factor, `1 - (
 between the two half ticks; `spliti` for an `addi`'s immediate, as in a phase += 0x500 a tick; `lagi` for a
 `mulli` of a tick count kept to whole ticks, a phase count x IMM lagging IMM/2 on the whole tick's step); each is a
 no-op while `g_rtStep` is 1 (`RT_STEPPED()`). `reload:fD=rB+O[+O2]` is for code that truncates a
-frame count kept as a float (drawing too): at 60 (`g_rtSixty`) the float is read back. Every generated store also names its instruction to
+frame count kept as a float (drawing too): at 60 (`g_rtSixty`) the float is read back. `reloadh:` is the same in a stepped process's steps only (`RT_STEPPED()`): a value an instruction should see in place of what it loads (the sea Peahat's snap target plus its bob). Every generated store also names its instruction to
 the store journal (`rt_journal_store(ea, size, pc)`, only on the journaling path), so the 60 fps
 tools report guest addresses.
 

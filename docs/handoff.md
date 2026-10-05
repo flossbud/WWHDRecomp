@@ -713,7 +713,7 @@ it in a window; D21 "Step 2"):**
     stage's name is at +0x5134). From the Outset dock `920:M_NewD2,0,0,-1` lands in Dragon Roost
     Cavern's entrance; rooms 1-4 of M_NewD2 with point 0 land in four other places (room 3 outdoors at
     night: a layer?). `WWHD_DEBUG_PLACE=tick:x,y,z` moves Link within a stage.
-    `WWHD_DEBUG_SPAWN=tick:process,param,x,y,z[,anglex[,angley]][;...]` creates an actor there in
+    `WWHD_DEBUG_SPAWN=tick:process[/subtype],param,x,y,z[,anglex[,angley]][;...]` (subtype: the name table's argument, e.g. the sea's Octorok `Oqw` is 227/1) creates an actor there in
     Link's room (the creation record `f_025D5678`, then fpcM_Create `f_025E14A8` on the layer at
     *0x101F3AE8), its angle's x and y in hex if given (x is more parameters for some, y its heading):
     a Bokoblin at `950:189,0,-201622,190,312600` stands on the Outset dock behind Link and acts.
@@ -1057,6 +1057,33 @@ it in a window; D21 "Step 2"):**
     Forest Haven's Koroks (NPC_BJ1-9) and Makar (NPC_CB1), Jabun (NPC_JB1 358); Cave08's propellers,
     fans and nets never loaded at the spawn points tried (point 0 of rooms 1-3: they need the stage's
     spawn list).
+  - **Round 2, sealife (session top; sea.txt, forest.txt)**: the sea creatures in action, spawned in the
+    sail route's way (`route_test.sh sail TYPE`; `pair.py`-style pairing by type, since a spawned actor's
+    heap address differs between the rates):
+    - Seahats (PH 209, `1450:209,ffffff01,-213500,400,310200`): their attack cycle (climb, hover, swoop) ran
+      every 60 ticks against 120: five countdowns (+0x480, a loop in the shared execute; land Peahats'
+      too) and the hover's countdown (+0x48E) `keep`. The hover's height is 900 + b (b the floaty bob,
+      30 sin): a snap to 900 (scale 1, cap 50) then b added through an offset eased with a cap of 30, so b
+      is a displacement where the snap holds it and a speed where it climbs (a tick adds 50 + b). At h the
+      snap aims at 900 + (1 - h) b and a step adds h b (the new rule `reloadh:`, below, with `*h@`, and
+      `/h@` undoing the step override's halved caps): the hover now equals 30's (919.4, 928.0, 929.7...),
+      the cycle is on 30's ticks, the path within 0.1% (before: clipped flat at 915, the cycle twice as
+      fast). They stay ~400 apart after the swoop's bounce off the boat (a collision).
+    - Land Peahats (kindan room 9): a wobble phase (+0x478, fly_angle_set) `spliti`; trial clean.
+    - Octoroks: the sea's ("Oqw" is 227 with subtype 1; `WWHD_DEBUG_SPAWN` takes `proc/subtype` now:
+      `1450:227/1,ffffff01,-212500,0,311000`) surface, wait out a countdown and jump at the boat: six
+      countdowns (+0x3E6, a loop) ran two a tick (`keep`), the jump's four inlined calcSpeed gravity adds
+      `fall@` (it peaked at 122 instead of 246), and the bob's phase on the waves (`spliti`, the pools'
+      was ruled). Now the same modes on the same ticks, the jump within half a tick. The pools' (kindan
+      room 12) countdowns now count per tick too; they part with random waits.
+    - Big Octo and Gyorgs: as round 1 found (trial clean but for copies; retested).
+    - Not tested: the Hyoi seagull's flight (NPC_KAM 195, `HyoiKam` over each island: a Hyoi Pear used
+      within its range, `scale.x` around its perch, and its talk distance (38) starts its descent;
+      `WWHD_DEBUG_POKE=990:0,1046F12E,1,83;990:0,1046F154,1,5;990:0,1046F0B9,1,24;990:0,10474C6B,1,83` puts
+      a Hyoi Pear on X (bait slot 0, gameInfo +0x7E/+0xA4 as on the GameCube), but on the Outset dock the
+      perch is 8000 away and WWHD_DEBUG_PLACE under it didn't move Link). Next: a route to a perch.
+    - Shared: `reloadh:fD=rB+O` (generate.py), `reload:` in a stepped process's steps only (`reload:`
+      applies at 60 fps even to a process that isn't stepping); `WWHD_DEBUG_SPAWN=tick:proc/subtype,...`.
   - **Two 60 fps crashes in the Forbidden Woods, fixed (session top; shared, `sixty.cpp` `LiveStore`)**: at
     every warp there with Link converted (the defaults). Both came from half ticks putting back or hiding
     words in .data/.bss that head lists whose nodes are on the heap (which a half tick never puts back):

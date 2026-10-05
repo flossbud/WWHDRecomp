@@ -1322,8 +1322,9 @@ namespace
 	}
 }
 
-// WWHD_DEBUG_SPAWN=tick:process,param,x,y,z[,anglex[,angley[,anglez]]][;...] (a test aid): at those game frames an
-// actor of that process name (actor_names.tsv's numbers) and parameters (hex) is created at that position
+// WWHD_DEBUG_SPAWN=tick:process[/subtype],param,x,y,z[,anglex[,angley[,anglez]]][;...] (a test aid): at those game
+// frames an actor of that process name (actor_names.tsv's numbers), subtype (the name table's argument, default 0:
+// the sea's Octorok "Oqw" is 227/1, the pools' "Oq" 227/0) and parameters (hex) is created at that position
 // in Link's room, as fopAcM_create does: the creation record (f_025D5678: parameters, position, room,
 // angle, scale, subtype, parent) and fpcM_Create (f_025E14A8: the layer, *0x101F3AE8, the process
 // name, no create function, the record). anglex (hex), the angle's x, is more parameters for some
@@ -1334,7 +1335,7 @@ void f_025D5678(PPCInterpreter_t* __restrict ctx);
 void f_025E14A8(PPCInterpreter_t* __restrict ctx);
 namespace
 {
-	struct Spawn { int tick, proc; uint32 param; float x, y, z; uint32 anglex, angley, anglez; };
+	struct Spawn { int tick, proc, subtype; uint32 param; float x, y, z; uint32 anglex, angley, anglez; };
 	void DebugSpawn(PPCInterpreter_t* ctx)
 	{
 		static const std::vector<Spawn> spawns = [] {
@@ -1342,8 +1343,19 @@ namespace
 			if (const char* e = getenv("WWHD_DEBUG_SPAWN"))
 				for (const char* p = e; p && *p; p = strchr(p, ';') ? strchr(p, ';') + 1 : nullptr)
 				{
-					Spawn w{ -1, 0, 0, 0, 0, 0, 0, 0, 0 };
-					if (sscanf(p, "%d:%d,%x,%f,%f,%f,%x,%x,%x", &w.tick, &w.proc, &w.param, &w.x, &w.y, &w.z, &w.anglex, &w.angley, &w.anglez) >= 6)
+					Spawn w{ -1, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+					int n = 0;
+					if (sscanf(p, "%d:%d%n", &w.tick, &w.proc, &n) != 2)
+						continue;
+					const char* q = p + n;
+					if (*q == '/')
+					{
+						int c = 0;
+						if (sscanf(q + 1, "%d%n", &w.subtype, &c) != 1)
+							continue;
+						q += 1 + c;
+					}
+					if (sscanf(q, ",%x,%f,%f,%f,%x,%x,%x", &w.param, &w.x, &w.y, &w.z, &w.anglex, &w.angley, &w.anglez) >= 4)
 						v.push_back(w);
 				}
 			return v;
@@ -1373,7 +1385,7 @@ namespace
 			ctx->gpr[5] = (uint32)(sint32)(sint8)rd8(s_link + 0x326);   // Link's room
 			ctx->gpr[6] = w.anglex || w.angley || w.anglez ? angle : 0;
 			ctx->gpr[7] = 0;
-			ctx->gpr[8] = 0;
+			ctx->gpr[8] = (uint32)(sint32)w.subtype;
 			ctx->gpr[9] = ~0u;
 			f_025D5678(ctx);
 			const uint32 append = ctx->gpr[3];
@@ -1390,7 +1402,7 @@ namespace
 				id = ctx->gpr[3];
 			}
 			regs.Restore(ctx);
-			cemuLog_log(LogType::Force, "wwhd debug: spawned process {} param {:08x} at {} {} {}: id {:x}", w.proc, w.param, w.x, w.y, w.z, id);
+			cemuLog_log(LogType::Force, "wwhd debug: spawned process {}/{} param {:08x} at {} {} {}: id {:x}", w.proc, w.subtype, w.param, w.x, w.y, w.z, id);
 		}
 	}
 }

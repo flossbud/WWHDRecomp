@@ -52,12 +52,23 @@
 # a csXyz by csXyz::operator+=, which has no step: on whole ticks, as session bottom's Stalfos part) and a
 # count. Found with Link by the pools of kindan room 12 (WWHD_DEBUG_PLACE=1000:-9400,420,-1400): they
 # woke there; at sea the one in room 18 didn't, with Link swimming 600 units off.
+023C1130    spliti      addi            oq (sea): the bob's phase (+0x400) + 0x800 a tick (on the sea's waves; round 2 sealife, sea room 27)
 023C11AC    spliti      addi            oq: the bob's phase (+0x400) + 0x800 a tick
 023C2B50    whole       bl 0201a554     oq: shape_angle (+0x328) += its spin (+0x468), once a tick
 023C2BDC    whole       bl 0201a554     oq: the same (another state)
 023C2F94    whole       bl 0201a554     oq: the same
 023C2FEC    whole       bl 0201a554     oq: the same
-023C2424    whole       stb             oq: a count (+0x3E0) + 1
+023C2424    whole       stb             oq: a count (+0x3E0) + 1 (its mode, 24 -> 25: mode 24 sets constants only)
+# In action (round 2 sealife: a sea Octorok, "Oqw" = 227 subtype 1, spawned by the sail route's boat,
+# WWHD_DEBUG_SPAWN=1450:227/1,ffffff01,-212500,0,311000): it surfaces, waits out a countdown and jumps at
+# the boat. Its six countdowns (+0x3E6 + 2i, a loop in the execute f_023C1380; the attack's +0x3E6 and
+# +0x3EE) ran two a tick: keep. The jump's arc: four inlined fopAcM_calcSpeed (speed.y += gravity
+# (+0x374), at least -100), each before fopAcM_posMove: fall@ (the jump peaked at 122 instead of 246).
+023C14D4    keep:r7     addi            oq: its countdowns (+0x3E6 + 2i) - 1 while > 0
+023C32FC    fall@f8     fadds           oq: speed.y += gravity (inlined calcSpeed)
+023C3364    fall@f8     fadds           oq: the same (another path)
+023C33DC    fall@f8     fadds           oq: the same
+023C350C    fall@f8     fadds           oq: the same
 #
 # ---- Seahats (PH 209 with the sea's parameter: Peahats, in the defaults; their sea code has its own
 # steps, found with Link placed among them in sea room 24): three phases += a per-tick amount (split),
@@ -67,6 +78,31 @@
 023CA1B0    split@r5    add             ph (sea): a phase (+0x474) += its step a tick
 023CA1E0    split@r0    add             ph (sea): a phase (+0x476) += its step a tick
 023CE960    vec@r4      bl 028e8d88     ph (sea): +0x430 += a rotated step a tick
+# In action (round 2 sealife: a Seahat spawned in the sail route's way, 1450:209,ffffff01,-213500,400,310200,
+# swoops at the boat): its attack cycle (climb, hover, swoop) ran twice as often at 60, every 60 ticks
+# against 120: five countdowns at +0x480 (a loop in the shared execute, f_023CC070) that only run in the
+# attack, so the idle tests never saw them. keep (for land Peahats too).
+023CC2D8    keep:r10    addi            ph: its countdowns (+0x480 + 2i) - 1 while > 0
+# Its hover (mode 1 of the sea branch, 023CC6E0 on) lasts a countdown (+0x48E, 60) set when its swoop
+# ends: keep (023CC808, session qa's in tick_rules.txt). Its height: 900 + b there, b = 30 sin(+0x472) the floaty bob (fuwafuwa_set 023CA0BC,
+# +0x410). Each step eases pos.y to 900 with scale 1 and a cap of 50 (a snap; out of the sea it climbs
+# 50 a tick, 023CCD7C), then adds b by an offset eased to it with a cap of 30 (023CEB6C on: +0x404
+# toward +0x410, pos.y toward pos.y + +0x404, +0x404 back to 0; x and z the same with +0x400/+0x408,
+# no snap). So the bob is a displacement where the snap holds it and a speed where it climbs (a tick
+# adds 50 + b); at h the snap aims at 900 + (1 - h) b (reloadh f13 = b, then *h@: 1 - h = h at 60) and a
+# step adds h b, uncapped: 900 + b hovering, 50 + b a tick climbing, as at 30 (the step overrides'
+# halved cap clipped b to 15: it hovered flat at 915). x and z: h of the offset a step (a speed).
+023CCD1C    reloadh:f13=r30+0x410 lfs   ph (sea): in its snap's target (900 + this), the bob b (+0x410) in place of the HIO's 0
+023CCD24    *h@f13      fadds           ph (sea): the snap's target 900 + h b ((1 - h) b at h = 1/2)
+023CEB78    /h@f3       bl 0200ed84     ph (sea): its x offset (+0x400) eased to +0x40C with a cap of 30, not 30 h
+023CEB90    /h@f3       bl 0200ed84     ph (sea): its y offset (+0x404) eased to b (+0x410), cap 30
+023CEBA8    /h@f3       bl 0200ed84     ph (sea): its z offset (+0x408) eased to +0x414, cap 30
+023CEBBC    *h@f12      fadds           ph (sea): pos.x eased to pos.x + h x offset
+023CEBD8    *h@f7       fadds           ph (sea): pos.y eased to pos.y + h y offset
+023CEBF0    *h@f0       fadds           ph (sea): pos.z eased to pos.z + h z offset
+023CEC10    /h@f2       bl 0200edc8     ph (sea): its x offset back to 0, cap 30
+023CEC20    /h@f2       bl 0200edc8     ph (sea): its y offset back to 0, cap 30
+023CEC34    /h@f2       bl 0200edc8     ph (sea): its z offset back to 0, cap 30
 #
 # ---- Big Octo (DAIOCTA 225, its eyes DAIOCTA_EYE 226) and Gyorgs (GY 228): no rules; tested on the boat
 # (route `sail`: aboard by f1095, sailing west-northwest from f1400 at ~50 units a tick). Big Octo's

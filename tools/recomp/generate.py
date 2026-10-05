@@ -92,6 +92,9 @@ rules, for the code of processes that run every frame with a time step h
                is 1), fD is the float at rB + O again (with O2, at the word at rB + O, plus O2):
                code that truncates a frame count kept as a float (whose half steps are .5) gets it
                whole (the particles' texture scroll, `int tick = getFrame()`)
+  reloadh:fD=rB+O[+O2]  the same while the process steps (h != 1, RT_STEPPED()) only: a value an
+               instruction should see in place of what it loads, in a stepped process's steps only
+               (the sea Peahat's snap target + its bob, tick_rules/sea.txt)
 REG is a register (r3, f1). These name any instruction by its mnemonic (`bl TARGET` for a call).
 """
 import bisect
@@ -246,9 +249,9 @@ class Program:
                     assert kind != "fall" or arg[0] == "f", f"tick_rules.txt:{n}: {rule}: fall@ takes the gravity's float register"
                     assert kind not in ("vec", "arc", "ssplit") or (arg[0] == "r" and words[2] == "bl"), f"tick_rules.txt:{n}: {rule}: a call's pointer register"
                     kind += "@"
-                if kind == "reload":
+                if kind in ("reload", "reloadh"):
                     m = re.fullmatch(r"(f(?:[12]?[0-9]|3[01]))=(r(?:[12]?[0-9]|3[01]))\+(0x[0-9a-fA-F]+)(?:\+(0x[0-9a-fA-F]+))?", arg)
-                    assert m, f"tick_rules.txt:{n}: {rule}: reload:fD=rB+OFFSET[+OFFSET] expected"
+                    assert m, f"tick_rules.txt:{n}: {rule}: {kind}:fD=rB+OFFSET[+OFFSET] expected"
                     value = (m.group(1), m.group(2), int(m.group(3), 16), None if m.group(4) is None else int(m.group(4), 16))
                     assert self.function_containing(ea) is not None, f"tick_rules.txt:{n}: {ea:08X} is in no function"
                     assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
@@ -541,13 +544,14 @@ def apply_tick_rule(rule, i, lines):
         if arg is not None:
             out += ["else", f"\tGPR(3) = {reg_expr(arg) if isinstance(arg, str) else emit.hx(arg)};"]
         return out
-    if kind == "reload":
+    if kind in ("reload", "reloadh"):
         dest, base, off, off2 = arg
         ea = f"GPR({base[1:]}) + {emit.hx(off)}"
         if off2 is not None:
             ea = f"rd32({ea}) + {emit.hx(off2)}"
         d = reg_expr(dest)
-        return lines + [f"if (RT_SIXTY()) {{ const uint32 w_ = rd32({ea}); float f_; memcpy(&f_, &w_, 4); "
+        gate = "RT_SIXTY()" if kind == "reload" else "RT_STEPPED()"
+        return lines + [f"if ({gate}) {{ const uint32 w_ = rd32({ea}); float f_; memcpy(&f_, &w_, 4); "
                         f"{d}.fp0 = (double)f_; {d}.fp1 = {d}.fp0; }}   // step rule: {what}"]
     if kind == "spliti":
         imm = emit.hx(i.simm & 0xFFFFFFFF)

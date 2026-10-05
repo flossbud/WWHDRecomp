@@ -178,3 +178,9 @@
 020B98E8    *h:f26      lfs             bmdhand chain (copy 6): m31C
 020BA51C    vec@r3      bl 0200fcd8     bmdhand chain (copy 7): the pull
 020BA558    *h:f29      lfs             bmdhand chain (copy 7): m31C
+#
+# Peahats (PH 209; the shared section in tick_rules.txt has the rest): fly_angle_set (f_023CA258) adds
+# to a wobble phase (+0x478) 800 a tick on land, 900 at sea; found in kindan room 9 in round 2's sealife
+# (the trial: "twice" in 98.5% of ticks).
+023CA4D8    spliti      addi            ph: a wobble phase (+0x478) + 800 a tick
+023CA518    spliti      addi            ph (sea): a wobble phase (+0x478) + 900 a tick
