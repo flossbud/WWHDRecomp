@@ -29,6 +29,15 @@
 # passed the test again (counter_audit.py listed it under ST, 190: the code's place)
 0248FC6C    whole       sth             252: gameInfo +0x5B60 - 1, every 32 ticks
 #
+# ---- WZ (208, d_a_wz.cpp: Wizzrobes, rooms 3 and 7 here; the decomp has no code; f_024E398C its actions).
+# Found with the trial in the Savage Labyrinth (WWHD_DEBUG_STAGE=920:Cave09,0,6,-1, route walk: three warp
+# in): its hover and two spins a call, and a countdown. Not ruled: +0x469 + 1 a call in several states (its
+# only reads here are those adds: an index, not a time).
+024E78CC    spliti      addi            wz: its hover's phase (+0x504) + 2000 a call (a sine of it)
+024E51C8    spliti      addi            wz: shape_angle.y + 0x100 a call (a spin)
+024E469C    split@r0    subf            wz: angle.y -= +0x506 + 0x700 a call (a spin; shape_angle.y and +0x502 copy it)
+024E524C    late        sth             wz: a countdown (+0x510) - 1 while above 0, tested before
+#
 # ---- BWD (217, d_a_bwd.cpp: Molgera, stage kazeB; execute f_020FA614): its tick count (its phases are
 # the count times a step: m18FE, m1900 in the decomp), counters and timers
 020FA9C8    whole       sth             bwd: its tick count (+0x1B30) + 1
