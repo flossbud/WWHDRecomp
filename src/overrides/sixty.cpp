@@ -2112,6 +2112,12 @@ namespace
 	}
 }
 
+namespace
+{
+	void ChainArrays(uint32 proc, std::vector<std::pair<uint32, uint32>>& saved);   // the chains (below)
+	void ChainRestore(const std::vector<std::pair<uint32, uint32>>& saved);
+}
+
 void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
 {
 	if (s_firstDraw)
@@ -2181,8 +2187,11 @@ void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
 	}
 	const uint32 outer = s_drawing;
 	s_drawing = GPR(3);
+	std::vector<std::pair<uint32, uint32>> chains;   // its chains moved on for this draw (the chains, below)
+	ChainArrays(s_drawing, chains);
 	if (!(g_rtHalfTick && !s_held.empty() && HeldDraw(ctx, orig_f_025DE2CC)))
 		orig_f_025DE2CC(ctx);
+	ChainRestore(chains);
 	s_drawing = outer;
 }
 
@@ -2195,6 +2204,14 @@ void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
 // converted actor that stepped this half tick. WWHD_60FPS_CHAINS=0 draws them as they are.
 namespace
 {
+	// WWHD_60FPS_CHAINS_LOG=path (a probe): each smoothed chain's tip (a line's last point, an array's
+	// middle point) per drawn frame, as drawn
+	FILE* ChainLog()
+	{
+		static FILE* log = [] { const char* e = getenv("WWHD_60FPS_CHAINS_LOG"); return e ? fopen(e, "w") : nullptr; }();
+		return log;
+	}
+
 	bool ChainsOn()
 	{
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_CHAINS"); return !(e && atoi(e) == 0); }();
@@ -2204,8 +2221,9 @@ namespace
 	struct ChainPoints { std::vector<uint32> prev, curr; };    // the points' words at the last two whole ticks' draws
 	std::unordered_map<uint32, ChainPoints> s_chainPoints;     // by the points' address
 
-	// n points (cXyz) at ea, about to be drawn: noted on a whole tick's frame; on a half tick's, if they're
-	// still the whole tick's, moved on (the words they had are added to saved, to put back after the draw)
+	// n points (cXyz) at ea, about to be drawn: noted on a whole tick's frame; on a half tick's, each point still
+	// the whole tick's is moved on (one that moved this half tick, a root that follows its actor every step,
+	// stays); the words they had are added to saved, to put back after the draw
 	void ChainDraw(uint32 ea, uint32 n, std::vector<std::pair<uint32, uint32>>& saved)
 	{
 		std::vector<uint32> now(3 * n);
@@ -2218,15 +2236,71 @@ namespace
 			c.curr = std::move(now);
 			return;
 		}
-		if (now != c.curr || c.prev.size() != now.size())
-			return;                                        // moved on this half tick, or not seen at a whole one
-		for (uint32 i = 0; i < 3 * n; i++)
+		if (c.curr.size() != now.size() || c.prev.size() != now.size())
+			return;                                        // not seen at a whole tick
+		for (uint32 p = 0; p < n; p++)
 		{
-			const float a = std::bit_cast<float>(c.prev[i]), b = std::bit_cast<float>(c.curr[i]);
-			saved.emplace_back(ea + 4 * i, now[i]);
-			wr32(ea + 4 * i, std::bit_cast<uint32>(b + 0.5f * (b - a)));
+			const uint32 i = 3 * p;
+			if (now[i] != c.curr[i] || now[i + 1] != c.curr[i + 1] || now[i + 2] != c.curr[i + 2])
+				continue;
+			for (uint32 k = i; k < i + 3; k++)
+			{
+				const float a = std::bit_cast<float>(c.prev[k]), b = std::bit_cast<float>(c.curr[k]);
+				saved.emplace_back(ea + 4 * k, now[k]);
+				wr32(ea + 4 * k, std::bit_cast<uint32>(b + 0.5f * (b - a)));
+			}
 		}
 	}
+
+	// the same for n angle triplets (csXyz, s16s) at ea: each moved on by half its last tick's wrapped change
+	void ChainDrawAngles(uint32 ea, uint32 n, std::vector<std::pair<uint32, uint32>>& saved)
+	{
+		const uint32 words = (6 * n + 3) / 4;
+		std::vector<uint32> now(words);
+		for (uint32 i = 0; i < words; i++)
+			now[i] = rd32(ea + 4 * i);
+		ChainPoints& c = s_chainPoints[ea];
+		if (!g_rtHalfTick)
+		{
+			c.prev = c.curr.size() == now.size() ? std::move(c.curr) : now;
+			c.curr = std::move(now);
+			return;
+		}
+		if (c.curr.size() != now.size() || c.prev.size() != now.size())
+			return;
+		auto half = [](const std::vector<uint32>& w, uint32 k) { return (sint16)(uint16)(w[k / 2] >> (k % 2 ? 0 : 16)); };
+		std::vector<bool> taken(words);
+		for (uint32 p = 0; p < n; p++)
+		{
+			bool same = true;
+			for (uint32 k = 3 * p; k < 3 * p + 3; k++)
+				same = same && half(now, k) == half(c.curr, k);
+			if (!same)
+				continue;
+			for (uint32 k = 3 * p; k < 3 * p + 3; k++)
+			{
+				if (!taken[k / 2])
+				{
+					taken[k / 2] = true;
+					saved.emplace_back(ea + 4 * (k / 2), now[k / 2]);
+				}
+				const sint16 a = half(c.prev, k), b = half(c.curr, k);
+				wr16(ea + 2 * k, (uint16)(sint16)(b + (sint16)(b - a) / 2));
+			}
+		}
+	}
+
+	// Chains in an actor that its draw makes models from (a whole tick's solver; its draw reads them): by process
+	// name, the arrays drawn half a tick on in a half tick's draw of the actor (if it stepped) and put back after.
+	// Helmaroc King's tail feathers (BDK 238: four tails at +0x414, 0x17C each; tail_draw reads each one's
+	// places at +0x24 and angles at +0x9C; tail_control on whole ticks but for the roots)
+	struct ChainArray { uint16 name; uint32 offset, count; bool angles; };
+	constexpr ChainArray kChainArrays[] = {
+		{ 238, 0x414 + 0x24, 10, false }, { 238, 0x414 + 0x9C, 10, true },
+		{ 238, 0x590 + 0x24, 10, false }, { 238, 0x590 + 0x9C, 10, true },
+		{ 238, 0x70C + 0x24, 10, false }, { 238, 0x70C + 0x9C, 10, true },
+		{ 238, 0x888 + 0x24, 10, false }, { 238, 0x888 + 0x9C, 10, true },
+	};
 
 	void ChainRestore(const std::vector<std::pair<uint32, uint32>>& saved)
 	{
@@ -2239,6 +2313,33 @@ namespace
 	bool ChainLines(uint16 name)
 	{
 		return name == 190 || name == 198;
+	}
+
+	// a process about to draw: its chain arrays noted (a whole tick) or moved on (a half tick it stepped)
+	void ChainArrays(uint32 proc, std::vector<std::pair<uint32, uint32>>& saved)
+	{
+		if (!ChainsOn() || !proc)
+			return;
+		const uint16 name = rd16(proc + 0x08);
+		if (std::none_of(std::begin(kChainArrays), std::end(kChainArrays), [&](const ChainArray& a) { return a.name == name; }))
+			return;
+		if (g_rtHalfTick)
+		{
+			const auto it = s_stepping.find(proc);
+			if (it == s_stepping.end() || !it->second)
+				return;
+		}
+		for (const ChainArray& a : kChainArrays)
+			if (a.name == name)
+				(a.angles ? ChainDrawAngles : ChainDraw)(proc + a.offset, a.count, saved);
+		if (FILE* log = ChainLog())
+		{
+			const ChainArray& a = *std::find_if(std::begin(kChainArrays), std::end(kChainArrays), [&](const ChainArray& x) { return x.name == name; });
+			const uint32 mid = proc + a.offset + 12 * (a.count / 2);
+			fprintf(log, "%u %c %08x %.3f %.3f %.3f\n", wwhd::os::SwapCount(), g_rtHalfTick ? 'h' : 'w', proc,
+				std::bit_cast<float>(rd32(mid)), std::bit_cast<float>(rd32(mid + 4)), std::bit_cast<float>(rd32(mid + 8)));
+			fflush(log);
+		}
 	}
 
 	// the process drawing is one whose chains are noted (a whole tick) or moved on (a half tick it stepped)
@@ -2260,8 +2361,7 @@ namespace
 	// bytes each, the points' address first)
 	void ChainLineUpdate(PPCInterpreter_t* __restrict ctx, void (*orig)(PPCInterpreter_t*), uint32 count, uint32 most, uint32 lines)
 	{
-		// WWHD_60FPS_CHAINS_LOG=path (a probe): each smoothed update's first line's tip, as drawn
-		static FILE* log = [] { const char* e = getenv("WWHD_60FPS_CHAINS_LOG"); return e ? fopen(e, "w") : nullptr; }();
+		FILE* log = ChainLog();
 		std::vector<std::pair<uint32, uint32>> saved;
 		const uint32 mat = GPR(3), at = rd32(mat + lines);
 		const uint32 n = rd16(mat + count), points = std::min<uint32>(GPR(4) & 0xFFFFu, rd16(mat + most));

@@ -1094,12 +1094,19 @@ it in a window; D21 "Step 2"):**
     (ChainLines): the Stalfos' hair (190, Earth Temple room 14: `M_Dai,15,0,-1` with
     `WWHD_DEBUG_POKE=980:190,3e0,2,1`) and the rats' tails (198, `Siren,0,6,-1`): their tips now make 46%
     and 47% of their motion on half frames (0% before). `WWHD_60FPS_CHAINS=0` turns it off;
-    `WWHD_60FPS_CHAINS_LOG=path` logs each smoothed line's tip per frame. Not done: the cloths (the boat's
-    sail 172, the pirate flag 173, tapestries 289: unconverted, drawn by their packets straight from a point
-    array the GPU reads after the draw call, so a copy is needed, not a put-back), the Stalfos' loincloth
-    and Helmaroc King's tail feathers (models from the chain), the rope bridges' ropes (89, the other line
-    class: to test with Link crossing). Other users of the two line classes (ropes, ships' lines, vines)
-    can be opted in once tested.
+    `WWHD_60FPS_CHAINS_LOG=path` logs each smoothed chain's tip per frame. Model chains the same way, in the
+    actor's draw (the fpcM_Draw override: arrays by process name, kChainArrays, moved on point by point,
+    a root that follows its actor every step left as it is; angle triplets by half their wrapped change):
+    Helmaroc King's tail feathers (BDK 238, four tails at +0x414, 0x17C each, places +0x24 and angles +0x9C,
+    tail_draw; `M2tower,22,0,3` with WWHD_DEBUG_BOSS=1): 38% of a feather's motion on half frames (16% of
+    them still: the actor held in its events). Not done: the cloths (the pirate flag 173, tapestries 289,
+    unconverted; the pirate flag's packet double-buffers its points and the GPU reads them after the draw,
+    so a copy is needed, not a put-back). The boat's sail as seen sailing isn't SAIL 172's packet (its
+    draw, f_0245FAAC, returns early while sailing: the boat's +0x3E4 is 0): the visible sail is drawn
+    elsewhere, to find. The Stalfos' loincloth (its pose set in the execute, nun_pos_set: its angle steps
+    on whole ticks, its anchor every step), the rope bridges' ropes (89, the other line class: to test
+    with Link crossing). Other users of the two line classes (ropes, ships' lines, vines) can be opted in
+    once tested.
   - **A tick that began stepping in an event finishes its half step (shared: sixty.cpp, 2026-10-05)**: the
     half tick's stop for a running event read Link's action again (StepInEvents), so where it left the
     list during the whole tick's step every process that had begun stepping lost the tick's other half:
