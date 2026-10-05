@@ -1,0 +1,15 @@
+# Step and tick rules for the cutscenes (session bottom; see ../tick_rules.txt for the format, the handoff's
+# "Cutscenes at 60"). A JStudio cutscene's values (dDemo) are read half way through the tick at a converted
+# process's whole step and at the tick at its half step (sixty.cpp's demo time): the cast reading them steps.
+#
+# ---- DEMO00 (406, d_a_demo00.cpp: the cutscenes' puppets, the cast a cutscene creates from its DemoNN archive;
+# execute f_02120CBC, actPerformance f_021219B8). Its place, angles and animation frame come from its demo
+# actor. HD sets its morf's frame to (s16)(f - 1), truncated to a whole frame, then plays it (+1 at 30): stepped,
+# f - h untruncated, so the play's h lands on f (whole frames: half way; half frames: 30's frame).
+02122424    *h@f31      fsubs           demo00 actPerformance: the frame - 1 (then played +1): - h
+02122464    exact:f29   frsp            demo00 actPerformance: the morf's frame, (s16)(f - h): untruncated
+021225C0    exact:f29   frsp            demo00 actPerformance: the frame before a cut's first (no play): untruncated
+# its prm commands, run each tick the cutscene sets them: the one-shot ones once a tick
+02120F90    whole       bl 0254da38     demo00 execute: an item get (prm 5)
+021210A0    whole       bl 025cb374     demo00 execute: a vibration's shock (prm 7)
+021210E4    whole       bl 025cb408     demo00 execute: a quake (prm 7)

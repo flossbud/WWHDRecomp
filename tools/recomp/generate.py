@@ -88,6 +88,9 @@ rules, for the code of processes that run every frame with a time step h
   lagw:rM      the same for a `mullw rD, rA, rB` of a tick count by a register rM (rA or rB: the phase a tick, as
                count x (REG0_S(n) + IMM), a debug register plus a constant): on the whole tick's step rD lags by
                rM/2 (rM read before the instruction, which may write it)
+  exact:fS     a frame truncated to whole frames (an s16: fctiwz, stored and read back as an integer) that would
+               hold a stepping process's animation to whole ticks: in its steps the instruction's float
+               destination gets fS, the untruncated value, instead (DEMO00's frame)
   lag:fREG     the same for a tick count made a float (count x speed with fmuls, count x speed + base
                with fmadds; lag@ for that instruction only): on the whole tick's step the float REG is
                REG - 1/2
@@ -284,7 +287,8 @@ class Program:
                         assert key == "r3", f"tick_rules.txt:{n}: unknown rule argument {arg}"
                         value = v if re.fullmatch(r"r([12]?[0-9]|3[01])", v) else int(v, 0)
                 else:
-                    assert kind.rstrip("@") in ("keep", "split", "splitd", "note", "vec", "arc", "fall", "ssplit", "lagw") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert kind.rstrip("@") in ("keep", "split", "splitd", "note", "vec", "arc", "fall", "ssplit", "lagw", "exact") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert kind != "exact@" and (kind != "exact" or arg[0] == "f"), f"tick_rules.txt:{n}: exact:fS takes a float register"
                     assert kind != "lagw@", f"tick_rules.txt:{n}: lagw takes :, not @"
                     assert kind not in ("ssplit", "splitd"), f"tick_rules.txt:{n}: {kind} takes @: {kind}@rN"
                     assert kind != "fall", f"tick_rules.txt:{n}: fall takes @: fall@fREG"
@@ -315,6 +319,8 @@ class Program:
                 return f"{ea:08X}: spliti applies to addi rD, rA, IMM, not {i.op}"
             if kind == "lagi" and i.op != "mulli":
                 return f"{ea:08X}: lagi applies to mulli rD, rA, IMM, not {i.op}"
+            if kind == "exact" and i.op not in ("frsp", "fmr", "fsub", "fsubs", "fadd", "fadds"):
+                return f"{ea:08X}: exact applies to an instruction writing a float (frsp, fmr, fsub...), not {i.op}"
             if kind == "lagw" and (i.op != "mullw" or r3 not in (f"r{i.rA}", f"r{i.rB}")):
                 return f"{ea:08X}: lagw applies to mullw rD, rA, rB with the multiplier rA or rB, not {i.op} ({r3})"
             if kind == "keep" and i.op not in KEEP_OPS:
@@ -592,6 +598,9 @@ def apply_tick_rule(rule, i, lines):
     if kind == "lagi":
         half = emit.hx((int(i.simm / 2)) & 0xFFFFFFFF)
         return lines + [f"if (RT_STEPPED() && RT_WHOLE_TICK()) GPR({i.rD}) = GPR({i.rD}) - {half};   // step rule: {what}"]
+    if kind == "exact":
+        return ([f"if (RT_STEPPED()) {{   // step rule: {what}", f"\tFPR({i.frD}) = {reg_expr(arg)};", "} else {"]
+                + ["\t" + l for l in lines] + ["}"])
     if kind == "lagw":
         return ([f"{{ const sint32 lagw_ = (sint32)GPR({arg[1:]});   // step rule: {what}"] + ["\t" + l for l in lines]
                 + [f"\tif (RT_STEPPED() && RT_WHOLE_TICK()) GPR({i.rD}) = GPR({i.rD}) - (uint32)(lagw_ / 2);", "}"])

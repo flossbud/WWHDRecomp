@@ -1700,12 +1700,19 @@ it in a window; D21 "Step 2"):**
     cutscene is JStudio (the boss refights' intros are event cameras, not JStudio). Open: other JStudio
     cutscenes (the 100% save replays few); an unconverted cast member reads the half way values at its
     whole step and keeps them (half a tick behind at whole ticks). The generic cutscene puppet DEMO00
-    (406, d_a_demo00.cpp; 10 in GTower's arrival) is the main unconverted cast: converting it needs
-    `*h@f31` on actPerformance's frame - 1 (f_021219B8 at 02122424, so setFrame(f - h) then play's h
-    lands on f) and `whole` on its execute's (f_02120CBC) item get (02120F90) and vibrations (021210A0,
-    021210E4); and after a string compare (r27) HD sets a frame (+0x9C of the model at +0x3F0) through
-    an s16 (fctiwz at 02122434), whole frames only: if that is the skeleton's, its pose would still
-    change once a tick. To read before converting it. Not done.
+    (406, d_a_demo00.cpp; 10 in GTower's arrival, 14 in the Deku Tree's meet_deku: the cast a cutscene
+    makes from its DemoNN archive) is converted (`tick_rules/cutscenes.txt`): its place, angles and
+    animation frame come from its demo actor. HD sets its morf's frame (+0x3F0's +0x9C) to (s16)(f - 1),
+    truncated (fctiwz, stored, read back with lha), then plays it (+1 at 30, + h stepped): `*h@f31` on the
+    - 1 (02122424) and a new step rule `exact:fS` (generate.py: in a stepped process's steps the
+    instruction's float destination gets fS, the untruncated value) on the truncation's frsp (02122464,
+    and 021225C0 for a cut's frame before 1), so the play's h lands on f; `whole` on its prm commands' item
+    get (02120F90) and shocks (021210A0, 021210E4). When a string compare (r27) matches, HD leaves the
+    morf to play freely: stepped, h a step. Test: meet_deku (Omori point 213 layer 8 with the pokes below,
+    A every 90 frames): the 14 puppets' places at half frames equal to 30's ticks (whole frames at the
+    midpoints but at cuts' teleports), their animation frames 9.5, 10 at a tick 30 shows 10; hz30 at
+    four moments 122, 35, 51, 67 blocks before, 0, 29, 7, 0 after (the rest: the foreground grass
+    blades, top's grass fix, and the message box's spinning next icon).
   - **Weather (the work queue's "weather", `tick_rules/weather.txt`)**: top's hz30 scan
     (scratch hz30.py: 60 consecutive swaps, screen blocks changing on one parity only) found the Wind
     Temple's floating dust at 30 Hz (16 and 29 blocks in kaze rooms 2 and 9). All the environment's
