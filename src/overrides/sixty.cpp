@@ -1566,6 +1566,75 @@ namespace
 	}
 }
 
+// WWHD_DEBUG_EVENT=tick:NAME[;...] (a test aid): from those game frames, once no event runs (EventRunning: a
+// stage's arrival is an event), the stage's event NAME (its event list's name: a JStudio cutscene's event has
+// the staff PACKAGE and CAMERA) is ordered for Link as an actor orders one: its index by
+// dEvent_manager_c::getEventIdx (f_02543F10, the manager at g_dComIfG_gameInfo + 0x52C4) and
+// fopAcM_orderOtherEventId (f_025D7A58: an "other" event, the list's priority, dEvtFlag_NOPARTNER), so a
+// finished save can replay the story's cutscenes
+void f_02543F10(PPCInterpreter_t* __restrict ctx);
+void f_025D7A58(PPCInterpreter_t* __restrict ctx);
+namespace
+{
+	void DebugEvent(PPCInterpreter_t* ctx)
+	{
+		struct Order { int tick; std::string name; bool done; };
+		static std::vector<Order> events = [] {
+			std::vector<Order> v;
+			if (const char* e = getenv("WWHD_DEBUG_EVENT"))
+				for (const char* p = e; p && *p; p = strchr(p, ';') ? strchr(p, ';') + 1 : nullptr)
+				{
+					int tick = 0, n = 0;
+					if (sscanf(p, "%d:%n", &tick, &n) != 1 || !n)
+						continue;
+					const char* end = strchr(p + n, ';');
+					std::string name(p + n, end ? (size_t)(end - (p + n)) : strlen(p + n));
+					if (!name.empty() && name.size() < 0x40)
+						v.push_back({ tick, name, false });
+				}
+			return v;
+		}();
+		if (events.empty() || g_rtHalfTick || !s_link || rd16(s_link + 0x08) != 168 || EventRunning())
+			return;
+		const int now = (int)wwhd::rt::GameFrame(wwhd::os::SwapCount());
+		for (Order& o : events)
+		{
+			if (o.done || now < o.tick)
+				continue;
+			o.done = true;
+			Registers regs;
+			regs.Save(ctx);
+			const uint32 sp = (ctx->gpr[1] - 0x200) & ~0xFu;
+			const uint32 str = sp + 0x100;
+			for (size_t i = 0; i <= o.name.size(); i++)
+				wr8(str + (uint32)i, i < o.name.size() ? (uint8)o.name[i] : 0);
+			wr32(sp, ctx->gpr[1]);                     // a back chain
+			ctx->gpr[1] = sp;
+			ctx->gpr[3] = 0x1046F0B0u + 0x52C4u;
+			ctx->gpr[4] = str;
+			ctx->gpr[5] = 0xFF;
+			f_02543F10(ctx);
+			const sint16 index = (sint16)ctx->gpr[3];
+			uint32 ordered = 0;
+			if (index >= 0)
+			{
+				ctx->gpr[1] = sp;
+				ctx->gpr[3] = s_link;
+				ctx->gpr[4] = (uint32)(sint32)index;
+				ctx->gpr[5] = 0xFF;                    // no map tool id
+				ctx->gpr[6] = 0xFFFF;                  // no hind
+				ctx->gpr[7] = 0;                       // the list's priority
+				ctx->gpr[8] = 1;                       // dEvtFlag_NOPARTNER_e
+				f_025D7A58(ctx);
+				ordered = ctx->gpr[3];
+			}
+			regs.Restore(ctx);
+			cemuLog_log(LogType::Force, "wwhd debug: event {} (index {}) ordered at frame {}: {}", o.name, index, now, ordered);
+			break;                                     // one order a tick
+		}
+	}
+}
+
 namespace wwhd::debug
 {
 	void RequestSpawn(int process, uint32 param, uint32 anglex)
@@ -1722,6 +1791,7 @@ void f_025F172C(PPCInterpreter_t* __restrict ctx)
 {
 	DebugStage();
 	DebugSpawn(ctx);
+	DebugEvent(ctx);
 	s_firstDraw = true;
 	s_held.clear();
 	if (!g_rtHalfTick)

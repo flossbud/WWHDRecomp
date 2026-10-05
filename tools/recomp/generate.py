@@ -85,6 +85,9 @@ rules, for the code of processes that run every frame with a time step h
   lagi         for a `mulli rD, rA, IMM` of a tick count (a phase as count x IMM, the count kept to whole
                ticks): on the whole tick's step rD lags by IMM/2, (count - 1/2) x IMM, so the phase
                moves every frame and is 30's at half ticks
+  lagw:rM      the same for a `mullw rD, rA, rB` of a tick count by a register rM (rA or rB: the phase a tick, as
+               count x (REG0_S(n) + IMM), a debug register plus a constant): on the whole tick's step rD lags by
+               rM/2 (rM read before the instruction, which may write it)
   lag:fREG     the same for a tick count made a float (count x speed with fmuls, count x speed + base
                with fmadds; lag@ for that instruction only): on the whole tick's step the float REG is
                REG - 1/2
@@ -279,12 +282,14 @@ class Program:
                         assert key == "r3", f"tick_rules.txt:{n}: unknown rule argument {arg}"
                         value = v if re.fullmatch(r"r([12]?[0-9]|3[01])", v) else int(v, 0)
                 else:
-                    assert kind.rstrip("@") in ("keep", "split", "splitd", "note", "vec", "arc", "fall", "ssplit") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert kind.rstrip("@") in ("keep", "split", "splitd", "note", "vec", "arc", "fall", "ssplit", "lagw") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert kind != "lagw@", f"tick_rules.txt:{n}: lagw takes :, not @"
                     assert kind not in ("ssplit", "splitd"), f"tick_rules.txt:{n}: {kind} takes @: {kind}@rN"
                     assert kind != "fall", f"tick_rules.txt:{n}: fall takes @: fall@fREG"
                     assert kind != "note" or arg[0] == "f", f"tick_rules.txt:{n}: note takes a float register"
                     assert re.fullmatch(r"[rf]([12]?[0-9]|3[01])", arg), f"tick_rules.txt:{n}: {rule}: a register expected"
                     assert kind.rstrip("@") not in ("split", "splitd") or arg[0] == "r", f"tick_rules.txt:{n}: split takes an integer register"
+                    assert kind != "lagw" or arg[0] == "r", f"tick_rules.txt:{n}: lagw takes the multiplier's integer register"
                     assert kind.rstrip("@") != "lag" or arg[0] == "f", f"tick_rules.txt:{n}: lag takes a float register (lagi: mulli)"
                     assert kind.rstrip("@") != "drawlag" or arg[0] == "f", f"tick_rules.txt:{n}: drawlag takes a float register"
                     value = arg
@@ -308,6 +313,8 @@ class Program:
                 return f"{ea:08X}: spliti applies to addi rD, rA, IMM, not {i.op}"
             if kind == "lagi" and i.op != "mulli":
                 return f"{ea:08X}: lagi applies to mulli rD, rA, IMM, not {i.op}"
+            if kind == "lagw" and (i.op != "mullw" or r3 not in (f"r{i.rA}", f"r{i.rB}")):
+                return f"{ea:08X}: lagw applies to mullw rD, rA, rB with the multiplier rA or rB, not {i.op} ({r3})"
             if kind == "keep" and i.op not in KEEP_OPS:
                 return f"{ea:08X}: keep applies to {', '.join(sorted(KEEP_OPS))}, not {i.op}"
             return None
@@ -583,6 +590,9 @@ def apply_tick_rule(rule, i, lines):
     if kind == "lagi":
         half = emit.hx((int(i.simm / 2)) & 0xFFFFFFFF)
         return lines + [f"if (RT_STEPPED() && RT_WHOLE_TICK()) GPR({i.rD}) = GPR({i.rD}) - {half};   // step rule: {what}"]
+    if kind == "lagw":
+        return ([f"{{ const sint32 lagw_ = (sint32)GPR({arg[1:]});   // step rule: {what}"] + ["\t" + l for l in lines]
+                + [f"\tif (RT_STEPPED() && RT_WHOLE_TICK()) GPR({i.rD}) = GPR({i.rD}) - (uint32)(lagw_ / 2);", "}"])
     if kind == "keep":
         dest = f"GPR({i.rD})" if i.op in ("addi", "addic", "add") else f"FPR({i.frD})"
         return ([f"if (RT_WHOLE_TICK()) {{   // step rule: {what}"] + ["\t" + l for l in lines]

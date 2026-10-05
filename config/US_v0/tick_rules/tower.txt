@@ -65,6 +65,20 @@
 020ED734    *h@f7       fadds           bst: pos.y += speed.y
 020ED770    late        stfs            bst: speed.y -= its fall (once a tick)
 020ED8C8    late        stfs            bst: speed.y += its rise (once a tick)
+# phases of its tick count (+0x1308, kept to whole ticks): the hover's bob (the hands float on it: at 60 they
+# moved on whole frames only, 577 blocks of the hz30 scan), the hurt shakes (the head's count too: it runs
+# first), head_hukki's sway and the demo camera's bank: half a phase behind on the whole tick's step
+020E61F0    lagw:r0     mullw           bst: the bob's x phase, count x (REG0_S(6) + 700)
+020E6200    lagw:r9     mullw           bst: the bob's y phase, count x (REG0_S(6) + 750)
+020E6218    lagw:r6     mullw           bst: the bob's z phase, count x (REG0_S(6) + 720)
+020E62B0    lagi        mulli           bst: its hurt shake's phase, count x 0x2100
+020E62D0    lagi        mulli           bst: its hurt shake's phase, count x 0x2300
+020E634C    lagi        mulli           bst: the head's shake's phase (the head's count), x 0x3600
+020E6360    lagi        mulli           bst: the head's shake's phase, x 0x4300
+020E63A4    lagi        mulli           bst: the head's shake's phase, x 0x3A00
+020ED250    lagw:r5     mullw           bst head_hukki: its sway's x phase, count x (REG0_S(6) + 700)
+020ED294    lagw:r12    mullw           bst head_hukki: its sway's z phase, count x (REG0_S(6) + 600)
+020F009C    lagi        mulli           bst demo_camera: its bank's phase, count x 0x1C00
 #
 # ---- Beam (232: a Beamos's beam). The Beamos's eye searches (blue_eye_search f_02326E4C, red_eye_search
 # f_02327968) drive their beam's length m588 (+0x718: + 1 a call up to 5, then it's on, m5F4 +0x844) and,

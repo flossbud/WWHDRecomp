@@ -1737,6 +1737,37 @@ it in a window; D21 "Step 2"):**
     (f_0256CA54, ~20 per-tick stores), the clouds' shadows (f_0256BB6C, ~21, several states), thunder (its
     flashes start on a random draw a tick: whole is right). Two calls must not be held: f_02560E08 (a
     getter: its f1 result would be stale) and f_0256DC04 (the mist's packet setup).
+  - **hz30 sweep of the dungeons and boss rooms (the work queue's "hz30-dungeons")**: top's hz30.py
+    (scratch hzscan.sh: 60 swaps from game frame 1100 after the warp) at 13 dungeon places (each
+    dungeon's entrance; Dragon Roost rooms 3 and 12, the Earth Temple's room 8, the Wind Temple's room 2,
+    Hyrule, Ganon's Tower's two halls) and the 8 boss rooms with WWHD_DEBUG_BOSS=1: 0 or 1 block (the
+    HUD's) in 16. Forbidden Woods' entrance (75), Hyrule (73) and the Wind Temple's entrance (12): grass
+    tufts only (d_a_obj_plant: top's draw-posed item); Jalhalla's room and Ganondorf's 4 (not read).
+    Gohdan's room 577: its hands' hover bob. bst's execute moves the model by sines of its tick count
+    (+0x1308, kept to whole ticks) times (REG0_S(6) + 700) and so on: a `mullw` (the multiplier a debug
+    register plus a constant), which `lagi` (mulli) didn't take. New step rule `lagw:rM` (generate.py):
+    the mullw's product lags rM/2 on the whole tick's step. On the bob's three phases, head_hukki's two;
+    `lagi` on the hurt shakes' five (two of the head's count: the head executes first, so a hand's step
+    sees it already counted, as at 30) and the demo camera's bank (`tick_rules/tower.txt`). Now 0.
+  - **Replaying cutscenes on the finished save (test aid `WWHD_DEBUG_EVENT=tick:NAME`, sixty.cpp)**: from
+    that game frame, once no event runs, orders the stage's event NAME for Link (getEventIdx f_02543F10,
+    fopAcM_orderOtherEventId f_025D7A58). Scratch stage_events.py lists a stage's events with their
+    staff and the cutscene (.stb) each plays (57 JStudio events in 31 stages); a cutscene's files are in
+    the object archive DemoNN that a room's LBNK chunk names for the layer (scratch stage_banks.py:
+    e.g. Omori room 0 layer 8 Demo14 = meet_deku, layer 9 Demo15 = getperl_deku; kenroom layer 0
+    Demo21 = master_sword), so warp in that layer. Two things the 100% save gets in the way of: (1) Link's
+    cutscene animations come from LkD00 or LkD01, chosen at the scene's load by event bit 0x2D01 (d_s_play
+    phase_0): the finished save loads LkD01, and an early cutscene (the Deku Tree, the Master Sword,
+    Jabun's pearl) then finds no animation: Link's dProcTool reads a resource with no data (f_023E07E4,
+    a crash, at 30 too). Clear the bit before the warp: the save's event bits are at *0x101F84DC + 0x644
+    (isEventBit f_025B8B94), 0x2D01 the byte +0x2D bit 1: on the 100% save WWHD_DEBUG_POKE
+    `915:0,145b81d1,1,fe` (0xff there). (2) An arrival in a cutscene layer plays the stage's EVNT entry
+    the spawn point names (params >> 24) unless its spawn switch (EVNT +0x13) is on in the stage's memory
+    (setStartDemo): on the finished save it is (seen). The stage memory's switches are at *0x101F84DC +
+    0x798 + 4 (+4 per 32: dSv_memBit_c via isSwitch f_025BA0C0); Omori's meet_deku is switch 10: poke
+    `959..968:0,145b82fc,4,fd2bfbff` after the stage memory's load at f958. Omori point 213 in layer 8 with
+    both: meet_deku plays from f970 (its dialogue waits for A). Or order it with WWHD_DEBUG_EVENT (bit 1
+    still needed). GTower's arrival (g2before) and ENDumi's ending play on arrival as they are.
   - **Dungeons (the work queue's "dungeons", from session top's census): the Wind Temple
     (`tick_rules/dungeons.txt`)**: converted Obj_Hami2/3/4 (47-49, grates turning or sliding in their
     switch's event), Obj_Hbrf1 (50, a lift), Obj_Vmc (52, the soil Makar's seeds grow in), TOGE (122,
