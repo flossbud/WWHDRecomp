@@ -1835,6 +1835,16 @@ it in a window; D21 "Step 2"):**
     session bottom's (done there), the sea's creatures top's. Not looked at: Poes, Wizzrobes, ChuChus (no
     countdown left), Armos, Miniblins, Mothulas, the bosses, NPCs, pots (5), the boat (5): run the audit
     with -v and read each.
+  - **Timer loops without a rule** (counter_audit.py reads indexed stores since da8b79e; an earlier scratch
+    grep had missed them): the Keese's four timers (+0x4C0, 0219AE7C) and the Peahat's five (+0x480)
+    had none: every wait of theirs ran at twice the speed (poked to 25 on ones spawned on the dock: 12
+    ticks at 60 against 24). The Keese's: `whole sthx` (24 at both rates now, its path over 75 ticks
+    unchanged); the Peahat's: session top's `keep` on the add (023CC2D8, in its sealife commit, tested in
+    action: a Seahat's attack cycle ran every 60 ticks against 120).
+    The same audit lists, for their owners: Mothula's seven timers (204, 0214D95C), the Octorok's six
+    (227, 023C14D8), the flame lift's (91, 021C31A8), per-element counts of Gohma (234, 020EA8CC), Kalle
+    Demos (235, 020B04AC), Gohdan (240, 020E682C), the shared enemy code (02041A1C) and the fences
+    (SAKU 398: 02464F60, 024650F4, 024651D4).
   - **B16's hunt, automated (nothing found)**: Windfall's spawn points (sea room 11's PLYR ids: 0 and 16
     the dock, 20 the town centre without a door, 1-13 and 15 the buildings' doors; `920:sea,20,11,-1`
     stands Link among the Killer Bees). 1200 consecutive captures (every second swap for 40 s, the camera

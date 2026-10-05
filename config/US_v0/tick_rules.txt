@@ -685,6 +685,7 @@
 0219C848    *h@f9       fadds           ki: current.pos.y += its velocity
 0219C858    *h@f11      fadds           ki: current.pos.z += its velocity
 0219AEA4    whole       sth             ki: m314 (+0x4C8) - 1 (d_a_ki.cpp: 10 or 50 on a hit, it can't be hit while this runs; session qa's audit)
+0219AE7C    whole       sthx            ki execute: its four timers (+0x4C0, d_a_ki.cpp's mTimers) count down (no rule until counter_audit.py read indexed stores)
 0219AEB0    whole       sth             ki execute: a tick count (+0x4D4) + 1
 #
 # ---- step rules: Magtails (MT, process 216, d_a_mt.cpp; execute f_021D87A0). Found with the trial on
