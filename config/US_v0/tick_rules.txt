@@ -681,6 +681,16 @@
 021DBFAC    split@r30   add             mt: +0x408 += its step a tick
 021DC040    split@r0    add             mt: a phase (+0x58A) += its step a tick
 021D9E2C    whole       sth             mt: a counter (+0x588) + 1
+# Its other hand-counted timers in the execute's block (session qa, tools/sixty/counter_audit.py): zero
+# while it only crawls, so the trial never saw them; the same `if (n != 0) n--` as the ruled +0x5AA beside
+# them (the decomp has no d_a_mt.cpp yet). Poked to 25 on the Magtail of Dragon Roost Cavern's room 8
+# (WWHD_DEBUG_STAGE=920:M_NewD2,0,8,-1, WWHD_DEBUG_POKE=1000:216,57c,2,19): 24 ticks at 30, 12 at 60, 24 now.
+021D8D18    whole       sth             mt: a countdown (+0x1A18) - 1
+021D8D2C    whole       sth             mt: a countdown (+0x57C) - 1
+021D8D3C    whole       sth             mt: a countdown (+0x57E) - 1
+021D8D54    whole       sth             mt: a countdown (+0x466) - 1
+021D8DD4    whole       sth             mt: a countdown (+0x582) - 1
+021D8DB0    whole       sth             mt: the counter +0x5AC back down (its + 1 is ruled above)
 021DB1C8    *h@f10      fadds           mt move (1): current.pos.x += speed.x
 021DB1BC    *h@f0       fadds           mt move (1): current.pos.y += speed.y
 021DB1E8    *h@f7       fadds           mt move (1): current.pos.z += speed.z
