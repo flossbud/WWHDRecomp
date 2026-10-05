@@ -281,7 +281,19 @@
     "330": "Rito",
     "348": "mail sorter",
     "371": "Komali",
-    "222": "Valoo"
+    "222": "Valoo",
+    "369": "Great Fairy",
+    "42": "magma rock",
+    "33": "Kryu00",
+    "199": "rat hole",
+    "143": "Jabun's water",
+    "274": "plant",
+    "262": "papers",
+    "332": "Sturgeon",
+    "287": "labyrinth trap",
+    "87": "Obj_Akabe",
+    "460": "ice block",
+    "64": "table"
   },
   "queue_note": "Round 2 (2026-10-04; round 1's nine areas are done). 'top' takes items from the top down, 'bottom' from the bottom up; claim before starting (tools/progress/publish.sh claim ID) and stop where the other session's claims begin. The owner's bugs are session qa's (the Bugs list): where an item touches one (named in it), leave the bug to qa or agree with qa first (SendMessage). Stage names are to be confirmed with tools/sixty/tests/room_list.sh.",
   "queue": [

@@ -1,0 +1,49 @@
+# The other islands and caves (round 2 "islands"), session top (docs/handoff.md "Two parallel sessions"): the
+# Great Fairy fountains (Fairy01-06), Fire Mountain (MiniKaz), Ice Ring Isle (MiniHyo), the caves (Cave01-11),
+# the Ghost Ship (PShip), the submarines (Abship), the Islet of Steel (ShipD), Jabun's cave (Pjavdou) and the
+# houses (Ojhous, Ocrogh, Otkura). Found with tools/sixty/tests/area_test.sh after a warp (STAGE,0,ROOM,-1 at
+# f920 on route save; the trial and 30 against 60 over f1000-1500), actor_rmw.py and the GameCube decomp
+# (zeldaret/tww). The format: ../tick_rules.txt.
+#
+# ---- the Great Fairy (BIGELF 369, d_a_bigelf.cpp; Fairy01-06): a count (+0x573) + 1 a tick to 255: keep.
+020946F8    keep:r8     addi            bigelf: a count (+0x573) + 1 while < 255
+#
+# ---- Fire Mountain's magma rocks (Magrock 42, d_a_obj_magmarock.cpp; MiniKaz): platforms that bob in the lava.
+# pos.y += speed.y first, then speed.y's gravity, its stop at the top, its drag and pull below the surface:
+# *h@ on the add, late on every speed store (the branches then see the tick's end height at the half step);
+# its tilt slerps toward its aim (C_QUATSlerp through f_02588544): k@ on t.
+0236EB88    *h@f9       fadds           magrock: pos.y += speed.y
+0236EBA4    late        stfs            magrock: speed.y += gravity
+0236EBC8    late        stfs            magrock: speed.y = 0 at its top
+0236EC38    late        stfs            magrock: speed.y *= its drag
+0236EC84    late        stfs            magrock: speed.y -= (pos.y - aim) * pull
+0236EC94    late        stfs            magrock: speed.y *= damping
+0236DE90    k@f1        bl 02588544     magrock: its tilt (+0x3E8) slerps toward its aim, t
+# Tested on the 100% save at f1000-1500 after the warp: trial clean; its height and speed are 30's tick for
+# tick until the lava under it differs (it aims at the lava's height, from the scene's dMagma_packet, whose
+# bubbles respawn at random places: the random stream at 60), then it bobs out of phase.
+#
+# ---- no rules, equal to 30's (trials clean): Jabun's cave's water (Obj_AjavW 143, Pjavdou), Orca's and
+# Sturgeon's house's plants and papers (Obj_Plant 274, 262, Ojhous room 1), Sturgeon (NPC_AJ1 332: only a
+# value set from the random stream at its creation differs), the Savage Labyrinth's traps (Obj_TnTrap 287,
+# Cave10 room 17: 81% of ticks equal, the rest the traps' phases).
+# Not present on the 100% save, so untested: Forest Haven's Koroks (NPC_BJ1-9, 336-344, Omori) and Makar
+# (NPC_CB1 334 there), Jabun (NPC_JB1 358).
+#
+# ---- Cave03's Kryu00 (33, seven): three phases += 400, 1000 and 1111 a tick (spliti); a 2-D damped spring
+# (+0x5A0/+0x5A4 velocity, +0x5A8/+0x5AC point: keep on the velocity's fadds and fmuls, *h@ on the point's
+# adds); a two-deep history of a height (+0x5E0, +0x5E4) shifted once a tick (whole).
+02338B60    spliti      addi            kryu00: a phase (+0x5B0) += 400
+02338C28    spliti      addi            kryu00: a phase (+0x5B2) += 1000
+02338C3C    spliti      addi            kryu00: a phase (+0x5B4) += 1111
+02338CAC    keep:f10    fadds           kryu00: vx (+0x5A0) += its pull
+02338CBC    keep:f10    fmuls           kryu00: vx *= damping
+02338CC4    keep:f11    fadds           kryu00: vz (+0x5A4) += its pull
+02338CD4    keep:f11    fmuls           kryu00: vz *= damping
+02338CCC    *h@f12      fadds           kryu00: px (+0x5A8) += vx
+02338CE0    *h@f0       fadds           kryu00: pz (+0x5AC) += vz
+023385E0    whole       stfs            kryu00: the height's history, oldest (+0x5E4) = older
+023385E4    whole       stfs            kryu00: older (+0x5E0) = the height (+0x5D8)
+#
+# ---- the submarines' rat holes (199, "nezuana", Abship room 5): their countdowns (+0x3DE + 2i, a loop): keep.
+02311294    keep:r9     addi            nezuana: a countdown - 1 while > 0

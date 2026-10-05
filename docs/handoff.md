@@ -1013,6 +1013,22 @@ it in a window; D21 "Step 2"):**
     in phase (their random waits draw differently at 60). Not present on the 100% save there, so not
     converted: Medli (NPC_MD 367), Obj_Rcloud (141), Obj_Eskban (160); the chieftain (NPC_BM1) shares the
     Rito's code and rule.
+  - **Round 2, islands (session top; `config/US_v0/tick_rules/islands.txt`)**: a census of the islands' and
+    caves' stages (Fairy01-06, MiniKaz, MiniHyo, Cave01-11, PShip, Abship, ShipD, Pjavdou, Ojhous, Ocrogh,
+    Otkura, Omori) for unconverted placed types; most are switches and tags. Converted: the Great Fairy
+    (BIGELF 369: a count to 255 `keep`; now equal to 30's), Fire Mountain's magma rocks (42: explicit
+    Euler, `*h@` on pos.y += speed.y and `late` on every speed store; their tilt's slerp `k@`; trial clean,
+    they bob out of phase as the lava's random bubbles under them differ), Cave03's Kryu00 (33: three
+    phases `spliti`, a damped spring, a height history `whole`; paths within ~10% of 30's, 2.4x before),
+    the submarines' rat holes (199: countdowns `keep`), and with no rules, trials clean: Jabun's cave's
+    water (143), Orca's house's plants and papers (274, 262), Sturgeon (NPC_AJ1 332), the Savage
+    Labyrinth's traps (287), Obj_Akabe (87), Ice Ring Isle's ice (460), tables (64). Not converted: Orca
+    (NPC_JI1 318: a hand-inlined look-at with clamped steps, +0xDD6 at 4x: to analyse), a Korok in Ocrogh
+    (NPC_BJ7 342: an old heading copied each step, its use unknown; the Korok decomp is stubs), Tingle's
+    tower's Tpota (394: trial clean but different everywhere, unexplained). Not present on the 100% save:
+    Forest Haven's Koroks (NPC_BJ1-9) and Makar (NPC_CB1), Jabun (NPC_JB1 358); Cave08's propellers,
+    fans and nets never loaded at the spawn points tried (point 0 of rooms 1-3: they need the stage's
+    spawn list).
   - **Two 60 fps crashes in the Forbidden Woods, fixed (session top; shared, `sixty.cpp` `LiveStore`)**: at
     every warp there with Link converted (the defaults). Both came from half ticks putting back or hiding
     words in .data/.bss that head lists whose nodes are on the heap (which a half tick never puts back):

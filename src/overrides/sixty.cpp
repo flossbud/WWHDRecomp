@@ -95,15 +95,16 @@ namespace
 	// fires (Fire), warp lights (WARPLIGHT), light bridges and stairs (LIGHTBRIDGE, LIGHTSTAIR),
 	// the hot floor (Hot_Floor), eye switches (Hys), mailboxes (OBJ_TORIPOST), item stands (STANDITEM),
 	// bomb flowers' bombs (BOMB2), steam vents (SteamTag), flame lifts (MFLFT), swinging platforms (MSW); the Rito
-	// Aerie's post boxes (Obj_Ospbox), Rito (NPC_BM1-5), mail sorter (NPC_BMSW), Komali (NPC_ZK1), Valoo (DR)
-	// (session top).
+	// Aerie's post boxes (Obj_Ospbox), Rito (NPC_BM1-5), mail sorter (NPC_BMSW), Komali (NPC_ZK1), Valoo (DR); the
+	// Great Fairy (BIGELF), Fire Mountain's magma rocks (42), Cave03's Kryu00 (33), rat holes (199), Sturgeon
+	// (NPC_AJ1) and the islands' still objects (143, 274, 262, 287, 87, 460, 64) (session top).
 	// One line each, so the parallel sessions' additions never meet (docs/handoff.md "Two parallel
 	// sessions"); keep a comma after each line's last.
 	// WWHD_60FPS_CONVERT= (empty) converts none.
 	constexpr const char* kConvertedByDefault =
 		"476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,"
 		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,443,221,"   // session bottom
-		"123,220,353,170,368,374,364,373,352,121,445,309,118,68,73,200,255,71,67,335,319,320,331,461,45,63,179,230,269,164,391,176,294,187,313,120,213,407,83,105,116,383,410,439,470,101,102,398,297,65,304,144,74,307,430,99,103,204,235,236,237,185,186,227,97,98,182,225,226,228,205,457,397,27,424,106,427,428,231,450,67,462,295,423,91,90,84,326,327,328,329,330,348,371,222";   // session top
+		"123,220,353,170,368,374,364,373,352,121,445,309,118,68,73,200,255,71,67,335,319,320,331,461,45,63,179,230,269,164,391,176,294,187,313,120,213,407,83,105,116,383,410,439,470,101,102,398,297,65,304,144,74,307,430,99,103,204,235,236,237,185,186,227,97,98,182,225,226,228,205,457,397,27,424,106,427,428,231,450,67,462,295,423,91,90,84,326,327,328,329,330,348,371,222,369,42,33,199,143,274,262,332,287,87,460,64";   // session top
 	const char* ConvertList()
 	{
 		const char* e = getenv("WWHD_60FPS_CONVERT");
