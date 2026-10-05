@@ -9,6 +9,14 @@
 02494318    whole       sthx            st: its timers (+0x408) count down
 02494338    whole       sth             st: a timer (+0x412) - 1
 02494348    whole       sth             st: a timer (+0x2024) - 1
+# more countdowns a call (session qa's audit, 2026-10-05: loaded, - 1, stored back, unruled); each is
+# tested right after (cr0 from extsb./extsh., or a compare), so keep (whole ticks only), not whole
+0249401C    keep:r8     addi            st: a count (+0x20CD, s8) - 1, tested
+02494074    keep:r7     addi            st: a count (+0x25AC, s8) - 1, tested
+02494B6C    keep:r8     addi            st: a count (+0x202C, s8) - 1
+024951DC    keep:r6     addi            st: a count (+0x21A8) - 1
+02495364    keep:r5     addi            st: a count (+0x21C8) - 1, compared with 10
+0249663C    keep:r11    addi            st head: its life (+0x414, 500 ticks) - 1, tested
 # speed_pos_calc (f_024961B8) moves it itself: pos += speed, then speed.y -= 5 (the explicit order: at 60
 # with gravity h of itself a step it would fall g/4 a tick too far). Gravity once a tick instead (late):
 # two half steps of h speed then add up to the 30 Hz step exactly.

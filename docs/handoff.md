@@ -1286,6 +1286,17 @@ it in a window; D21 "Step 2"):**
     type (38) switched 44 ticks early at 60 (f1293 against f1338): requested by name only by the Gyorg
     controller (GY_CTRL 229/230, f_0216BBBC) and NPC_SO (f_022E06A4), so the Gyorg attack's trigger fires
     early (told session top, sea life). The camera's type is at camera +0x248+0x51C, its style +0x514.
+  - **Enemies: a Bokoblin in the sea, the Stalfos' countdowns (round 2 enemies; session bottom)**: a fight
+    on the Outset dock (scratch route: the save route, a Bokoblin spawned 120 units ahead facing Link,
+    `WWHD_DEBUG_SPAWN=950:189,0,-201599,168,312125,0,f82d`; ZL held from f985, B every 15 frames from
+    f1000): hit, knocked back ~35 ticks through the air (peak 256 against 263) into the sea, its stick
+    knocked away on its own arc; then water_fail (f_020A3B18, its only per-call move) lowered it 1 a
+    call: at 60 it sank twice as fast. `*h@f30` on that `pos.y -= 1` (tick_rules.txt): 1.0 a tick at
+    both rates, deleted 120 ticks after landing at both. The stick's landing turns its angle x by a
+    speed or the rest of the way to 0x3A00 for ~7 ticks (an inline chase: not ruled). The Stalfos (my
+    earth.txt): six countdowns session qa's audit found (+0x20CD, +0x25AC, +0x202C, +0x21A8, +0x21C8, the
+    head's 500-tick life +0x414), each tested right after: `keep`. M_Dai,15 with
+    `WWHD_DEBUG_POKE=990:190,3e0,2,1`: 30 against 60 as before (mean 7 units apart, paths 326/335).
   - **Songs at 60: the playback, its end and the Wind's Requiem's change of wind (shared: sixty.cpp's
     StepInEvents, tick_rules.txt; regress.sh rerun)**: after conducting (0x9A, already stepping) Link
     plays the song back (0x9B, procTactPlay f_0243AC64), ends it (0x9C) and, for the Wind's Requiem,

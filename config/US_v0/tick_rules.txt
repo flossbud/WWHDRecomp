@@ -580,6 +580,7 @@
 0209C634    whole       sth             bk execute: a countdown (+0x42C) - 1
 0209C648    whole       sth             bk execute: a countdown (+0x42E) - 1
 0209D864    *h@f8       fadds           bk: +0x13A0 += +0x498 a tick
+020A3C44    *h@f30      fsubs           bk water_fail: current.pos.y -= 1 a tick (sinking after a fall into water; at 60 it sank twice as fast)
 0209DA70    *h@f8       fadds           bk: +0x13A0 += +0x498 a tick
 0209E13C    whole       sth             bk: a counter (+0x138E) + 1
 020A1D78    *h@f11      fadds           bk: a float timer (+0xCC4) + its rate
