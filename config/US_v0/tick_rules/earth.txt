@@ -171,3 +171,11 @@
 020E2D38    whole       sth             bridge execute: a plank's m3C0 - 1
 020E2ED4    whole       sth             bridge execute: a plank's m3C2 - 1
 020E3054    whole       sthx            bridge execute: a plank's hit timers m3A0[i] - 1
+#
+# ---- counts a call without a rule, from session qa's tools/sixty/counter_audit.py (2026-10-05, session
+# bottom): keep:REG on the add where the count is tested right after it changes, late on the store where
+# it is tested before. Read and left: stores that set a count from another value, constants, globals,
+# input-driven counts (a ReDead's escape count), and a few not yet understood (see the handoff).
+02495324    keep:r5     addi            st: a count (r7,r8) - 1 a call, tested after (f_02493FB0)
+0218D4CC    keep:r4     addi            kantera: a count (0x47c(r29)) - 1 a call, tested after (f_0218D3F8)
+0244A700    keep:r11    addi            pw: a count (+0x3A1, s8) - 1 a call, tested after through a reload (f_0244A67C)

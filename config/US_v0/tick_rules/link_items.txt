@@ -231,3 +231,12 @@
 # approaches only): the melody starts when mTactPlayTimer (+0x6920, 10 from its init) reaches 0, counted a
 # call; the zero test reads the register, so keep (whole ticks only), not late (that would start it twice)
 0243AE60    keep:r7     addi            link tact play: mTactPlayTimer - 1
+#
+# ---- counts a call without a rule, from session qa's tools/sixty/counter_audit.py (2026-10-05, session
+# bottom): keep:REG on the add where the count is tested right after it changes, late on the store where
+# it is tested before. Read and left: stores that set a count from another value, constants, globals,
+# input-driven counts (a ReDead's escape count), and a few not yet understood (see the handoff).
+021ACF68    late        sth             kui: a count (0x3fa(r31)) - 1 a call, tested before (f_021ACB0C)
+021ACF7C    late        sth             kui: a count (0x3fc(r31)) - 1 a call, tested before (f_021ACB0C)
+021ACFA8    late        sth             kui: a count (0x3f8(r31)) - 1 a call, tested before (f_021ACB0C)
+021AD548    keep:r11    addi            kui: a count (0x424(r31)) - 1 a call, tested after (f_021ACB0C)

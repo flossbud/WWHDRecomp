@@ -8,6 +8,13 @@
 # and poking a throw's speeds into it (WWHD_DEBUG_POKE=955:453,370,4,41700000;955:453,340,4,41a00000):
 # path 692 against 693 units, 5 apart on average.
 024CDD14    keep:r11    addi            tsubo: a countdown (+0x79D, m683) - 1, on whole ticks
+# five more counts a call (session qa's counter_audit.py, 2026-10-05): keep where tested right after,
+# late on the store where tested before
+024CD3E8    keep:r12    addi            tsubo: a countdown (+0x91C, m802) - 1, acts at 0
+024CE3F0    keep:r12    addi            tsubo: a countdown (+0x8B4, u8) - 1, acts at 0
+024CE858    late        stb             tsubo: a countdown (+0x79F, u8) - 1, tested before
+024CEBA4    keep:r11    addi            tsubo: a countdown (+0x91E) - 1, compared with 70 after
+024CF440    keep:r12    addi            tsubo bits: a piece's countdown (+0x18, s8) - 1, tested after
 # its speedF damped a tick: sliding on the ground (* 0.5), pushed in its throw (* 0.9), against a wall
 024CE1C0    d@f11       fmuls           tsubo wait: speedF *= 0.5 (sliding to a stop)
 024CF110    d@f12       fmuls           tsubo drop: speedF *= 0.9 (pushed)
@@ -61,3 +68,9 @@
 0249DE24    ssplit@r4   bl 020068cc     stone sink: m67E += m680
 0249DEA8    split@r4    bl 0200692c     stone sink: m684 -= its drag
 0249DEB4    ssplit@r4   bl 020068cc     stone sink: m682 += m684
+#
+# ---- counts a call without a rule, from session qa's tools/sixty/counter_audit.py (2026-10-05, session
+# bottom): keep:REG on the add where the count is tested right after it changes, late on the store where
+# it is tested before. Read and left: stores that set a count from another value, constants, globals,
+# input-driven counts (a ReDead's escape count), and a few not yet understood (see the handoff).
+0249D38C    late        stb             stone: a count (0x797(r31)) - 1 a call, tested before (f_0249D2BC)

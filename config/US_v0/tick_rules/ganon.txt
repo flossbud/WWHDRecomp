@@ -243,3 +243,22 @@
 # (session qa, tools/sixty/counter_audit.py).
 02126E80    late        stb             door10: the wait before a cleared room's bars lift (+0x3BD) - 1
 02197E60    late        stb             kddoor: the same wait (+0x3BD) - 1
+#
+# ---- counts a call without a rule, from session qa's tools/sixty/counter_audit.py (2026-10-05, session
+# bottom): keep:REG on the add where the count is tested right after it changes, late on the store where
+# it is tested before. Read and left: stores that set a count from another value, constants, globals,
+# input-driven counts (a ReDead's escape count), and a few not yet understood (see the handoff).
+020A074C    keep:r11    addi            bl: a count (0x464(r31)) - 1 a call, tested after (f_020A070C)
+020AB1AC    late        sth             bl: a count (0x4(r25)) - 1 a call, tested before (f_020AB020)
+020AB1D0    late        sthx            bl: a count (r25,r7) - 1 a call, tested before (f_020AB020)
+0207A9B4    late        stb             bgn: a count (0x0(r3)) - 1 a call, tested before (f_0207A9A0)
+0207E028    late        sth             bgn: a count (0x284(r25)) - 1 a call, tested before (f_0207DE64)
+0207EB64    late        sth             bgn: a count (0xd4c(r26)) - 1 a call, tested before (f_0207E7B4)
+0207F160    late        sth             bgn: a count (0xd4c(r26)) - 1 a call, tested before (f_0207E7B4)
+02089324    late        stb             bgn2: a count (0x3a1(r27)) - 1 a call, tested before (f_0208857C)
+0208E250    late        sth             bgn2: a count (0x3058(r16)) - 1 a call, tested before (f_0208B6A4)
+0208E528    late        sthx            bgn2: a count (r31,r22) - 1 a call, tested before (f_0208B6A4)
+0208E9F4    late        stb             bgn2: a count (0x3a1(r31)) - 1 a call, tested before (f_0208B6A4)
+0208ED20    late        stb             bgn2: a count (0x33bc(r16)) - 1 a call, tested before (f_0208B6A4)
+02155FA4    keep:r5     addi            gnd: a count (0x1730(r31)) - 1 a call, tested after (f_02154EE0)
+02155FC8    late        stb             gnd: a count (0x1731(r31)) - 1 a call, tested before (f_02154EE0)

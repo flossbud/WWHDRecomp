@@ -85,3 +85,13 @@
 # joint callback (nodeCallBack f_02131FF8: mFanAngle += mFanSpeed, 0x1D4C a tick for Hsen3), which runs
 # in the model's calc when it is drawn, where the step is 1 (a rule there doesn't apply): converted, the
 # fan is drawn and calculated every frame and its blades turned twice as fast; unconverted, at 30's speed.
+#
+# ---- counts a call without a rule, from session qa's tools/sixty/counter_audit.py (2026-10-05, session
+# bottom): keep:REG on the add where the count is tested right after it changes, late on the store where
+# it is tested before. Read and left: stores that set a count from another value, constants, globals,
+# input-driven counts (a ReDead's escape count), and a few not yet understood (see the handoff).
+020494BC    late        sthx            am: a count (r29,r5) - 1 a call, tested before (f_0204938C)
+0204D40C    late        sthx            am2: a count (r27,r8) - 1 a call, tested before (f_0204D3A4)
+020F923C    late        sthx            bwd: a count (r29,r24) - 1 a call, tested before (f_020F90C4)
+020F951C    late        sth             bwd: a count (0x6208(r30)) - 1 a call, tested before (f_020F94DC)
+0248EF44    late        sth             252: a count (0x3e2(r3)) - 1 a call, tested before (f_0248EEEC)

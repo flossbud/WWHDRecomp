@@ -632,6 +632,23 @@
 #                                       speed; with gravity h a step, a falling enemy dropped K g/4 a tick too far
 #                                       (session top, 2026-10-04: spawn tests' Moblin and Darknut walking off the dock)
 #
+# the enemies' shared code, five more counts a call (session top's list from counter_audit.py, which
+# files them under the next profile, VigaH 297): keep where the count is tested after it changes (or its
+# value used right after), late on the store where it is tested before
+02041248    keep:r11    addi            enemy common: a count (+0xE(r28)) - 1, tested after
+02041BDC    late        sth             enemy common: a count (+0x8(r31)) - 1, tested before
+02042AC4    keep:r8     addi            enemy update: a count (+0x4D2) - 1, its value multiplied after
+02043A7C    keep:r4     addi            enemy update: a count (+0x7C8) - 1, tested after
+02043AA4    late        sth             enemy update: a count (+0x7E6) - 1, tested before
+# the enemies' own counts a call (counter_audit.py, as above): Bokoblin, Darknut, Moblin, the Bokoblin's stick
+0209BF2C    keep:r4     addi            bk: a count (0x3fb(r30)) - 1 a call, tested after (f_0209BD1C)
+0209C0BC    late        sthx            bk: a count (r22,r7) - 1 a call, tested before (f_0209BD1C)
+024BEB54    keep:r9     addi            tn: a count (0x54c(r30)) - 1 a call, tested after (f_024BD170)
+021CB1B8    keep:r11    addi            mo2: a count (0x898(r29)) - 1 a call, tested after (f_021C9B1C)
+020C0814    keep:r8     addi            boko: a count (0x492(r31)) - 1 a call, tested after (f_020C0624)
+020C1734    late        sth             boko: a count (0x444(r25)) - 1 a call, tested before (f_020C1684)
+020C1880    keep:r12    addi            boko: a count (0x446(r30)) - 1 a call, tested after (f_020C183C)
+020C19F8    late        sth             boko: a count (0x43c(r30)) - 1 a call, tested before (f_020C183C)
 # ---- step rules: the scene's plants (sixty.cpp's Plants, WWHD_60FPS_PLANTS=1). Found with the
 # step-doubling trial (WWHD_60FPS_TRIAL_PLANTS=1) along route plants (Outset's village).
 025CDD9C    split@r7    add             plants' sway (f_025CDCB4): a phase (+0x0) += its step

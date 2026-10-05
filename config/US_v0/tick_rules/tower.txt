@@ -76,3 +76,12 @@
 02327AB0    *h@f30      fadds           beam (red search): m588 + 1 a tick
 02327BE8    *h@f30      fadds           beam (red search): m588 + 1 a tick (on, ending)
 02327C04    *h@f30      fadds           beam (red search): m5A8 + 1 a tick
+#
+# ---- counts a call without a rule, from session qa's tools/sixty/counter_audit.py (2026-10-05, session
+# bottom): keep:REG on the add where the count is tested right after it changes, late on the store where
+# it is tested before. Read and left: stores that set a count from another value, constants, globals,
+# input-driven counts (a ReDead's escape count), and a few not yet understood (see the handoff).
+023AD228    late        sth             obj_try: a count (0x7ae(r31)) - 1 a call, tested before (f_023AD1C0)
+023AD834    late        stb             obj_try: a count (0x7b2(r30)) - 1 a call, tested before (f_023AD758)
+023ADA54    keep:r12    addi            obj_try: a count (0x7ac(r31)) - 1 a call, tested after (f_023ADA30)
+023AE4C8    keep:r12    addi            obj_try: a count (0x7ac(r31)) - 1 a call, tested after (f_023AE4A8)

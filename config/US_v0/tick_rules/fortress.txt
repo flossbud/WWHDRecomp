@@ -84,3 +84,16 @@
 02064204    late        stfs            bdk: speed.y -= its fall (once a tick)
 0206540C    *h@f1       fadds           bdk feather: z += its sway a tick
 02065420    *h@f1       fadds           bdk feather: y += its sway a tick
+#
+# ---- counts a call without a rule, from session qa's tools/sixty/counter_audit.py (2026-10-05, session
+# bottom): keep:REG on the add where the count is tested right after it changes, late on the store where
+# it is tested before. Read and left: stores that set a count from another value, constants, globals,
+# input-driven counts (a ReDead's escape count), and a few not yet understood (see the handoff).
+0230C844    late        sth             nz: a count (0x3e8(r30)) - 1 a call, tested before (f_0230BEF4)
+0230E164    late        sth             nz: a count (0x3da(r24)) - 1 a call, tested before (f_0230BEF4)
+020660E0    late        sth             bdk: a count (0x40a(r30)) - 1 a call, tested before (f_02065AB4)
+02066C80    late        stb             bdk: a count (0x2682(r31)) - 1 a call, tested before (f_02066A38)
+02069088    keep:r8     addi            bdk: a count (0x2714(r31)) - 1 a call, tested after (f_02066A38)
+02172ABC    late        sth             himo3: a count (0x3d8(r31)) - 1 a call, tested before (f_02172A00)
+02174188    late        stb             himo3: a count (0x2f(r28)) - 1 a call, tested before (f_02172A00)
+0231DE70    late        stw             barrel: a count (0x730(r31)) - 1 a call, tested before (f_0231DE48)

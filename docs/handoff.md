@@ -1286,6 +1286,21 @@ it in a window; D21 "Step 2"):**
     type (38) switched 44 ticks early at 60 (f1293 against f1338): requested by name only by the Gyorg
     controller (GY_CTRL 229/230, f_0216BBBC) and NPC_SO (f_022E06A4), so the Gyorg attack's trigger fires
     early (told session top, sea life). The camera's type is at camera +0x248+0x51C, its style +0x514.
+  - **Counts a call without a rule, in session bottom's types (shared enemy code too; regress.sh rerun)**:
+    session qa's `tools/sixty/counter_audit.py` lists every field loaded, +-1 and stored back with no
+    rule. For my processes (and the enemies item) each site was classified from its code (a scratch
+    classifier, then read): keep:REG on the add where the count is tested right after it changes (a
+    record form, a compare, or a reload and test), late on the store where it is tested before (`if (n)
+    n--`). 57 rules: the enemies' shared code (5, from session top's list: counter_audit files them under
+    VigaH 297), pots (5, session qa's list), Bokoblin, Darknut, Moblin and the Bokoblin's stick (8, in
+    tick_rules.txt), Stalfos, Poes and the Moblin lanterns (earth.txt), Bubbles, Puppet Ganon and
+    Ganondorf (ganon.txt, 14), rats, Helmaroc King, the ropes and barrels (fortress.txt), the Tower's
+    statues (tower.txt), stakes (link_items.txt), Armos, Molgera and 252 (wind.txt), stones. Left on
+    purpose: a ReDead's escape count (+0x4F4: stick-driven), stores setting a count from another value
+    or a constant (Molgera +0x3A1 at 020FBFCC, 02047BE8), a global (gameInfo +0x5B60 from the Stalfos),
+    and not yet understood: the Stalfos' +0x3A8/+0x3A9 around f_025D9000, Gohdan's indexed store
+    020E682C, Ganondorf's +0x60B (021558EC), the shared enemy timers loop 02041A1C, the Darknut's +0x3F4
+    (024BC7AC/83C/868, plain stores after an unrelated test).
   - **A ReDead's scream and grab at 60 (shared: sixty.cpp's StepInEvents, tick_rules.txt; regress.sh
     rerun)**: the same fight route against a ReDead (`WWHD_DEBUG_SPAWN=950:224,0,-201599,168,312125,0,
     f82d`): it screams, Link is startled (0xB8), frozen (0xCE) and held (0xCF, 150 ticks), all events
