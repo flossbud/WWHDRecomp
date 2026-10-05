@@ -160,3 +160,18 @@
 02388134    keep:r11    addi            rflw: the swing's tick count m40C (+0x528) + 1, tested at once
 023881B4    spliti      addi            rflw: the swing's phase m40A (+0x526) + 0x1000 (its first 8 ticks)
 02388224    spliti      addi            rflw: the swing's phase + 0x800
+#
+# ---- Windfall at night (session top; WWHD_DEBUG_TIME=905:345, 23:00 before the warp: the day's clock is the
+# float at +0x44 of what 0x101F84DC points to, sixty.cpp; area_test.sh sea,20,11,-1 1000 1400 128 walk). The
+# night lights (Obj_Light 128, d_a_obj_light.cpp, stubs) run lit only at night: f_0236B5A4 turns a phase
+# +0x57E by 720 a tick (the light's spin) and +0x57C by 4500 (its flicker: a scale +0x584 and a brightness
+# +0x580 from sin(+0x57C) each step; the trial: both phases twice). Its event sequences (f_0236BAE0: a
+# countdown +0x3FA, tested at once; f_0236BE84: a count +0x3F6, == 10 and == 75 at once) didn't run there.
+# By night the auction's bidders (NPC_AUCTION 361, eight) and the auction (AUCTION 382) run in Orichh: only
+# the bidders' blink stepped twice idle, but both count their bidding's times in the auction's event
+# (counter_audit: 2 + 5 countdowns, 4 + 3 counts): not converted until that is tested. The shutters (259),
+# NPC_PF1 356 and 197 didn't run at 23:00.
+0236B604    spliti      addi            light: its spin phase (+0x57E) + 720
+0236B68C    spliti      addi            light: its flicker phase (+0x57C) + 4500
+0236BBA0    keep:r12    addi            light (an event): a countdown (+0x3FA) - 1, then == 1 acts
+0236BEDC    keep:r11    addi            light (an event): a count (+0x3F6) + 1, then == 10 and == 75 act

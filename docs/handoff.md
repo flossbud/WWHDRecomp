@@ -1185,6 +1185,18 @@ it in a window; D21 "Step 2"):**
     count in a state it never entered) and Obj_Yboil 276 (didn't run), liftable rocks (Stone2 455) and
     ladders (Obj_Ladder 85: knocked down in an event; on this save they lie fallen), Outset's gong (284) and
     the Flight Control Platform's goal flag (didn't run).
+  - **Night (session top; sixty.cpp's `WWHD_DEBUG_TIME=tick:degrees`, windfall.txt)**: WWHD's day clock is
+    the float at +0x44 of the save info the pointer at 0x101F84DC holds (dKy_getdaytime_hour f_02556C34
+    divides it by 15; 1490 functions load that pointer; in this run it was 0x145B7BA4, on the heap). The
+    game info at 0x1046F0B0 has a copy at +0x24 (the save file's place for it) that the day doesn't read:
+    poking it, before or after the warp, changed nothing. `WWHD_DEBUG_TIME=905:345` (23:00, before the
+    f920 warp) gives a night Windfall. Converted: the night lights (Obj_Light 128: spin and flicker phases
+    `spliti`, its event counts `keep`). Run by night but left: the auction's bidders (NPC_AUCTION 361) and
+    the auction (AUCTION 382), idle clean but for the bidders' blink; their bidding counts its times in
+    the auction's event. Not running at 23:00: the shutters (259), NPC_PF1 (356), 197. Owner bug B16
+    ("long blue streaks across the screen" in Windfall, never reproduced by day): session qa's streak.py
+    over 600 consecutive swaps at night (and 120 at the town centre) finds no one-frame glitch; the night
+    sky's shooting stars (HD-only) draw long thin trails, as long at 30 (`CAPTURE_30=1`) as at 60.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next
