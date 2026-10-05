@@ -71,6 +71,8 @@ WW-4's actor conversion is split between two sessions working side by side:
 ### Session `qa` (from 2026-10-04): the owner's bugs
 
 **Session qa retired (2026-10-05, the owner's decision; main takes over deploys and bug triage).**
+Its worker checkouts (`/wwhd/WWHDRecomp-qa` on both workers) were removed; don't start a session
+named `qa` again without the owner asking.
 Deployed to `~/wwhd-play` at retirement: ww-4 `55cf53b` (F1 and the mouse in the debug menu), after
 predeploy.sh passed 24 of 24. The bug list: B1-B4, B6, B7, B9, B11-B15, B17-B28 fixed and deployed
 (B23-B27 found by qa's own counter audit, B28 by bottom), B5 closed as the game's own scene. **Open,
@@ -100,7 +102,9 @@ name `qa` (same `.worker-dir`/`.session` mechanism, same integration into `ww-4`
   working on it, `bug note ID TEXT` for findings (the cause, the commit that brought it in),
   `bug fixed ID "commit, how"` once the fix is in `ww-4` and deployed, `bug verified ID` when the
   owner confirms, `bug reopen ID` if not, `bug wontfix ID "why"`. `bug list` prints them.
-- **The owner's copy**: from now on only `qa` deploys to `~/wwhd-play` on the desktop
+- **The owner's copy** (since qa's retirement: the main session, coordinator `ww-4-5a`, deploys and
+  triages the owner's bugs, assigning them to `top` or `bottom`; run `tools/sixty/tests/predeploy.sh`
+  first): before that only `qa` deployed to `~/wwhd-play` on the desktop
   (`tools/play/deploy.sh owner@DESKTOP_ADDR`, after a build of the current `ww-4` tip with the
   checks passing), so what the owner plays is always the integrated state; say in the bug notes
   which commit is deployed. `top` and `bottom` deploy only to `~/wwhd-test` (headless). Don't
