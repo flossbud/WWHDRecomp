@@ -88,8 +88,17 @@ ol.log code { color: var(--accent); font-size: .82rem; margin-right: 6px; }
 ol.log time { color: var(--muted); font-size: .82rem; float: right; margin-left: 8px; }
 .issues li { margin: 4px 0; }
 .empty { color: var(--muted); font-style: italic; }
-#zoom { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 9; }
-#zoom img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+#zoom { position: fixed; inset: 0; background: rgba(0,0,0,.94); display: none; align-items: center; justify-content: center; padding: 16px 64px; z-index: 9; }
+#zoom figure { margin: 0; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+#zoom img { max-width: 100%; max-height: calc(100vh - 90px); border-radius: 8px; }
+#zoom figcaption { color: #e6edf3; font-size: .9rem; text-align: center; max-width: 900px; }
+#zoom button { position: absolute; background: rgba(255,255,255,.12); color: #fff; border: 0; border-radius: 999px;
+  width: 44px; height: 44px; font-size: 28px; line-height: 44px; cursor: pointer; padding: 0; }
+#zoom button:hover, #zoom button:focus-visible { background: rgba(255,255,255,.28); outline: none; }
+#zoom .prev { left: 10px; top: 50%; transform: translateY(-50%); }
+#zoom .next { right: 10px; top: 50%; transform: translateY(-50%); }
+#zoom .close { right: 10px; top: 10px; font-size: 24px; }
+@media (max-width: 520px) { #zoom { padding: 16px 8px 72px; } #zoom .prev, #zoom .next { top: auto; bottom: 14px; transform: none; } #zoom .prev { left: calc(50% - 54px); } #zoom .next { right: calc(50% - 54px); } }
 .now { display: flex; gap: 10px; align-items: center; padding: 4px 0; }
 .now + .now { border-top: 1px solid var(--line); }
 ol.queue { margin: 0; padding-left: 22px; }
@@ -180,7 +189,12 @@ footer { color: var(--muted); font-size: .8rem; text-align: center; margin: 10px
   </div>
   <footer id="foot"></footer>
 </main>
-<div id="zoom"><img alt=""></div>
+<div id="zoom" role="dialog" aria-modal="true" aria-label="Screenshot">
+  <button class="prev" aria-label="Previous screenshot">&#8249;</button>
+  <figure><img alt=""><figcaption id="zoomCap"></figcaption></figure>
+  <button class="next" aria-label="Next screenshot">&#8250;</button>
+  <button class="close" aria-label="Close">&#215;</button>
+</div>
 <script>
 const $ = id => document.getElementById(id);
 let data = null, tab = 0, claims = null;
@@ -239,8 +253,43 @@ function render() {
   $("foot").textContent = "Data from " + ago(d.generated) + " · refreshes every 20 s";
 }
 $("tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { tab = +b.dataset.i; render(); } });
-$("shots").addEventListener("click", e => { if (e.target.tagName === "IMG") { $("zoom").querySelector("img").src = e.target.src; $("zoom").style.display = "flex"; } });
-$("zoom").addEventListener("click", () => $("zoom").style.display = "none");
+// the enlarged view: buttons, the arrow keys (Esc closes) and a swipe on phones go through the shots
+let shotList = [], shotAt = -1;
+const zoom = $("zoom");
+function showShot(i) {
+  if (!shotList.length) return;
+  shotAt = (i + shotList.length) % shotList.length;
+  const x = shotList[shotAt];
+  zoom.querySelector("img").src = x.file;
+  zoom.querySelector("img").alt = x.caption;
+  $("zoomCap").textContent = `${shotAt + 1} / ${shotList.length} · ${x.caption} · ${ago(x.time)}`;
+  zoom.style.display = "flex";
+}
+function closeShot() { zoom.style.display = "none"; shotAt = -1; }
+$("shots").addEventListener("click", e => {
+  if (e.target.tagName !== "IMG") return;
+  const i = shotList.findIndex(x => e.target.getAttribute("src") === x.file);
+  showShot(i < 0 ? 0 : i);
+});
+zoom.addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (b && b.classList.contains("prev")) showShot(shotAt - 1);
+  else if (b && b.classList.contains("next")) showShot(shotAt + 1);
+  else if (b || e.target === zoom) closeShot();
+});
+document.addEventListener("keydown", e => {
+  if (shotAt < 0) return;
+  if (e.key === "ArrowLeft") { showShot(shotAt - 1); e.preventDefault(); }
+  else if (e.key === "ArrowRight") { showShot(shotAt + 1); e.preventDefault(); }
+  else if (e.key === "Escape") closeShot();
+});
+let touchX = null;
+zoom.addEventListener("touchstart", e => { touchX = e.touches[0].clientX; }, {passive: true});
+zoom.addEventListener("touchend", e => {
+  if (touchX === null) return;
+  const dx = e.changedTouches[0].clientX - touchX; touchX = null;
+  if (Math.abs(dx) > 40) showShot(shotAt + (dx < 0 ? 1 : -1));
+});
 function renderBugs(b) {
   const label = {open: "open", working: "working", ready: "ready · awaiting deploy", fixed: "fixed · retest", verified: "verified", wontfix: "won't fix"};
   const item = x => {
@@ -271,6 +320,7 @@ async function refresh() {
     return `<div class="now"><span class="dot${Date.now() / 1000 - last > 3 * 3600 ? " idle" : ""}"></span>
     <div><b>${esc(x.session)}:</b> <span class="sub">${esc(x.text || "idle")} · ${ago(x.time)}${c > x.time ? ` · last commit ${ago(c)}` : ""}</span></div></div>`;
   }).join("");
+  if (s && s.length) shotList = s;
   if (s && s.length) $("shots").innerHTML = s.map(x => `<figure><img loading="lazy" src="${esc(x.file)}" alt="${esc(x.caption)}"><figcaption>${esc(x.caption)} · ${ago(x.time)}</figcaption></figure>`).join("");
 }
 for (const id of ["bugsCard", "queueCard"]) {
