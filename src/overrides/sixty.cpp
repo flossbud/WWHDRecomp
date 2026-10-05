@@ -2123,6 +2123,121 @@ void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
 	s_drawing = outer;
 }
 
+// ---- chains at 60 fps (the chains item, D21) ---------------------------------------------------------
+// One-pass chain solvers (a Stalfos' hair: ke_move) keep the 30 Hz step on whole ticks (tick_rules: a half
+// step's projection doesn't add up to a tick's), so on a half tick's frame their points are still the whole
+// tick's while the actor they hang on has moved on. Drawn there, they're moved half a tick on along their
+// last tick's motion (the points as the whole tick left them plus half of what that tick moved them: exact
+// for an even swing), only while drawing (the solver's state is put back after the draw) and only for a
+// converted actor that stepped this half tick. WWHD_60FPS_CHAINS=0 draws them as they are.
+namespace
+{
+	bool ChainsOn()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_CHAINS"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+
+	struct ChainPoints { std::vector<uint32> prev, curr; };    // the points' words at the last two whole ticks' draws
+	std::unordered_map<uint32, ChainPoints> s_chainPoints;     // by the points' address
+
+	// n points (cXyz) at ea, about to be drawn: noted on a whole tick's frame; on a half tick's, if they're
+	// still the whole tick's, moved on (the words they had are added to saved, to put back after the draw)
+	void ChainDraw(uint32 ea, uint32 n, std::vector<std::pair<uint32, uint32>>& saved)
+	{
+		std::vector<uint32> now(3 * n);
+		for (uint32 i = 0; i < 3 * n; i++)
+			now[i] = rd32(ea + 4 * i);
+		ChainPoints& c = s_chainPoints[ea];
+		if (!g_rtHalfTick)
+		{
+			c.prev = c.curr.size() == now.size() ? std::move(c.curr) : now;
+			c.curr = std::move(now);
+			return;
+		}
+		if (now != c.curr || c.prev.size() != now.size())
+			return;                                        // moved on this half tick, or not seen at a whole one
+		for (uint32 i = 0; i < 3 * n; i++)
+		{
+			const float a = std::bit_cast<float>(c.prev[i]), b = std::bit_cast<float>(c.curr[i]);
+			saved.emplace_back(ea + 4 * i, now[i]);
+			wr32(ea + 4 * i, std::bit_cast<uint32>(b + 0.5f * (b - a)));
+		}
+	}
+
+	void ChainRestore(const std::vector<std::pair<uint32, uint32>>& saved)
+	{
+		for (const auto& [ea, w] : saved)
+			wr32(ea, w);
+	}
+
+	// the actors whose 3D lines are such chains, by process name: a Stalfos (190: its hair, ke_move on whole
+	// ticks), a rat (198: its tail, tail_control on whole ticks)
+	bool ChainLines(uint16 name)
+	{
+		return name == 190 || name == 198;
+	}
+
+	// the process drawing is one whose chains are noted (a whole tick) or moved on (a half tick it stepped)
+	bool ChainOwner(uint32 proc)
+	{
+		if (!ChainsOn() || !proc || !ChainLines(rd16(proc + 0x08)))
+			return false;
+		if (!g_rtHalfTick)
+			return true;
+		const auto it = s_stepping.find(proc);
+		return it != s_stepping.end() && it->second;
+	}
+}
+
+namespace
+{
+	// a 3D line class's update (in a draw): its lines' points moved on for a half tick's frame (above). count,
+	// most and lines: where the class keeps its lines' count (u16), their most points (u16) and the lines (16
+	// bytes each, the points' address first)
+	void ChainLineUpdate(PPCInterpreter_t* __restrict ctx, void (*orig)(PPCInterpreter_t*), uint32 count, uint32 most, uint32 lines)
+	{
+		// WWHD_60FPS_CHAINS_LOG=path (a probe): each smoothed update's first line's tip, as drawn
+		static FILE* log = [] { const char* e = getenv("WWHD_60FPS_CHAINS_LOG"); return e ? fopen(e, "w") : nullptr; }();
+		std::vector<std::pair<uint32, uint32>> saved;
+		const uint32 mat = GPR(3), at = rd32(mat + lines);
+		const uint32 n = rd16(mat + count), points = std::min<uint32>(GPR(4) & 0xFFFFu, rd16(mat + most));
+		for (uint32 i = 0; i < n; i++)
+			if (const uint32 ea = rd32(at + 16 * i))
+				ChainDraw(ea, points, saved);
+		if (log && n && points)
+		{
+			const uint32 tip = rd32(at) + 12 * (points - 1);
+			fprintf(log, "%u %c %08x %.3f %.3f %.3f\n", wwhd::os::SwapCount(), g_rtHalfTick ? 'h' : 'w', s_drawing,
+				std::bit_cast<float>(rd32(tip)), std::bit_cast<float>(rd32(tip + 4)), std::bit_cast<float>(rd32(tip + 8)));
+			fflush(log);
+		}
+		orig(ctx);
+		ChainRestore(saved);
+	}
+}
+
+// mDoExt_3DlineMat1_c::update(mat r3, points r4, width f1, color r5, ?, tevStr r7): builds its lines' vertices
+// from their points, in the draw (a Stalfos' hair, ke_disp): +0x13C the lines, +0x13E their most points, +0x144
+// the lines
+void orig_f_025EA548(PPCInterpreter_t* __restrict ctx);
+void f_025EA548(PPCInterpreter_t* __restrict ctx)
+{
+	if (!ChainOwner(s_drawing))
+		[[clang::musttail]] return orig_f_025EA548(ctx);
+	ChainLineUpdate(ctx, orig_f_025EA548, 0x13C, 0x13E, 0x144);
+}
+
+// the other 3D line class's update, the same with the class's fields 0x40 on (a rat's tail, the draw f_0230AE30;
+// rope bridges, ropes, the ships' lines too): +0x17C, +0x17E, +0x184
+void orig_f_025EC62C(PPCInterpreter_t* __restrict ctx);
+void f_025EC62C(PPCInterpreter_t* __restrict ctx)
+{
+	if (!ChainOwner(s_drawing))
+		[[clang::musttail]] return orig_f_025EC62C(ctx);
+	ChainLineUpdate(ctx, orig_f_025EC62C, 0x17C, 0x17E, 0x184);
+}
+
 // fopAc_Execute: every actor's execute goes through it (from fpcM_Management's execute pass)
 void f_025D475C(PPCInterpreter_t* __restrict ctx)
 {

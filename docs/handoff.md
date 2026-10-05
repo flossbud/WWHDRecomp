@@ -1084,6 +1084,22 @@ it in a window; D21 "Step 2"):**
       perch is 8000 away and WWHD_DEBUG_PLACE under it didn't move Link). Next: a route to a perch.
     - Shared: `reloadh:fD=rB+O` (generate.py), `reload:` in a stepped process's steps only (`reload:`
       applies at 60 fps even to a process that isn't stepping); `WWHD_DEBUG_SPAWN=tick:proc/subtype,...`.
+  - **Chains drawn at 60 (the chains item, session top; shared: sixty.cpp)**: one-pass chain solvers keep
+    the 30 Hz step (rules `whole` on them), so their points stood still on half ticks while the actor they
+    hang on moved. Those drawn as 3D lines are now drawn half a tick on along their last tick's motion on a
+    half tick's frame (the points as the whole tick left them plus half of what that tick moved them),
+    only while the line's vertices are built (mDoExt_3DlineMat1_c::update f_025EA548 and the other line
+    class's f_025EC62C; the solver's points are put back), only for a converted owner that stepped this
+    half tick and only if the points are still the whole tick's. Opted in by process name
+    (ChainLines): the Stalfos' hair (190, Earth Temple room 14: `M_Dai,15,0,-1` with
+    `WWHD_DEBUG_POKE=980:190,3e0,2,1`) and the rats' tails (198, `Siren,0,6,-1`): their tips now make 46%
+    and 47% of their motion on half frames (0% before). `WWHD_60FPS_CHAINS=0` turns it off;
+    `WWHD_60FPS_CHAINS_LOG=path` logs each smoothed line's tip per frame. Not done: the cloths (the boat's
+    sail 172, the pirate flag 173, tapestries 289: unconverted, drawn by their packets straight from a point
+    array the GPU reads after the draw call, so a copy is needed, not a put-back), the Stalfos' loincloth
+    and Helmaroc King's tail feathers (models from the chain), the rope bridges' ropes (89, the other line
+    class: to test with Link crossing). Other users of the two line classes (ropes, ships' lines, vines)
+    can be opted in once tested.
   - **A tick that began stepping in an event finishes its half step (shared: sixty.cpp, 2026-10-05)**: the
     half tick's stop for a running event read Link's action again (StepInEvents), so where it left the
     list during the whole tick's step every process that had begun stepping lost the tick's other half:
