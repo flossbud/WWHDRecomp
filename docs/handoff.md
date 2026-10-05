@@ -1619,6 +1619,10 @@ it in a window; D21 "Step 2"):**
     of the Gods on 30's ticks (0x9C f1664-1928, the new stage at f2240 against f2241, Link within 15-43
     units). After it the boat lands 28 degrees off (the spin's ends a fraction of a tick apart, above), so
     the route's steering misses the ring of light at f3224 (a scripted route's matter, not the game's).
+    The other songs' ends checked for the same pattern: the Song of Passing's restart is guarded by a flag
+    (a scratch route like wind's with right, left, down: its timeline as at 30, the day changed and the
+    stage restarted at f1383 against f1384); the Command Melody's change of player repeats harmlessly (the
+    same partner; not testable: no companion on the 100% save); the Wind's Requiem's end sets a button.
   - **Late stores at an event's edge (shared: generate.py, ppc_ops.h, sixty.cpp)**: an event that
     begins, is ordered or ends during a whole tick holds the half step of the event's own processes
     that took a stepping whole step (sixty.cpp's edge, above). A `late` store waits for the half step,
