@@ -60,12 +60,13 @@ def counters(path):
         if not m:
             continue
         dst, src = m.group(2), m.group(3)
-        store = next((x for x in lines[i + 1:i + 7] if len(x) == 3 and x[1] in ("sth", "stb", "stw")
+        store = next((x for x in lines[i + 1:i + 7] if len(x) == 3 and x[1] in ("sth", "stb", "stw", "sthx", "stbx", "stwx")
                       and x[2].startswith(dst + ",") and "(r1)" not in x[2]), None)
         if not store:
             continue
-        field = store[2].split(",", 1)[1]
-        if not any(len(x) == 3 and x[1] in ("lha", "lhz", "lbz", "lwz") and x[2] == src + "," + field for x in lines[max(0, i - 14):i]):
+        field = store[2].split(",", 1)[1]             # D(rA), or rA,rB of an indexed store (a loop over timers)
+        if not any(len(x) == 3 and x[1] in ("lha", "lhz", "lbz", "lwz", "lhax", "lhzx", "lbzx", "lwzx") and x[2] == src + "," + field
+                   for x in lines[max(0, i - 14):i]):
             continue
         down = (m.group(1) == "subi") != m.group(4).startswith("-")
         yield int(store[0], 16), "-" if down else "+", field, int(l[0], 16)

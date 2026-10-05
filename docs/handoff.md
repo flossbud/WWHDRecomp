@@ -1747,6 +1747,16 @@ it in a window; D21 "Step 2"):**
     with no argument it lists every converted process that still has such a countdown (79 lines on
     2026-10-05: NPC_PEOPLE 9, pots 5, the boat 5, the Stalfos 9, the bosses 2-7 each...). Each is a
     candidate, not a bug: read it in the decomp (input-driven counts and state numbers want no rule).
+  - **The audit's other fixes (session qa)**: a barred door's 65-tick wait after its room is cleared
+    (door10/kddoor m2A1 +0x3BD, `late`; B24); the Magtail's five hand-counted timers and its +0x5AC count
+    (poked in DRC room 8, `920:M_NewD2,0,8,-1`: 24 ticks at both rates, 12 before); the Kargaroc's unk_326
+    and unk_340 ("can't be hit", 5 or 50) and the Keese's m314 (10 or 50), poked on ones spawned on the
+    Outset dock: 24 at both, 12 before (B25). By the code's idiom only, not seen counting in a test (zero
+    or held in the idle state the pokes reach): the Boko Baba's +0x480, the Peahat's +0x460, +0x46C and
+    +0x48E, the Bubble's +0x406: `whole` or `keep` leaves a count per tick either way. The Stalfos is
+    session bottom's (done there), the sea's creatures top's. Not looked at: Poes, Wizzrobes, ChuChus (no
+    countdown left), Armos, Miniblins, Mothulas, the bosses, NPCs, pots (5), the boat (5): run the audit
+    with -v and read each.
   - **For the owner's recordings**: `~/wwhd-play/play-60-rec.sh` (desktop only, made by qa) is play-60.sh
     with the flight recorder on (Link, the camera, arrows, ships); F9 writes the last 20 s to
     `~/wwhd-play/flight/`. B8, B10 and B16 wait for one.

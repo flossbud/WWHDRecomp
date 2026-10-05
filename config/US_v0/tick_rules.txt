@@ -666,6 +666,7 @@
 0219C838    *h@f6       fadds           ki: current.pos.x += its velocity
 0219C848    *h@f9       fadds           ki: current.pos.y += its velocity
 0219C858    *h@f11      fadds           ki: current.pos.z += its velocity
+0219AEA4    whole       sth             ki: m314 (+0x4C8) - 1 (d_a_ki.cpp: 10 or 50 on a hit, it can't be hit while this runs; session qa's audit)
 0219AEB0    whole       sth             ki execute: a tick count (+0x4D4) + 1
 #
 # ---- step rules: Magtails (MT, process 216, d_a_mt.cpp; execute f_021D87A0). Found with the trial on
@@ -770,6 +771,11 @@
 0205ED04    whole       sth             bb: a counter (+0x4C6) + 1
 0205EDA4    whole       sthx            bb: its timers (+0x48C) count down
 02061834    whole       sth             bb: a countdown (+0x44C) - 1
+# its two countdowns after the timers' loop (d_a_bb.cpp: unk_326, and unk_340, 5 or 50 on a hit: it can't
+# be hit again while it runs) and the cry's count (session qa, tools/sixty/counter_audit.py)
+0205EDC4    whole       sth             bb: unk_326 (+0x49A) - 1
+0205EDD4    whole       sth             bb: unk_340 (+0x4B4) - 1: it can't be hit while this runs
+02061774    keep:r11    addi            bb: unk_C50 (+0xDC4) - 1, then its cry when it equals unk_C52
 0205E834    *h@f11      fadds           bb move (f_0205E638): current.pos.x += speed.x
 0205E83C    *h@f0       fadds           bb move: current.pos.y += speed.y
 0205E848    *h@f0       fadds           bb move: current.pos.z += speed.z
@@ -886,6 +892,10 @@
 023CC7D0    whole       sth             ph: its state timer (+0x462) + 1
 023CC854    whole       sth             ph: its state timer (+0x462) + 1
 023CC8FC    whole       sth             ph: its state timer (+0x462) + 1
+# its countdowns (session qa's audit; no decomp of d_a_ph.cpp yet: `if (n > 0) n--` each, the third tested at 0)
+023CA7CC    whole       stb             ph (f_023CA5AC): a countdown (+0x460) - 1
+023CD4EC    whole       sth             ph: a countdown (+0x46C) - 1
+023CC808    keep:r8     addi            ph: a countdown (+0x48E) - 1, then acts at 0
 023CCA48    whole       sth             ph: its state timer (+0x462) + 1
 023CCAC0    whole       sth             ph: its state timer (+0x462) + 1
 023CCBD8    whole       sth             ph: its state timer (+0x462) + 1
@@ -927,6 +937,8 @@
 # ---- step rules: Boko Babas (BO, process 214, d_a_bo.cpp; execute f_020BCEC8), spawned beside Link in
 # the Forbidden Woods (kindan room 9: WWHD_DEBUG_SPAWN; the room's own wait for Link to come close).
 020BD02C    whole       sthx            bo: its timers (+0x482) count down
+020BDAE8    keep:r12    addi            bo: a countdown (+0x480) - 1, then acts at 1 (session qa's audit; no decomp of d_a_bo.cpp yet)
+020BED50    keep:r12    addi            bo: the same countdown - 1 in another state, then acts at 0
 #
 # ---- step rules: a shared s16 countdown (f_02055B64: if (*t) --*t; return *t; cLib_calcTimer<s16>, as
 # cLib_calcTimer<u8> 0207A9A0 is overridden). Found on Outset's NPC_YW1 (process 317).

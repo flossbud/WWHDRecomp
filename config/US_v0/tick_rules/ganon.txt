@@ -198,6 +198,8 @@
 # ---- BL (207, d_a_bl.cpp: Bubbles, the flying skulls; f_020AAC08 their hover). Found in GanonB's four.
 020AAC4C    spliti      addi            bl: the hover's phase (+0x420) + 1000 a tick
 020AACB0    spliti      addi            bl: the hover's phase (+0x420) + 500 a tick
+020A9974    whole       stb             bl (f_020A9744): a countdown (+0x406) - 1 (`if (n > 0) n--`; session qa's audit, no decomp of d_a_bl.cpp yet)
+020AA2E4    whole       stb             bl (f_020AA068): the same countdown - 1
 #
 # ---- GND (246, d_a_gnd.cpp: Ganondorf, at the top of the tower, stage GTower; the decomp has no code;
 # execute f_02154EE0). Found with the trial along route gtower (A through the arrival's cutscene, which
