@@ -101,7 +101,8 @@ case "${1:-}" in
 		claims "$1" "${2:?item id}" "${3:-}"
 		;;
 	shot)
-		src=$2; cap=$(json_str "${3:-}"); name=shot-$(date +%Y%m%d-%H%M%S).jpg
+		src=$2; cap=$(json_str "${3:-}"); name=shot-$(date +%Y%m%d-%H%M%S-%3N).jpg   # ms: two shots in one second
+		# would share a file (one picture under both captions, deleted with the older one)
 		source "$root/tools/worker/target.sh"                # the worker the capture was made on (as for job)
 		if [ "$WWHD_ON" = desktop ]; then
 			ssh -o BatchMode=yes owner@DESKTOP_ADDR "podman exec wwhd-worker convert '$src' -resize 960x540 -quality 82 jpg:-" |
