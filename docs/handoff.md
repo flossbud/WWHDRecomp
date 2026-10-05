@@ -1687,6 +1687,28 @@ it in a window; D21 "Step 2"):**
     read them first). Not looked at: ChuChus, Keese, ReDeads, Poes, Wizzrobes, Floormasters, Bubbles,
     Peahats, Armos, Miniblins, Magtails, Kargarocs, Mothulas. The ground smoke's count of bk, mo2 and tn
     (a puff a call while it runs) is left alone: as many puffs as at 30 in half the time.
+  - **Link's own countdowns (session qa, the same audit on his code)**: ~35 of his timers still counted on
+    both frames, each an action or a guard half as long at 60. The one that changes play: after a hit he
+    can't be hit again for 30 ticks (mDamageWaitTimer, +0x3B0, changeDamageProc): 15 at 60. Also the
+    window a turned stick counts for a spin attack (m3524), the ticks on a slope before he slides
+    (m3526), the wait before the next arrow (m355E), the Deku Leaf's gust's ticks (m353A), mQuakeTimer,
+    and the actions' own counts (mProcVar0.m34D0 +0x6916...): the waits after the parry cuts, the spin
+    attack, the jump attack's landing, a weapon's swing, a missed grab, a ladder's rung, the rope and
+    bottle actions, and in procTactWait the three ticks after a beat before the stick is judged (1.5 at 60:
+    a late stick read as the wrong note, perhaps part of B15). Rules in `link_qa.txt`, the kind by how the
+    count is tested (`late` if before the - 1, `keep` if after, else `whole`). Poked to 25 on the dock
+    (`WWHD_DEBUG_POKE=1000:168,3b0,2,19`): 24 ticks at both rates (12 before); route `cuts` (a spin
+    attack, two jump attacks): procCutTurn 17 and procJumpCutLand 14 ticks at both (16.5 and 13 before).
+    His action table: 12-byte entries at 0x10036DF4 (.rodata), the function in the third word, in the
+    decomp's daPyProc order.
+  - **`tools/sixty/counter_audit.py`** (new): per converted process, every stored counter (a field loaded,
+    +-1, stored back) with no rule on its store or add. Run it after converting a type and after a fix;
+    with no argument it lists every converted process that still has such a countdown (79 lines on
+    2026-10-05: NPC_PEOPLE 9, pots 5, the boat 5, the Stalfos 9, the bosses 2-7 each...). Each is a
+    candidate, not a bug: read it in the decomp (input-driven counts and state numbers want no rule).
+  - **For the owner's recordings**: `~/wwhd-play/play-60-rec.sh` (desktop only, made by qa) is play-60.sh
+    with the flight recorder on (Link, the camera, arrows, ships); F9 writes the last 20 s to
+    `~/wwhd-play/flight/`. B8, B10 and B16 wait for one.
   - **Open (session qa)**: B16 (Windfall's streaks: the colours of the man by the gate's clothes; not
     reproduced from the dock, on the quay by the gate over 20 s, or after a talk; route `wfw` strafes Link
     from the dock to the quay at 30, at 60 he slips off its edge: his path is 5 units off); B8 (the bow's

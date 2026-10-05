@@ -30,6 +30,7 @@ route_info() {
         hook)  route=hook-100.txt      frames=1200  save=/wwhd/data/saves/wwhd_100 trace= ;;
         spin)  route=spin-100.txt      frames=1500  save=/wwhd/data/saves/wwhd_100 trace= ;;
         wfw)   route=wfw-100.txt       frames=1200  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        cuts)  route=cuts-100.txt      frames=1400  save=/wwhd/data/saves/wwhd_100 trace= ;;
         mob)   route=mob-100.txt       frames=1800  save=/wwhd/data/saves/wwhd_100 trace= ;;
         talk)  route=talk-100.txt      frames=1500  save=/wwhd/data/saves/wwhd_100 trace= ;;
         sail)  route=sail-100.txt      frames=2940  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/sail-det/a.zst ;;
@@ -38,4 +39,4 @@ route_info() {
         *) return 1 ;;
     esac
 }
-route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob"
+route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts"

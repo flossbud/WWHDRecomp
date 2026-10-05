@@ -41,3 +41,50 @@
 0240BB10    *h@f29      fadds           f_0240B7F4: its second frame (+0x5708) + 1
 0240BC0C    *h@f29      fsubs           f_0240B7F4: the frame (+0x5618) - 1
 0240BC28    *h@f29      fsubs           f_0240B7F4: the second frame (+0x5708) - 1
+#
+# ---- Link's countdowns that still ran on both frames of a tick (session qa's audit after B14: every field
+# loaded, - 1 and stored back in his code, without a rule; the hurricane spin's class, B9). Named by the
+# decomp, the actions by his action table (12-byte entries at 0x10036DF4, the function in the third word).
+# The rule follows how the count is tested: `late` where it is tested before the - 1 (`if (n > 0) n--; else
+# next`: both frames of a tick see the tick's count, the next action starts on a whole tick as at 30),
+# `keep` on the - 1 where the new count is tested (`n--; if (n == 0) ...`: the half tick computes nothing
+# new), `whole` where only memory holds it.
+#
+# His timers outside the actions:
+023FA5B0    keep:r10    addi            changeDamageProc: mDamageWaitTimer (+0x3B0) - 1, then its end at 0: the 30 ticks he can't be hit again (15 at 60 before)
+023D4790    keep:r12    addi            daPy_py_c (f_023D4768): mQuakeTimer (+0x3B2) - 1, then its end at 0
+023E4D60    keep:r12    addi            changeSlideProc: m3526 (+0x6976) - 1, the ticks on a slope before he slides
+023F42A4    late        sth             setStickData: m3524 (+0x6974) - 1, the window a turned stick counts for the spin attack
+023F23F4    late        sth             setDemoData: m3554 (+0x69A4) - 1, then the forest water's flag off
+023EB034    whole       sth             checkNextActionHookshotReady: m355C (+0x69AC) - 1
+023EC240    whole       sth             checkNextActionRopeReady: m355C (+0x69AC) - 1
+0240CA20    whole       sth             setLightSaver: m355C (+0x69AC) - 1
+023EB4E0    whole       sth             checkNextActionBowReady: m355E (+0x69AE) - 1, the wait before the next arrow
+02409AFC    whole       sth             setCollision: m3534 (+0x6984) - 1
+02409E78    whole       sth             setCollision: m353A (+0x698A) - 1, the ticks the Deku Leaf's gust blows
+02409F18    whole       sth             setCollision: m353A (+0x698A) - 1 (the other path)
+023FE364    whole       sth             autoGroundHit: mTinkleHoverTimer (+0x699C) - 1
+0240B948    whole       sth             mTinkleShieldTimer (+0x699E) - 1
+# His actions' own counts (mProcVar0.m34D0 +0x6916, m34D2 +0x6918, m34D6 +0x691C):
+024406D0    late        sth             procCutEA: the wait after its swing (+0x6916) - 1
+02440964    late        sth             procCutEB: the wait after its swing - 1
+02440F2C    late        sth             procCutExB: the wait after its swing - 1
+02441808    late        sth             procCutTurn: the wait after the spin attack - 1
+02442E34    late        sth             procJumpCutLand: the wait after the jump attack's landing - 1
+0243EB1C    late        sth             procWeaponNormalSwing: the wait after a picked-up weapon's swing - 1
+0242DF78    late        sth             procGrabMiss: the wait after a missed grab - 1
+02427D38    late        sth             procLadderMove: the wait between two rungs - 1
+0242D2F4    late        sth             procCrawlAutoMove: its count - 1 (tested at the action's start)
+0242D648    whole       sth             procCrawlAutoMove: m34D6 (+0x691C) - 1
+0243BF7C    late        sth             procVomitLand: the wait after landing - 1
+0243BD40    whole       sth             procVomitJump: m34D0 - 1 (no pushing while it runs)
+0243BCD0    keep:r11    addi            procVomitJump: m34D2 (+0x6918) - 1, then the jump at 0
+02432674    keep:r12    addi            procShipPaddle: the idle count - 1, then a fidget at 0
+02436AE8    whole       sth             procRopeHangWait: m34D0 - 1
+024375E0    keep:r8     addi            procRopeThrowCatch: m34D0 - 1, then the next rope action at 0
+0243E488    keep:r10    addi            procBottleOpen: m34D0 - 1, then the water mark at 0
+0243A7A0    keep:r5     addi            procTactWait: the three ticks after a beat (+0x6916) - 1, then the stick is judged at 0
+0243A748    whole       stw             procTactWait: WWHD's own count (+0x6A7C, set from f_025E1EFC) - 1
+0243B7B4    keep:r9     addi            procTactPlayOriginal: m34D6 (+0x691C) - 1, then the next swing at 0
+# Left: procTactPlay's melody count (+0x6920, 0243AE60: session bottom's keep), a count at +0x652A of r26
+# in f_0240CDD0 (0240D640, not identified), makeBgWait's m352E (his creation, on whole ticks anyway).
