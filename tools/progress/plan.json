@@ -338,6 +338,10 @@
     {
       "id": "cutscenes",
       "name": "JStudio cutscenes (dDemo) at 60: Link's cutscene action steps, the cutscene's values evaluated for both steps of a tick (first: Ganondorf's arrival in Ganon's Tower); next: other cutscenes, an unconverted cast's half-tick lag"
+    },
+    {
+      "id": "npcs",
+      "name": "NPCs still at 30 where players go (a stage survey): Windfall's houses (bomb shop BMS1 and P1, the auction AUCTION/KP1/GP1/KF1, Lenzo PHOTO, school HO, Kaisen KG1), Outset (YM1, LS1 Aryll, P1/P2, AH), island stalls ROTEN, Koroks BJ1-9 on the islands, HR, FA1, Beedle's shop BS1, Carlov's MT/MN"
     }
   ],
   "later": [
