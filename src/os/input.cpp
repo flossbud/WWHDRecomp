@@ -14,6 +14,7 @@
 // connect and sampling callbacks, which this game never registers.
 #include "os.h"
 #include "input.h"
+#include "debug_menu.h"
 #include "Cafe/OS/libs/padscore/padscore.h"
 #include "Cafe/OS/libs/vpad/vpad.h"
 #include <fstream>
@@ -193,7 +194,7 @@ WWHD_OS_FUNCTION(padscore, KPADReadEx)
 		return fail(kKpadNoSample);
 	s_lastRead[channel] = now;
 
-	Pad pad = Current();
+	Pad pad = debug_menu::Filter(Current());          // the debug menu takes the pad while it is open
 	s_lastPad = pad;
 	uint32 hold = 0;
 	for (auto [from, to] : kProButtons)

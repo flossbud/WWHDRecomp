@@ -27,6 +27,7 @@
 // The dumps are game memory: they stay on the worker.
 #include "override.h"
 #include "../os/input.h"
+#include "../os/debug_menu.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -37,6 +38,7 @@
 #include <cstring>
 #include <ctime>
 #include <deque>
+#include <mutex>
 #include <set>
 #include <thread>
 #include <tuple>
@@ -1289,8 +1291,34 @@ namespace wwhd::sixty
 namespace
 {
 	struct StageWarp { int tick, point, room, layer; char name[9]; };
+	// the debug menu's warp (wwhd::debug::RequestStage, src/os/debug_menu.h): one waiting for the next
+	// game frame
+	std::mutex s_warpLock;
+	bool s_warpWaiting = false;
+	StageWarp s_warp{};
+	void NextStage(const StageWarp& w)
+	{
+		constexpr uint32 kNext = 0x1046F0B0u + 0x5140u;
+		for (uint32 i = 0; i < 8; i++)
+			wr8(kNext + i, (uint8)w.name[i]);
+		wr16(kNext + 8, (uint16)w.point);
+		wr8(kNext + 0xA, (uint8)w.room);
+		wr8(kNext + 0xB, (uint8)w.layer);
+		wr8(kNext + 0xC, 1);
+		wr8(kNext + 0xD, 0);
+		cemuLog_log(LogType::Force, "wwhd debug: next stage {} point {} room {} layer {}", w.name, w.point, w.room, w.layer);
+	}
 	void DebugStage()
 	{
+		if (!g_rtHalfTick)
+		{
+			std::lock_guard lock(s_warpLock);
+			if (s_warpWaiting)
+			{
+				s_warpWaiting = false;
+				NextStage(s_warp);
+			}
+		}
 		static const std::vector<StageWarp> warps = [] {
 			std::vector<StageWarp> v;
 			if (const char* e = getenv("WWHD_DEBUG_STAGE"))
@@ -1306,19 +1334,19 @@ namespace
 			return;
 		const int now = (int)wwhd::rt::GameFrame(wwhd::os::SwapCount());
 		for (const StageWarp& w : warps)
-		{
-			if (w.tick != now)
-				continue;
-			constexpr uint32 kNext = 0x1046F0B0u + 0x5140u;
-			for (uint32 i = 0; i < 8; i++)
-				wr8(kNext + i, (uint8)w.name[i]);
-			wr16(kNext + 8, (uint16)w.point);
-			wr8(kNext + 0xA, (uint8)w.room);
-			wr8(kNext + 0xB, (uint8)w.layer);
-			wr8(kNext + 0xC, 1);
-			wr8(kNext + 0xD, 0);
-			cemuLog_log(LogType::Force, "wwhd debug: next stage {} point {} room {} layer {}", w.name, w.point, w.room, w.layer);
-		}
+			if (w.tick == now)
+				NextStage(w);
+	}
+}
+
+namespace wwhd::debug
+{
+	void RequestStage(const char* name, int point, int room, int layer)
+	{
+		std::lock_guard lock(s_warpLock);
+		s_warp = StageWarp{ 0, point, room, layer, {} };
+		strncpy(s_warp.name, name, 8);
+		s_warpWaiting = true;
 	}
 }
 
@@ -1410,11 +1438,28 @@ namespace
 // dSv_memBit_c::isDungeonItem(mem, item): item 3 is the stage's "boss beaten" (isStageBossEnemy and 44
 // call sites test it). A test aid: WWHD_DEBUG_BOSS=1 answers "no" for it, so a boss appears again in
 // its room on a finished save (with WWHD_DEBUG_STAGE to get there); nothing is written to the save.
+// The debug menu turns it on and off (wwhd::debug::SetBossRefight, src/os/debug_menu.h).
+namespace
+{
+	std::atomic<int> s_bossRefight{ -1 };            // -1: as WWHD_DEBUG_BOSS says
+}
+namespace wwhd::debug
+{
+	bool BossRefight()
+	{
+		static const bool env = [] { const char* e = getenv("WWHD_DEBUG_BOSS"); return e && *e == '1'; }();
+		const int v = s_bossRefight.load();
+		return v < 0 ? env : v != 0;
+	}
+	void SetBossRefight(bool on)
+	{
+		s_bossRefight.store(on ? 1 : 0);
+	}
+}
 void orig_f_025B9100(PPCInterpreter_t* __restrict ctx);
 void f_025B9100(PPCInterpreter_t* __restrict ctx)
 {
-	static const bool on = [] { const char* e = getenv("WWHD_DEBUG_BOSS"); return e && *e == '1'; }();
-	if (on && ctx->gpr[4] == 3)
+	if (wwhd::debug::BossRefight() && ctx->gpr[4] == 3)
 	{
 		ctx->gpr[3] = 0;
 		return;

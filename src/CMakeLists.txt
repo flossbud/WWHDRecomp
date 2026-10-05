@@ -129,7 +129,7 @@ add_library(wwhd_runtime OBJECT runtime/dispatch.cpp runtime/imports.cpp runtime
 wwhd_like_cemu(wwhd_runtime)
 
 add_library(wwhd_os OBJECT os/coreinit_memory.cpp os/coreinit_queue_wait.cpp os/coreinit_thread_state.cpp
-	os/coreinit_time.cpp os/erreula.cpp os/input.cpp os/install.cpp os/nn_offline.cpp os/swkbd.cpp
+	os/coreinit_time.cpp os/debug_menu.cpp os/erreula.cpp os/input.cpp os/install.cpp os/nn_offline.cpp os/swkbd.cpp
 	os/system_flags.cpp
 	os/gx2/blit.cpp os/gx2/context_state.cpp os/gx2/draw.cpp os/gx2/memory.cpp os/gx2/misc.cpp
 	os/gx2/query.cpp os/gx2/render_target.cpp os/gx2/resource.cpp os/gx2/shader.cpp

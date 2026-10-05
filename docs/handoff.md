@@ -1328,6 +1328,24 @@ it in a window; D21 "Step 2"):**
     type (38) switched 44 ticks early at 60 (f1293 against f1338): requested by name only by the Gyorg
     controller (GY_CTRL 229/230, f_0216BBBC) and NPC_SO (f_022E06A4), so the Gyorg attack's trigger fires
     early (told session top, sea life). The camera's type is at camera +0x248+0x51C, its style +0x514.
+  - **The debug menu (the owner's idea; round 2 debugmenu, session bottom)**: click both sticks at once
+    and a panel opens over the game (src/os/debug_menu.cpp; drawn by src/frontend/overlay.cpp as the
+    system's dialogs are, so never in captures): Islands, Dungeons, Bosses (refights on), "Boss
+    refights: ON/OFF", Close. The D-pad or the left stick moves, A chooses, B goes back (or closes);
+    while it is open, and until the buttons that closed it are let go, the game reads no input. A
+    destination asks for the stage change on the next game frame, as WWHD_DEBUG_STAGE does
+    (wwhd::debug::RequestStage in sixty.cpp); a boss turns the refights on first (WWHD_DEBUG_BOSS's
+    switch, now wwhd::debug::SetBossRefight; the env var still sets it at start). The menu filters
+    the pad in KPADReadEx (src/os/input.cpp), so an input script drives it too: the scratch route
+    `LCLICK+RCLICK 5` at f1000, `DOWN 3` at 1015 and 1025, `A 3` at 1035 and 1045 warps the save route
+    to Gohma (M_DragB), and Gohma (234) is there from f1093. Destinations (each warped to on the save
+    route; Link arrives in all): Outset (sea,0,44), Windfall (sea,0,11), Dragon Roost Island (Adanmae),
+    the Rito Aerie (Atorizk), Forest Haven (Omori); Dragon Roost Cavern (M_NewD2), the Forbidden Woods
+    (kindan), the Tower of the Gods (Siren), the Forsaken Fortress (MajyuE), the Earth and Wind Temples
+    (M_Dai, kaze), Hyrule (Hyrule), Ganon's Tower (GanonA); Gohma (M_DragB), Kalle Demos (kinBOSS),
+    Gohdan (SirenB), Helmaroc King (M2tower,22,0,3), Jalhalla (M_DaiB), Molgera (kazeB), Puppet Ganon
+    (GanonK), Ganondorf (GTower). (A warp to the stage Link is in reuses his process's address: the
+    track's (name, address) key then spans both.) Next: spawning actors, the Xboss refight rooms.
   - **Counts a call without a rule, in session bottom's types (shared enemy code too; regress.sh rerun)**:
     session qa's `tools/sixty/counter_audit.py` lists every field loaded, +-1 and stored back with no
     rule. For my processes (and the enemies item) each site was classified from its code (a scratch

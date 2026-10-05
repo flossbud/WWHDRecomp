@@ -7,6 +7,7 @@
 #include "../gpu/vk/renderer.h"
 #include "../os/swkbd.h"
 #include "../os/erreula.h"
+#include "../os/debug_menu.h"
 #include <SDL3/SDL.h>
 
 namespace
@@ -147,6 +148,28 @@ namespace
 		Show((1920 - w) / 2, (1080 - h) / 2, c, w, h);
 	}
 
+	void DrawDebugMenu(const wwhd::os::debug_menu::View& v)
+	{
+		constexpr int w = 900;
+		const int h = 130 + (int)v.items.size() * 40 + 60;
+		Canvas c(w, h);
+		c.Text(40, 34, 3, v.title, kText);
+		int y = 100;
+		for (size_t i = 0; i < v.items.size(); i++)
+		{
+			if ((int)i == v.cursor)
+			{
+				c.Fill(30, y - 8, w - 60, 38, kFrame);
+				c.Text(48, y, 3, "> " + v.items[i], kText);
+			}
+			else
+				c.Text(48, y, 3, "  " + v.items[i], kHint);
+			y += 40;
+		}
+		c.Text(40, h - 50, 2, v.hint, kHint);
+		Show((1920 - w) / 2, (1080 - h) / 2, c, w, h);
+	}
+
 	void DrawHomeSign()
 	{
 		constexpr int w = 620, h = 60;
@@ -165,23 +188,27 @@ namespace wwhd
 
 	void UpdateOverlay()
 	{
-		static uint32 s_keyboard = ~0u, s_error = ~0u;
+		static uint32 s_keyboard = ~0u, s_error = ~0u, s_menu = ~0u;
 		static bool s_home = false, s_shown = false;
 		os::swkbd::View kb = os::swkbd::Current();
 		os::erreula::View err = os::erreula::Current();
-		if (kb.version == s_keyboard && err.version == s_error && err.homeNixSign == s_home)
+		os::debug_menu::View menu = os::debug_menu::Current();
+		if (kb.version == s_keyboard && err.version == s_error && err.homeNixSign == s_home && menu.version == s_menu)
 			return;
 		s_keyboard = kb.version;
 		s_error = err.version;
 		s_home = err.homeNixSign;
+		s_menu = menu.version;
 		if (err.dialog)
 			DrawError(err);
 		else if (kb.open)
 			DrawKeyboard(kb);
+		else if (menu.open)
+			DrawDebugMenu(menu);
 		else if (err.homeNixSign)
 			DrawHomeSign();
 		else if (s_shown)
 			gpu::SetOverlay(0, 0, 0, 0, {});
-		s_shown = err.dialog || kb.open || err.homeNixSign;
+		s_shown = err.dialog || kb.open || menu.open || err.homeNixSign;
 	}
 }
