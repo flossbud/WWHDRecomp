@@ -1690,7 +1690,13 @@ it in a window; D21 "Step 2"):**
     current file 101D6004, frame 101D6008) by d_demo.cpp's asserts; watching 101D6004 tells whether a
     cutscene is JStudio (the boss refights' intros are event cameras, not JStudio). Open: other JStudio
     cutscenes (the 100% save replays few); an unconverted cast member reads the half way values at its
-    whole step and keeps them (half a tick behind at whole ticks).
+    whole step and keeps them (half a tick behind at whole ticks). The generic cutscene puppet DEMO00
+    (406, d_a_demo00.cpp; 10 in GTower's arrival) is the main unconverted cast: converting it needs
+    `*h@f31` on actPerformance's frame - 1 (f_021219B8 at 02122424, so setFrame(f - h) then play's h
+    lands on f) and `whole` on its execute's (f_02120CBC) item get (02120F90) and vibrations (021210A0,
+    021210E4); and after a string compare (r27) HD sets a frame (+0x9C of the model at +0x3F0) through
+    an s16 (fctiwz at 02122434), whole frames only: if that is the skeleton's, its pose would still
+    change once a tick. To read before converting it. Not done.
   - **Dungeons (the work queue's "dungeons", from session top's census): the Wind Temple
     (`tick_rules/dungeons.txt`)**: converted Obj_Hami2/3/4 (47-49, grates turning or sliding in their
     switch's event), Obj_Hbrf1 (50, a lift), Obj_Vmc (52, the soil Makar's seeds grow in), TOGE (122,
