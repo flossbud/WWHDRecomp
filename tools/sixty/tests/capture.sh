@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# capture.sh NAME "STAGE,point,room,layer"|- SWAPS(comma) ["SWAP BUTTON FRAMES"...]: captures for the progress
+# capture.sh NAME "STAGE,point,room,layer"|- SWAPS(comma) ["FRAME BUTTON HELD"...]: captures for the progress
 # page, at 60 fps on the worker's GPU (quick; not for comparisons, which use llvmpipe): route save, the warp at
-# f920 unless "-", then extra input lines after the save route's (swaps: two a game frame from 900, e.g.
-# "1200 RLEFT 60" swings the camera). WWHD_DEBUG_* and WWHD_60FPS_* pass through. Prints the captures (game
-# data: they stay on the worker); then tools/progress/publish.sh shot PPM CAPTION. CEMU_BIN= another binary
-# (one in a folder of its own runs beside a test). CAPTURE_30=1: at 30 instead (swaps are game frames then),
-# to see whether something wrong at 60 is there at 30 too.
+# f920 unless "-", then extra input lines after the save route's, in game frames as the routes' are (e.g.
+# "1150 RLEFT 30" swings the camera); the captures' SWAPS are swaps, two a game frame from 900 (game frame 1150
+# is swap 1400). WWHD_DEBUG_* and WWHD_60FPS_* pass through. Prints the captures (game data: they stay on the
+# worker); then tools/progress/publish.sh shot PPM CAPTION. CEMU_BIN= another binary (one in a folder of its
+# own runs beside a test). CAPTURE_30=1: at 30 instead (swaps are game frames then), to see whether something
+# wrong at 60 is there at 30 too.
 set -e
 source "$(dirname "$0")/common.sh"
 d=$OUT/cap-$1; rm -rf "$d"; mkdir -p "$d/shots"

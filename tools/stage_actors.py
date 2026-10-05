@@ -1,7 +1,7 @@
 """Which actors a stage's rooms place: the rooms' actor lists, by WWHD process number (for 60 fps work).
 
 Usage (on the worker; reads the game's files, so its output stays there):
-    python3 tools/stage_actors.py STAGE [ROOM...] [--names NAMES.tsv] [--layers] [--pos PROC]
+    python3 tools/stage_actors.py STAGE [ROOM...] [--names NAMES.tsv] [--layers] [--pos PROC] [--spawns]
 
 STAGE is a stage name (sea, M_NewD2, kindan...): content/Common/Stage/STAGE_Stage.szs and STAGE_RoomN.szs
 (Yaz0-compressed SARC archives in WWHD, RARC on the GameCube; some, e.g. sea rooms 11 and 44, are inside
@@ -12,7 +12,11 @@ each entry naming the actor by an 8-byte name. dStage_searchName's table (l_obje
 the RPX's data by its first two names. Prints, per room, the process numbers present with their counts,
 profile names (NAMES.tsv, default /wwhd/data/ghidra-out/actor_names.tsv) and stage names. ROOM limits
 the rooms (numbers; "stage" for the stage file). --pos PROC prints that process's placements instead
-(name, parameters, position, angle y): where to put Link (WWHD_DEBUG_PLACE) or spawn one.
+(name, parameters, position, angle y): where to put Link (WWHD_DEBUG_PLACE) or spawn one. --spawns prints
+the rooms' player spawn points (PLYR) instead: a stage warp's point (WWHD_DEBUG_STAGE=tick:STAGE,point,
+room,layer) is the low byte of the entry's angle z, and a point the room hasn't gives its first entry. A
+spawn point facing an actor gets Link to it more surely than WWHD_DEBUG_PLACE, which in play moves him along
+a line from where he was and stops at the first wall.
 """
 import argparse
 import collections
@@ -170,6 +174,21 @@ def actor_chunks(dz, full=False):
                 yield tag, name
 
 
+def spawn_points(dz):
+    """(point, x, y, z, angle y, params) for every player spawn point (PLYR, 0x20 bytes an entry) of a
+    dzr/dzs file; the point is the low byte of the entry's angle z."""
+    n = struct.unpack(">I", dz[0:4])[0]
+    for k in range(n):
+        tag, count, off = struct.unpack(">4sII", dz[4 + 12 * k:16 + 12 * k])
+        if tag != b"PLYR":
+            continue
+        for j in range(count):
+            e = off + 0x20 * j
+            prm, x, y, z = struct.unpack(">Ifff", dz[e + 8:e + 0x18])
+            ay, az = struct.unpack(">hh", dz[e + 0x1A:e + 0x1E])
+            yield az & 0xFF, x, y, z, ay, prm
+
+
 def object_names():
     """{stage name: (WWHD process number, argument)} from l_objectName in the RPX's data."""
     rpx = Rpx(RPX)
@@ -202,6 +221,7 @@ def main():
     ap.add_argument("--names", default="/wwhd/data/ghidra-out/actor_names.tsv")
     ap.add_argument("--layers", action="store_true")
     ap.add_argument("--pos", type=int, help="print this process's placements")
+    ap.add_argument("--spawns", action="store_true", help="print the player spawn points (a warp's point)")
     args = ap.parse_args()
     names = {}
     if os.path.exists(args.names):
@@ -223,6 +243,11 @@ def main():
         groups = collections.defaultdict(collections.Counter)
         for fname, blob in files.items():
             tables = [blob] if fname.endswith((".dzr", ".dzs")) else embedded_dz(blob) if fname.endswith(".bfres") else []
+            if args.spawns:
+                for dz in tables:
+                    for point, x, y, z, ay, prm in spawn_points(dz):
+                        print(f"{args.stage} room {room} spawn point {point} at {x:.0f},{y:.0f},{z:.0f} angle {ay} (params {prm:08x})")
+                continue
             if args.pos is not None:
                 for dz in tables:
                     for tag, name, prm, x, y, z, ay in actor_chunks(dz, full=True):
