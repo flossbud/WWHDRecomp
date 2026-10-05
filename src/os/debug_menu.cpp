@@ -221,6 +221,55 @@ namespace wwhd::os::debug_menu
 		return s_open;
 	}
 
+	void Hover(int item)
+	{
+		std::lock_guard lock(s_lock);
+		if (!s_open || item < 0 || item >= (int)Items().size() || item == s_cursor)
+			return;
+		s_cursor = item;
+		s_version++;
+	}
+
+	void Click(int item)
+	{
+		std::lock_guard lock(s_lock);
+		if (!s_open || item < 0 || item >= (int)Items().size())
+			return;
+		s_cursor = item;
+		Choose();
+		if (!s_open)
+			s_swallow = true;
+		s_version++;
+	}
+
+	void Back()
+	{
+		std::lock_guard lock(s_lock);
+		if (!s_open)
+			return;
+		if (s_page == kTop)
+		{
+			s_open = false;
+			s_swallow = true;
+		}
+		else
+		{
+			s_cursor = TopIndex(s_page);
+			s_page = kTop;
+		}
+		s_version++;
+	}
+
+	void Scroll(int steps)
+	{
+		std::lock_guard lock(s_lock);
+		const int count = (int)Items().size();
+		if (!s_open || !count || !steps)
+			return;
+		s_cursor = ((s_cursor + steps) % count + count) % count;
+		s_version++;
+	}
+
 	input::Pad Filter(const input::Pad& pad)
 	{
 		std::lock_guard lock(s_lock);
@@ -284,8 +333,8 @@ namespace wwhd::os::debug_menu
 		v.title = ListOf(s_page).title;
 		v.items = Items();
 		v.cursor = s_cursor;
-		v.hint = s_page == kTop ? "D-pad: move   A: choose   B, both sticks or F1: close"
-		                        : "D-pad: move   A: warp   B: back";
+		v.hint = s_page == kTop ? "Move: D-pad/mouse   Choose: A/click   Close: B/F1"
+		                        : "Move: D-pad/mouse   Pick: A/click   Back: B/right click";
 		return v;
 	}
 }

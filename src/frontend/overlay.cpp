@@ -148,13 +148,18 @@ namespace
 		Show((1920 - w) / 2, (1080 - h) / 2, c, w, h);
 	}
 
+	// the debug menu's panel in the 1920x1080 TV frame: drawn by DrawDebugMenu, hit by the mouse
+	// (wwhd::DebugMenuItemAt)
+	constexpr int kMenuW = 900, kMenuTop = 100, kMenuRow = 40;
+	int MenuHeight(size_t items) { return 130 + (int)items * kMenuRow + 60; }
+
 	void DrawDebugMenu(const wwhd::os::debug_menu::View& v)
 	{
-		constexpr int w = 900;
-		const int h = 130 + (int)v.items.size() * 40 + 60;
+		constexpr int w = kMenuW;
+		const int h = MenuHeight(v.items.size());
 		Canvas c(w, h);
 		c.Text(40, 34, 3, v.title, kText);
-		int y = 100;
+		int y = kMenuTop;
 		for (size_t i = 0; i < v.items.size(); i++)
 		{
 			if ((int)i == v.cursor)
@@ -164,7 +169,7 @@ namespace
 			}
 			else
 				c.Text(48, y, 3, "  " + v.items[i], kHint);
-			y += 40;
+			y += kMenuRow;
 		}
 		c.Text(40, h - 50, 2, v.hint, kHint);
 		Show((1920 - w) / 2, (1080 - h) / 2, c, w, h);
@@ -184,6 +189,21 @@ namespace wwhd
 	void ShowPreparing(uint32 done, uint32 total)
 	{
 		DrawPreparing(done, total);
+	}
+
+	int DebugMenuItemAt(float tvx, float tvy)
+	{
+		const os::debug_menu::View v = os::debug_menu::Current();
+		if (!v.open)
+			return -1;
+		const int h = MenuHeight(v.items.size());
+		const float px = tvx - (1920 - kMenuW) / 2, py = tvy - (1080 - h) / 2;
+		if (px < 0 || py < 0 || px >= kMenuW || py >= h)
+			return -2;                                  // outside the panel
+		if (px < 30 || px >= kMenuW - 30 || py < kMenuTop - 8)
+			return -1;                                  // on the panel, not on an item
+		const int i = (int)((py - (kMenuTop - 8)) / kMenuRow);
+		return i < (int)v.items.size() ? i : -1;
 	}
 
 	void UpdateOverlay()

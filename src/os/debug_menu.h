@@ -16,6 +16,12 @@ namespace wwhd::os::debug_menu
 	// it (window_system.cpp). On the keyboard the arrows move, X (A) or Enter (+) chooses, Z (B) goes back.
 	void Toggle();
 	bool IsOpen();
+	// The mouse while the menu is open (window_system.cpp; the overlay finds the item under it):
+	// hovering an item selects it, a left click chooses it, a right click goes back, the wheel moves.
+	void Hover(int item);
+	void Click(int item);
+	void Back();
+	void Scroll(int steps);
 
 	struct View
 	{

@@ -25,6 +25,7 @@
 #include "audio/CubebInputAPI.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
+#include <algorithm>
 #else
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
@@ -353,6 +354,59 @@ static void PrepareShaders(SDL_Window* window)
 					wwhd::os::swkbd::Confirm();
 			}
 			PublishInput();
+			break;
+		// the mouse in the debug menu (the owner's ask): hover selects, a left click chooses (outside the
+		// panel closes), a right click goes back, the wheel moves; the game never sees the mouse
+		case SDL_EVENT_MOUSE_MOTION:
+		case SDL_EVENT_MOUSE_BUTTON_DOWN:
+		case SDL_EVENT_MOUSE_WHEEL:
+			if (wwhd::os::debug_menu::IsOpen())
+			{
+				if (ev.type == SDL_EVENT_MOUSE_WHEEL)
+				{
+					if (ev.wheel.y != 0)
+						wwhd::os::debug_menu::Scroll(ev.wheel.y > 0 ? -1 : 1);
+					break;
+				}
+				const float mx = ev.type == SDL_EVENT_MOUSE_MOTION ? ev.motion.x : ev.button.x;
+				const float my = ev.type == SDL_EVENT_MOUSE_MOTION ? ev.motion.y : ev.button.y;
+				// window points to pixels, then to the 1920x1080 frame fitted in the window as the TV image is
+				const float density = SDL_GetWindowPixelDensity(window);
+				int pw = 0, ph = 0;
+				SDL_GetWindowSizeInPixels(window, &pw, &ph);
+				const double scale = std::min(pw / 1920.0, ph / 1080.0);
+				if (scale <= 0)
+					break;
+				const float tx = (float)((mx * density - (pw - 1920 * scale) / 2) / scale);
+				const float ty = (float)((my * density - (ph - 1080 * scale) / 2) / scale);
+				const int item = wwhd::DebugMenuItemAt(tx, ty);
+				if (ev.type == SDL_EVENT_MOUSE_MOTION)
+				{
+					wwhd::os::debug_menu::Hover(item);
+					break;
+				}
+				// one press, once: a click can arrive twice (seen on X11: two presses 3 ms apart at the
+				// same point), and the second would choose on the page the first opened
+				static Uint64 s_lastPress = 0;
+				static Uint8 s_lastButton = 0;
+				static float s_lastX = -1, s_lastY = -1;
+				const bool repeat = ev.button.button == s_lastButton && mx == s_lastX && my == s_lastY &&
+					ev.button.timestamp - s_lastPress < 50'000'000;   // ns
+				s_lastPress = ev.button.timestamp; s_lastButton = ev.button.button; s_lastX = mx; s_lastY = my;
+				cemuLog_log(LogType::Force, "wwhd: debug menu: mouse button {} (mouse {}, clicks {}) at {:.0f},{:.0f}: item {}{}",
+					(int)ev.button.button, (uint32)ev.button.which, (int)ev.button.clicks, tx, ty, item, repeat ? " (repeat, ignored)" : "");
+				if (repeat)
+					break;
+				if (ev.button.button == SDL_BUTTON_LEFT)
+				{
+					if (item >= 0)
+						wwhd::os::debug_menu::Click(item);
+					else if (item == -2)
+						wwhd::os::debug_menu::Toggle();
+				}
+				else if (ev.button.button == SDL_BUTTON_RIGHT)
+					wwhd::os::debug_menu::Back();
+			}
 			break;
 		case SDL_EVENT_TEXT_INPUT:
 			if (wwhd::os::swkbd::Current().open)
