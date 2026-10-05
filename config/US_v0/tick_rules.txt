@@ -300,6 +300,37 @@
 02537364    k@f1        bl 0201ae48     rollingEvCamera: the same (the others)
 025373E8    lag@f0      fmuls           rollingEvCamera: the longitude's turn, m11C x speed
 02537444    lag@f12     fmadds          rollingEvCamera: the radius, m11C x RadiusAdd + radius
+# the get-item event camera (f_025351A0, Link holding up an item, his action 0xAE; the decomp has a
+# stub): a state machine (work +0x37C at r28) with a count of calls (work +0x39C): it waits Timer1 (27)
+# calls, picks a clear view near Link (state 10), then approaches it over Timer2 (5) calls by t =
+# count / Timer2 (fovy, centre, the globe's angles and radius) and snaps to it (state 99, done). The
+# count + 1 and the wait's end (state 10) late, as 30 ticks them; k: on t
+025353A0    late        stw             getItemEvCamera: state = 10 (the wait's end)
+025353AC    late        stw             getItemEvCamera: count + 1 (the wait's end)
+02535804    late        stw             getItemEvCamera: count + 1
+025355D4    k:f30       fdivs           getItemEvCamera: t = count / Timer2, the approach's factor
+# the trans event camera (f_02531D20; the decomp has a stub; its data names are TP's transEvCamera's:
+# Timer, BSpCurve, StartEye, StartCenter, StartFovy, StartBank, TransType, RelActor, Cushion; work area
+# at r28 = dCamera +0x37C; a chest's item, as Link starts holding it up): a call puts its targets at
+# start + (end - start) x t, t = (m11C + 1) / Timer or a B-spline's (f_025C0C80, below), and moves
+# centre, eye, fovy and bank toward them by Cushion (work +0x58). m11C is late: lag@ on t's count; k@
+# on Cushion
+02532998    lag@f12     fdivs           transEvCamera: t = (m11C + 1) / Timer
+02533028    k@f1        bl 0201ae48     transEvCamera: centre += (target - centre) x Cushion
+02533144    k@f1        bl 0201ae48     transEvCamera: eye += (target - eye) x Cushion
+02533174    k@f11       fmadds          transEvCamera: fovy += (target - fovy) x Cushion
+025331E8    k@f1        bl 0201ae48     transEvCamera: centre, TransType 2
+02533250    k@f1        bl 0201ae48     transEvCamera: eye, TransType 2
+02533280    k@f11       fmadds          transEvCamera: fovy, TransType 2
+025332FC    k@f1        bl 0201ae48     transEvCamera: centre, the others
+02533374    k@f1        bl 0201ae48     transEvCamera: eye, the others
+025333A4    k@f11       fmadds          transEvCamera: fovy, the others
+025333E8    k@f1        bl 0200693c     transEvCamera: bank += (target - bank) x Cushion
+# the B-spline path an event camera steps along (f_025C0C80, GC's d2DBSplinePath::Step; called by
+# transEvCamera with BSpCurve and by bSplineEvCamera f_0253A704 only): a count of calls (+0) x a speed
+# (+0x1C) is the curve's segment and its weights; the count late, lag@ on it
+025C0D00    lag@f9      fmuls           bspline step: count x speed, the curve's position
+025C0DE8    late        stw             bspline step: count + 1
 # the letterbox (f_024FF8A0: dCamera +0x5FC, GC's mTrimSize: 0 to 90 when Z-targeting, by its mode
 # m600): it approaches its size by 0.25 a call, or 0
 024FF940    k@f31       fmadds          trim: size += (size' (+0x7A8) - size) * 0.25

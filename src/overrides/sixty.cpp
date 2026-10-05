@@ -206,9 +206,10 @@ namespace
 	// Converted processes step at 60 in an event too while Link's action is one checked in events
 	// (D21): his procedure's index (daPy_lk_c +0x65F0, the function at +0x65F8) in this list: 4 wait,
 	// 6 move (an entrance's walk out matches the 30-tick run, the camera too), 0x9A conducting, 0xAA
-	// talking (bug B18: talks ran at 30; the talk camera is ruled), 0xD2 rising in a warp light (bug
-	// B20; his rise and the rolling event camera are ruled). Others hold the event to whole ticks as
-	// before; so does the half tick after an event starts, is ordered or is asked to end.
+	// talking (bug B18: talks ran at 30; the talk camera is ruled), 0xAD opening a chest and 0xAE
+	// holding up an item he got (their cameras are ruled), 0xD2 rising in a warp light (bug B20; his
+	// rise and the rolling event camera are ruled). Others hold the event to whole ticks as before; so does the half tick after an event
+	// starts, is ordered or is asked to end.
 	// WWHD_60FPS_EVENTS=0: no stepping in events at all.
 	uint32 s_link = 0;                              // Link (168) as he last executed
 	bool StepInEvents()
@@ -217,7 +218,7 @@ namespace
 		if (!on || !s_link || rd16(s_link + 0x08) != 168)
 			return false;
 		const uint32 action = rd32(s_link + 0x65F0);
-		return action == 4 || action == 6 || action == 0x9A || action == 0xAA || action == 0xD2;
+		return action == 4 || action == 6 || action == 0x9A || action == 0xAA || action == 0xAD || action == 0xAE || action == 0xD2;
 	}
 	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0, s_edgeFinishes = 0;
 	void StepStats()
@@ -1315,18 +1316,19 @@ namespace
 	}
 }
 
-// WWHD_DEBUG_SPAWN=tick:process,param,x,y,z[,anglex[,angley]][;...] (a test aid): at those game frames an
+// WWHD_DEBUG_SPAWN=tick:process,param,x,y,z[,anglex[,angley[,anglez]]][;...] (a test aid): at those game frames an
 // actor of that process name (actor_names.tsv's numbers) and parameters (hex) is created at that position
 // in Link's room, as fopAcM_create does: the creation record (f_025D5678: parameters, position, room,
 // angle, scale, subtype, parent) and fpcM_Create (f_025E14A8: the layer, *0x101F3AE8, the process
 // name, no create function, the record). anglex (hex), the angle's x, is more parameters for some
 // actors (a Darknut's equipment is (anglex >> 5) & 7: 0x80 a shield and a cape); angley (hex) is its
-// heading (a grappling hook's stake, KUI, takes the hook only from across its axis)
+// heading (a grappling hook's stake, KUI, takes the hook only from across its axis); anglez (hex) is more
+// parameters again (a chest's item, TBOX, is anglez >> 8)
 void f_025D5678(PPCInterpreter_t* __restrict ctx);
 void f_025E14A8(PPCInterpreter_t* __restrict ctx);
 namespace
 {
-	struct Spawn { int tick, proc; uint32 param; float x, y, z; uint32 anglex, angley; };
+	struct Spawn { int tick, proc; uint32 param; float x, y, z; uint32 anglex, angley, anglez; };
 	void DebugSpawn(PPCInterpreter_t* ctx)
 	{
 		static const std::vector<Spawn> spawns = [] {
@@ -1334,8 +1336,8 @@ namespace
 			if (const char* e = getenv("WWHD_DEBUG_SPAWN"))
 				for (const char* p = e; p && *p; p = strchr(p, ';') ? strchr(p, ';') + 1 : nullptr)
 				{
-					Spawn w{ -1, 0, 0, 0, 0, 0, 0, 0 };
-					if (sscanf(p, "%d:%d,%x,%f,%f,%f,%x,%x", &w.tick, &w.proc, &w.param, &w.x, &w.y, &w.z, &w.anglex, &w.angley) >= 6)
+					Spawn w{ -1, 0, 0, 0, 0, 0, 0, 0, 0 };
+					if (sscanf(p, "%d:%d,%x,%f,%f,%f,%x,%x,%x", &w.tick, &w.proc, &w.param, &w.x, &w.y, &w.z, &w.anglex, &w.angley, &w.anglez) >= 6)
 						v.push_back(w);
 				}
 			return v;
@@ -1357,13 +1359,13 @@ namespace
 			const uint32 angle = sp + 0x110;           // csXyz: x, y, z
 			wr16(angle, (uint16)w.anglex);
 			wr16(angle + 2, (uint16)w.angley);
-			wr16(angle + 4, 0);
+			wr16(angle + 4, (uint16)w.anglez);
 			wr32(sp, ctx->gpr[1]);                     // a back chain
 			ctx->gpr[1] = sp;
 			ctx->gpr[3] = w.param;
 			ctx->gpr[4] = pos;
 			ctx->gpr[5] = (uint32)(sint32)(sint8)rd8(s_link + 0x326);   // Link's room
-			ctx->gpr[6] = w.anglex || w.angley ? angle : 0;
+			ctx->gpr[6] = w.anglex || w.angley || w.anglez ? angle : 0;
 			ctx->gpr[7] = 0;
 			ctx->gpr[8] = 0;
 			ctx->gpr[9] = ~0u;

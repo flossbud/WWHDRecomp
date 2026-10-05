@@ -1242,6 +1242,28 @@ it in a window; D21 "Step 2"):**
     type (38) switched 44 ticks early at 60 (f1293 against f1338): requested by name only by the Gyorg
     controller (GY_CTRL 229/230, f_0216BBBC) and NPC_SO (f_022E06A4), so the Gyorg attack's trigger fires
     early (told session top, sea life). The camera's type is at camera +0x248+0x51C, its style +0x514.
+  - **Item gets at 60 (shared: sixty.cpp's StepInEvents, tick_rules.txt; regress.sh rerun)**: opening a
+    chest (Link's action 0xAD, DEMO_OPEN_TREASURE) and holding up what he got (0xAE, DEMO_GET_ITEM) held
+    their events to whole ticks, as talks did (B18). Both added, and three cameras ruled (no decomp,
+    all stubs): getItemEvCamera (f_025351A0: waits Timer1 = 27 calls, then approaches a clear view over
+    Timer2 = 5 by t = count / Timer2: its count + 1 and the wait's end late, k: on t), transEvCamera
+    (f_02531D20, TP's names: start-to-end by t = (m11C + 1) / Timer or a B-spline, cushioned: lag@ on
+    t's count, k@ on its eleven Cushion sites) and the B-spline stepper both event cameras use
+    (f_025C0C80, d2DBSplinePath::Step: its count late, lag@ on count x speed). Tests (scratch routes on
+    the save route; `WWHD_DEBUG_SPAWN` now takes anglez, a chest's item): a heart piece at Link's feet
+    (`950:255,00ffff07,-201622,168,312243`) and a chest 120 units ahead facing him
+    (`950:292,000fff80,-201599,168,312125,0,f82d,400`, tbox 31; walk up, A): Link's actions at the same
+    ticks at both rates (0xAE f975-1108; 0xAD f1031, 0xAE f1062, done f1259), the cameras equal to 30's
+    at every tick's end through each transition (pitch within 0.1 degree) and half way between at mid-
+    tick; the chest (TBOX 292), the item (255) and the get camera's trials clean. During the opening the
+    camera holds the view it had at the event's start: 16 units further at 60 from the follow camera's
+    own difference (see its lag lead).
+  - **Open: on qa's `door2` route (no second door spawned) Link, standing, is pushed 38 units at 60
+    from f1379 (session top's report)**: after all of the route's input, only on half ticks (his
+    position holds at whole ticks), by his BG correction (WWHD_STATE_CENSUS_TRACE on pos.x: f_024EF6B8 ->
+    f_024F3574 -> f_024F2CA0), no actor within 800 units. It appeared with B19: the door's slam shake
+    draws cM_rndFX each call and ran twice a tick before, so the random stream after the door changed.
+    The half-step wall push while standing is the bug to find (a trial on Link at f1379).
   - **Bug B20, the warp light's rise ran at 30, now at 60 (shared: sixty.cpp's StepInEvents, a new
     `lag` step rule in generate.py, tick_rules.txt; regress.sh rerun)**: B18's cause again: rising in a
     warp light is Link's action 0xD2 (daPyProc_DEMO_WARP_SHORT, dProcWarpShort f_0242583C), not in the
