@@ -1737,6 +1737,15 @@ it in a window; D21 "Step 2"):**
     every 90 frames, hz30 at four moments): the opening's Outset awake, the Deku Tree's pearl, Valoo's
     (dragontale, howling), Komali's pearl, the King of Red Lions' meeting, Zelda's awakening, epilogue:
     nothing but the grass (top's fix) and the HUD.
+    The Master Sword's (master_sword, kenroom layer 0 with 0x2D01 cleared): 712, 228, 2726 blocks, the
+    whole screen, because no converted process took a half step: an actor orders an event every tick
+    through it (dEvt_control_c's order count, +0xC0, 1 at every frame's start at both rates), and the half
+    step stopped at any pending order (EventOrdered, sixty.cpp). While an event runs the control takes only
+    a change (dEvtType_CHANGE: type 0xD in WWHD, fopAcM_orderChangeEventId f_025D7874's; check() ends the
+    event for it) and drops the other orders at the tick's end, so EventOrdered now counts only a change
+    while one runs (an ending event is EventEnding's): 0, 0, 0, 0. The chamber's knight statues (zouK 396)
+    converted too (they come alive by dDemo_setDemoData; `whole` on its roll-crash check; idle in the
+    cutscene, their places exact).
   - **Weather (the work queue's "weather", `tick_rules/weather.txt`)**: top's hz30 scan
     (scratch hz30.py: 60 consecutive swaps, screen blocks changing on one parity only) found the Wind
     Temple's floating dust at 30 Hz (16 and 29 blocks in kaze rooms 2 and 9). All the environment's

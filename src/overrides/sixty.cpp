@@ -85,8 +85,8 @@ namespace
 	// mirrors (Obj_Mmrr), fire jets (Obj_Flame), Ganon's Tower's waterfalls (Obj_Gtaki, Obj_Gnnbtaki,
 	// Obj_Gnntakis, Obj_Gnntakie), Asoko's lifts (Obj_Hlift), the Earth Temple's light statues (Obj_Mkie)
 	// and light tags (469), the Wind Temple's propeller grates (AMI_PROP) and breakable floors (FLOOR),
-	// the weather's KYEFF and KYEFF2 (478, 479: tick_rules/weather.txt), the cutscenes' puppets DEMO00 and Jabun
-	// (406, 358: tick_rules/cutscenes.txt)
+	// the weather's KYEFF and KYEFF2 (478, 479: tick_rules/weather.txt), the cutscenes' puppets DEMO00, Jabun and the
+	// Master Sword chamber's knight statues (406, 358, 396: tick_rules/cutscenes.txt)
 	// (session bottom); Windfall's
 	// windmill wheel (Obj_Ferris), pigs (KB),
 	// townsfolk (NPC_PEOPLE, NPC_KK1, NPC_MK, NPC_UK, NPC_GK1, NPC_TT, NPC_RSH1), market stalls (Obj_Roten),
@@ -113,7 +113,7 @@ namespace
 	// WWHD_60FPS_CONVERT= (empty) converts none.
 	constexpr const char* kConvertedByDefault =
 		"476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,"
-		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,443,221,305,47,48,49,50,52,122,129,148,166,289,159,272,267,275,140,138,139,46,75,469,94,96,478,479,406,358,"   // session bottom
+		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,443,221,305,47,48,49,50,52,122,129,148,166,289,159,272,267,275,140,138,139,46,75,469,94,96,478,479,406,358,396,"   // session bottom
 		"51,276,"   // session main
 		"123,220,353,170,368,374,364,373,352,121,445,309,118,68,73,200,255,71,67,335,319,320,331,461,45,63,179,230,269,164,391,176,294,187,313,120,213,407,83,105,116,383,410,439,470,101,102,398,297,65,304,144,74,307,430,99,103,204,235,236,237,185,186,227,97,98,182,225,226,228,205,457,397,27,424,106,427,428,231,450,67,462,295,423,91,90,84,326,327,328,329,330,348,371,222,369,42,33,199,143,274,262,332,287,87,460,64,89,172,173,318,218,210,342,394,355,357,359,362,375,366,322,347,372,365,341,344,340,360,376,325,363,381,346,345,351,324,336,337,338,339,343,280,277,291,271,93,56,55,459,152,128,131,38";   // session top
 	const char* ConvertList()
@@ -191,10 +191,23 @@ namespace
 
 	// An event ordered this tick (dEvt_control_c's order count, two bytes before its mode, as in the
 	// decomp's layout): the event manager starts it on the next whole tick, so a half tick between
-	// runs the orderer before the event is set up (Link's Wind Waker wait cancelled itself)
+	// runs the orderer before the event is set up (Link's Wind Waker wait cancelled itself). While an
+	// event runs, the control takes only a change (an order of type 0xD, as fopAcM_orderChangeEventId
+	// f_025D7874 makes it: dEvt_control_c::check ends the event for it; an ending event is EventEnding's)
+	// and drops the others at the tick's end: an actor that orders its event every tick through a
+	// cutscene (the Master Sword's) held every converted process to whole ticks
 	bool EventOrdered()
 	{
-		return (sint8)rd8(0x1046F0B0u + 0x5290u) > 0;
+		constexpr uint32 kEvtControl = 0x1046F0B0u + 0x51D0u;
+		const int orders = (sint8)rd8(kEvtControl + 0xC0u);
+		if (orders <= 0)
+			return false;
+		if (rd8(kEvtControl + 0xC2u) == 0)          // no event runs (EventRunning, below)
+			return true;
+		for (int i = 0; i < orders && i < 8; i++)
+			if (rd16(kEvtControl + i * 0x18u) == 0xD)
+				return true;
+		return false;
 	}
 	// An event whose end was asked this tick (dComIfGp_event_reset: bit 8 of dEvt_control_c's event flags,
 	// g_dComIfG_gameInfo +0x52B8, as DOOR10's demo action sets it, f_02127408): the control ends it on the

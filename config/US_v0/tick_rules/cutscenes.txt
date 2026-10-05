@@ -32,3 +32,8 @@
 02247AA8    late        sth             jb1 playBrkAnm: the count back to 0 at the animation's end
 0224864C    drawlag:f1  frsp            jb1 draw: the lamp brk's frame (the count at +0xC04)
 0224868C    drawlag:f1  frsp            jb1 draw: the light brk's frame (+0xC88)
+#
+# ---- zouK (396, d_a_obj_zouK.cpp: the knight statues of the Master Sword's chamber, kenroom; execute
+# f_023BFA38). Converted: in master_sword they come alive by dDemo_setDemoData (above); its pose is set
+# before the demo's update (set_mtx), so its whole frames show 30's tick and its half frames half way.
+023BFA64    whole       bl 025d69fc     zouk execute: fopAcM_rollPlayerCrash (a roll into it: once a tick)
