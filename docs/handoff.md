@@ -1588,8 +1588,10 @@ it in a window; D21 "Step 2"):**
     tick; the chest (TBOX 292), the item (255) and the get camera's trials clean. During the opening the
     camera holds the view it had at the event's start: 16 units further at 60 from the follow camera's
     own difference (see its lag lead).
-  - **Open: on qa's `door2` route (no second door spawned) Link, standing, is pushed 38 units at 60
-    from f1379 (session top's report)**: after all of the route's input, only on half ticks (his
+  - **No longer seen (2026-10-05, ww-4 f504cfa): the door2 route's half-step push of a standing Link.** Link
+    now stands still at both rates from f1137 to the route's end (the 13 units between them are from the
+    route's opening turn and walk, 25 apart by f1037). The report, for the record: **on qa's `door2` route
+    (no second door spawned) Link, standing, is pushed 38 units at 60 from f1379 (session top's report)**: after all of the route's input, only on half ticks (his
     position holds at whole ticks), by his BG correction (WWHD_STATE_CENSUS_TRACE on pos.x: f_024EF6B8 ->
     f_024F3574 -> f_024F2CA0), no actor within 800 units. It appeared with B19: the door's slam shake
     draws cM_rndFX each call and ran twice a tick before, so the random stream after the door changed.
