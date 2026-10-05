@@ -70,6 +70,28 @@ WW-4's actor conversion is split between two sessions working side by side:
 
 ### Session `qa` (from 2026-10-04): the owner's bugs
 
+**Session qa retired (2026-10-05, the owner's decision; main takes over deploys and bug triage).**
+Deployed to `~/wwhd-play` at retirement: ww-4 `55cf53b` (F1 and the mouse in the debug menu), after
+predeploy.sh passed 24 of 24. The bug list: B1-B4, B6, B7, B9, B11-B15, B17-B28 fixed and deployed
+(B23-B27 found by qa's own counter audit, B28 by bottom), B5 closed as the game's own scene. **Open,
+each waiting for the owner:** B8 (the bow arm that looks 30: needs an F9 recording, which arrows and
+which view; a charge word at Link +0x46B0 was ruled out on route bow), B10 (Beedle's ship too fast: not
+reproduced, needs a recording of where), B16 (Windfall's streaks: not reproduced by day or night in
+~2500 scanned frames; the night sky's shooting stars are the game's own and the same at 30: a capture
+is on the progress page with the question). Recordings: `~/wwhd-play/play-60-rec.sh` (desktop only) is
+play-60.sh with the flight recorder on (Link, the camera, arrows, ships); F9 writes
+`~/wwhd-play/flight/f-TIME-N.bin` (copy to the worker; `compare.load_track` reads it). qa's tools, all
+in git: `tools/sixty/tests/predeploy.sh` (run it on the tip before every deploy: 24 routes at 30 and
+60, FAIL when Link ends over 150 units from 30's end), `tools/sixty/counter_audit.py` (counters
+without a rule per converted process), `tools/sixty/tests/streak.py` (glitch frames in consecutive
+captures), `whole_only.py`, `judder.py`, `tools/reference/refpoke.py` (the reference Cemu with warps
+and pokes), and the routes back, door2, hook, spin, talk, wfw, mob, cuts, house. Unfinished: nothing
+in flight; left as notes above are Link's face animation (playTextureAnime, no defect seen), the
+audit's remaining lists for other sessions' types, and the Boko Baba's, Bubble's and part of the
+Peahat's countdown rules, which are by the code's idiom only (their counts never ran in a test). The
+worker scratch (`/wwhd/data/m6/WWHDRecomp-qa` on both workers) holds only test outputs and scripts;
+the cleanup job may take all of it.
+
 A third session fixes the bugs the owner finds when playing, while `top` and `bottom` carry on:
 worktree `.worktrees/ww-4-qa`, branch `ww-4-qa`, worker checkout `/wwhd/WWHDRecomp-qa`, session
 name `qa` (same `.worker-dir`/`.session` mechanism, same integration into `ww-4`).
