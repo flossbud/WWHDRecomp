@@ -72,7 +72,6 @@
       "name": "Enemies",
       "ids": [
         181,
-        184,
         187,
         188,
         189,
@@ -134,6 +133,8 @@
     "168": "Link",
     "165": "King of Red Lions",
     "181": "Kargaroc",
+    "210": "Princess Zelda",
+    "218": "Molgera larva",
     "188": "Moblin",
     "189": "Bokoblin",
     "190": "Stalfos",
