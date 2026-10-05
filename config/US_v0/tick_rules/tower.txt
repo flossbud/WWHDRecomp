@@ -85,3 +85,4 @@
 023AD834    late        stb             obj_try: a count (0x7b2(r30)) - 1 a call, tested before (f_023AD758)
 023ADA54    keep:r12    addi            obj_try: a count (0x7ac(r31)) - 1 a call, tested after (f_023ADA30)
 023AE4C8    keep:r12    addi            obj_try: a count (0x7ac(r31)) - 1 a call, tested after (f_023AE4A8)
+020E682C    late        sthx            bst: a timer (+0x30A8[i], one per hand) - 1 a call, tested before (f_020E54A0; session qa's indexed-loop audit)

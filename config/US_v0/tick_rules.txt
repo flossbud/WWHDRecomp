@@ -640,6 +640,7 @@
 02042AC4    keep:r8     addi            enemy update: a count (+0x4D2) - 1, its value multiplied after
 02043A7C    keep:r4     addi            enemy update: a count (+0x7C8) - 1, tested after
 02043AA4    late        sth             enemy update: a count (+0x7E6) - 1, tested before
+02041A1C    late        sthx            enemy common: a timer array (+0x44[i], 10 slots) - 1 a call, tested before (at 0 its slot is cleared; f_02041570)
 # the enemies' own counts a call (counter_audit.py, as above): Bokoblin, Darknut, Moblin, the Bokoblin's stick
 0209BF2C    keep:r4     addi            bk: a count (0x3fb(r30)) - 1 a call, tested after (f_0209BD1C)
 0209C0BC    late        sthx            bk: a count (r22,r7) - 1 a call, tested before (f_0209BD1C)
