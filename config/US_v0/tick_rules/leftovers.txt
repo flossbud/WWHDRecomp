@@ -1,0 +1,25 @@
+# The work queue's "leftovers" item (session main): types left at 30 by the area items.
+#
+# Fire Mountain's volcano (Obj_Volcano 51, d_a_obj_volcano.cpp; WWHD's fields are the GameCube's + 0x238: the
+# state field_0x500 at +0x738). On this save its switch is on (frozen: state 3, idle); poking the state to 4
+# (`WWHD_DEBUG_POKE=TICK:51,738,4,4`) plays FIRE_VOLCANO, to 1 FREEZE_VOLCANO. The magma model rises 100 a tick
+# to home + 2300 in fire_demo_main and fail_demo_main (half of it a step: the clamp lands on 30's tick); its
+# animations and fade (J3DFrameCtrl, cLib_chaseF) are the shared helpers' (sixty_step.cpp). freeze_demo_main
+# counts field_0x4E8 (+0x720) a tick and starts sounds at 10 and 150 with `==`, reading the count back: the
+# count keeps on half steps, and the sounds start on whole ticks only (on the half step after, the count
+# still reads 10 or 150). Tested with the pokes on sea,0,20,-1 (from f1000): the freeze's count, its
+# sounds' ticks and its end (f1302) are 30's; the eruption's magma rises 50 a frame and reaches the top on 30's
+# tick (f1044; the event's start, as other events', lets it begin half a tick early).
+023B4D60    *h@f13      fadds           volcano fire_demo_main: the magma's y + 100 a tick
+023B4EB0    *h@f0       fadds           volcano fail_demo_main: the same
+023B4AB0    keep:r8     addi            volcano freeze_demo_main: field_0x4E8 + 1
+023B4AEC    whole       bl 025e1a40     volcano freeze_demo_main: the chill sound at 10
+023B4B3C    whole       bl 025e1a40     volcano freeze_demo_main: the ice-break sound at 150
+023B4B44    whole       bl 025e1988     volcano freeze_demo_main: the riddle jingle at 150
+#
+# Fire Mountain's boiling sea (Obj_Yboil 276, d_a_obj_Yboil.cpp): 50 bubbles, each playing its animations
+# (the helpers) and, once stopped, waiting mMdlTimer ticks (1 + rnd 4) while the volcano's switch is off,
+# then pos_reset (a random place): the wait counts whole ticks and the reset runs on the tick it ends. Not tested: it isn't created on this
+# save (its switch on: frozen); rules by the code's idiom.
+023BD180    whole       stwx            yboil _execute: mMdlTimer[i] - 1
+023BD190    whole       bl 023bc628     yboil _execute: pos_reset(i) when it reaches 0

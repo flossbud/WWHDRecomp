@@ -217,6 +217,5 @@
 02338144    spliti      addi            dragonhead: mAlpha + 2 (fading in)
 0235FC20    whole       sth             iceisland: the wind's volume (+0x6EA) - 1 while > 0
 0235FC5C    whole       sth             iceisland: the wind's volume + 1 while < 100
-# Left at 30: Fire Mountain's Obj_Volcano 51 (idle on this save, 100% equal over 400 ticks; a count +0x720
-# compared with 10 in a state it never entered) and Obj_Yboil 276 (didn't run); liftable rocks (Stone2 455:
+# Fire Mountain's Obj_Volcano 51 and Obj_Yboil 276: converted in leftovers.txt (session main). Left at 30: liftable rocks (Stone2 455:
 # carried and thrown, untested).
