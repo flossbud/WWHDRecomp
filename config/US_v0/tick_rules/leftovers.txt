@@ -23,3 +23,16 @@
 # save (its switch on: frozen); rules by the code's idiom.
 023BD180    whole       stwx            yboil _execute: mMdlTimer[i] - 1
 023BD190    whole       bl 023bc628     yboil _execute: pos_reset(i) when it reaches 0
+#
+# Medli (NPC_MD 367, d_a_npc_md.cpp; her code 02280508-02295870), the Earth Temple's companion: tested with
+# WWHD_DEBUG_COMPANION=1 and route medli (lifted, carried, thrown at the entrance's wall). Her hair is a chain
+# her model's calc rebuilds in each step (hairNodeCallBack, f_02283A78): each point = the last + (its old offset
+# + gravity (0, -m14C, 0) + the wind x power x 3) normalized to its length, turned at most 0x1000 from the
+# last's: per step that pull and that turn are h of themselves.
+02283CC4    vec@r4      bl 028e8d88     md hairNodeCallBack: offset += gravity + wind (a tick's pull)
+02283E4C    *h:f1       lfs             md hairNodeCallBack: vecChange's turn at most cM_s2rad(0x1000) a tick
+02283728    keep:r7     addi            md nodeCallBack: a count (+0x4247, u8) + 1 to 255
+# her move (f_02288B08) is an inlined fopAcM_calcSpeed: speed.y (+0x340) - gravity (+0x374) to maxFallSpeed
+# (+0x378), or + it from below: thrown, at 60 she lost the throw's rise twice as fast (vy - 4 a step)
+02288EC8    fall@f6     fsubs           md move: speed.y -= gravity
+02288EEC    fall@f8     fadds           md move: speed.y += gravity (below maxFallSpeed)

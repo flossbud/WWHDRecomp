@@ -2444,8 +2444,10 @@ it in a window; D21 "Step 2"):**
     whose throw (action 0x71) let go of it puts it back there, current and old position (sixty.cpp
     ThrowPlace; `WWHD_60FPS_THROWPOS=0` turns it off). Route medli: her path is 30's tick for tick
     (the wall at 6380, down at 6190); predeploy's 24 routes unchanged. It covers pots, bombs and rocks
-    thrown from his hands too. Medli is not converted yet (256 functions; actor_rmw lists 162
-    stores). Makar (NPC_CB1 334) is created by checkGetItem(MASTER_SWORD_3) instead: the same aid would
+    thrown from his hands too. **Medli converted** (leftovers.txt): her hair chain's pull and turn a step (`vec@`, `*h`),
+    a count `keep`, her move's inlined gravity `fall@` (thrown, she lost the throw's rise twice as fast).
+    Route medli: within 18.6 units of 30's path (mean 7), down 5 units from 30's spot. Not tested: her
+    flight with Link (the wing glide), the light reflected off her harp, talking. Makar (NPC_CB1 334) is created by checkGetItem(MASTER_SWORD_3) instead: the same aid would
     need that check for his code.
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
