@@ -968,3 +968,11 @@
 # ---- step rules: a circling point (f_02587128: its angle +0x20 += its speed +0x22, then the point is the
 # centre + the rotated offset). Found on Outset's NPC_SO (process 118), who walks toward it.
 02587160    split@r8    add             circling point: its angle += its speed a tick
+#
+# ---- Countdowns (session top's types in the base defaults; Kargaroc's and Keese's are session qa's, above) no test had run (round 2's counter audit: session qa's tools/sixty/counter_audit.py lists
+# every countdown with no rule): each counted two a tick at 60 where its code ran. keep on the add where the
+# count is tested right after it (the half tick neither counts nor acts), late on the store where it's tested
+# elsewhere or before (once a tick, at the tick's end). Damage (+0x3A1 after a hit) and counts changed on
+# events have no rule.
+020F1658    late        sth             btd (Gohma): a countdown (+0x41C) - 1 while > 0
+020F1C60    late        sth             btd: a countdown (+0x420) - 1 while > 0 (and +0x408 is 0)

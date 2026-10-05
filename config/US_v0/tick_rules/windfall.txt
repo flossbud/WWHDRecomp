@@ -99,3 +99,25 @@
 # blink (playTexPatternAnm, f_022D7C7C), checked at entry. m95A counts animation ends (checkPass, which
 # has its time step), not ticks.
 022D7D28    late        stb             rsh1 playTexPatternAnm: mBtpFrame (+0x430) + 1
+#
+# ---- Countdowns no test had run (round 2's counter audit: session qa's tools/sixty/counter_audit.py lists
+# every countdown with no rule): each counted two a tick at 60 where its code ran. keep on the add where the
+# count is tested right after it (the half tick neither counts nor acts), late on the store where it's tested
+# elsewhere or before (once a tick, at the tick's end). Damage (+0x3A1 after a hit) and counts changed on
+# events have no rule.
+02191E3C    keep:r8     addi            kb (pig): a countdown (+0x792) - 1 while > 0, tested after
+022ED85C    keep:r12    addi            npc_tt: its timer helper (u8): *t - 1 while > 0
+022EFC98    late        sth             npc_uk: a countdown (+0x1114) - 1 while > 0 (it waits on it)
+022EFF00    late        stb             npc_uk: a countdown (+0x835) - 1 while > 0
+022EFF9C    late        stb             npc_uk: a count (+0x1116) - 1 while its check holds
+022EFFAC    keep:r12    addi            npc_uk: a countdown (+0x1112) - 1 while > 0, tested after
+022C03E4    keep:r11    addi            npc_people: a countdown (+0x8E4) - 1 while > 0, tested after
+022C2DB4    keep:r12    addi            npc_people: a countdown (+0x90A) - 1 while > 0, tested after
+022C40C8    keep:r10    addi            npc_people: a countdown (+0x8E2) - 1, tested after
+022C4374    keep:r10    addi            npc_people: the same (another state)
+022C4828    keep:r7     addi            npc_people: the same
+022C5EC4    keep:r11    addi            npc_people: the same
+022C5FAC    keep:r10    addi            npc_people: the same
+022C4CE8    late        sth             npc_people: a countdown (+0x8E8) - 1 while > 0
+022C4D54    keep:r11    addi            npc_people: a countdown (+0x8E6) - 1, tested after
+02235578    keep:r12    addi            npc_gk1: its timer helper (u16): *t - 1 while > 0

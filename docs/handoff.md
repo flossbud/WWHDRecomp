@@ -1084,6 +1084,21 @@ it in a window; D21 "Step 2"):**
       perch is 8000 away and WWHD_DEBUG_PLACE under it didn't move Link). Next: a route to a perch.
     - Shared: `reloadh:fD=rB+O` (generate.py), `reload:` in a stepped process's steps only (`reload:`
       applies at 60 fps even to a process that isn't stepping); `WWHD_DEBUG_SPAWN=tick:proc/subtype,...`.
+  - **Countdowns in session top's types (the counter audit, 2026-10-05)**: session qa's
+    `tools/sixty/counter_audit.py` lists every stored countdown with no rule, the ones a trial sees only if
+    its test runs them. Of the 94 in session top's types (and the boat, Kargarocs, Keese, Gohma), ~70 are
+    ruled in their area files (and tick_rules.txt for the base types): `keep` on the add where the count is
+    tested right after it (a record-form `extsh.`/`rlwinm.` and a branch, or a compare: the half tick
+    neither counts nor acts), `late` on the store where it's tested elsewhere or before (once a tick, at
+    its end: exact either way). Notable: dropped items' lifetime (item 255, mSimpleExistTimer: they
+    vanished at half the time), AND_SW0's timed switches (307), the townsfolk's (373) and Killer Bees'
+    (368) waits, the mail sorter's (348), Big Octo's, the warship's, the magma rock's state wait (its old
+    value tested: `late`, the state change resets it). Not ruled: damage (`+0x3A1 - 1` after a hit's
+    sound: the sea cannon, warship, Big Octo's eyes, pigs, Gohma), counts changed on events (the Morths'
+    stuck count KUTTUKU_ALL_COUNT, a bomb's release, the ship's cannon using a bomb, the mail sorting's
+    presses, an item stand's sale), a loop's set-then-count (the Great Fairy's particles), and five in
+    shared enemy code the audit gives to VigaH (297: before its own code; for the enemies item). The
+    166 counts up weren't reviewed (most are state steps, `+= 1` to the next mode, which want no rule).
   - **Two 60 fps crashes in the Forbidden Woods, fixed (session top; shared, `sixty.cpp` `LiveStore`)**: at
     every warp there with Link converted (the defaults). Both came from half ticks putting back or hiding
     words in .data/.bss that head lists whose nodes are on the heap (which a half tick never puts back):

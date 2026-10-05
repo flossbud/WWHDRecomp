@@ -221,3 +221,16 @@
 021D69C8    lagi        mulli           msw_move: count x 900
 021D6BE0    keep:r11    addi            msw execute: m844 (+0x960) - 1
 021D6C20    keep:r8     addi            msw execute: a chain's hit shake (m83C[i]) - 1
+#
+# ---- Countdowns no test had run (round 2's counter audit: session qa's tools/sixty/counter_audit.py lists
+# every countdown with no rule): each counted two a tick at 60 where its code ran. keep on the add where the
+# count is tested right after it (the half tick neither counts nor acts), late on the store where it's tested
+# elsewhere or before (once a tick, at the tick's end). Damage (+0x3A1 after a hit) and counts changed on
+# events have no rule.
+02397F74    keep:r10    addi            swpush: a countdown (+0x4A0) - 1 while > 0, its end tested after
+021C3160    late        sth             mflft: a flame's countdown (+0x812) - 1 while > 0
+021B6720    late        stb             lightstair: a countdown (+0x659) - 1 (its other state)
+020516C0    keep:r5     addi            and_sw0: its timer (+0x3BA) - 1, tested after (a timed switch's limit)
+020517A8    keep:r5     addi            and_sw0: the same (the other path)
+024A99D4    late        sth             taght: a countdown (+0x3BC) - 1 while > 0
+024A9B1C    late        sth             taght: the same (while its check holds)

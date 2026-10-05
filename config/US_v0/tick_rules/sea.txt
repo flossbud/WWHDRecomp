@@ -169,3 +169,16 @@
 0231ED24    keep:f10    fadds           barrel2 set_water_pos: vz += -0.2 pz + a jitter
 0231ED30    keep:f10    fmuls           barrel2 set_water_pos: vz *= 0.99
 0231ED3C    *h@f13      fadds           barrel2 set_water_pos: pz += vz
+#
+# ---- Countdowns no test had run (round 2's counter audit: session qa's tools/sixty/counter_audit.py lists
+# every countdown with no rule): each counted two a tick at 60 where its code ran. keep on the add where the
+# count is tested right after it (the half tick neither counts nor acts), late on the store where it's tested
+# elsewhere or before (once a tick, at the tick's end). Damage (+0x3A1 after a hit) and counts changed on
+# events have no rule.
+023C4E40    keep:r7     addi            oship: a countdown (+0x402) - 1, tested after
+0211CC74    late        stw             daiocta: a countdown (+0x69C) - 1 while > 0
+020C2A28    keep:r10    addi            bomb: a countdown (+0x440) - 1 while > 0, tested after (then its gravity)
+020C2E98    late        stb             bomb: a sink count (+0x433) - 1 while > 0
+020C2E94    *h@f10      fsubs           bomb: pos.y -= its sink step, each step while the count lasts
+02476D3C    late        stb             ship: a countdown (+0x638) - 1 while > 0
+02476F54    late        stb             ship: the same (another path)

@@ -75,3 +75,14 @@
 0238E568    *h@f0       fadds           shelf mode_rot: mRotSpeed (+0x3F0) += mRotAccel a tick
 0238E570    k@f13       fnmsubs         shelf mode_rot: mRotSpeed -= mRotSpeed * mRotDecay
 0238E588    split@r0    add             shelf mode_rot: shape_angle.x += (s16)mRotSpeed a tick
+#
+# ---- Countdowns no test had run (round 2's counter audit: session qa's tools/sixty/counter_audit.py lists
+# every countdown with no rule): each counted two a tick at 60 where its code ran. keep on the add where the
+# count is tested right after it (the half tick neither counts nor acts), late on the store where it's tested
+# elsewhere or before (once a tick, at the tick's end). Damage (+0x3A1 after a hit) and counts changed on
+# events have no rule.
+0238E5A8    keep:r11    addi            shelf: a countdown (+0x3FE) - 1, tested after
+02362878    late        stb             ikada: a countdown (+0x55C) - 1 while > 0
+02380074    keep:r12    addi            ojtree: a countdown (+0x3EC) - 1 while > 0, tested after
+021A2568    keep:r11    addi            crab: a countdown (+0x3E6) - 1, tested after
+0217ED70    keep:r8     addi            item (255): its lifetime (+0x776) - 1, gone below 0 (dropped items vanished at half the time)

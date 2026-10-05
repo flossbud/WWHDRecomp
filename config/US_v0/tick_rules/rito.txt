@@ -13,3 +13,15 @@
 # ---- Valoo (DR 222, d_a_dr.cpp: the dragon on the peak, stage Adanmae): three countdowns (+0x3D6, +0x3D8,
 # +0x3DA, a loop), then its mode (+0x3D4) acts on them: keep.
 0212A058    keep:r8     addi            dr: its timers (+0x3D6 + 2i) - 1 while > 0
+#
+# ---- Countdowns no test had run (round 2's counter audit: session qa's tools/sixty/counter_audit.py lists
+# every countdown with no rule): each counted two a tick at 60 where its code ran. keep on the add where the
+# count is tested right after it (the half tick neither counts nor acts), late on the store where it's tested
+# elsewhere or before (once a tick, at the tick's end). Damage (+0x3A1 after a hit) and counts changed on
+# events have no rule.
+02380A7C    keep:r11    addi            ospbox: a countdown (+0x5B2) - 1 while > 0, tested after
+023806B0    late        sth             ospbox: a count (+0x5B0) - 1 each step while Link is near (0 when he isn't)
+0220ADF0    keep:r10    addi            bmsw: a countdown (+0xA02) - 1, tested after
+0220AEB0    keep:r12    addi            bmsw: the same (another path)
+0220CCC0    keep:r12    addi            bmsw: its timer helper (s8): *t - 1 while > 0, read after
+02210748    keep:r8     addi            bmsw: a countdown (+0xD76) - 1, tested after

@@ -184,3 +184,26 @@
 # (the trial: "twice" in 98.5% of ticks).
 023CA4D8    spliti      addi            ph: a wobble phase (+0x478) + 800 a tick
 023CA518    spliti      addi            ph (sea): a wobble phase (+0x478) + 900 a tick
+#
+# ---- Countdowns no test had run (round 2's counter audit: session qa's tools/sixty/counter_audit.py lists
+# every countdown with no rule): each counted two a tick at 60 where its code ran. keep on the add where the
+# count is tested right after it (the half tick neither counts nor acts), late on the store where it's tested
+# elsewhere or before (once a tick, at the tick's end). Damage (+0x3A1 after a hit) and counts changed on
+# events have no rule.
+0246FE78    late        sth             shand: a countdown (+0x434) - 1 each step
+02488960    late        sth             sk: a countdown (+0x3DC) - 1 while > 0 (it waits on it)
+0248E214    late        sth             ssk: a countdown (+0x3D8) - 1 while > 0
+021A7E3C    late        sth             ks (Morth): a countdown (+0x43A) - 1 while > 0
+021A92A0    keep:r9     addi            ks: a countdown (+0x57C) - 1, compared with 20 after
+02182690    keep:r11    addi            jbo: a countdown (+0x788) - 1, tested after
+02182910    keep:r11    addi            jbo: the same (another state)
+02182AF4    keep:r11    addi            jbo: the same (another state)
+020B0198    late        sth             bmd (Kalle Demos): a countdown (+0xA24) - 1 while > 0
+020BAAC4    keep:r7     addi            bmdhand: a countdown (+0x420) - 1 while > 0, tested after
+020B5E84    late        sth             bmdfoot: a countdown (+0x3E4) - 1 while > 0
+020B77F4    keep:r10    addi            bmdfoot: a countdown (+0xE04) - 1, its sound at 30, used after
+02047BE4    keep:r12    addi            vigah: a countdown (+0x5B8) - 1 while > 0 (its reset to 60 - 1 too)
+0219560C    keep:r6     addi            kddoor: a countdown (+0x792) - 1, tested after
+0219733C    late        sth             kddoor: a countdown (+0x19A) - 1 while > 0
+021976CC    late        sth             kddoor: the same (another state)
+02465378    late        stw             saku: a countdown (+0x1008) - 1 while > 0

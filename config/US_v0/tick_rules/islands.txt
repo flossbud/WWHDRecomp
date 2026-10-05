@@ -47,3 +47,13 @@
 #
 # ---- the submarines' rat holes (199, "nezuana", Abship room 5): their countdowns (+0x3DE + 2i, a loop): keep.
 02311294    keep:r9     addi            nezuana: a countdown - 1 while > 0
+#
+# ---- Countdowns no test had run (round 2's counter audit: session qa's tools/sixty/counter_audit.py lists
+# every countdown with no rule): each counted two a tick at 60 where its code ran. keep on the add where the
+# count is tested right after it (the half tick neither counts nor acts), late on the store where it's tested
+# elsewhere or before (once a tick, at the tick's end). Damage (+0x3A1 after a hit) and counts changed on
+# events have no rule.
+0236E828    late        stw             magma rock: a state's countdown (+0x750) - 1; at 0 (the old value) it moves on, set to 45
+0236ECE8    late        stw             magma rock: the countdown (+0x750) - 1 in its other states
+0236ECEC    late        stw             magma rock: a count (+0x754) + 1 (with it)
+02093A50    keep:r9     addi            bigelf: a countdown (+0x528) - 1 while > 0, its value used after
