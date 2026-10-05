@@ -2038,6 +2038,12 @@ it in a window; D21 "Step 2"):**
     (227, 023C14D8), the flame lift's (91, 021C31A8), per-element counts of Gohma (234, 020EA8CC), Kalle
     Demos (235, 020B04AC), Gohdan (240, 020E682C), the shared enemy code (02041A1C) and the fences
     (SAKU 398: 02464F60, 024650F4, 024651D4).
+  - **Before every deploy: `tools/sixty/tests/predeploy.sh`** (session qa, after B28): 23 scripted routes at
+    30 and 60 with the current build, FAIL when Link ends more than 150 units from the 30-tick run's end
+    (another outcome), WARN from 40; ~8 minutes on the desktop (the 30 runs are kept and reused). B28 (the
+    Ballad of Gales never warped at 60, for a day of deploys) got through because every test compared a
+    build with the one before, and "unchanged" was still broken; this one compares with 30. Run it on the
+    tip you deploy; a FAIL is a bug to log before the owner finds it.
   - **B16's hunt, automated (nothing found)**: Windfall's spawn points (sea room 11's PLYR ids: 0 and 16
     the dock, 20 the town centre without a door, 1-13 and 15 the buildings' doors; `920:sea,20,11,-1`
     stands Link among the Killer Bees). 1200 consecutive captures (every second swap for 40 s, the camera
