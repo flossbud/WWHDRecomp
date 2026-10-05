@@ -4,26 +4,24 @@
 # KYEFF (478, GameCube 0x1E4; d_kyeff.cpp's dKyeff_c::execute f_02585B40) moves them all once a tick: the wind
 # lines and thunder (dKyw_wether_move f_0257836C), then dKyw_wether_move_draw (f_0257ACAC, each effect's setup
 # inlined, its mover called: the sun and its lens flare, rain, snow, the volcano's ash, stars, poison mist,
-# the dust motes...). Unconverted, all of them stepped at 30 Hz (top's hz30 scan: the Wind Temple's dust).
+# the dust motes...; the inits (rain, snow, stars, the mist's f_0256DC04) are left to run on either step: a
+# packet is made in the step its flag is set). Unconverted, all of them stepped at 30 Hz (top's hz30 scan: the Wind Temple's dust).
 # KYEFF is converted, and each effect's mover is held to whole ticks until it has its own steps (the
 # effects' setups run on both steps: a packet is made in the step its flag is set).
-02585D14    whole       bl 0257836c     kyeff execute: dKyw_wether_move (thunder, the wind lines) once a tick
+02578404    whole       bl 02577138     dKyw_wether_move (f_0257836C): the thunder's move once a tick
 02585C78    *h@f0       fadds           kyeff execute (the title screen): its sky's time (env +0x1020) + c a tick
-0257B354    whole       bl 02565e0c     wether_move_draw: the sun's move once a tick
-0257B358    whole       bl 02565b70     wether_move_draw: the lens flare's move once a tick
-0257B3B8    whole       bl 02565e0c     wether_move_draw: the sun's move (its other branch)
-0257B3BC    whole       bl 02565b70     wether_move_draw: the lens flare's move (its other branch)
 0257B46C    whole       bl 02566b88     wether_move_draw: the rain's move once a tick
 0257B4F4    whole       bl 02566b88     wether_move_draw: the rain's move (its other branch)
 0257B6A8    whole       bl 02569408     wether_move_draw: the volcano's ash (kazanbai) once a tick
 0257B7A4    whole       bl 02569408     wether_move_draw: the volcano's ash (its other branch)
 0257B70C    whole       bl 02568bd4     wether_move_draw: the snow's move once a tick
 0257B7FC    whole       bl 02568bd4     wether_move_draw: the snow's move (its other branch)
-0257BAC4    whole       bl 02560e08     wether_move_draw: f_02560E08 once a tick
-0257BE08    whole       bl 0256a388     wether_move_draw: the stars' move once a tick
-0257BE80    whole       bl 0256a388     wether_move_draw: the stars' move (its other branch)
-0257C0F4    whole       bl 0256dc04     wether_move_draw: f_0256DC04 once a tick
 0257C11C    whole       bl 0256ca54     wether_move_draw: the poison mist's move once a tick
+025837FC    whole       bl 0256bb6c     f_02583678 (the fog's setup): the clouds' shadows' move once a tick
+0258392C    whole       bl 0256bb6c     f_02583678: the clouds' shadows' move (another branch)
+0258397C    whole       bl 0256bb6c     f_02583678: the clouds' shadows' move (another branch)
+025839B0    whole       bl 0256bb6c     f_02583678: the clouds' shadows' move (another branch)
+02583A8C    whole       bl 0256bb6c     f_02583678: the clouds' shadows' move (another branch)
 #
 # ---- the dust motes (housi; dKyr_housi_move f_02567F68, d_kankyo_rain.cpp; 300 of 0x50 bytes in the packet at
 # env +0xA78, from +0x9C): each drifts with the wind and its own speed factor (+0x34), wobbles on three
@@ -53,3 +51,53 @@
 025686DC    spliti      addi            housi: its alpha's phase + 600 a tick (put back near)
 0256877C    spliti      addi            housi: its alpha's phase + 600 a tick (put back)
 025687D0    spliti      addi            housi: its alpha's phase + 600 a tick (waiting)
+#
+# ---- the wind lines (dKyr_wind_move f_025642AC, d_kankyo_rain.cpp; 30 at the env's mpWind): particle emitters set
+# where each line flies a tick: its swerve's phase (+0x2C, + 800 x the wind's power), its angles (+0x2E, +0x30)
+# turned by the swerve, a loop's count and turn (+0x28, +0x2E: + 3600 + 200 i), its place (+0x10) moved by its
+# speed; a step takes h of each (the angles' approaches and the alphas are cLib_addCalc/AngleS, stepped). An
+# emitter field (+0x230) flips its sign once a tick: whole
+02564B28    *h@f13      fmadds          wind lines: the swerve's phase (+0x2C) + 800 x the wind's power a tick
+02564B8C    *h@f6       fmadds          wind lines: angle y (+0x2E) += the swerve x sin (odd lines)
+02564BCC    *h@f6       fmadds          wind lines: angle xz (+0x30) += the swerve x sin (odd lines)
+02564C14    *h@f6       fmadds          wind lines: angle y += the swerve x sin (even lines)
+02564C54    *h@f6       fnmsubs         wind lines: angle xz -= the swerve x sin (even lines)
+02564C8C    split@r25   add             wind lines: the loop's count (+0x28) + 3600 + 200 i a tick
+02564C94    split@r25   add             wind lines: the loop's turn of angle y + 3600 + 200 i a tick
+02564E88    *h@f6       fmadds          wind lines: x += move x its speed
+02564E98    *h@f6       fmadds          wind lines: y += move y its speed
+02564EAC    *h@f6       fmadds          wind lines: z += move z its speed
+02564F1C    *h@f6       fmadds          wind lines: x += move x its speed (its other branch)
+02564F2C    *h@f6       fmadds          wind lines: y += move y its speed (its other branch)
+02564F40    *h@f6       fmadds          wind lines: z += move z its speed (its other branch)
+02564FA4    whole       stfs            wind lines: an emitter's field (+0x230) negated a tick
+# the sky's two seagull flocks (dKyr_kamome_move, inlined at the end of f_025642AC): a wait to appear (+0x1C, -
+# 1 a tick) and a time aloft (- 1 a tick) kept; the turn's speed (+0x14) a random walk (+ rndFX(1) a tick), the
+# heading (+0x10) += that speed x the flock's scale, the climb's phase (+0x12) + 15 a tick: a step's share;
+# their emitters' field (+0x230) flips once a tick
+025656F8    keep:r4     addi            kamome: the wait to appear (+0x1C) - 1
+025658F8    keep:r8     addi            kamome: the time aloft (+0x1C) - 1
+02565728    *h@f1       fadds           kamome: the turn's speed (+0x14) + rndFX(1) a tick
+025657F4    *h@f6       fmadds          kamome: the heading (+0x10) += the turn's speed x the scale a tick
+0256580C    spliti      addi            kamome: the climb's phase (+0x12) + 15 a tick
+025658BC    whole       stfs            kamome: its emitter's field (+0x230) negated a tick
+#
+# ---- the islands' shoreline foam: the room model (BG 439, session top's; daBg_btkAnm_c::play f_0207A05C) sets a
+# "special" texture animation's frame to the wave frame (gameInfo +0x5D00, a u16 0-99 that ENVSE counts + 1 a
+# tick): whole frames only, so the foam stepped at 30 Hz (top's hz30 scan, Windfall's quay: 100 blocks). On
+# the whole tick's step it is half a frame back (lag), on the half step the tick's: in between, as stepped
+# processes are (at the wrap to 0 its whole step holds frame 0)
+0207A0A4    lag:f0      frsp            daBg btk play: the shoreline foam's frame = the wave frame
+#
+# ---- the sea's fake waves (usonami; wave_move f_0256A448, called from wether_move_wave f_02583D00; 300 sprites at
+# the env's mpWavePacket): each drifts with the wind by its speed, its strength (reset to 1 and scaled down
+# near shores, the camera and Link each tick: no step) and its alpha's share, and its phase (+0x24) adds its
+# speed (+0x20) a tick; its alpha approaches with cLib_addCalc (stepped)
+0256B24C    *h@f9       fmadds          fake waves: x += wind x its speed x strength x alpha a tick
+0256B290    *h@f6       fmadds          fake waves: z += wind x its speed x strength x alpha a tick
+0256B298    *h@f7       fadds           fake waves: its phase (+0x24) + its phase speed (+0x20) a tick
+#
+# ---- the sun and its lens flare (dKyr_sun_move f_02565E0C, dKyr_lenzflare_move f_02565B70): placed from the time
+# and the camera each call, nothing summed (their fades are cLib_addCalc's): no rules, every step
+# ---- the stars (dKyr_star_move f_0256A388): their twinkle's phase (+0xCA) + 200 + rndFX a tick
+0256A42C    split@r9    add             stars: the twinkle's phase (+0xCA) + 200 + rndFX a tick

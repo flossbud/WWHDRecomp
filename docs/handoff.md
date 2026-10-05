@@ -1708,9 +1708,19 @@ it in a window; D21 "Step 2"):**
     300 motes at the env packet +0xA78; g_env_light is static at 0x10475A68) step: drift, wobble, fall,
     phases, wind kicks and the move a step's share, the put-back wait kept, the alpha phase split. Now the
     scan finds only the HUD (1 block each). A mote watched (WWHD_60FPS_WATCH on the packet, 0x45299C00
-    in kaze room 9): its phase + 0.03 a tick at 30, + 0.015 a frame at 60. Next: the wind lines, rain,
-    snow, stars, the ash, the mist, then KYEFF2's clouds (vrkumo); top: the sea's own process (38) is
-    theirs, KYEFF's wave glitter is ours.
+    in kaze room 9): its phase + 0.03 a tick at 30, + 0.015 a frame at 60. Then: the wind lines and the
+    sky's seagulls (dKyr_wind_move f_025642AC, kamome inlined; the env's mpWind +0xAAC): their swerve,
+    angles, loops, moves and timers stepped, an emitter field's per-tick sign flip whole (a line watched
+    on route leaf: 40 units a frame against 85 a tick, its swerve 600 a frame against 1200 a tick); the
+    sea's fake waves (wave_move f_0256A448, mpWavePacket +0xAA0): drift and phase stepped (a wave's
+    phase on 60's half frames equals 30's ticks exactly); the sun, its lens flare (computed each call:
+    released) and the stars (their twinkle's phase split); the islands' shoreline foam (BG 439's special
+    btk frame from the wave frame ENVSE counts, a u16: `lag:f0` at 0207A0A4). hz30 after them: Forest
+    Haven inside 35 -> 1 block, Outset's sea 13 -> 0, Windfall's quay 100 -> 1; Dragon Roost's beach 14
+    and Forest Haven's island 18 left are grass tufts posed in their draw (session top's finding).
+    Still held whole: rain, snow, the volcano's ash, the poison mist, the clouds' shadows, thunder; not
+    converted: KYEFF2 (479, the sky's clouds). Two calls must not be held: f_02560E08 (a getter: its f1
+    result would be stale) and f_0256DC04 (the mist's packet setup).
   - **Dungeons (the work queue's "dungeons", from session top's census): the Wind Temple
     (`tick_rules/dungeons.txt`)**: converted Obj_Hami2/3/4 (47-49, grates turning or sliding in their
     switch's event), Obj_Hbrf1 (50, a lift), Obj_Vmc (52, the soil Makar's seeds grow in), TOGE (122,
