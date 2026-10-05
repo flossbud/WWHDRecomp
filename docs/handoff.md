@@ -1276,6 +1276,20 @@ it in a window; D21 "Step 2"):**
     printed). The earlier leads (the draw-matrix buffers, DC flushes, the 16 decomp actors that pose joints
     in a draw-time callback) were on the wrong object; those actors pose from their own state, which is
     stepped when they are converted.
+  - **hz30 sweep outdoors (session top; the work queue's "hz30-outdoors")**: hz30.py at the 49 sea sectors
+    (`sea,0,N,-1`, 60 swaps from 1300, no input after the warp; scratch sweep.sh: four lanes on the
+    desktop worker, a run 1.5 min) and Windfall by night (`WWHD_DEBUG_TIME=905:345`) and dusk (905:268),
+    after the plants' sway: 33 sectors 0 blocks, 13 only the HUD's corner (x 1776-1800 y 96-120, on every
+    scan). The rest are things stepped on whole ticks (changing at the half -> whole swap only), none of
+    them a type to convert: ground shadows' edges creeping a pixel (Bomb Island 8, Western Fairy Island
+    42, Flight Control Platform 5, Horseshoe Island 5, Needle Rock Isle 3), drawn in the ground's pass
+    from a vertex constant that changes at that swap (entry 18's w, -0.00037 a tick: the sun, likely from
+    the day clock, which dScnKy_env_light_c::setDaytime advances by mTimeAdv once a tick); Thorned Fairy
+    Island's sky (18: the clouds' texture changes more at that swap); a distant foam ring off Ice Ring
+    Isle (3) and a speck on Fire Mountain's horizon (2); 1-2 blocks at the screen's edge at Northern
+    Triangle, Eastern Fairy Island and Three-Eye Reef (not read). The wind's power (env +0xA18, which the
+    grass sways by) is steady in these scenes (0.6). Weather's, so passed to session bottom; contact
+    sheets of all of them on the progress page.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next
