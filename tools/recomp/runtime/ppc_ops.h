@@ -34,6 +34,12 @@ extern bool g_rtSixty;
 // below 1 on both of its frames), the whole tick when it runs whole ticks (30 fps, an unconverted
 // process, a converted one in an event)
 #define RT_LATE_TICK() (g_rtHalfTick || g_rtStep == 1.0f)
+// A `late` store that a stepping process's whole tick passes over is noted while g_rtLateNotes is set
+// (its value then, by the generated code's else branch: late_wr8 and on, below); if an event's edge
+// then holds that process's half step, src/overrides/sixty.cpp makes the noted stores there, so the
+// tick's once-a-tick stores aren't lost (a count would fall a tick behind 30's for the whole event)
+extern bool g_rtLateNotes;
+void rt_late_note(uint32 ea, uint32 size, uint64 value);
 #define RT_SIXTY() (g_rtSixty)
 // Step rules (config/US_v0/tick_rules.txt, tools/recomp/generate.py) for code run with a time step
 #define RT_STEPPED() (g_rtStep != 1.0f)
@@ -145,6 +151,11 @@ static inline void wr16(uint32 ea, uint16 v, uint32 pc = 0) { RT_STORE(ea, 2, pc
 static inline void wr32(uint32 ea, uint32 v, uint32 pc = 0) { RT_STORE(ea, 4, pc); v = __builtin_bswap32(v); memcpy(memory_base + ea, &v, 4); }
 static inline void wr64(uint32 ea, uint64 v, uint32 pc = 0) { RT_STORE(ea, 8, pc); v = __builtin_bswap64(v); memcpy(memory_base + ea, &v, 8); }
 static inline void zero_line(uint32 ea, uint32 pc = 0) { ea &= ~31u; RT_STORE(ea, 32, pc); memset(memory_base + ea, 0, 32); }   // dcbz
+// a `late` store passed over on a stepping whole tick: noted, not made (RT_LATE_TICK, above)
+static inline void late_wr8(uint32 ea, uint8 v, uint32 = 0) { if (g_rtLateNotes) rt_late_note(ea, 1, v); }
+static inline void late_wr16(uint32 ea, uint16 v, uint32 = 0) { if (g_rtLateNotes) rt_late_note(ea, 2, v); }
+static inline void late_wr32(uint32 ea, uint32 v, uint32 = 0) { if (g_rtLateNotes) rt_late_note(ea, 4, v); }
+static inline void late_wr64(uint32 ea, uint64 v, uint32 = 0) { if (g_rtLateNotes) rt_late_note(ea, 8, v); }
 
 // ---- condition register ------------------------------------------------------------------------
 static inline void cr_record(PPCInterpreter_t* ctx, uint32 r)       // Rc=1: CR0 from a result

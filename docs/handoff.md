@@ -1422,10 +1422,27 @@ it in a window; D21 "Step 2"):**
     1046, RRIGHT 24 at 1071 (3/4: no meter input), LLEFT 10 at 1300 and A at 1320 (the direction), A
     every 40 frames after: the same timeline at both rates (0xC4 f1363-1423), the playback and the
     overhead view equal, the wind's camera within 0.1 degree and 0.1 of fovy, half way at mid-tick.
-    Open, older (also without these): when the event ends (f1423) the camera at 30 resets behind Link
-    (yaw -11, pitch 0, fovy 60); at 60 it takes no half steps f1423-1427 and comes back with the view
-    the song camera saved at the song's start (gameInfo +0x5B0C-+0x5B28: yaw 178, pitch -11, fovy 55),
-    so after a song it faces the other way (told session top: the event's edge).
+    The view after a song (found by session top; fixed with its event-end fix, 8dd19ee): the song's
+    last camera (f_02534964, TargetType 9) returns to the view the song camera saved on its first call
+    (m11C 0) in gameInfo +0x5B0C-+0x5B28 (centre, eye, fovy, bank; a watch on it: written once at 30,
+    at f1004, with the field view). At 60 it was written again at f1005 with the song camera's own view
+    (yaw 178 against -11), and after the song the camera faced Link. The song is ordered during Link's
+    whole tick at f1004, after the camera's whole step began stepping: the order's edge held its half
+    step, so its late stores were lost, m11C among them, and the first call came again. Two fixes: a
+    held half step's late stores are made there (below, "Late stores at an event's edge"), and the save's
+    8 stores are whole (a first call on a half step, its count late, would save again after moving the
+    eye). Now: written once (f1004w), m11C in step, the end view yaw -10.5 at both by f1468.
+  - **Late stores at an event's edge (shared: generate.py, ppc_ops.h, sixty.cpp)**: an event that
+    begins, is ordered or ends during a whole tick holds the half step of the event's own processes
+    that took a stepping whole step (sixty.cpp's edge, above). A `late` store waits for the half step,
+    so those were lost: each such process's once-a-tick counts fell a tick behind 30's from the event's
+    start. Now the generated else branch of a late store notes it on a stepping whole step (late_wr32
+    and on, while g_rtLateNotes is set: its address, size and value), by process and in order;
+    at the half step the notes are made if the edge holds it (as its step's stores, so the half tick's
+    rollback keeps them) and dropped if it steps. The 10 late calls (event orders, which repeat) aren't
+    noted. At 30 nothing changes (RT_LATE_TICK is always true). Run log line: "N late stores made for
+    stopped ones" (the song route: 4 holds, 15 stores). events_test.sh (back, door2, talk, cuts, items,
+    warp, door): base and new lines identical; regress identical.
   - **The Ballad of Gales' flight at 60 (shared: sixty.cpp's StepInEvents, tick_rules.txt; regress.sh
     rerun)**: the whole warp (the cyclone lifting the boat, the flight, setting it down) is an event with
     Link sitting in the boat (0x89 SHIP_PADDLE; steering is 0x88), not in the event-stepping list, so

@@ -51,7 +51,9 @@ its register), and a different instruction at that address is an error. `whole:r
 its result, `whole:r3=rN` sets it to the register rN (a call's own argument: "unchanged"). `late`
 runs it once a tick at the tick's end instead: on the half tick while its process steps at 60 (a
 tick counter, so that both frames of a tick see the tick's count, as `1 / (N - count)` approaches
-need; RT_LATE_TICK), on the whole tick otherwise; it takes the same instructions and r3=. Step
+need; RT_LATE_TICK), on the whole tick otherwise; it takes the same instructions and r3=. A late
+store that a stepping process's whole tick passes over is noted (late_wr32 and on, ppc_ops.h), and
+made on the half tick if an event's edge holds that process's half step (src/overrides/sixty.cpp). Step
 rules, for the code of processes that run every frame with a time step h
 (g_rtStep, src/overrides/sixty.cpp; nothing changes while it is 1, at 30 fps always):
   keep:SRC     on a half tick the instruction's destination gets SRC instead (a counter that
@@ -520,6 +522,7 @@ def emit_blocks(body, labels):
     return out
 
 
+WRITE = re.compile(r"\bwr(8|16|32|64)\(")   # a generated store's memory write (ppc_ops.h)
 KEEP_OPS = {"addi", "addic", "add", "fadds", "fsubs", "fadd", "fsub", "fmuls", "fmadds", "fmsubs", "fnmadds", "fnmsubs"}
 
 
@@ -539,6 +542,13 @@ def apply_tick_rule(rule, i, lines):
     if kind in ("whole", "late"):
         test = "RT_WHOLE_TICK()" if kind == "whole" else "RT_LATE_TICK()"
         out = [f"if ({test}) {{   // tick rule: {what}"] + ["\t" + l for l in lines] + ["}"]
+        if kind == "late" and i.op in STORES:
+            # passed over (a stepping process's whole tick): noted, to be made if its half step is held;
+            # an update form's register update is in the lines
+            noted = [WRITE.sub(r"late_wr\1(", l) for l in lines]
+            assert any("late_wr" in l for l in noted) and not any(WRITE.search(l) for l in noted), \
+                f"{what}: a late store whose writes can't be noted ({i.op})"
+            return out + ["else {"] + ["\t" + l for l in noted] + ["}"]
         if i.op in STORES and i.op.endswith("u"):
             out += ["else", f"\tGPR({i.rA}) = GPR({i.rA}) + {emit.hx(i.d)};"]   # the update without the store
         if arg is not None:

@@ -207,6 +207,40 @@ namespace
 	std::unordered_map<uint32, bool> s_stepping;    // process -> stepping at 60 this tick
 	std::unordered_map<uint32, bool> s_eventAtWhole;   // process -> an event ran at its whole step
 	std::unordered_map<uint32, bool> s_stepInEventAtWhole;   // process -> Link's action stepped in events at it
+
+	// The `late` stores a stepping process's whole step passed over (they wait for its half step, the
+	// tick's end; rt_late_note, ppc_ops.h), noted with their values, by process, in order, wherever
+	// they go. An edge that holds its half step (below) makes them there, finishing the tick's
+	// once-a-tick stores; before, they were lost: at the Wind's Requiem's start the camera's call count
+	// (m11C) fell a tick behind for the whole song, the song camera's first call came again on the next
+	// tick and saved the view it had just set as the one to return to (the view after the song faced
+	// Link). A half step that runs makes them itself, so its notes are dropped.
+	struct LateNote { uint32 ea, size; uint64 value; };
+	std::vector<LateNote> s_lateNotes;              // the running whole step's
+	std::unordered_map<uint32, std::vector<LateNote>> s_lateNoted;   // process -> its whole step's
+	uint64 s_lateMade = 0;
+
+	void MakeLateNotes(uint32 proc)
+	{
+		const auto it = s_lateNoted.find(proc);
+		if (it == s_lateNoted.end())
+			return;
+		s_converting++;                             // as its step's stores (HalfTickStore: globals stand)
+		for (const LateNote& n : it->second)
+		{
+			if (n.size == 1)
+				wr8(n.ea, (uint8)n.value);
+			else if (n.size == 2)
+				wr16(n.ea, (uint16)n.value);
+			else if (n.size == 4)
+				wr32(n.ea, (uint32)n.value);
+			else
+				wr64(n.ea, n.value);
+		}
+		s_converting--;
+		s_lateMade += it->second.size();
+		s_lateNoted.erase(it);
+	}
 	// Converted processes step at 60 in an event too while Link's action is one checked in events
 	// (D21): his procedure's index (daPy_lk_c +0x65F0, the function at +0x65F8) in this list: 4 wait,
 	// 6 move (an entrance's walk out matches the 30-tick run, the camera too), 0x88 and 0x89 steering
@@ -232,8 +266,8 @@ namespace
 	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0, s_edgeFinishes = 0;
 	void StepStats()
 	{
-		cemuLog_log(LogType::Force, "wwhd sixty: {} half steps of converted processes; {} stopped by a running event, {} by an ordered one, {} by an ending one; {} finished their tick at an event's edge",
-			s_halfSteps, s_eventStops, s_orderStops, s_endStops, s_edgeFinishes);
+		cemuLog_log(LogType::Force, "wwhd sixty: {} half steps of converted processes; {} stopped by a running event, {} by an ordered one, {} by an ending one; {} finished their tick at an event's edge; {} late stores made for stopped ones",
+			s_halfSteps, s_eventStops, s_orderStops, s_endStops, s_edgeFinishes, s_lateMade);
 	}
 
 	// A process outside the event finishes its tick at an event's edge (D21). The half tick's stops above
@@ -1504,6 +1538,13 @@ void f_025B9100(PPCInterpreter_t* __restrict ctx)
 	orig_f_025B9100(ctx);
 }
 
+// a late store that a stepping process's whole step passed over (ppc_ops.h's late_wr32 and on; while
+// g_rtLateNotes is set, by f_025DE58C below): noted for its half step (s_lateNoted)
+void rt_late_note(uint32 ea, uint32 size, uint64 value)
+{
+	s_lateNotes.push_back({ ea, size, value });
+}
+
 // m_Do_main's frame body (see the top)
 void f_025F172C(PPCInterpreter_t* __restrict ctx)
 {
@@ -1511,6 +1552,8 @@ void f_025F172C(PPCInterpreter_t* __restrict ctx)
 	DebugSpawn(ctx);
 	s_firstDraw = true;
 	s_held.clear();
+	if (!g_rtHalfTick)
+		s_lateNoted.clear();                        // only a tick's own notes are made at its half step
 	if (g_rtHalfTick)
 	{
 		static const bool skip = [] { const char* e = getenv("WWHD_60FPS_HALF"); return e && strcmp(e, "none") == 0; }();
@@ -1827,11 +1870,13 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 				s_orderStops += ordered;
 				s_endStops += ending;
 				s_stepping[proc] = false;
+				MakeLateNotes(proc);                    // the tick's late stores, which its half step would make
 			}
 			else
 			{
 				s_edgeFinishes += edge;
 				s_halfSteps++;
+				s_lateNoted.erase(proc);                // its half step makes them
 			}
 		}
 		converted = s_stepping[proc];
@@ -1861,7 +1906,25 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	const float step = g_rtStep;
 	g_rtStep = 0.5f;
 	s_converting++;
+	// its whole step: the late stores it passes over are noted for its half step (s_lateNoted)
+	const bool notes = !g_rtHalfTick;
+	const bool notesOuter = g_rtLateNotes;
+	std::vector<LateNote> outer;
+	if (notes)
+	{
+		outer.swap(s_lateNotes);
+		g_rtLateNotes = true;
+	}
 	orig_f_025DE58C(ctx);
+	if (notes)
+	{
+		g_rtLateNotes = notesOuter;
+		if (s_lateNotes.empty())
+			s_lateNoted.erase(proc);
+		else
+			s_lateNoted[proc].swap(s_lateNotes);
+		s_lateNotes.swap(outer);
+	}
 	s_converting--;
 	g_rtStep = step;
 	if (resetFlags)
