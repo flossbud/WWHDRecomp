@@ -2534,6 +2534,16 @@ it in a window; D21 "Step 2"):**
     getActionBtnX's first test, dComIfGs_checkGetItemNum of the X item: WWHD's save data is a heap object
     (*0x101F84DC + 0x20), so pokes into the static g_dComIfG_gameInfo (0x1046F0B0 + ...) don't add a pear
     to the bait bag; a pear set on X through the menu (or the bag's bait slot found) would tell.
+    With the pear in the heap save's bait bag (route hyoi's header now has the pokes) X calls it: a talk
+    event from f1101, Link hands over at f1230 (action 0x3). The flight at 60 unconverted: hz30 5, 0, 38
+    blocks (the flap's wings). **Converted** (companions.txt; the flap energy's `+ 1` was ruled already as
+    KF1's in windfall.txt: f_022600FC is this keyProc): its speed's approach `*h`, a hit's spin `spliti`;
+    hz30 0, 0, 10. Its path matches 30's exactly while it glides straight (to f1500) and drifts once the stick
+    turns it (LLEFT 40 at f1500): its yaw 24% behind 30's in the turn's first tick, then ahead, ~1000 s16
+    units (5.5 degrees) by f1540, the path ~400 units off by f1750. Not the camera loop (getStickAngY aims at
+    dCam_getControledAngleY plus the stick: reading the camera's angle as of the tick's start, tried with a
+    whole:r3=last rule, changed it by 30 units); left: the stepped cLib_addCalcAngleS (f_0200F378: divisor
+    2s-1 then 2s, max and min steps split) in this call's regime, or the stick's first frame.
   - Makar (NPC_CB1 334): created in the Wind Temple by the aid as the waiting kind (event bit 0x2910 picks
     isTypeKaze); following Link needs his rescue's state (0x1610/0x1604 and the temple's switches): not
     done.

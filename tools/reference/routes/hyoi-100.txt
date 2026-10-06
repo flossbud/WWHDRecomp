@@ -1,6 +1,12 @@
-# Route: the Hyoi seagull (NPC_KAM 195) called with a Hyoi Pear and flown (session main, the leftovers item).
-XX and the pear on X:
-# WWHD_DEBUG_POKE=990:0,1046F12E,1,83;990:0,1046F154,1,5;990:0,1046F0B9,1,24;990:0,10474C6B,1,83
+# Route: the Hyoi seagull (NPC_KAM 195) called with a Hyoi Pear and flown (session main, the leftovers item;
+# session bottom, the companions item). On Star Island (WWHD_DEBUG_STAGE=920:sea,0,2,-1) with a Hyoi Pear in
+# the bait bag's first slot (5 of them) and on X:
+# WWHD_DEBUG_POKE=990:0,145B7BFE,1,83;990:0,145B7C24,1,5;990:0,145B7B89,1,24;990:0,10474C6B,1,83
+# WWHD's save data is a heap object, *0x101F84DC + 0x20 (0x145B7B80 after this boot of the 100% save): its bait
+# bag at +0x7E, the bait counts at +0xA4 (dSv_player_c's parts by dSv_save_c's init, f_025B8904); the play's
+# X item at 0x10474C6B. X at f1100 calls the seagull (a talk event, Link FOOD_SET 0xA8), it lands and Link
+# hands over at ~f1230 (action 0x3). Pokes at g_dComIfG_gameInfo + 0x7E (the GameCube's layout) don't reach
+# the bag: then getActionBtnX's checkGetItemNum fails and nothing answers the pear.
 # FRAME BUTTONS [FRAMES_HELD]; game frames.
 420 A 5        # title screen
 540 A 5        # Controller Selection

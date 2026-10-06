@@ -8,3 +8,12 @@
 0241D970    keep:r11    addi            procAutoJump: the glide's count (+0x6916) - 1, tested the next tick
 0241D9A4    keep:r12    addi            procAutoJump: the hits' count (+0x6918) - 1, then she lets go at 0
 0241DA28    *h@f10      fsubs           procAutoJump: speed.y - 0.5 while he rises
+#
+# ---- the Hyoi seagull (NPC_KAM 195, d_a_npc_kamome.cpp; execute f_0225E598, keyProc f_022600FC): flown by the
+# player after a Hyoi Pear (route hyoi). Converted: its flap timers count whole ticks (cLib_calcTimer<s16>
+# f_02055B64: tick_rules.txt's shared keep), the angle chases are stepped helpers; the energy a glide builds
+# a tick keep (windfall.txt's 022601CC: f_022600FC is this keyProc, ruled there as KF1's), its speed's
+# approach to the target (mAccelF a tick) h of it, a hit's spin split.
+0225E6B8    *h@f8       fadds           npc_kam execute: speedF + mAccelF toward the target speed
+0225E6D8    *h@f8       fsubs           npc_kam execute: speedF - mAccelF toward the target speed
+02260984    spliti      addi            npc_kam damagePlayerAction: shape_angle.y += 0x2000 (its spin when hit)
