@@ -12,7 +12,9 @@ A small status page for the owner (desktop and phone), served from the worker ho
   the page when the session ends; `publish.sh step ID DONE TOTAL` sets a queue item's progress bar
   (items with "ids" in `plan.json`, the actor types they cover, fill theirs on their own);
   `publish.sh shot PPM CAPTION` adds a capture made
-  on the worker; `publish.sh serve` starts the server (a crontab `@reboot` entry on the worker, tagged
+  on the worker; `publish.sh usage` copies the Claude account's usage meters from the editing machine into `usage.json` (a crontab entry
+  on the editing machine, tagged `wwhd-usage`, runs it every 5 minutes; only percentages and reset times leave the editing machine);
+  `publish.sh serve` starts the server (a crontab `@reboot` entry on the worker, tagged
   `wwhd-progress`, starts it after a reboot).
 
 The data lives in `/wwhd/data/progress` on the worker, outside git. Every capture is kept: `shots.json`

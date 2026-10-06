@@ -30,6 +30,10 @@
 #                           add a capture: PPM is a path on the worker (/wwhd/...: the desktop's while
 #                           it's lent, else the worker's; WWHD_ON= forces one); it becomes a JPEG
 #                           on the worker, never on the editing machine or in git (captures are game data); none is ever deleted
+#   publish.sh usage        the Claude account's usage meters (5 h, week, per model) from the editing machine's
+#                           /api/usage/claude ($WWHD_USAGE_URL, default http://127.0.0.1:7690) to usage.json:
+#                           percentages and reset times only, the login token never leaves the editing machine. A
+#                           crontab entry on the editing machine (tagged wwhd-usage) runs it every 5 minutes
 #   publish.sh serve        start the server if it isn't running (http://TAILNET_IP:8765)
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
@@ -155,6 +159,12 @@ if len(shots) > 24:
 save(path, shots[:24])
 PY
 		;;
+	usage)
+		u=$(curl -sf -m 20 "${WWHD_USAGE_URL:-http://127.0.0.1:7690}/api/usage/claude") || { echo "usage: the editing machine didn't answer" >&2; exit 1; }
+		printf '%s' "$u" | python3 -c 'import json,sys,time; d=json.load(sys.stdin); s=d["snapshot"]
+json.dump({"meters": s["meters"], "fetchedAt": s["fetchedAt"] // 1000, "stale": d.get("stale", False), "published": int(time.time())}, sys.stdout)' |
+			ssh $host "cat > $dir/usage.json.tmp && mv $dir/usage.json.tmp $dir/usage.json"
+		;;
 	serve)
 		ssh $host "bash -s" <<EOF
 mkdir -p $dir
@@ -171,5 +181,5 @@ EOF
 		rm -f "$names"
 		ssh $host "cat > $dir/index.html" < "$here/index.html"
 		;;
-	*) echo "usage: publish.sh [now TEXT | retire [SESSION] | claim|done|release ID [NOTE] | step ID DONE TOTAL | bug ... | shot PPM CAPTION [PLACE] | serve]" >&2; exit 2 ;;
+	*) echo "usage: publish.sh [now TEXT | retire [SESSION] | claim|done|release ID [NOTE] | step ID DONE TOTAL | bug ... | shot PPM CAPTION [PLACE] | usage | serve]" >&2; exit 2 ;;
 esac

@@ -40,6 +40,22 @@ a:hover { color: var(--link-hover); }
 .ring div { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 800; }
 .stats { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--side); }
 .stats b { color: #fff; font-weight: 600; font-size: 13px; }
+/* Claude usage (usage.json): on the navy of the sidebar and of the phone's Now hero */
+.usage { display: flex; flex-direction: column; gap: 10px; }
+.usage .eyebrow { display: flex; align-items: baseline; gap: 8px; }
+.usage .eyebrow span { margin-left: auto; letter-spacing: 0; text-transform: none; font-weight: 500; font-size: 10.5px; }
+.usage .eyebrow span.stale { color: var(--retest); }
+.meter { display: flex; flex-direction: column; gap: 5px; }
+.meterHead { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--side); }
+.meterHead b { margin-left: auto; font-family: var(--mono); font-size: 13px; font-weight: 600; color: #fff; }
+.meterBar { position: relative; height: 6px; border-radius: 3px; background: var(--navy3); }
+.meterBar > div { height: 100%; border-radius: 3px; background: var(--teal); max-width: 100%; }
+.meterBar.warning > div { background: var(--retest); }
+.meterBar.exceeded > div { background: #e5534b; }
+.meterBar > i { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: #fff; opacity: .55; }
+.meter small { font-size: 11px; color: var(--side2); }
+.usageNote { font-size: 10.5px; color: var(--side2); display: flex; align-items: center; gap: 6px; }
+.usageNote i { width: 2px; height: 10px; border-radius: 1px; background: #fff; opacity: .55; flex: none; }
 .eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--side2); }
 .agents { display: flex; flex-direction: column; gap: 12px; }
 .agent { background: var(--navy2); border-radius: 9px; overflow: hidden; }
@@ -184,6 +200,10 @@ a.earlier { color: var(--link); font-weight: 600; }
 .mBig div { font-size: 24px; }
 .mStats { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--side); min-width: 0; }
 .mStats b { color: #fff; font-weight: 600; font-size: 15px; }
+.mUsage { padding: 0 16px; }
+.mUsage .meterHead { font-size: 13px; }
+.mUsage .meterHead b { font-size: 14px; }
+.mUsage .meter small { font-size: 12px; }
 .mDeck { display: flex; flex-direction: column; gap: 10px; }
 .mDeckHead { display: flex; align-items: baseline; padding: 0 16px; font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--side2); }
 .mDeckHead span { margin-left: auto; letter-spacing: 0; text-transform: none; font-weight: 500; font-size: 11px; }
@@ -319,6 +339,7 @@ a.earlier { color: var(--link); font-weight: 600; }
       </div>
       <div class="stats" id="stats"></div>
     </div>
+    <div class="usage" id="usage" hidden></div>
     <div class="agents">
       <div class="eyebrow">On deck</div>
       <div class="agents" id="agents"><span class="empty">No session has reported yet.</span></div>
@@ -387,6 +408,7 @@ a.earlier { color: var(--link); font-weight: 600; }
           </div>
           <div class="mStats" id="mStats"></div>
         </div>
+        <div class="usage mUsage" id="mUsage" hidden></div>
         <div class="mDeck"><div class="mDeckHead">On deck<span>swipe ›</span></div><div class="mCarousel" id="mAgents"></div></div>
       </div>
       <div class="mSec"><div class="mH"><h2>Needs you</h2><span id="mBugMeta"></span></div><div class="mList" id="mBugs" style="gap:12px"></div></div>
@@ -440,7 +462,7 @@ const $ = id => document.getElementById(id);
 const COLORS = {bottom: "#1fb8a6", main: "#4A8FE7", top: "#DAA520", web: "#d4548a", qa: "#8494a4"};
 const color = s => COLORS[s] || "#8494a4";
 const SHOTS_PER_PAGE = 12, LOG_COUNT = 12, LIVE_SECONDS = 600;
-let data = null, claims = {}, bugList = [], sessions = [], shotList = [];
+let data = null, claims = {}, bugList = [], sessions = [], shotList = [], usage = null;
 let page = 0, sel = 0, openBugs = {}, lastOk = 0, doneAll = false;
 const DONE_SHOWN = 8;
 
@@ -826,6 +848,36 @@ $("mMore").addEventListener("click", () => { mShown += SHOTS_STEP; renderMobile(
 $("mQSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { mQ = b.dataset.id; renderMobile(); } });
 $("mLSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { mL = b.dataset.id; renderMobile(); } });
 
+// --- Claude usage: the account's meters (publish.sh usage, every 5 minutes from the editing machine) ---
+const STOP_AT = 50;   // the owner's rule: unattended sessions stop at 50% of the week
+function meterLabel(m) {
+  if (m.id === "session") return "5-hour window";
+  if (m.id === "weekly_all") return "This week, all models";
+  const model = m.id.split(":")[1] || m.label;
+  return "This week, " + model.charAt(0).toUpperCase() + model.slice(1);
+}
+function resetText(iso) {
+  const t = Date.parse(iso); if (!t) return "";
+  const s = Math.max(0, (t - Date.now()) / 1000), d = new Date(t);
+  const clock = d.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
+  const left = s < 3600 ? Math.round(s / 60) + " min" : s < 86400 ? `${Math.floor(s / 3600)} h ${Math.round(s % 3600 / 60)} min`
+    : `${Math.floor(s / 86400)} d ${Math.round(s % 86400 / 3600)} h`;
+  return s < 86400 ? `resets in ${left} (${clock})` : `resets ${d.toLocaleDateString([], {weekday: "short"})} ${clock} (in ${left})`;
+}
+function usageHtml() {
+  if (!usage || !usage.meters || !usage.meters.length) return "";
+  const age = Date.now() / 1000 - (usage.published || usage.fetchedAt || 0), stale = usage.stale || age > 1200;
+  return `<div class="eyebrow">Claude usage<span class="${stale ? "stale" : ""}">${stale ? "as of " + agoText(usage.fetchedAt) : "updated " + agoText(usage.fetchedAt)}</span></div>` +
+    usage.meters.map(m => `<div class="meter"><div class="meterHead">${esc(meterLabel(m))}<b>${Math.round(m.percent)}%</b></div>
+      <div class="meterBar ${esc(m.severity)}"><div style="width:${Math.min(100, m.percent)}%"></div>${m.id === "weekly_all" ? `<i style="left:${STOP_AT}%"></i>` : ""}</div>
+      ${m.resetsAt ? `<small>${esc(resetText(m.resetsAt))}</small>` : ""}</div>`).join("") +
+    (usage.meters.some(m => m.id === "weekly_all") ? `<div class="usageNote"><i></i>${STOP_AT}%: where unattended sessions stop for the week</div>` : "");
+}
+function renderUsage() {
+  const h = usageHtml();
+  for (const id of ["usage", "mUsage"]) { $(id).hidden = !h; $(id).innerHTML = h; }
+}
+
 function renderFresh(ok) {
   if (ok) lastOk = Date.now() / 1000;
   $("freshDot").className = ok ? "" : "stale";
@@ -835,8 +887,9 @@ function renderFresh(ok) {
 }
 
 async function refresh() {
-  const [p, n, s, a, c, b] = await Promise.all([get("progress.json"), get("sessions.json"), get("shots.json"), get("shots-archive.json"),
-    get("claims.json"), get("bugs.json")]);
+  const [p, n, s, a, c, b, u] = await Promise.all([get("progress.json"), get("sessions.json"), get("shots.json"), get("shots-archive.json"),
+    get("claims.json"), get("bugs.json"), get("usage.json")]);
+  if (u) usage = u;
   if (c) claims = c;
   if (b) bugList = b;
   if (n) sessions = n;
@@ -849,7 +902,7 @@ async function refresh() {
   if (p) data = p;
   if (data) { renderSide(); renderQueue(); renderIssues(); renderLog(); }
   renderAgents(); renderShots(); renderBugs();
-  renderMobile();
+  renderMobile(); renderUsage();
   if (sheet.style.display === "flex") renderSheet();
   renderFresh(!!p);
 }
