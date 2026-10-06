@@ -813,3 +813,36 @@ void f_0281F878(PPCInterpreter_t* __restrict ctx)
 	orig_f_0281F878(ctx);
 	g_rtStep = step;
 }
+
+
+// ---- the Tower of the Gods' water (session top, the owner's note N9) -------------------------------------
+
+// daObjTide::Act_c::mode_norm (tide r3; Obj_Tide 39): its height is home.y + (1 - M_now) x its rise, M_now the
+// water level Tag_Waterlevel (471) keeps in a static (0x101D5F28; its state bits at 0x101D5F2C). The tide
+// executes before the tag, so at 30 it shows the level the tag left a tick before. Both converted at 60, a step
+// of the tide read the level the tag's step before it left, half a tick old: smooth, but ~0.6 tick ahead of 30's
+// water, and each change ended 1.5 ticks early (88.5 ticks against 90). A stepped tide reads the level and state
+// as its own last step saw them, a step older: at half ticks 30's water, at whole ticks halfway to it.
+void f_023A14A8(PPCInterpreter_t* __restrict ctx)
+{
+	if (!Stepped())
+		[[clang::musttail]] return orig_f_023A14A8(ctx);
+	constexpr uint32 kNow = 0x101D5F28u, kState = 0x101D5F2Cu;
+	struct Seen { uint32 now, state, step; };
+	static std::unordered_map<uint32, Seen> s_seen;
+	const uint32 tide = GPR(3), step = StepId(), now = rd32(kNow), state = rd32(kState);
+	const auto it = s_seen.find(tide);
+	const bool older = it != s_seen.end() && step - it->second.step == 1;
+	if (older)
+	{
+		wr32(kNow, it->second.now);
+		wr32(kState, it->second.state);
+	}
+	orig_f_023A14A8(ctx);
+	if (older)
+	{
+		wr32(kNow, now);
+		wr32(kState, state);
+	}
+	s_seen[tide] = { now, state, step };
+}

@@ -102,6 +102,25 @@
 022B0080    whole       stfs            os walkPlayerAction: speedF = the walk's speed, inside the window
 022B0094    whole       stfs            os walkPlayerAction: speedF = 0, outside it
 #
+# ---- Tag_Waterlevel (471, d_a_tag_waterlevel.cpp; execute f_024B3AC0; session top, the owner's note N9): the
+# tower's water level, M_now (a static, 0x101D5F28: 0 low, 1 high), approaches the schedule's target (the
+# environment's schedule bit: 360 ticks at each level, 90 to change) with cLib_addCalc (stepped) by a step
+# (+0x3AC, field_0x290) that grows 0.005 a tick, 0.005 to 0.015. Unconverted, the level moved on whole ticks
+# only, and its water (Obj_Tide 39, converted, executing before it: its height home.y + (1 - M_now) x 460)
+# on half ticks only: the water rose and fell at 30 Hz (all of its 2277 units of moves on half frames).
+# Converted: its step's growth h a step; its snap to the target (within 0.005: M_now = the target, the step 0) on
+# whole steps, as 30's ticks see it (a half step's snap ended each change up to a tick early: 88.5 ticks against 90)
+024B3C24    *h@f4       fadds           tag_waterlevel: field_0x290 (+0x3AC) + 0.005 a tick
+024B3C04    whole       stfs            tag_waterlevel: M_now = the target (within 0.005 of it)
+024B3C0C    whole       stfs            tag_waterlevel: field_0x290 = 0, with the snap
+# Obj_Tide's mode_norm (f_023A14A8, d_a_obj_tide.cpp): when the water starts down (STATE_2 without STATE_1) m2F4
+# (+0x40C) = the attr's m42, then - 1 a call and at 0 its brk2 (the water's colour animation) restarts: a count
+# a step at 60, the restart at half the delay; and the water's moving sound, an mDoAud_seStart a call while it
+# moves (0x701B up, 0x701C down), twice a tick at 60. The count kept to whole ticks, the sounds once a tick
+023A1564    keep:r11    addi            tide mode_norm: m2F4 (+0x40C) - 1, the brk2 restart's delay (tested == 0 after)
+023A15F4    whole       bl 025e1988     tide mode_norm: mDoAud_seStart(0x701B), the water rising
+023A1608    whole       bl 025e1988     tide mode_norm: mDoAud_seStart(0x701C), the water falling
+#
 # ---- counts a call without a rule, from session qa's tools/sixty/counter_audit.py (2026-10-05, session
 # bottom): keep:REG on the add where the count is tested right after it changes, late on the store where
 # it is tested before. Read and left: stores that set a count from another value, constants, globals,

@@ -111,7 +111,8 @@ namespace
 	// bomb flowers' bombs (BOMB2), steam vents (SteamTag), flame lifts (MFLFT), swinging platforms (MSW); the Rito
 	// Aerie's post boxes (Obj_Ospbox), Rito (NPC_BM1-5), mail sorter (NPC_BMSW), Komali (NPC_ZK1), Valoo (DR); the
 	// Great Fairy (BIGELF), Fire Mountain's magma rocks (42), Cave03's Kryu00 (33), rat holes (199), Sturgeon
-	// (NPC_AJ1) and the islands' still objects (143, 274, 262, 287, 87, 460, 64) (session top).
+	// (NPC_AJ1) and the islands' still objects (143, 274, 262, 287, 87, 460, 64), the Tower of the Gods' water
+	// level (Tag_Waterlevel 471: its water, Obj_Tide, reads it every frame) (session top).
 	// One line each, so the parallel sessions' additions never meet (docs/handoff.md "Two parallel
 	// sessions"); keep a comma after each line's last.
 	// WWHD_60FPS_CONVERT= (empty) converts none.
@@ -121,7 +122,7 @@ namespace
 		// (session main's line, between comment lines so neighbours' edits don't conflict)
 		"51,276,367,301,302,303,113,112,314,361,382,380,321,30,92,104,107,145,157,273,323,451,153,377,124,"   // session main
 		// (session top's line)
-		"123,220,353,170,368,374,364,373,352,121,445,309,118,68,73,200,255,71,67,335,319,320,331,461,45,63,179,230,269,164,391,176,294,187,313,120,213,407,83,105,116,383,410,439,470,101,102,398,297,65,304,144,74,307,430,99,103,204,235,236,237,185,186,227,97,98,182,225,226,228,205,457,397,27,424,106,427,428,231,450,67,462,295,423,91,90,84,326,327,328,329,330,348,371,222,369,42,33,199,143,274,262,332,287,87,460,64,89,172,173,318,218,210,342,394,355,357,359,362,375,366,322,347,372,365,341,344,340,360,376,325,363,381,346,345,351,324,336,337,338,339,343,280,277,291,271,93,56,55,459,152,128,131,38,401,125,127,60,61,465,268,402";   // session top
+		"123,220,353,170,368,374,364,373,352,121,445,309,118,68,73,200,255,71,67,335,319,320,331,461,45,63,179,230,269,164,391,176,294,187,313,120,213,407,83,105,116,383,410,439,470,101,102,398,297,65,304,144,74,307,430,99,103,204,235,236,237,185,186,227,97,98,182,225,226,228,205,457,397,27,424,106,427,428,231,450,67,462,295,423,91,90,84,326,327,328,329,330,348,371,222,369,42,33,199,143,274,262,332,287,87,460,64,89,172,173,318,218,210,342,394,355,357,359,362,375,366,322,347,372,365,341,344,340,360,376,325,363,381,346,345,351,324,336,337,338,339,343,280,277,291,271,93,56,55,459,152,128,131,38,401,125,127,60,61,465,268,402,471";   // session top
 	const char* ConvertList()
 	{
 		const char* e = getenv("WWHD_60FPS_CONVERT");
@@ -1400,9 +1401,17 @@ namespace
 					memcpy(&age, &a, 4);
 					memcpy(&life, &l, 4);
 				}
-				fprintf(f, "  emitter %08x group %u cb %08x pcb %08x rate %.3f step %u dyn %08x volume %u div %u particles %u age %.1f life %.1f\n",
+				// and over all its particles: the oldest's age and the lives' mean
+				float oldest = 0, lives = 0;
+				uint32 n = 0;
+				for (uint32 pl = first; pl; pl = rd32(pl + 12), n++)
+				{
+					oldest = std::max(oldest, std::bit_cast<float>(rd32(rd32(pl) + 0x78)));
+					lives += std::bit_cast<float>(rd32(rd32(pl) + 0x7C));
+				}
+				fprintf(f, "  emitter %08x group %u cb %08x pcb %08x rate %.3f step %u dyn %08x volume %u div %u particles %u age %.1f life %.1f oldest %.1f lives %.2f\n",
 					e, g, cb ? rd32(cb) : 0, pcb ? rd32(pcb) : 0, r, rd8(e + 0x27), rd32(e + 0x84), rd8(e + 0x26), rd16(e + 0x66),
-					rd32(e + 0x1B4), age, life);
+					rd32(e + 0x1B4), age, life, oldest, n ? lives / n : 0.0f);
 			}
 		fflush(f);
 	}

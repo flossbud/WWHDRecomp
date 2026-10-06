@@ -3353,6 +3353,37 @@ it in a window; D21 "Step 2"):**
   (started by the walk's end) rose 2 ticks early. Its mode, stick and arrival stores and its cutEnd call whole
   (link_actions.txt): the walk ends on 30's tick, the rocks rise on it; their bob still drifts up to 20 units later
   (the lava's height under them: islands.txt's note).
+- **Session top: the owner's notes N4, N2, N9, N5 (2026-10-06, after the reboot)**:
+  - **Movement tests** (`tools/sixty/tests/movement.py`, routes moveramp, moveangle, movecircle, moveturn, movejump in
+    Gohma's empty room M_DragB; the input script's sticks at any position, `LS=x,y`/`RS=x,y`, os/input.cpp): `gen`
+    writes the routes from SUITES, `cmp DIR ROUTE` compares 30 and 60 per segment (distance, top speed, ticks to 90%,
+    the start-relative end gap, facing, the camera's +0x2B4, the evenness of 60's frames, the camera eye's gap and
+    jerk), `ticks DIR ROUTE SEG|FROM-TO` tick by tick. Pairing fixed at key 2k+1 (the routes start alike; the
+    path-picked one flipped on two of them). Link's own movement matches (17.00/17.00 at full, 3.42/3.43 at 0.6, the
+    ramp's 90% on the same tick, stops from a run within 0.06, even frames). Left: B57 (the camera falls 5-17 degrees
+    behind in long turns, his camera-relative heading with it; bottom has it), B58 (L-targeting released while
+    moving: procAtnMove's approach by half a tick, then the switch, and the half step slows by procMove's rule: 7.24
+    against 6.0, a tick longer; the fix is the half step after a switch finishing the tick under the old action's
+    speed rule), B59 (a room's walk-in, Gohma's: its slow-down's 50-unit check a tick later, his foot-measured speed
+    1-2 units off, so it stops at 9.5 at once, 2 ticks early). Same at both rates, the game's own: up to half way
+    straight along an axis the stick only turns Link (his stick magnitude, +0x6A08, is the script's exactly; the
+    window's SDL stick has a 15% round dead zone, frontend/window_system.cpp).
+  - **N2, the side-jump camera** (B56, qa has it): per tick the camera moves as at 30, but at a jump's descent and
+    landing the tick's two frames split it unevenly (f_024FD11C's eye: set at once or approached, on height
+    thresholds; the half steps take the other path). Findings in qa's message and the bug.
+  - **N9, the Tower of the Gods' water** (B55, fixed): its times were right (360 ticks a level, 90 a change) but it
+    moved on half frames only. Tag_Waterlevel 471 converted (tower.txt: its step's growth `*h@`, its snap whole), and
+    the tide (Obj_Tide 39, executing before the tag) reads the level a step older (sixty_step.cpp f_023A14A8), as at
+    30 it reads it a tick older: now 30's height at half ticks within ~1 unit of 460, every frame moving (moves
+    462/458 on whole/half frames). Its brk2 delay keep, its moving sounds whole.
+  - **N5, Dragon Roost Cavern's fire jets** (B60, open): the jet (Obj_Flame 267, room 3) is exact (power, height,
+    modes on 30's ticks; captures: the column's bright pixels equal 30's at whole frames). What differs is the lava's
+    glow under it: lit sooner and dark ~15 ticks sooner at 60. It follows Link's conversion and nothing else tried
+    (the jet, particles, BG 439, KYTAG00, the camera, Ykgr, steam: no change; Link's draws halved or skipped: no
+    change); his trial shows only his own stores. Measure in the bug's note. Particle counts at 60 read lower for an
+    unrelated reason: WWHD's JPA keeps a dead particle 2 calcs (+0x10C) and an emptied emitter 2 (+0x3D4, f_0282014C)
+    before deleting them, a frame count, so a tick at 60 (not visible); lifetimes round to half ticks at 60 (tried,
+    `ceil(life)`: no visible change, not kept).
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.
