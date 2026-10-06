@@ -1,0 +1,101 @@
+# The work queue's "eqwhole" item (session main): equality tests of counts the rules keep to whole ticks (whole on
+# the store, keep on the add), in the converted types but the bosses (session bottom's bosses.txt). On a stepping
+# half step such a count reads as on the whole step before it, so `count == N` acted twice a tick (Gohma's armour
+# cracked after two rocks). eqwhole (tools/recomp/generate.py) makes the compare read unequal on a half step.
+# Found by tools/sixty/eq_audit.py (eqsites.py over each converted type's code, a site kept only where a rule for
+# its field lies within 0x4000 bytes: the types' code ranges overlap). Left out: `== 0` and `== -1` (a count
+# resting there: a state), `== 0xff` (counts saturating at 255: Medli's and P2's head counts, the boat's 0x1096),
+# the trees' `== 1` (ftree's countdowns stop at 1), the volcano's `== 10` (its sounds already wait for whole ticks,
+# leftovers.txt). The number before the colon is the process the audit found the site under (code ranges overlap,
+# so it can be a neighbour's); the field and the compared value follow.
+020568A8    eqwhole     cmpi            472: 0xbc8 == 0x23
+0207E004    eqwhole     cmpl            296: 0x4be == r4
+0207ECA4    eqwhole     cmpl            296: 0xd50 == r10
+0207ED70    eqwhole     cmpl            296: 0xd50 == r10
+0207EDA4    eqwhole     cmpi            296: 0xd50 == 0xeb
+0207EF3C    eqwhole     cmpl            296: 0xd50 == r4
+0207EFD8    eqwhole     cmpi            296: 0xd50 == 0x82
+0207F00C    eqwhole     cmpi            296: 0xd50 == 0x98
+0207F550    eqwhole     cmpi            296: 0xd50 == 0x104
+0209D994    eqwhole     cmpi            189: 0x138e == 0x1e
+0209D9B8    eqwhole     cmpi            189: 0x138e == 0x32
+0209DAD8    eqwhole     cmpi            189: 0x138e == 0x5
+0209DBB4    eqwhole     cmpi            189: 0x138e == 0x1e
+0209DBE4    eqwhole     cmpi            189: 0x138e == 0x32
+0209DC10    eqwhole     cmpi            189: 0x138e == 0x46
+0209DCFC    eqwhole     cmpi            189: 0x138e == 0x5
+0209DD3C    eqwhole     cmpi            189: 0x138e == 0x2d
+0209DECC    eqwhole     cmpi            189: 0x138e == 0x1e
+020BC474    eqwhole     cmpi            214: 0x3e6 == 0x2
+020BC658    eqwhole     cmpi            214: 0x3e6 == 0x2
+020BC698    eqwhole     cmpi            214: 0x3e6 == 0x2
+020BC6D4    eqwhole     cmpi            214: 0x3e6 == 0x2
+020BC740    eqwhole     cmpi            214: 0x3e6 == 0x2
+020BC7B4    eqwhole     cmpi            214: 0x3e6 == 0x2
+020BCA24    eqwhole     cmpi            214: 0x3e6 == 0x1
+020C4FB8    eqwhole     cmpl            214: 0xb48 == r8
+020C628C    eqwhole     cmpl            294: 0xb48 == r0
+020C764C    eqwhole     cmpl            294: 0xb48 == r0
+020C7D68    eqwhole     cmpl            294: 0xb48 == r0
+02102730    eqwhole     cmpi            61: 0x3e98 == 0x32
+02102750    eqwhole     cmpl            61: 0x3e9a == r0
+02102810    eqwhole     cmpl            61: 0x3e9a == r0
+021028BC    eqwhole     cmpl            61: 0x3e9a == r0
+02102D50    eqwhole     cmpl            61: 0x3e9a == r11
+02103190    eqwhole     cmpi            61: 0x3e98 == 0x32
+021031C4    eqwhole     cmpi            61: 0x3e98 == 0x14
+02103344    eqwhole     cmpl            61: 0x3e98 == r0
+02103360    eqwhole     cmpl            61: 0x3e98 == r8
+021033D0    eqwhole     cmpi            61: 0x3e98 == 0x32
+021033E8    eqwhole     cmpi            61: 0x3e98 == 0x6e
+02103510    eqwhole     cmpl            61: 0x3e98 == r6
+0210356C    eqwhole     cmpl            61: 0x3e98 == r4
+0212EDD4    eqwhole     cmpi            185: 0x61a == 0x1
+0214C33C    eqwhole     cmpi            204: 0x3f8 == 0x5a
+0214C63C    eqwhole     cmpi            204: 0x3f8 == 0x22
+0214D018    eqwhole     cmpi            204: 0x3f8 == 0x53
+0214D6B4    eqwhole     cmpi            204: 0x3f8 == 0x22
+0214D6D8    eqwhole     cmpi            204: 0x3f8 == 0x22
+0214D788    eqwhole     cmpi            204: 0x3f8 == 0x22
+0214E10C    eqwhole     cmpi            204: 0x3f8 == 0x3
+0214E178    eqwhole     cmpi            204: 0x3f8 == 0x4
+0214FC50    eqwhole     cmpi            204: 0x3f8 == 0x22
+0214FD14    eqwhole     cmpi            204: 0x3f8 == 0x22
+0214FE2C    eqwhole     cmpi            204: 0x3f8 == 0x22
+0214FF24    eqwhole     cmpi            204: 0x3f8 == 0x22
+0215311C    eqwhole     cmpi            204: 0x3f8 == 0x51
+02163A90    eqwhole     cmpi            171: 0x2b8c == 0x5
+02170F80    eqwhole     cmpl            230: 0x3b8 == r5
+021716B0    eqwhole     cmpi            230: 0x3b8 == 0x1e
+0217182C    eqwhole     cmpl            230: 0x3b8 == r5
+02172070    eqwhole     cmpi            230: 0x3b8 == 0xc8
+02172090    eqwhole     cmpi            230: 0x3b8 == 0xaa
+02172174    eqwhole     cmpl            230: 0x3b8 == r7
+021721D4    eqwhole     cmpi            230: 0x3b8 == 0x2
+021723AC    eqwhole     cmpi            230: 0x3b8 == 0x63
+021723C4    eqwhole     cmpi            230: 0x3b8 == 0x28
+02184868    eqwhole     cmpi            213: 0x3da == 0x1
+0218D63C    eqwhole     cmpi            182: 0x3b4 == 0x23
+0218E9C0    eqwhole     cmpi            182: 0x3b4 == 0x7
+021A5BF8    eqwhole     cmpl            98: 0x496 == r11
+021A61C8    eqwhole     cmpi            98: 0x496 == 0x64
+021A61DC    eqwhole     cmpi            98: 0x496 == 0x96
+021B3C64    eqwhole     cmpi            120: 0x5b8 == 0xc8
+021C6158    eqwhole     cmpi            91: 0x3b4 == 0x1
+021C9DF8    eqwhole     cmpi            188: 0x2e50 == 0x1
+021CC310    eqwhole     cmpl            188: 0x2d4c == r7
+021D5EC8    eqwhole     cmpi            90: 0x844 == 0x1
+021D5F6C    eqwhole     cmpi            90: 0x844 == 0x1
+021DB6CC    eqwhole     cmpi            216: 0x582 == 0x32
+023C06EC    eqwhole     cmpi            227: 0x3e0 == 0xa
+023CB5E8    eqwhole     cmpi            173: 0x462 == 0x3
+023CB6A0    eqwhole     cmpi            173: 0x462 == 0x3
+023CB6EC    eqwhole     cmpi            173: 0x462 == 0x3
+023CB7DC    eqwhole     cmpi            173: 0x462 == 0x3
+023CBDC4    eqwhole     cmpi            173: 0x462 == 0x4
+023CCD20    eqwhole     cmpi            173: 0x462 == 0x3
+023CCDD8    eqwhole     cmpli           173: 0x462 == 0xa
+0243B7E4    eqwhole     cmpi            247: 0x6916 == 0x5
+024849B8    eqwhole     cmpi            112: 0x456 == 0x4b
+0248BB40    eqwhole     cmpi            101: 0x3d8 == 0x1
+024CEBDC    eqwhole     cmpi            175: 0x91e == 0xd
