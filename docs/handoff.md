@@ -2568,8 +2568,10 @@ it in a window; D21 "Step 2"):**
     flight with Link (the wing glide), the light reflected off her harp, talking. Makar (NPC_CB1 334): `WWHD_DEBUG_COMPANION=1` also answers "no" to his code's checkGetItem(0x3E, the
     full-power Master Sword; f_02520C0C), so the finished save creates him in the Wind Temple (`kaze,0,0,-1`
     lists 334), but as the companion before he joins Link: he stays at 14067,-4540,1040 (no placement there;
-    a poke of his position doesn't hold), not at the entrance. Getting him to follow needs his story state
-    (his events' bits) as well. Not converted.
+    a poke of his position doesn't hold), not at the entrance. That place is the save's companion position (dComIfGs_getPlayerPriestPos, restored at his
+    creation while the priest flag is 1): Wind Temple room 12, spawn point 12 (`kaze,12,12,-1`, 129 units from
+    him). There, poked 80 units before Link and facing him, he isn't drawn and A doesn't lift him (f1100-1130):
+    a hidden state his story state or events decide. Not converted.
 
 - **Session bottom: the queue's "companions" item (2026-10-06; `config/US_v0/tick_rules/companions.txt`)**:
   - Medli's glide with Link (route `medliglide`: route medli's pick-up, then carried off the entrance hall's
