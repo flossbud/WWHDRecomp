@@ -849,7 +849,7 @@ $("mQSeg").addEventListener("click", e => { const b = e.target.closest("button")
 $("mLSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { mL = b.dataset.id; renderMobile(); } });
 
 // --- Claude usage: the account's meters (publish.sh usage, every 5 minutes from the editing machine) ---
-const STOP_AT = 50;   // the owner's rule: unattended sessions stop at 50% of the week
+const WRAP_AT = 75;   // the owner's rule (2026-10-06): at 75% of the week, sessions wrap up (finish, commit, hand off), not stop dead
 function meterLabel(m) {
   if (m.id === "session") return "5-hour window";
   if (m.id === "weekly_all") return "This week, all models";
@@ -869,9 +869,9 @@ function usageHtml() {
   const age = Date.now() / 1000 - (usage.published || usage.fetchedAt || 0), stale = usage.stale || age > 1200;
   return `<div class="eyebrow">Claude usage<span class="${stale ? "stale" : ""}">${stale ? "as of " + agoText(usage.fetchedAt) : "updated " + agoText(usage.fetchedAt)}</span></div>` +
     usage.meters.map(m => `<div class="meter"><div class="meterHead">${esc(meterLabel(m))}<b>${Math.round(m.percent)}%</b></div>
-      <div class="meterBar ${esc(m.severity)}"><div style="width:${Math.min(100, m.percent)}%"></div>${m.id === "weekly_all" ? `<i style="left:${STOP_AT}%"></i>` : ""}</div>
+      <div class="meterBar ${esc(m.severity)}"><div style="width:${Math.min(100, m.percent)}%"></div>${m.id === "weekly_all" ? `<i style="left:${WRAP_AT}%"></i>` : ""}</div>
       ${m.resetsAt ? `<small>${esc(resetText(m.resetsAt))}</small>` : ""}</div>`).join("") +
-    (usage.meters.some(m => m.id === "weekly_all") ? `<div class="usageNote"><i></i>${STOP_AT}%: where unattended sessions stop for the week</div>` : "");
+    (usage.meters.some(m => m.id === "weekly_all") ? `<div class="usageNote"><i></i>${WRAP_AT}%: sessions wrap up their work for the week</div>` : "");
 }
 function renderUsage() {
   const h = usageHtml();

@@ -39,6 +39,12 @@ WW-4's actor conversion is split between two sessions working side by side:
   other session integrated first: fetch, rebase, check again.
 - Shared code (sixty.cpp, sixty_step.cpp, generate.py, ppc_ops.h, the helpers): change it only
   when needed, say so in the commit, and rerun `regress.sh`: the other session's actors use it too.
+- **Usage: wrap up at 75% of the week** (the owner's rule from 2026-10-06; it replaces "stop at 50%").
+  The Claude account's usage is on the progress page (the sidebar; the phone's Now tab) and in
+  `curl -s http://WORKER_ADDR:8765/usage.json` (`weekly_all`'s `percent`, every 5 minutes). Below
+  75% work as usual. At 75% wrap up, don't stop dead: finish or park the step in hand (integrate what
+  passes the checks, or commit the rest on your branch with notes), write the handoff, set
+  `publish.sh now`, release claims you won't finish (`publish.sh release ID`), and start no new item.
 
 ### Two workers: the owner's desktop first, the worker as the fallback (from 2026-10-05)
 
