@@ -376,6 +376,10 @@
     {
       "id": "bossfights",
       "name": "Round 7: the bosses fought by a route at 30 and 60 (WWHD_DEBUG_BOSS, the debug menu's refights): phases, damage taken and given, on the same ticks; Gohma first (hookshot), then Kalle Demos (boomerang), Jalhalla (light), Molgera, Helmaroc, Gyorg, the Big Octo, Puppet Ganon, Ganondorf (bottom's)"
+    },
+    {
+      "id": "eqwhole",
+      "name": "Round 7: equality tests of whole-tick counts in converted types (`if (timer == N)` seen again on the half step: an event twice a tick, Gohma's armor cracking after 2 rocks): audit every converted type (bottom's eqsites.py) and rule the sites with eqwhole (main's)"
     }
   ],
   "later": [
