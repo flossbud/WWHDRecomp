@@ -104,6 +104,25 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   out of the pot (vomit action 0x98) starts its forward speed ramp half a tick early (+1 a tick) and lands 7.5
   units further than 30 (an action phase set in the whole step whose next step runs in the half step).
 - **B45 closed**: the Wind Waker's volume follows the left stick in the original code (procTactWait).
+- **Deploys after it**: ww-4 a347b51 (bottom's B47, N3, N8, N12/N13 fixes) and 55119a5 (bottom's N8 tail grab),
+  each after predeploy (47 ok + the known land/sidle/sail WARNs). predeploy.sh now reuses a 30 run only once it
+  finished (ROUTE/30.ok) and gives each invocation its own binary folders (bin.PID.N).
+- **N12/N13 measured** (GTower's arrival, 30 against 60, per field over f1100-8100): Link's cap sway (setHatAngle,
+  link_items.txt's rules) and all of Zelda's state move as at 30 (0.95-1.09 per tick); Ganondorf's hair chain was
+  the one off (bottom's ke_control fix); Link's +0x648/+0x6A0/+0x6F8 are his face's texture-pattern frames (copied
+  in his draw from m3530/m3532), whole numbers once a tick at both rates.
+- **B8 (bow arm)** retried on the bow and arrows routes: nothing of Link's or the arrow's changes only once a tick
+  while aiming (colliders and a flags byte only). Still needs the owner's F9 recording.
+- **B56 (N2, the camera's jolt at side jumps; open)**: route movejump (session top's movement.py: `movement.py cmp
+  DIR movejump`, its jerk column). At the first landing of "sidejump right x3" (tick 1229) the follow distance R
+  (dCamera +0x8) goes 327.9 -> 283.1 -> 291.4 -> 275.7 at 60 (30: 318.8 -> 277.9 -> 273.2). The camera trial over
+  ticks 1226-1232 shows a tick's two half steps ending where 30's step does: the split is wrong, not the amount.
+  bumpCheck's stores there are its direct path (f_024FD11C+0xDC0: the eye put on the line's hit point): the half
+  step's push-out stops short of the hit (no snap), the next passes it (snap). Tried and dropped: k on bumpCheck's
+  seven cushions (no change, rules kept in the session's scratch), WWHD_60FPS_CAMTICK=1 (positions nearer 30's,
+  jerk doubled). dCamera +0x620/+0x640 are HD-only view set-up values written in the camera's draw (0274CDFC),
+  derived. Split with session bottom (B57, the follow camera behind in turns): qa takes the camera's own steps
+  and the HD follow engine (f_0250FDC8), bottom how Link reads the camera.
 - **B50, Link climbed onto ledges too soon** (found on the way: walking into route crate's crate): changeFrontWallTypeProc's
   count of ticks pushing against a ledge (m3544, +0x6994; over the HIO's 14 he hops up, catches a wall or takes a
   small jump) ran on both steps: keep on its add (`link_qa.txt`). Route `climb`: the hop was 3.5 ticks early.
