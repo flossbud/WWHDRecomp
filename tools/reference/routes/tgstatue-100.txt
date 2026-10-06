@@ -1,0 +1,24 @@
+# Route: a Tower of the Gods statue walked by the Command Melody (session top, the work queue's "dungeons2"): a
+# stage warp to Siren's room 13, the statue Os (NPC_OS 314, argument 0) read as not finished (its event bit 1710: on
+# the finished save it stands on its pedestal in room 7 and takes no command), Link placed beside it (within its
+# call's 500 units); the Wind Waker raised, 4/4 (the left stick held left), the Command Melody (left, neutral,
+# right, neutral: JAIZelInst's pattern 2): "You conducted the Command Melody!", the statue takes the stick (~f1350,
+# camera-relative), walks, and R gives Link back. At 60 (dungeons2): Link 0.0 from 30's at the end; the statue's hops
+# on 30's ticks, 18 units at the end: the song's phases each start half a tick sooner (0.5 at the baton, 1 at its
+# playback 0x9B, 1.5 at its end 0x9C), not found. Before: the possessed camera's countdown counted on both steps
+# (the handover 12 ticks early) and each hop moved 4.5 ticks (its animation window sampled at half steps).
+# FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_STAGE=920:Siren,0,13,-1
+#env WWHD_DEBUG_FLAGS=ev:1710=0,1704=0,1B01=0
+#env WWHD_DEBUG_PLACE=1000:7300,502,-8945
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; the warp at f920
+1050 UP 5      # the Wind Waker: the left stick sets the meter, the right stick plays the notes
+1065 LLEFT 125 # 4/4 (beats 32, 56, 84 and 108 frames after raising the baton)
+1072 RLEFT 24  # the Command Melody: left,
+1121 RRIGHT 25 # (neutral,) right, (neutral)
+1350 LUP 40    # the statue walks
+1395 LLEFT 30
+1440 R 5       # back to Link

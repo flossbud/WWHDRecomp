@@ -94,6 +94,14 @@
 02327BE8    *h@f30      fadds           beam (red search): m588 + 1 a tick (on, ending)
 02327C04    *h@f30      fadds           beam (red search): m5A8 + 1 a tick
 #
+# ---- NPC_OS (314, d_a_npc_os.cpp: the statues; execute f_022AD0F0; route tgstatue, the statue walked after
+# the Command Melody). walkPlayerAction (f_022AFF94) walks in hops: speedF is the walk's speed while the
+# walk's previous animation frame (+0x8D8) is inside a window (HIO +0xAC, +0xA8), else 0 (and it turns):
+# the half steps' frames fell inside it once more a hop (4.5 ticks of motion against 30's 4). The whole
+# steps decide, as 30's ticks do; the half step keeps their speed
+022B0080    whole       stfs            os walkPlayerAction: speedF = the walk's speed, inside the window
+022B0094    whole       stfs            os walkPlayerAction: speedF = 0, outside it
+#
 # ---- counts a call without a rule, from session qa's tools/sixty/counter_audit.py (2026-10-05, session
 # bottom): keep:REG on the add where the count is tested right after it changes, late on the store where
 # it is tested before. Read and left: stores that set a count from another value, constants, globals,

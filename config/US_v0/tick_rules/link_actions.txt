@@ -20,3 +20,16 @@
 # procLandDamage (f_0241DC30, 0x26) waits out m34D0 (+0x6916, mProcVar0) once its animation stops, a count a step:
 # whole (a drop from 1200 units: waiting again 1.5 ticks early before; session bottom's "landings").
 0241DCC8    whole       sth             link procLandDamage: m34D0 (+0x6916) - 1 (tested > 0 only)
+# An event's walk to a point (setDemoData f_023F22FC, demo modes N_WALK 2 and N_DASH 3; session top, dungeons2: the
+# walk-in after GanonB's warp, route gtgrapple): each call takes the cut's mode, makes it N_WALK while |mNormalSpeed|
+# / mMaxNormalSpeed is below the HIO's ratio (the walk's speed cap, 8.5 of 17), sets the stick 0 within 50 units of
+# the point (20 walking) and stops him within 10 (N_WAIT, mNormalSpeed 0; the cut ends). At 60 the half step after
+# the cap's whole step was a dash again: 3.3 units ahead, inside the 10 a tick sooner, stopped 6.6 short, the walk's
+# end 2 ticks early (and the trial's magma rocks, started by it, 2 ticks early). The whole steps decide, as 30's
+# ticks do; the half step keeps their mode and stick (set from the cut each call, then 0 near) and walks on, and ends no cut (the arrival's N_WAIT ends the cut at once)
+023F3154    whole       stfs            setDemoData (walk): mNormalSpeed = 0, arrived
+023F317C    whole       stfs            setDemoData (walk): the stick 0 near the point
+023F2D60    whole       stfs            setDemoData: the stick from the cut's data ("stick"), each call
+023F2D70    whole       stfs            setDemoData: the stick 1, each call (no "stick")
+023F3190    whole       stw             setDemoData (walk): mDemo's mode = N_WALK or N_DASH (or N_WAIT)
+023F32B0    whole       bl 02543280     setDemoData: dComIfGp_evmng_cutEnd(mStaffIdx), Link's cut done (N_WAIT and the waits)

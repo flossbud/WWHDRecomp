@@ -383,6 +383,17 @@
 0253B738    k@f8        fmadds          twoActorCamera: radius (the other path)
 0253B710    k@f8        fmadds          twoActorCamera: fovy += (target - fovy) x CtrCus
 0253B7B0    k@f8        fmadds          twoActorCamera: fovy (the other path)
+# the possessed event camera (f_0253A998, the decomp's possessedEvCamera stub; its data names Target, Radius,
+# Latitude, Longitude, Fovy, Cushion, Blure, Timer, Type; work area at r28 = dCamera +0x37C: a state at +0,
+# a countdown at +0xC from Timer at +8): the Command Melody's change of player (event OPTION_CHAR_START)
+# moves the view to the possessed actor, a Tower of the Gods statue or Medli, by 1 / countdown a call (eye,
+# fovy, the globe's angles), the centre by Cushion; at 0 its state is 99, the cut's end, and Link's song
+# end (0x9C, stepping in events) gives the stick to the partner. At 60 it counted on both steps: the change
+# came 12 ticks early (route tgstatue). The countdown and its end late, k: on 1 / countdown, k@ on Cushion
+0253AEB0    k:f30       fdivs           possessedEvCamera: f30 = 1 / countdown, the approach's factor
+0253AFD8    k@f1        bl 0201ae48     possessedEvCamera: centre += (target - centre) x Cushion
+0253B0C8    late        stw             possessedEvCamera: countdown - 1
+0253B0D4    late        stw             possessedEvCamera: state = 99 (the countdown's end)
 # the Ballad of Gales' flight camera (f_025383D0, the decomp's tornadoWarpEvCamera stub; work area at r29
 # = dCamera +0x37C: a state, a countdown at +4; the boat, SHIP 165, found by name): state 1 for 100
 # calls brings the eye to a clear view of the boat by (1 / countdown) x 0.15 a call, fovy toward 70 and

@@ -1,0 +1,19 @@
+# Route: the grappling hook in a trial of Ganon's Tower (session top, the work queue's "dungeons2"): GanonB, the
+# Dragon Roost trial (a lava corridor; its stakes, KUI 250, are the joints of the spiked bars across it). A stage
+# warp to its room 0, Link placed over the first magma rock (as route gtrock), the hook out (Y: first person), the
+# view raised 22 frames onto the second bar's stake (0,800,-3000; the reticle turns to its mark), thrown: it wraps
+# the stake, Link is pulled under it (0x77) and swings over the lava (0x78), pumped forward. At 60 (dungeons2, ww-4
+# 2685c17): 7.1 units from 30's at the end, 19.5 at most; his actions on 30's ticks. The walk-in after the warp
+# ended 2 ticks early and 37 units apart before (setDemoData's walk to a point, now decided on whole steps:
+# link_actions.txt); what is left is the first magma rock's bob under him (route gtrock).
+# FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_STAGE=920:GanonB,0,0,-1
+#env WWHD_DEBUG_PLACE=1020:-5,-380,-2385
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; the warp at f920, then the walk-in
+1060 Y 3       # the grappling hook out (first person)
+1075 RUP 22    # the view up, onto the stake
+1110 Y 3       # thrown: it wraps the stake
+1180 LUP 60    # pumped forward

@@ -13,13 +13,15 @@
 # items (a chest), cuts, leaf, hook, ladder, crawl, carry, spin, bow, shield, swing, land, sidle, pot, plants,
 # slash, sail, menus, tour, house (out of a Windfall house's door and back in), and Link's items (session top's
 # items2: boomerang, bombs, grapple, boots, hammer, armor, mirror; heavy, the Power Bracelets' lift, session
-# main's route), and the dungeons' (session top's dungeons2: drcjar, fwbud, tgbeam, wtspring, gtrock; medli, session
-# main's); back, talk and house start from their stage warps, the items' and dungeons' routes warp, spawn and poke
+# main's route), and the dungeons' (session top's dungeons2: drcjar, fwbud, tgbeam, wtspring, gtrock, tgstatue,
+# medliharp, gtgrapple, fwswitch; medli, session main's); back, talk and house start from their stage warps, the items' and dungeons' routes warp, spawn and poke
 # what they need (their "#env" lines, tools/sixty/run.sh). On 2026-10-05 (ww-4 14a98dd) all
 # passed but warp (262,106 units: B28; 17 with its fix, 29b66d9); the largest others were land 99, swing 70,
 # sail 65, sidle 53, plants 46 (WARN: known small drifts), the rest under 33. On 2026-10-06 (items2, on ww-4
 # b924f3f) all 32 passed but land 82, sidle 62 and sail 51 (WARN, known); the item routes' ends 0-12 units. On
-# 2026-10-06 (dungeons2, on ww-4 4700fb6) all 38 passed but the same three; the dungeon routes' ends 0-25 units. Not in it: walk without a stage warp (Link swims off the
+# 2026-10-06 (dungeons2, on ww-4 4700fb6) all 38 passed but the same three; the dungeon routes' ends 0-25 units. On
+# 2026-10-06 (dungeons2 part 2, on ww-4 2685c17) all 46 passed but land 82, sidle 62 and sail 51; tgstatue, medliharp
+# and fwswitch 0.0 units, gtgrapple 7.1, the fights (en-*) 9-34. Not in it: walk without a stage warp (Link swims off the
 # dock for 1900 ticks with camera-relative strokes: 7000 units apart, the runs' headings drift) and mob (a
 # fight: the random stream). Enemy fights (session bottom's enemies2: tools/reference/routes/en-*-100.txt, Link on
 # Outset's grass or in the Savage Labyrinth, ZL and a slash every 15 frames): in it, the ReDead (its freeze and
@@ -32,7 +34,7 @@
 # Output: game state, it stays on the worker.
 set -e
 source "$(dirname "$0")/common.sh"
-routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land sidle pot plants slash sail menus tour boomerang bombs grapple boots hammer armor mirror heavy drcjar fwbud tgbeam wtspring medli gtrock en-rd en-ph en-pz en-bo)
+routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land sidle pot plants slash sail menus tour boomerang bombs grapple boots hammer armor mirror heavy drcjar fwbud tgbeam wtspring medli gtrock en-rd en-ph en-pz en-bo tgstatue medliharp gtgrapple fwswitch)
 P=$OUT/predeploy; mkdir -p "$P"
 jobs=${PREDEPLOY_JOBS:-4}
 run_one() {

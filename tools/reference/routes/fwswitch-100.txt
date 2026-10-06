@@ -1,0 +1,19 @@
+# Route: a boomerang switch in the Forbidden Woods (session top, the work queue's "dungeons2"): a stage warp to
+# kindan's room 13 (the five crystal switches on totem poles, SW_HIT0 451: timed, 6 x 15 ticks lit), their switches
+# (8-12) and the puzzle's (7, SwNo2: when set they stay lit) read as off, the room's two Kargarocs (set IDs 0, 1)
+# read as beaten; the boomerang put on Y, Link placed so a crystal (switch 10) is ahead; Y held (first person),
+# the view swept up through it (a lock), Y let go: thrown, it hits the crystal: lit (state 4, then 5 with its
+# timer), and 90 ticks later it goes out (state 0). At 60 (dungeons2): Link 0.0 from 30's; the crystal hit 1.5 ticks
+# later (the boomerang's flight: his catch 1.5 sooner), lit at 30's tick and out at it (its timer, mOnTimer +0x74C,
+# counted on both steps before: out 45 ticks early).
+# FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_STAGE=920:kindan,0,13,-1
+#env WWHD_DEBUG_FLAGS=sw:7=0,8=0,9=0,10=0,11=0,12=0;ac:0=1,1=1
+#env WWHD_DEBUG_POKE=990:0,1046F0BA,1,5;990:0,10474C6C,1,2D
+#env WWHD_DEBUG_PLACE=1000:-7400,483,-275
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; the warp at f920
+1020 Y 60      # the boomerang out (first person), thrown at f1080
+1035 RUP 11    # the view up through the crystal: locked

@@ -3234,6 +3234,35 @@ it in a window; D21 "Step 2"):**
   half steps stop for f1030-1037: an event's edge?). The trial's first grapple stake is out of the hook's reach
   from where the walk-in stops. The Forbidden Woods' boomerang switches (SW_HIT0 451, room 13, 480 units above the
   floor) weren't hit: the boomerang's aim wasn't steered blind there.
+- **Session top: dungeons2's second part (2026-10-06)**: the mechanics main added after the first push, each a
+  route in predeploy. **The Command Melody**: the Wind Waker raised (D-pad up), 4/4 (the left stick held left), the
+  notes on the right stick (left, neutral, right, neutral: JAIZelInst's pattern 2; 3/4's beats are 30 frames, 4/4's
+  25.7); a partner within its call (a statue's 500 units, Medli's 400) then takes the stick. **tgstatue** (Siren room
+  13: the statue Os read as unfinished, `ev:1710=0`; on the finished save it stands on its pedestal and takes no
+  command): the possessed event camera (f_0253A998, the decomp's stub; data Target, Radius, Latitude, Longitude, Fovy,
+  Cushion, Blure, Timer, Type) moves the view to the partner by 1 / countdown a call and its end lets Link's song end
+  (0x9C, stepping in events) hand over: at 60 it counted on both steps, the handover 12 ticks early (found by
+  WWHD_60FPS_EVENTS=0 and then each converted type left out: 476): the countdown and its end late, k: on 1 / countdown,
+  k@ on its Cushion (tick_rules.txt). The statue walks in hops (walkPlayerAction f_022AFF94: speedF while its previous
+  animation frame is inside a window): 4.5 ticks a hop at 60, the window sampled at half steps: its two speedF stores
+  whole (tower.txt). Now Link 0.0 from 30's, the statue 18 units at the end: the song's phases each start half a tick
+  sooner (0.5 at the baton, 1 at the playback 0x9B, 1.5 at its end 0x9C), not found. **medliharp** (M_Dai room 2:
+  Medli moved into its sunbeam, LTag1, the room's ChuChus read as beaten by their set IDs, `ac:0=1,...,8=1`;
+  `ac:*=1` lost Medli; tools/stage_actors.py `--pos` prints set IDs and angle z now): A in the light raises her harp
+  (mkamaePlayerAction: its reflection), B lowers it: Link and Medli 0.0 from 30's. **fwswitch** (kindan room 13: the
+  crystal switches SW_HIT0 451 on totem poles, their switches 8-12 and the puzzle's 7 read as off, the Kargarocs'
+  set IDs 0 and 1 as beaten; the boomerang's view swept up through a crystal locks it): lit and out on 30's ticks;
+  its lit time (actionOnTimer f_024A1D34: mOnTimer, WWHD's s16 at +0x74C, tested then - 1) counted on both steps,
+  out 45 ticks early: late (forest.txt). The hit itself 1.5 ticks later (the boomerang's flight, its homing's checks
+  per step, items2's note). **gtgrapple** (GanonB: on the first magma rock, the hook's view up 22 frames onto the
+  second spiked bar's joint, a stake KUI, thrown: wraps, pulled 0x77, swings 0x78, pumped). The trial's rock drift
+  came mostly from Link's walk-in after the warp (setDemoData f_023F22FC, an event's walk to a point, N_DASH): a call
+  makes it N_WALK below the walk's speed ratio (the cap 8.5 of 17), sets the stick from the cut each call and 0
+  within 50 units, and stops him within 10 (N_WAIT, the cut's end); at 60 the half step after the cap's whole step
+  dashed again (3.3 units ahead), crossed the 10 a tick sooner and stopped 6.6 short, 2 ticks early, and the rocks
+  (started by the walk's end) rose 2 ticks early. Its mode, stick and arrival stores and its cutEnd call whole
+  (link_actions.txt): the walk ends on 30's tick, the rocks rise on it; their bob still drifts up to 20 units later
+  (the lava's height under them: islands.txt's note).
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.

@@ -5,6 +5,8 @@
 # hook's reach: the swing isn't driven.) At 60 (ww-4 16e0faf + dungeons2) 5.7 units at the end, 29.5 at most: the
 # walk-in ends 1.5 ticks early, the landing a tick early (Link's landing reactions: "landings"), and the rocks'
 # bob drifts up to 23 units from 30's after he lands (their half steps stop for f1030-1037, an event's edge?).
+# With dungeons2's walk-in fix (setDemoData decided on whole steps, link_actions.txt) the walk-in ends on 30's tick;
+# on ww-4 2685c17 23.9 units at the end (the rocks' bob, which he rides).
 # FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by tools/sixty/run.sh.
 #env WWHD_DEBUG_STAGE=920:GanonB,0,0,-1
 #env WWHD_DEBUG_PLACE=1020:-5,-380,-2385

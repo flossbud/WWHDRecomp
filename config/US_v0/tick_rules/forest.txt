@@ -214,3 +214,11 @@
 020B04A4    keep:r9     addi            bmd (Kalle Demos): its timers (a loop) - 1 while > 0, tested after
 02464F58    keep:r7     addi            saku: a post's countdown (+0x100C + i, a loop) - 1 while > 0, tested after
 024650EC    keep:r11    addi            saku: the same (the other loop)
+#
+# ---- SW_HIT0 (451, d_a_swhit0.cpp: the crystal switches the boomerang hits, kindan room 13's five on totem poles;
+# session top, dungeons2: route fwswitch). A timed one (params >> 20, 6 there) lit stays on for 15 x that ticks
+# (actionOnTimer f_024A1D34: mOnTimer, WWHD's s16 at +0x74C, tested and then - 1 a call; at 0 the switch goes off);
+# at 60 it went off 45 ticks early. The countdown before an order (actionToOnReady f_024A19B4: mTimer, +0x74A, 5)
+# the same. Both tested before they change: late, so both steps see the tick's count
+024A1DC8    late        sth             swhit0 actionOnTimer: mOnTimer (+0x74C) - 1, the switch's time lit
+024A19EC    late        stb             swhit0 actionToOnReady: mTimer (+0x74A) - 1, then its event's order

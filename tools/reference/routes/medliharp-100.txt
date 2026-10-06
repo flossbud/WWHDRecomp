@@ -1,0 +1,25 @@
+# Route: Medli's harp in the Earth Temple's light (session top, the work queue's "dungeons2"): Medli as the
+# companion (WWHD_DEBUG_COMPANION=1), a stage warp to M_Dai's room 2 (its sunbeam, LTag1 at -2550,200,0, always
+# on), the room's ChuChus read as beaten (their set IDs 0-8: not created), Link placed beside the light and
+# Medli moved into it, facing him (within her call's 400 units); the Command Melody (4/4: left, neutral, right,
+# neutral) gives her the stick (~f1440): A in the light raises her harp (mkamaePlayerAction: onMirror, the beam
+# reflected), the stick turns it, B lowers it. At 60 (dungeons2): Link and Medli 0.0 from 30's all the way, her harp's
+# turn 16/65536 of a turn apart; the camera's handover 1.5 ticks sooner (the song's phases: route tgstatue). With
+# ac:*=1 (every set ID beaten) Medli wasn't created: the ChuChus' own IDs (stage_actors.py --pos prints them).
+# FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_COMPANION=1
+#env WWHD_DEBUG_STAGE=920:M_Dai,2,2,-1
+#env WWHD_DEBUG_FLAGS=ac:0=1,1=1,2=1,3=1,4=1,5=1,6=1,7=1,8=1
+#env WWHD_DEBUG_PLACE=1000:-2800,200,0
+#env WWHD_DEBUG_POKE=1100:367,314,4,c51f6000;1100:367,318,4,43480000;1100:367,31c,4,00000000;1100:367,32a,2,c000
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; the warp at f920
+1150 UP 5      # the Wind Waker
+1165 LLEFT 125 # 4/4
+1172 RLEFT 24  # the Command Melody: left,
+1221 RRIGHT 25 # (neutral,) right, (neutral)
+1470 A 5       # Medli's harp up in the light
+1520 LLEFT 25  # turned
+1580 B 5       # lowered

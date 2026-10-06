@@ -12,7 +12,7 @@ each entry naming the actor by an 8-byte name. dStage_searchName's table (l_obje
 the RPX's data by its first two names. Prints, per room, the process numbers present with their counts,
 profile names (NAMES.tsv, default /wwhd/data/ghidra-out/actor_names.tsv) and stage names. ROOM limits
 the rooms (numbers; "stage" for the stage file). --pos PROC prints that process's placements instead
-(name, parameters, position, angle y): where to put Link (WWHD_DEBUG_PLACE) or spawn one. --spawns prints
+(name, parameters, position, angle y, angle z, set ID): where to put Link (WWHD_DEBUG_PLACE) or spawn one. --spawns prints
 the player spawn points (PLYR; some stages keep them in the stage file) instead: a stage warp's point
 (WWHD_DEBUG_STAGE=tick:STAGE,point,room,layer) is the low byte of the entry's angle z, its room the low byte
 of its parameters, and a point the room hasn't gives its first entry. A
@@ -155,7 +155,8 @@ def embedded_dz(blob):
 
 
 def actor_chunks(dz, full=False):
-    """(tag, name) for every actor-placing entry of a dzr/dzs file (with full, also params, x, y, z, angle y)."""
+    """(tag, name) for every actor-placing entry of a dzr/dzs file (with full, also params, x, y, z, angle y,
+    angle z and the set ID, 0x1E: the number dSv_info_c::isActor checks, 0xFFFF for none)."""
     n = struct.unpack(">I", dz[0:4])[0]
     for k in range(n):
         tag, count, off = struct.unpack(">4sII", dz[4 + 12 * k:16 + 12 * k])
@@ -169,8 +170,8 @@ def actor_chunks(dz, full=False):
             name = dz[e:e + 8].split(b"\0")[0].decode("ascii", "replace")
             if full:
                 prm, x, y, z = struct.unpack(">Ifff", dz[e + 8:e + 0x18])
-                ay = struct.unpack(">h", dz[e + 0x1A:e + 0x1C])[0]
-                yield tag, name, prm, x, y, z, ay
+                ay, az, sid = struct.unpack(">hhH", dz[e + 0x1A:e + 0x20])
+                yield tag, name, prm, x, y, z, ay, az, sid
             else:
                 yield tag, name
 
@@ -251,9 +252,10 @@ def main():
                 continue
             if args.pos is not None:
                 for dz in tables:
-                    for tag, name, prm, x, y, z, ay in actor_chunks(dz, full=True):
+                    for tag, name, prm, x, y, z, ay, az, sid in actor_chunks(dz, full=True):
                         if table.get(name, (-1, 0))[0] == args.pos:
-                            print(f"{args.stage} room {room} {tag} {name} params {prm:08x} at {x:.0f},{y:.0f},{z:.0f} angle {ay}")
+                            print(f"{args.stage} room {room} {tag} {name} params {prm:08x} at {x:.0f},{y:.0f},{z:.0f} angle {ay}"
+                                  f" (z {az & 0xFFFF:04x}, set ID {sid if sid != 0xFFFF else '-'})")
                 continue
             for dz in tables:
                 for tag, name in actor_chunks(dz):
