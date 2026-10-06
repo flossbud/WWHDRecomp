@@ -3088,6 +3088,40 @@ it in a window; D21 "Step 2"):**
   falls in the tick's first half (at most half a tick early, 1/60 s). Extending animstart's rule to every
   stepping process put the launch a step earlier still (68 at the end), so it was reverted. Left as is:
   invisible in play; only the route's end distance shows it.
+- **Session top: the queue's "items2" (round 8, 2026-10-06)**: routes for Link's items, 30 against 60. Each route
+  carries what it needs as `#env NAME=VALUE` lines (stage, pokes, spawns), which `tools/sixty/run.sh` exports
+  unless already set; the stable ones are in predeploy's default list. **boomerang** (two ChuChus 206 spawned and
+  locked, a third hides): hit at both rates, the second a tick later at 60. **bombs** (thrown along the dock, one
+  put down): both blow up in 30's ticks; the thrown one rests 11 units from 30's spot. **grapple** (session
+  bottom's stake 250 swing): its actions in 30's ticks, 7 units at the end. **steal** (the hook on a spawned
+  Bokoblin): not in predeploy, the Bokoblin wanders otherwise from its spawn (the random stream, below).
+  **boots**: speeds within 0.05 of 30's, actions in 30's ticks. **hammer**: the pound's pause (procHammerFrontSwing
+  f_0243CA98: m34D0 +0x6916 counts 10 ticks from where the hammer meets the ground) ran on both steps, so the swing
+  ended 6 ticks early (B38): the count `whole`, its zero test `eqwhole` (link_items.txt). **armor**: WWHD's magic
+  armour tests the rupees, not the magic (changeDragonShield f_023E9D50 reads the heap save's +0x24; m3548 +0x6998
+  set to 60 and never counted): damage costs rupees (a bomb at Link's feet: 5000 -> 4980 at f1177, both rates).
+  Its knockback (0x68, then the get-up 0x69 when he lands) got up half a tick early and waited a tick early: the
+  arc reaches the ground up to half a tick sooner at 60 (a whole step's move) and the half step after it reacted,
+  in the state paired with 30's tick of the landing. The reaction (procLargeDamage f_0241E7D4's call of
+  procLargeDamageUp_init) now on whole ticks (link_actions.txt `whole:r3=0`): 0x69 and 0x04 in 30's ticks, the
+  largest gap 11.5 -> 6.1. The other landing reactions (falls, jumps, the fall off a ledge 0x2C) have the same
+  half tick; not ruled yet. **mirror**: no light shaft on Outset, so one is spawned: Tag_Light 469 (GC 0x1DB; type
+  1, the Earth Temple's sunbeam, param 00ff3ffd: no switches, a straight cone) where Link stands; in it his reset
+  flag 0x200000 (checkLightHit) and the beam from the shield, on the same ticks at both rates but the one he steps
+  out on. **heavy** (session main's boulder; its spawn now an `#env` line): actions in 30's ticks; the boulder
+  lands 32 units past 30's spot (main's heavythrow cause). **arrows** (an ice arrow on a Bokoblin, a fire arrow on
+  the frozen block, a fire arrow on a second): not in predeploy until the random stream holds (the Bokoblin went
+  for Link at f1023.5 at 60). enemy_ice's timer and enemy_fire's were ruled already (02041248, 02041BDC,
+  02041A1C); its frozen block's pop and spin and the 40-tick hang (pos += speed, speed.y -= 5, mMoveDelayTimer)
+  are not, to look at once a frozen enemy can be compared.
+  The random stream (with session bottom, whose RNDSYNC fix is b924f3f): on the save route 30 and 60 drew alike
+  until a seagull's half-step draw (bottom's), then the fishman (NPC_SO 118): its _execute puts it back on the
+  water's surface when under it and posMoveF then moves it by speed.y, which lies at maxFallSpeed (-100) while it
+  waits under the water: at 30 it rests 100 under; put back on both steps it rested 50 under at 60, another height
+  for its ground check and mode, and its jump drew at f914.5 against 30's f918. The put-back and what its swim
+  modes do to its height before it (the pull toward the circling point, mB34 under the water, and modeNearSwim's
+  pos.y += mB34) are whole-tick only now (outset.txt): its half step's height equals 30's on every tick (-57.5,
+  -60, ... -100), x and z within 1.6 units, its heading within 85.
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,

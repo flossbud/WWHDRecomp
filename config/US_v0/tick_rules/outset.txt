@@ -10,6 +10,21 @@
 022DF884    keep:r12    addi            so blink (f_022DF6EC): m86C (+0x9E4) + 1, then > the end frame restarts it
 022E058C    k@f1        bl 0201ae48     so modeSwim: pos += (circling point - pos) * mB04 (+0xC7C), an approach a tick
 022E08FC    k@f1        bl 0201ae48     so modeNearSwim: the same
+# Its _execute (f_022DF6EC) puts it back on the water's surface when it's under it (dLib_getWaterY), then
+# posMoveF moves it by its speed: lying in the water (speed.y at maxFallSpeed, -100) it ended each tick 100 under
+# the surface at 30 and, put back on both steps, 50 under at 60 (half its speed a step): another height for its
+# ground check, its mode and its jump's draw (session bottom's find: the random stream parted at its jump, f914.5
+# against 30's f918; session top, after items2's routes). Put back on whole ticks only, the half step goes on
+# from the whole step's move as 30's tick does. What its swim modes do to its height before that (the pull
+# toward the circling point, which lies mB34 (+0xCAC, -150 here) under the water, and modeNearSwim's
+# pos.y += mB34) the tick's put-back wipes at 30: at 60 they stand on the half step (85 under, not 57.5, on the
+# first): whole ticks only too, so the half step leaves the height as the whole step's move left it. Exact while
+# it's under the water (the swims' height only falls: gravity, no lift).
+022DF984    whole       stfs            so _execute: current.pos.y = the water's height, when under it
+022E05C4    whole       stw             so modeSwim: current.pos.y after the pull toward the circling point
+022E0940    whole       stw             so modeNearSwim: current.pos.y after the pull toward the circling point
+022E08B4    whole       stfs            so modeNearSwim: current.pos.y += mB34 (+0xCAC), away from the point
+022E095C    whole       stfs            so modeNearSwim: current.pos.y += mB34, at the point
 #
 # ---- Beedle's ship (OBJ_IKADA, process 68, d_a_obj_ikada.cpp: the Great Sea's ships). Its bob (the
 # _execute's mWaveAnimTimer), the lantern's spin (mLightRotY/X), the rocking phases of its stop modes and
