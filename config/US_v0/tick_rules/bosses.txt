@@ -193,3 +193,60 @@
 020FCD10    eqwhole     cmpi            bwd f_020FA614: a count (+0x1A48) == 0xff
 02102948    eqwhole     cmpi            bwd f_02101F30: m3C20 (+0x3E98) == 0x53
 02102A60    eqwhole     cmpl            bwd f_02101F30: m3C22 (+0x3E9A) == a value
+#
+# ---- Gohdan (BST 240: its head and two hands, SirenB with WWHD_DEBUG_BOSS=1; tower.txt has its rules; WWHD's
+# fields are the GameCube's + 0x234). Its demo camera (f_020EE200) counts msFrameCount (+0x30D0) at its end
+# for its demos (m2E9A +0x30CE), unruled: its death demo (m2E9A poked to 50, mActionType +0x130A to 22, at
+# f1100) ran at double speed at 60 (states 52, 53, 54 at f1431, 1446.5, 1512 against 1761, 1792, 1858).
+# Once a tick, and its 46 equality tests of it and its timers' (m10FC[] +0x1330, `keep`) four, once.
+020F018C    whole       sth             bst demo_camera: msFrameCount (+0x30D0) + 1
+020EE3B8    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x3c
+020EE448    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x14
+020EE4DC    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x14
+020EE4F8    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EE880    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x3c
+020EE8A4    eqwhole     cmpi            bst demo_camera: msFrameCount == 0xb4
+020EE8BC    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EE8DC    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EE8F8    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EE91C    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EE938    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EEA50    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x14
+020EEAA4    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x3b
+020EEAB8    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x3c
+020EEB04    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x5a
+020EEB50    eqwhole     cmpi            bst demo_camera: msFrameCount == 0xa9
+020EEB60    eqwhole     cmpi            bst demo_camera: msFrameCount == 0xaa
+020EEC7C    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x14
+020EECD0    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x3b
+020EECE8    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x3c
+020EED34    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x5a
+020EED80    eqwhole     cmpi            bst demo_camera: msFrameCount == 0xa9
+020EED90    eqwhole     cmpi            bst demo_camera: msFrameCount == 0xaa
+020EEE88    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x1e
+020EEEDC    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x3b
+020EEEF4    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x3c
+020EEF40    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x5a
+020EEF8C    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x96
+020EF328    eqwhole     cmpi            bst demo_camera: msFrameCount == 0xc8
+020EF394    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x12c
+020EF604    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x5a
+020EF624    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x64
+020EF670    eqwhole     cmpi            bst demo_camera: msFrameCount == 0x78
+020EF694    eqwhole     cmpi            bst demo_camera: msFrameCount == 0xf0
+020EF6AC    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EF6CC    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EF6E8    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EF70C    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EF72C    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EF754    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EF774    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EF95C    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EF978    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EF9C4    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EFCEC    eqwhole     cmpl            bst demo_camera: msFrameCount == a value
+020EFFE4    eqwhole     cmpi            bst demo_camera: msFrameCount == 0xaa
+020EB43C    eqwhole     cmpi            bst f_020EB174: m10FC[3] (+0x1336) == 0x1
+020ECCE8    eqwhole     cmpi            bst f_020EB4BC: m10FC[0] (+0x1330) == 0x32
+020ECD24    eqwhole     cmpi            bst f_020EB4BC: m10FC[0] (+0x1330) == 0x1e
+020ED0BC    eqwhole     cmpi            bst f_020EB4BC: m10FC[3] (+0x1336) == 0x1

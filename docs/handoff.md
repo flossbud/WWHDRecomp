@@ -2916,6 +2916,11 @@ it in a window; D21 "Step 2"):**
   the same states at 8213, 8232, 8302, 8347/8348, 8355/8356), then his attacks part with Link's rolls and
   the random stream; Link hit seven times for 4 at both rates (the first at f8515 / 8850.5). Not driven:
   the light arrows and the parries.
+  **Gohdan** (BST 240, SirenB; not in the item's list, the same class as Helmaroc's): its demo camera's
+  count msFrameCount (+0x30D0) had no rule and its death demo (m2E9A +0x30CE poked to 50, mActionType
+  +0x130A to 22 at f1100) ran at double speed at 60 (states 52-54 at f1431/1446.5/1512 against
+  1761/1792/1858). `whole` on the add, eqwhole on its 46 tests and its timers' 4: every state at 30's tick
+  (to f2382) and the heart container at f2289 at both.
   Left for after "resolve" (session top's): per-hit counters in these fights (main: hold per-site `keep`s).
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
