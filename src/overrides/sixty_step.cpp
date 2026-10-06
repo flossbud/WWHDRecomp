@@ -512,7 +512,33 @@ namespace
 	// +0x7408 and +0x7520): the last two steps' for each Link, so a step's move is measured over a whole
 	// tick
 	struct Toes { float pos[2][3]; };
-	struct ToeHistory { Toes last, before; uint32 lastStep = 0; bool haveBefore = false; };
+	// the model's matrices posMoveFromFootPos reads (m37B4, Link +0x73BC; the waist's, the left and the right foot's,
+	// joints 30, 34, 39 of the matrices at *(*(*(Link +0x448) +0x2C) +0x10), 0x30 bytes each), as the whole step saw them
+	struct FootMatrices { uint32 step = 0; uint8 base[0x30]; uint8 joint[3][0x30]; };
+	struct ToeHistory { Toes last, before; uint32 lastStep = 0; bool haveBefore = false; FootMatrices whole; };
+	constexpr uint32 kFootJoint[3] = { 0x5A0u, 0x660u, 0x750u };
+	uint32 FootJoints(uint32 link)
+	{
+		const uint32 model = rd32(link + 0x448);
+		const uint32 holder = model ? rd32(model + 0x2C) : 0;
+		return holder ? rd32(holder + 0x10) : 0;
+	}
+	void SwapFootMatrices(uint32 link, FootMatrices& m)
+	{
+		const uint32 joints = FootJoints(link);
+		if (!joints)
+			return;
+		uint8 t[0x30];
+		memcpy(t, memory_base + link + 0x73BC, 0x30);
+		memcpy(memory_base + link + 0x73BC, m.base, 0x30);
+		memcpy(m.base, t, 0x30);
+		for (int i = 0; i < 3; i++)
+		{
+			memcpy(t, memory_base + joints + kFootJoint[i], 0x30);
+			memcpy(memory_base + joints + kFootJoint[i], m.joint[i], 0x30);
+			memcpy(m.joint[i], t, 0x30);
+		}
+	}
 	std::unordered_map<uint32, ToeHistory> s_toes;
 	constexpr uint32 kToe[2] = { 0x7408u, 0x7520u };
 
@@ -538,7 +564,11 @@ namespace
 // measured from the toe of two steps before, a whole tick: at whole ticks that is the 30 Hz
 // measurement exactly, and the feet's small step-to-step jitter (their ground fitting) isn't
 // doubled as a half step's move divided by h would be (the speed ran 20-30% high). The first step
-// after a pause measures from the last one, half a tick.
+// after a pause measures from the last one, half a tick. The toes come from the model's matrices as
+// the last frame left them, and a half step's last frame is the whole tick's draw, half a tick on: its
+// measure ran half a tick ahead of 30's (a walk's start ramped early, Link ~1 unit ahead from there,
+// route tour; session top, walkstart). So a half step measures with the whole step's matrices (put in
+// for the call, its own put back after): both of a tick's steps take 30's measure.
 void f_023FCB9C(PPCInterpreter_t* __restrict ctx)
 {
 	const uint32 link = GPR(3);
@@ -555,7 +585,20 @@ void f_023FCB9C(PPCInterpreter_t* __restrict ctx)
 		history.haveBefore = false;
 	if (history.haveBefore)
 		WriteToes(link, history.before);               // the move is measured from a tick ago
+	const uint32 joints = FootJoints(link);
+	const bool wholeMatrices = g_rtHalfTick && continuing && history.whole.step == step - 1 && joints;
+	if (!g_rtHalfTick && joints)
+	{
+		history.whole.step = step;                     // the whole step's matrices, for the half step
+		memcpy(history.whole.base, memory_base + link + 0x73BC, 0x30);
+		for (int i = 0; i < 3; i++)
+			memcpy(history.whole.joint[i], memory_base + joints + kFootJoint[i], 0x30);
+	}
+	if (wholeMatrices)
+		SwapFootMatrices(link, history.whole);         // in for the call ...
 	orig_f_023FCB9C(ctx);
+	if (wholeMatrices)
+		SwapFootMatrices(link, history.whole);         // ... and the half step's own back
 	history.before = now;
 	history.haveBefore = true;
 	history.lastStep = step;

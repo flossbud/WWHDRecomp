@@ -1409,6 +1409,27 @@ it in a window; D21 "Step 2"):**
     differ from his first walking ticks: tour 2.4 units in 3 ticks, with it or not) and predeploy got worse:
     tour 20 -> 271 and land 99 -> 306 units (each a bifurcation: tour's Link, 20 units to one side, clears a
     corner that stops him at 30), crawl 1 -> 77, sidle 53 -> 103, pot 8 -> 2. So it stays a probe, off.
+  - **Link's walk start (session top; the work queue's "walkstart"; shared: sixty_step.cpp's posMoveFromFootPos
+    override, predeploy.sh)**: predeploy pairs 30's tick k with the 60 run's half tick that holds the same state
+    (key 2k+1 or 2k-1, whichever Link's path matches best; before: the same key, the next whole frame). Link's
+    walking speed comes from his feet (posMoveFromFootPos: the planted toe's move, a whole tick's by the override,
+    from the model's matrices as the last frame left them); a half step's last frame is the whole tick's draw,
+    so its measure ran half a tick on. Now a half step measures with the whole step's matrices (m37B4 and the
+    waist's and feet's, joints 30, 34, 39 at *(*(*(Link +0x448) +0x2C) +0x10), put in for the call and back):
+    in a walk's ramp the half ticks' speeds are 30's (tour: 2.83, 5.62, 9.02 against 2.76, 5.22, 8.99; before
+    5.08, 6.64, 9.70). predeploy, paired: swing 70 -> 39 (no longer WARN), plants 37 -> 13, sidle 53 -> 48,
+    back 4.6 -> 2.4, door 5.9 -> 2.8, pot 7.9 -> 7.0; tour 20.5 -> 25.4, talk 8.8 -> 11.0, ladder 4.2 -> 8.5
+    (its farthest 156 -> 274); the ends' sum 438 -> 381, the means' 203 -> 189. Left: the walk's first tick
+    (the toes' measured move 2.99 against 30's 1.66 at tour's tick 966, the whole step's too: 60's toes lead
+    30's by up to a tick as the walk animation starts, the stick read and the procedure change's timing, not
+    the measure's), and Link's other fields differ from before the walk (old.*, the idle animation's phase).
+    Why the animation leads: Link's animation frame (+0x589C) is 30's at the 60 run's whole frame (key 2k),
+    his place at the half tick (2k+1): his action call sets a new animation up after the common part's update,
+    and at 30 that tick doesn't advance it, while the half step does (tour's tick 965: frame 0 at 30, 1.61 at
+    60's half tick). Tried and taken out: the half step leaving out the update of a control of Link's set up
+    after its whole step's update (its frame changed since): predeploy got much worse (ladder 4 -> 287 FAIL,
+    crawl 1 -> 98, plants 13 -> 65, pot 7 -> 49, tour 25 -> 43; only sidle better, 48 -> 19): his procedures
+    set some frames every step (a walk's frame from the distance), which read as set-ups.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next
@@ -2688,7 +2709,17 @@ it in a window; D21 "Step 2"):**
     tick off; holding them didn't help (0x24 no change, 0x36 worse): the general rule the turn's notes ask
     for (which set-ups step in their own tick at 30).
   - sidle (53): no action changes, walking only: the camera's yaw (the known k75 approximation in a sustained
-    turn) sending the camera-relative walk elsewhere.
+    turn) sending the camera-relative walk elsewhere. *Corrected (session top, walkstart)*: there is no
+    sustained lag (route swim: the camera within 150 of 30's all through a long turn); a turn's start leaves
+    it ~130 behind (0.7 degrees), and Link's walk start differs too (below, "The follow camera in a turn" and
+    "Link's walk start"); sidle's last 50 units come in its last 10 ticks, where Link walks into a corner of
+    two walls and slides along the other one than at 30.
+  - *Corrected (session top, walkstart)*: these numbers compared 30's tick with the 60 run's whole frame of
+    the same key, half a tick later (a track's key is the tick x 2, + 1 on a half tick, and which 60 frame
+    holds 30's tick k varies by run: 2k+1 on most routes, 2k-1 on warp and crawl). predeploy now pairs by
+    state: the ends at rest are the same, the on-the-way numbers shrink (warp's "farthest 82574" was the warp
+    itself read half a tick off: 82), sail's end 65 -> 51. The swing and sail transitions above stand: paired
+    by state, 0x24, 0x36 and 0x89 (sail) and 0x30, 0x04 (swing) come a tick early at 60.
 
 - **Session main: the queue's "heavythrow" item (round 6)**: route `heavy` (a boulder, Stone2 455, spawned where
   carry's pot stands: its header). 30 against 60 (60's whole frame of tick t against 30's tick t + 1) match

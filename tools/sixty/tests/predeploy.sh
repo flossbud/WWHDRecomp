@@ -4,7 +4,11 @@
 # Link is: FAIL when he ends more than PREDEPLOY_FAIL units (default 150) from where the 30-tick run ends,
 # i.e. the route had another outcome at 60 (the Ballad of Gales that never warped, bug B28: every test until
 # then compared a build with the one before, and "unchanged" was still broken); WARN from PREDEPLOY_WARN (40).
-# Also printed: the farthest apart on the way and his action at the end. Exit status 1 on a FAIL.
+# Also printed: the farthest apart on the way and his action at the end. Exit status 1 on a FAIL. 30's tick k
+# is compared with the 60 run's half tick that holds the same tick's state: key 2k+1 or 2k-1 (a track's key is the
+# tick x 2, + 1 on a half tick, and which side the 60 run's ticks fall on varies by run), whichever Link's path
+# matches best (session top, walkstart: before, the same key, 60's whole frame, half a tick on: a walk at 14
+# units a tick read ~7 apart).
 # Default routes: warp (the Ballad of Gales to the Tower of the Gods), back and door (dungeon doors), talk,
 # items (a chest), cuts, leaf, hook, ladder, crawl, carry, spin, bow, shield, swing, land, sidle, pot, plants,
 # slash, sail, menus, tour, house (out of a Windfall house's door and back in); back, talk and house start
@@ -58,14 +62,21 @@ for r in sys.argv[4:]:
         a, b = link(os.path.join(P, r, "30", "track.bin")), link(os.path.join(P, r, "60", "track.bin"))
     except OSError as e:
         print(f"FAIL  {r:7s} no track ({e})"); bad += 1; continue
-    ts = [t for t in sorted(a) if t % 2 == 0 and t in b and t >= 1800]
-    if not ts or max(a) // 2 != max(b) // 2:
+    # 30's tick k (key 2k) against 60's frame holding the same tick's state: a half tick's key, 2k+1 or 2k-1
+    # by the run (where the 60 switch fell against the game's ticks), the one Link's path matches best
+    def paired(off):
+        ts = [t for t in sorted(a) if t % 2 == 0 and t + off in b and t >= 1800]
+        return ts, [math.dist(pos(a[t]), pos(b[t + off])) for t in ts]
+    if not a or not b or max(a) // 2 != max(b) // 2:
         print(f"FAIL  {r:7s} the runs end on different ticks: 30 at {max(a) // 2 if a else '-'}, 60 at {max(b) // 2 if b else '-'}"); bad += 1; continue
-    d = [math.dist(pos(a[t]), pos(b[t])) for t in ts]
+    off = min((1, -1), key=lambda o: (lambda ts, d: sum(d) / len(d) if d else float("inf"))(*paired(o)))
+    ts, d = paired(off)
+    if not ts:
+        print(f"FAIL  {r:7s} no ticks to compare"); bad += 1; continue
     act = lambda x: struct.unpack(">I", x[max(x)][0x65F0:0x65F4])[0]
     verdict = "FAIL" if d[-1] > fail else "WARN" if d[-1] > warn else "ok"
     bad += verdict == "FAIL"
     print(f"{verdict:5s} {r:7s} Link at the end {d[-1]:8.1f} units from 30's (farthest on the way {max(d):9.1f}, mean {sum(d) / len(d):7.1f});"
-          f" his action at the end {act(a):02x} at 30, {act(b):02x} at 60; ticks 900-{ts[-1] // 2}")
+          f" his action at the end {act(a):02x} at 30, {act(b):02x} at 60; ticks 900-{ts[-1] // 2}, 60's key 2k{off:+d}")
 sys.exit(1 if bad else 0)
 PY
