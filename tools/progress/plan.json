@@ -420,6 +420,10 @@
     {
       "id": "rides",
       "name": "Round 8: riding moving grounds at 60 (dBgS::MoveBg*: a stepping ground stopping on its half step leaves its move flag into the next whole step; a stepping rider on a 30 Hz ground moves with it on whole steps only): Link on lifts and platforms, then items and enemies (bottom's)"
+    },
+    {
+      "id": "landings",
+      "name": "Round 8: Link's landing reactions (falls, jumps, the ledge 0x2C, rolls) react in the half step after a whole-step landing, half a tick early, as the knockback did (B39): ruled to whole ticks (bottom's)"
     }
   ],
   "later": [
