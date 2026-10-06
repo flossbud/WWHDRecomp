@@ -303,6 +303,7 @@ function render() {
     if (c && c.state === "done") prog = [1, 1, "done"];
     else if (c && c.progress) prog = [c.progress[0], c.progress[1], `${c.progress[0]} / ${c.progress[1]}`];
     else if (q.ids && q.ids.length) prog = [q.converted || 0, q.ids.length, `${q.converted || 0} / ${q.ids.length} types`];
+    else prog = [0, 1, c ? "no count yet" : "not started"];
     const mini = prog ? `<div class="mini"><div class="bar"><span class="c" style="width:${100 * prog[0] / prog[1]}%"></span></div><small>${esc(prog[2])}</small></div>` : "";
     return `<li><b>${esc(q.id)}</b>${badge}${mini}<div class="sub">${esc(q.name)}</div>${c && c.note ? `<div class="sub">${esc(c.note)}</div>` : ""}</li>`;
   }).join("");
