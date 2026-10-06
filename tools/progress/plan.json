@@ -344,6 +344,18 @@
     {
       "id": "census",
       "name": "Round 5: the 180-odd types still at 30: a census of which move in play (placed in a stage and changing state at 30), the rest recorded as still; convert the movers"
+    },
+    {
+      "id": "contacts",
+      "name": "Round 6: a converted barrier re-counts a continuous contact as a new hit every tick: check whether converted enemies do the same (double hits, damage), fix the shared cause (bottom's)"
+    },
+    {
+      "id": "camera",
+      "name": "Round 6: the follow camera turns ~13% slower in a sustained turn (Link swimming; the drifts' sidle and land): the k75 approximation, made exact"
+    },
+    {
+      "id": "heavythrow",
+      "name": "Round 6: the heavy throw's tick lead (Link's hands a tick ahead from the throw's start: a boulder lands 37 units past 30's)"
     }
   ],
   "later": [

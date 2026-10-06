@@ -1,0 +1,12 @@
+# The work queue's "census" item (session main): the types still at 30 that change state where a stage file places
+# them (tools/sixty/tests/movers.sh: each warped to and tracked at 30), converted. Format: ../tick_rules.txt.
+# Trials (stage_test.sh, f1050-1250) clean with no rules: 30 (M_DaiMB,0,12), KLFT 92 (GanonD), WARPHYRULE 107
+# (Hyrule,219,0), Obj_YLzou 145 (Hyroom), Ygcwp 157 (GanonA,0,1), SWHIT0 451 (GanonM,0,2).
+#
+# WARPFLOWER (104, M_DaiB: the boss rooms' warp flowers): two counts + 1 a tick, one to 20000
+024D7B20    keep:r12    addi            warpflower: a count (+0x400) + 1
+024D78F0    keep:r10    addi            warpflower: a count (+0x3FC) + 1 to 20000
+# Obj_Pbka (273, Obombh): its spin, current and shape angle y + 0x500 a tick
+0238284C    spliti      addi            pbka: the spin's angle + 0x500
+# NPC_P2 (323, Asoko): a count (+0x888, u8) + 1 a step to 255 in its head's joint callback (as Medli's nodeCallBack)
+022B5C10    keep:r9     addi            p2: a count (+0x888) + 1 to 255
