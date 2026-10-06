@@ -2496,6 +2496,14 @@ it in a window; D21 "Step 2"):**
     a poke of his position doesn't hold), not at the entrance. Getting him to follow needs his story state
     (his events' bits) as well. Not converted.
 
+- **Session bottom: the queue's "companions" item (2026-10-06; `config/US_v0/tick_rules/companions.txt`)**:
+  - Medli's glide with Link (route `medliglide`: route medli's pick-up, then carried off the entrance hall's
+    ledge): Link's procAutoJump (f_0241D79C) glides while mProcVar0.m34D0 (+0x6916) counts ~100 ticks
+    (and m34D2 +0x6918 counts wall hits), rising with speed.y slowed 0.5 a tick; none had a rule, so at 60
+    the glide ended ~15 ticks early and 14 units lower (count 100 -> 0 by f1280 against 30's f1293).
+    `keep` on both counts, `*h@` on the 0.5: the count runs a tick a tick (2 behind 30's: the glide starts
+    on a half tick), the height -73 against 30's -72, the drop and landing within a tick of 30's.
+
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.

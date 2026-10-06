@@ -1,0 +1,10 @@
+# Step and tick rules for the companions (the work queue's "companions", session bottom; the format:
+# ../tick_rules.txt). Medli (NPC_MD 367) and Makar (NPC_CB1 334) on the finished save: WWHD_DEBUG_COMPANION=1
+# (sixty.cpp; handoff "Session main: leftovers").
+#
+# ---- Link's glide holding Medli (procAutoJump f_0241D79C, d_a_player_main.cpp: walking off a ledge with her,
+# event bit 0x1620 on, he rises at 5 and glides while mProcVar0.m34D0 (+0x6916) counts down; a wall or a
+# collider hit counts m34D2 (+0x6918) down, and at 0 she lets go; his rise slows 0.5 a tick)
+0241D970    keep:r11    addi            procAutoJump: the glide's count (+0x6916) - 1, tested the next tick
+0241D9A4    keep:r12    addi            procAutoJump: the hits' count (+0x6918) - 1, then she lets go at 0
+0241DA28    *h@f10      fsubs           procAutoJump: speed.y - 0.5 while he rises
