@@ -412,6 +412,10 @@
     {
       "id": "census-left",
       "name": "Round 7: the 24 placed types no test created (census.txt's list): created with the placement survey, WWHD_DEBUG_PLACE and WWHD_DEBUG_EVENT, tested and converted where they move (bottom's)"
+    },
+    {
+      "id": "items2",
+      "name": "Round 8: predeploy routes for Link's items not covered yet (boomerang, bombs, grappling hook, Iron Boots, Skull Hammer, Mirror Shield, Power Bracelets, fire and ice arrows, magic armor), 30 against 60, what parts fixed (top's)"
     }
   ],
   "later": [
