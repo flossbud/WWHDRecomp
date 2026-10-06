@@ -2115,15 +2115,20 @@ namespace
 // resolution; on the half tick a stepping process's push is half of it, and after the half tick the other
 // half is left for its whole step (all of it, if it didn't step), so the two steps move it one tick's
 // push, half a step each. WWHD_60FPS_PUSHSPLIT=0 (a probe) turns it off.
+// With the resolution after the half step (session top's "resolve", below) the next tick's whole step comes
+// first: a stepping process's push is halved when the resolution has made it, the other half is put back for
+// its half step when that frame starts, and if its half step didn't run that half moves it at the frame's
+// end, before the next resolution (pos += it), so it is still one tick's push.
 namespace
 {
+	bool ResolveLate();                             // (below)
 	bool PushSplit()
 	{
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_PUSHSPLIT"); return !(e && atoi(e) == 0); }();
 		return on;
 	}
 	uint32 s_ccPass = 0;                            // collision resolutions so far
-	struct CoPush { uint32 stts, actor, id; uint16 name; uint32 move[3]; bool halved; };
+	struct CoPush { uint32 stts, actor, id; uint16 name; uint32 move[3]; bool halved, second; };
 	std::vector<CoPush> s_coPushes;                // the last whole tick's Co colliders' Stts
 	uint32 s_coPushesSwap = ~0u;                    // the swap whose resolution noted them
 
@@ -2133,9 +2138,40 @@ namespace
 			rd32(c.actor + 4) == c.id && rd16(c.actor + 8) == c.name;
 	}
 
+	// the resolution after the half step: a stepping process's push, half of it for the next whole step
+	void PushesResolved()
+	{
+		for (CoPush& c : s_coPushes)
+		{
+			c.halved = c.second = false;
+			if (!LiveActor(c) || !Converted(c.name))
+				continue;
+			const auto it = s_stepping.find(c.actor);   // (the half tick that just ended)
+			if (it == s_stepping.end() || !it->second)
+				continue;
+			for (int i = 0; i < 3; i++)
+			{
+				c.move[i] = rd32(c.stts + 4 * i);
+				wr32(c.stts + 4 * i, std::bit_cast<uint32>(std::bit_cast<float>(c.move[i]) * 0.5f));
+			}
+			c.halved = true;
+		}
+	}
+
 	// a half tick's start: a stepping process's push, half of it
 	void PushesHalfTickBegin()
 	{
+		if (ResolveLate())
+		{
+			for (CoPush& c : s_coPushes)               // the other half, for the half step
+				if (c.halved && LiveActor(c))
+				{
+					for (int i = 0; i < 3; i++)
+						wr32(c.stts + 4 * i, std::bit_cast<uint32>(std::bit_cast<float>(c.move[i]) * 0.5f));
+					c.second = true;
+				}
+			return;
+		}
 		const bool fresh = s_coPushesSwap + 1 == wwhd::os::SwapCount();   // this tick's resolution's (not a pause's)
 		for (CoPush& c : s_coPushes)
 		{
@@ -2159,6 +2195,22 @@ namespace
 	// a half tick's end: the other half for its whole step (all of it if the half step didn't run)
 	void PushesHalfTickEnd()
 	{
+		if (ResolveLate())
+		{
+			for (CoPush& c : s_coPushes)               // a half step that didn't run: its half moves it now
+			{
+				if (c.second && LiveActor(c))
+				{
+					const auto it = s_stepping.find(c.actor);
+					if (it == s_stepping.end() || !it->second)
+						for (int i = 0; i < 3; i++)
+							wr32(c.actor + 0x314 + 4 * i, std::bit_cast<uint32>(std::bit_cast<float>(rd32(c.actor + 0x314 + 4 * i)) +
+								std::bit_cast<float>(c.move[i]) * 0.5f));
+				}
+				c.halved = c.second = false;
+			}
+			return;
+		}
 		for (const CoPush& c : s_coPushes)
 		{
 			if (!c.halved || !LiveActor(c))
@@ -2303,9 +2355,11 @@ void f_0200E558(PPCInterpreter_t* __restrict ctx)
 		for (const CoPush& c : s_coPushes)
 			seen = seen || c.stts == stts;
 		if (!seen)
-			s_coPushes.push_back({ stts, actor, rd32(actor + 4), rd16(actor + 8), {}, false });
+			s_coPushes.push_back({ stts, actor, rd32(actor + 4), rd16(actor + 8), {}, false, false });
 	}
 	orig_f_0200E558(ctx);
+	if (g_rtSixty && PushSplit() && ResolveLate() && AnyConverted())
+		PushesResolved();                           // (it runs after the half step now: above)
 	if (dbg)
 	{
 		bool any = false;
