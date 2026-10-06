@@ -3273,6 +3273,29 @@ it in a window; D21 "Step 2"):**
     after a hit is alike (~30 units) but at 60 it walks back in, at 30 away. Next: d_a_bk.cpp's damage_check
     (l.3518: the Tg hit, cc_at_check, the knockback) at 60. The Floormaster's grab (M_Dai room 6, Link placed by it):
     as at 30 (186 ticks held, the same exit), 2 ticks early (it notices Link on a half step, f1100.5 against 1101).
+    Later (handed to session qa): the "lead" was wrong. bk956 wasn't pushed back at 30: it was walking at Link
+    (action 4 mode 3, speedF 20) when hit, at 60 it was swinging (action 5), so the two fights had parted before.
+    The 30 and 60 fights draw from different random streams: the save route's stream parts at f909, before every
+    spawn (rnd logs of mo956: the Moblin's first walk-back timer 38 at 30, 31 at 60), so paths can't be compared
+    tick by tick. The Moblin's extra hits in mo956: it guards (action 10, defence) only a cut it has been hit by
+    (m2960, learned in damage_check), with Link's cut on, Z-targeted, and m05B6 (25 after a hit) at 0; at 30 the
+    first cut hit at f1009 and from f1035 it guarded and walked back; at 60 the first cut missed (the Moblin 28
+    units further, from the random walk-back), so it never learned and walked in. New probe **WWHD_DEBUG_RNDSEED=
+    tick** (sixty.cpp, before fw_procFrame): from that tick each whole tick's frame starts with the stream set
+    from the tick number, at 30 and 60 alike (after the half step's make-up flush); checked: the stream is equal at
+    every tick start from f940 and the Moblin's spawn timer equal (21). Still the fights part: draws within a tick
+    come in another order (other processes' draw counts), and at seed 940 / spawn 950 the Moblin took 3 hits at 30
+    and died in 4 at 60. Two rate effects seen, neither yet shown to favour Link: (1) per-call random tests run on
+    both steps get two chances a tick (the half step's draw takes the next tick's number): the Moblin's shove
+    (d_a_mo2.cpp l.1678, `m05A0 >= 15 && cM_rndF(1) < 0.5` each call), the Bokoblin's guard (d_a_bk.cpp l.2022,
+    `cM_rndF(1) <= 0.5` each call while Link cuts); a fix would be `whole` on the `bl cM_rndF` (skipped on the half
+    step, f1 keeps its argument, the maximum, so `rnd < p` fails and nothing is drawn); this makes enemies guard
+    and shove more at 60, not less; (2) a mode set on a whole step acts on that tick's half step (the Moblin's
+    mode 2 decisions), so each "set, then act next call" link of a state machine is half a tick at 60 against a
+    tick at 30. Next: the batch `seedfights.sh` (scratch, both workers' bin/: Moblin 188 and Bokoblin 189 spawned
+    150 ahead at f950-958, seed 940; outputs the worker /wwhd/data/m6/WWHDRecomp-bottom/seed) for counts, and the
+    A/B `seednoconv.sh` (desktop: the same with 188/189 unconverted): if 60's extra hits stay with the enemies at
+    whole ticks, the cause is Link's side (his cut's colliders checked on both steps), else the enemies'.
 - **Session main: sail's launch (predeploy's sail, WARN ~51)**: from session top's look. At 60 the boat sets sail in
   the half step of f1119, a tick-half before 30's f1120; the 19 units gained then are most of the route's lag.
   The trigger is the ship's own mast animation (daShip's mpBodyAnm, frame >= 7 / checkFrame(7)), played in its

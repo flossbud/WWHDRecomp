@@ -2820,6 +2820,27 @@ void f_02019788(PPCInterpreter_t* __restrict ctx)
 	orig_f_02019788(ctx);
 }
 
+// WWHD_DEBUG_RNDSEED=tick (a probe, session bottom's B62): from that game tick on, the random stream is set as each
+// whole tick's frame starts to a state made from the tick, at 30 and 60 alike, so two runs' fights draw the same
+// numbers from there wherever their streams parted before (the save route's part at f909); a draw's place within
+// its tick (the processes that drew before it) can still differ.
+namespace
+{
+	void RndSeedProbe(bool half)
+	{
+		static const uint32 at = [] { const char* e = getenv("WWHD_DEBUG_RNDSEED"); return e ? (uint32)atoi(e) : 0u; }();
+		if (at == 0 || half)
+			return;
+		const uint32 tick = wwhd::rt::GameFrame(wwhd::os::SwapCount());
+		if (tick < at)
+			return;
+		const uint32 h = tick * 2654435761u;
+		wr32(0x101FF9D4u, 1 + (h >> 4) % 30268);
+		wr32(0x101FF9D8u, 1 + (h >> 9) % 30306);
+		wr32(0x101FF9DCu, 1 + (h >> 14) % 30322);
+	}
+}
+
 // fw_procFrame, sead's procFrame_: one whole frame (the tick, the draw, the present, the vsync wait).
 // At 60 fps it decides whether the frame is a whole or a half tick (see the top); with the store
 // census on, a half tick's frame is watched from end to end.
@@ -2827,7 +2848,10 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 {
 	const uint32 from = wwhd::rt::SixtyFrom();      // ~0 when 60 fps is off
 	if (from == ~0u)
+	{
+		RndSeedProbe(false);
 		[[clang::musttail]] return orig_f_0274C264(ctx);
+	}
 	const uint32 swap = wwhd::os::SwapCount();
 	if (swap == from && from != 0)
 	{
@@ -2838,6 +2862,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		RndFlushAll();                              // the whole tick is over: a process that didn't step (the random stream)
 	g_rtHalfTick = swap >= from && (swap - from) % 2 != 0;
 	g_rtSixty = swap >= from;
+	RndSeedProbe(g_rtHalfTick);
 	if (!g_rtHalfTick)
 	{
 		s_uiAnims.clear();                           // the HD UI's animations that play this tick (above)
