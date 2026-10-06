@@ -47,7 +47,7 @@
       "done": true
     },
     {
-      "name": "NPCs and town actors (Medli and Makar left: no save state with them)",
+      "name": "NPCs and town actors (Makar left: hidden until his story state)",
       "done": true
     },
     {
@@ -56,6 +56,14 @@
     },
     {
       "name": "Door and talk events at 60",
+      "done": true
+    },
+    {
+      "name": "Boss fights compared at 30 and 60 (all nine; Gohma, Kalle Demos, Jalhalla, Helmaroc, Gohdan fixed)",
+      "done": true
+    },
+    {
+      "name": "Gameplay timing at 60: contacts, pushes, hits, once-a-tick timer tests, collisions after the half step",
       "done": true
     },
     {
