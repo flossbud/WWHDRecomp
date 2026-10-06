@@ -40,6 +40,10 @@ h2 { font-size: 1.05rem; margin: 0 0 10px; }
 .bar > span { display: block; height: 100%; }
 .bar .c { background: var(--good); } .bar .r { background: var(--warn); }
 .big .bar { height: 18px; border-radius: 9px; }
+#totalCard .bar { height: 24px; border-radius: 12px; }
+#totalCard .row { align-items: baseline; }
+#totalCard .row b { font-size: 1.35rem; }
+.totParts { margin-top: 8px; font-size: .85rem; }
 .row { display: flex; justify-content: space-between; gap: 10px; margin: 10px 0 4px; }
 .row b { font-variant-numeric: tabular-nums; }
 .tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
@@ -132,6 +136,13 @@ footer { color: var(--muted); font-size: .8rem; text-align: center; margin: 10px
     <span class="sub" id="ticket"></span>
   </header>
 
+  <section class="card big" id="totalCard" hidden>
+    <h2>Overall progress</h2>
+    <div class="row"><span id="totLabel"></span><b id="totPct"></b></div>
+    <div class="bar"><span class="c" id="totBarC"></span><span class="r" id="totBarR"></span></div>
+    <div class="sub totParts" id="totParts"></div>
+  </section>
+
   <section class="card" id="sessions"><p class="empty">No session has reported yet.</p></section>
 
   <div class="grid">
@@ -208,7 +219,30 @@ footer { color: var(--muted); font-size: .8rem; text-align: center; margin: 10px
 </div>
 <script>
 const $ = id => document.getElementById(id);
-let data = null, tab = 0, claims = null;
+let data = null, tab = 0, claims = null, bugList = null;
+// every unit of work counted alike: actor types converted, work queue items done (with the earlier
+// rounds), bugs closed (fixed, verified or won't fix); in progress: types with rules, items being
+// worked on, bugs being fixed or waiting for a deploy
+function renderTotal() {
+  if (!data) return;
+  const all = data.groups.flatMap(g => g.actors), cl = claims || {};
+  const queue = (data.queue || []).map(q => cl[q.id] ? cl[q.id].state : "open");
+  const bugs = bugList || [];
+  const parts = [
+    ["actor types", all.length, all.filter(a => a.status === "converted").length, all.filter(a => a.status === "rules").length],
+    ["queue items", queue.length + (data.queue_done || []).length, queue.filter(x => x === "done").length + (data.queue_done || []).length,
+      queue.filter(x => x === "working").length],
+    ["bugs", bugs.length, bugs.filter(x => ["fixed", "verified", "wontfix"].includes(x.state)).length,
+      bugs.filter(x => x.state === "working" || x.state === "ready").length],
+  ].filter(x => x[1]);
+  const n = parts.reduce((t, x) => t + x[1], 0), done = parts.reduce((t, x) => t + x[2], 0), going = parts.reduce((t, x) => t + x[3], 0);
+  if (!n) return;
+  $("totalCard").hidden = false;
+  $("totLabel").textContent = `${done.toLocaleString()} of ${n.toLocaleString()} done` + (going ? `, ${going} in progress` : "");
+  $("totPct").textContent = pct(done, n) + "%";
+  $("totBarC").style.width = (100 * done / n) + "%"; $("totBarR").style.width = (100 * going / n) + "%";
+  $("totParts").textContent = parts.map(([name, t, d]) => `${name} ${d} / ${t}`).join(" · ");
+}
 const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
 function ago(t) {
   const s = Math.max(0, Date.now() / 1000 - t);
@@ -353,9 +387,10 @@ function renderBugs(b) {
 async function refresh() {
   const [p, n, s, a, c, b] = await Promise.all([get("progress.json"), get("sessions.json"), get("shots.json"), get("shots-archive.json"),
     get("claims.json"), get("bugs.json")]);
-  if (b && b.length) renderBugs(b);
+  if (b && b.length) { bugList = b; renderBugs(b); }
   if (c) claims = c;
   if (p) { data = p; render(); }
+  renderTotal();
   // a session is active if its status line or its latest commit ("(session NAME)" in the subject) is recent
   const lastCommit = name => Math.max(0, ...((data && data.commits) || []).filter(m => m.subject.includes("session " + name)).map(m => m.time));
   if (n && n.length) $("sessions").innerHTML = n.map(x => {
