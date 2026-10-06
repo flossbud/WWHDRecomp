@@ -1,0 +1,11 @@
+# ---- hits counted once a tick (session main's "hitcounts" audit, tools/sixty/hit_audit.py; session top, resolve)
+# A resolution's hit flags stay until the next resolution, and both steps of a converted process read them (at 60
+# the resolution runs after the half step, sixty.cpp: the next tick's whole and half steps): a branch that adds
+# to a count, marks something or makes an effect on a hit read it twice where 30's one execute reads it once.
+# These calls read no hit in the half step (`whole:r3=0`): the whole step, the tick's first reader, acts on it.
+# Hits read every step to hold a state (Jalhalla's stun) keep both reads (none of these).
+0210AF8C    whole:r3=0  bl 025160dc     process 61 (f_0210AF64): its shot's At hit on a target (457): the target marked, an effect, m772 (the next target) + 1
+02100B28    whole:r3=0  bl 025160dc     process 61 (f_020FF80C): its At hit: two effects, a count (+0x3E96 of r29) + 1
+023C2EBC    whole:r3=0  bl 025160dc     Octorok (227, f_023C1380): its At hit: an effect, m3E0 + 1
+024E4DD0    whole:r3=0  bl 025162a4     windmill (114, f_024E398C): its Tg hit: an effect, m469 + 1
+02339C54    whole:r3=0  bl 025162a4     Ebomzo (162, f_02339C38): its Tg hit: m320 (the wobble) + 8

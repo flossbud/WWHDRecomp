@@ -2833,6 +2833,37 @@ it in a window; D21 "Step 2"):**
   waits for mActionState 0, which the hit sets to 7 (its timers `whole`), Kalle Demos ignores hits while m310
   runs (8, `whole`, 020AECA8), Jalhalla's sword damage needs mActionState 0x53; none calls cLib_calcTimer<u8>.
   Not played: their fights need the hookshot, boomerang and light puzzles driven.
+- **Session top: the queue's "resolve" (round 7, 2026-10-06; `src/overrides/sixty.cpp`, "the collision resolution
+  after the half step"; link_qa.txt; with session bottom's push split)**: the play scene's draw resolves the
+  tick's collisions first (dScnPly_Draw f_025AF8A0: dCcS::Move f_02518798 = cCcS::Move, CalcArea, ChkAtTg,
+  ChkCo, MoveAfterCheck; whole ticks only, 025AF938) and empties the lists later in the same draw (dCcS::Draw
+  f_0251879C = cCcS::DrawClear f_0200E5BC, in both ticks' frames). At 60 that came after the whole step, where
+  a converted process stands half a tick short of 30's tick end, and since animstart Link's pose too (Kalle
+  Demos' core took a cut at f1421 that 30 misses). Now at 60 dCcS::Move only notes its manager, the clear
+  waits with it (without that the lists were empty by the half frame and nothing hit), and both run when the
+  half tick's frame ends (fw_procFrame's half path, after the rollback and the converted globals' hand-back:
+  in the half frame's draw a resolution would be undone, and the half step's .bss writes hidden), with
+  g_rtHalfTick off; one still waiting at a whole frame's start runs there. Colliders register in the whole
+  step only (dCcS::Set is skipped on half steps), a converted process's objects holding its half step's
+  values by then; the lists' duplicates are the game's own (Kalle Demos' tentacles register 40 colliders
+  twice at 30 too), so they're kept. The next tick's two steps both read the hits (Jalhalla's stun reads its
+  light hit every step). Link's sword's last tip and point (m36D0 +0x72E4 from mSwordTopPos +0x72CC, and
+  +0x72D8 from +0x3E4; two paths, 0240E31C-0240E348 and 0240E404-0240E430) are saved once a tick, in the whole
+  step, so the half step's sweep capsules are 30's chords (saved in the half step too, they were the half
+  tick's: the arc's outer half). Session bottom's Co push split is redone on it (half the push in W(k+1),
+  half in H(k+1); a half step that didn't run gets its half at the frame's end). Tests: Kalle Demos
+  (kalle12) takes 2 cuts as at 30 (f1432/1464 against 1433/1466; 3 before, the third at f1421: resolve alone
+  or the sword's saves alone kept it); Jalhalla's stun (jal5) lasts 55.0 ticks as at 30 (54.5 before);
+  Gohma's combos chain as before; predeploy unchanged (its routes have few collisions); regress: only the
+  Chuchu spawn test moved (mean 20.2 -> 20.3; 0b9c42f9). `WWHD_60FPS_RESOLVE=0` turns it off (the old order
+  and the old split); `WWHD_DEBUG_RESOLVE=path` logs each resolution waited for and made, with the lists'
+  counts. Session main's hitcounts audit (tools/sixty/hit_audit.py), folded in: a converted process's two steps
+  both read a resolution's hits, so a branch that counts, marks or makes an effect on a hit ran twice a tick;
+  tick_rules/hitcounts.txt makes five such calls read no hit in the half step (`whole:r3=0`): process 61's
+  shot on a target (the target marked and m772, the next target, + 1: the half step marked the next one too)
+  and its own At count, the Octorok's (227) m3E0, the windmill's (114) m469, Ebomzo's (162) wobble m320 + 8.
+  Link's m34C4 += 2 on his At hits is a state step (left). Hit-once for every hit (a resolution's hit seen
+  only by its first reader) wasn't taken: hits read every step to hold a state (Jalhalla's stun) would end.
 - **Session bottom: the queue's "bossfights" (round 7, 2026-10-06; `config/US_v0/tick_rules/bosses.txt`)**: each
   boss refought (`WWHD_DEBUG_BOSS=1`, warped in with `WWHD_DEBUG_STAGE`) from the 100% save at 30 and 60, its
   phases (state fields from `WWHD_STATE_TRACK`), its health (+0x3A1) and Link's life (0x145B7B80 by
