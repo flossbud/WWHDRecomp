@@ -1461,14 +1461,21 @@ it in a window; D21 "Step 2"):**
     plants 13.3 -> 9.2, land 100.7 -> 82.3 (WARN), talk 11.0 -> 7.3, crawl 1.0 -> 0.5; worse: sidle 3.4 -> 67
     (WARN: its turn in place at f1324 is nearly 180 degrees, and it starts from an angle 630 units off 30's
     (since the roll at f1298), so it turns the other way round, a tick longer, and the walk after starts a
-    tick late), leaf 33 -> 72 (the glide; its mean 12.2 -> 13.4), door 2.8 -> 5.4, pot 7.5 -> 9.0, back
-    2.4 -> 4.5. Left: the speed's ramp. 30 moves a tick at the tick's end speed; a whole step moves at the
+    tick late), leaf 33 -> 72, door 2.8 -> 5.4, pot 7.5 -> 9.0, back 2.4 -> 4.5. Leaf, fixed after: the
+    Deku Leaf glide's switch to its own gravity (procFanGlide f_02438E78: speed.y < -gravity, then gravity and
+    maxFallSpeed the glide's) was checked in the half step on the half-fallen speed, half a tick early (the
+    rise's last half tick at the glide's gravity: 5.5 units higher for the whole glide); the two stores are
+    `whole` (link_items.txt): the glide's height within 0.22 of 30's, leaf 72 -> 16.4 (mean 9.4). Left: the
+    speed's ramp. 30 moves a tick at the tick's end speed; a whole step moves at the
     mid-tick one (mNormalSpeed's acceleration and m3598 half done), so Link falls a quarter of each speed change
     behind while it changes (sidle's walk start: 4.8 units by full speed; the animation's lead hid part of it).
     Tried and dropped: a tick-exact move (a whole step h of the speed, the half step the rest of the tick's;
     a `tick@` rule on posMoveFromFootPos's add): the walk start's lag went (sidle 4.8 -> 1.1), but tour
     11.1 -> 18.3 and sidle 67 -> 113: at a stop the half step moves back onto 30's place, and a whole step's
     half-done values take branches 30's tick doesn't (m3598 0.99 against 1.00 picks the feet's smoothing).
+    Also tried: setNormalSpeedF (f_02416230) once a tick, in the whole step at a step of 1 (both steps then move
+    at the tick's speed): sidle 67 -> 3.6, back, door, talk better, but tour 11 -> 27.5, swing 11 -> 27, plants
+    9 -> 37, pot 9 -> 23.5, bow and items worse, actions in 30's tick 194 -> 188: dropped. Sidle stays WARN.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next

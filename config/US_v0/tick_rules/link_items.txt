@@ -58,6 +58,13 @@
 024391A8    whole       stw             link glide: the magic's timer (m3574, +0x69C4) - 1 (subic.: see above)
 024391D0    whole       sth             link glide: the magic - 1 when the timer reaches 0
 024391D4    whole       stw             link glide: the magic's timer = 40 again
+# The switch to the glide's own gravity once the leaf's lift is spent (speed.y < -gravity: gravity = field
+# 0x3C, maxFallSpeed = field 0x38), checked in the call, before the move: at 30 a tick's check sees the speed
+# the last tick left; the half step saw the half-fallen one and switched half a tick early, the rest of the
+# rise at the glide's gentle gravity: 5.5 units higher for the whole glide, in the water 1.5 ticks late
+# (route leaf, 33 -> 72 units once Link's animations ran in step; session top). Once a tick, in the whole step.
+024392F8    whole       stfs            link glide: gravity = the glide's (+0x374)
+024392FC    whole       stfs            link glide: maxFallSpeed = the glide's (+0x378)
 02439704    vec@r4      bl 028e8d88     link glide: current.pos += m3730, the wind's push (its own add)
 02439710    split@r0    add             link glide: shape_angle.y += m34D4 (+0x691A), the stick's turn a tick
 02439838    split@r7    add             link glide: m34E0 (+0x6928) += m34D6, its bank's carried turn
