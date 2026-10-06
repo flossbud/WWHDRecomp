@@ -89,7 +89,8 @@ namespace
 	// Master Sword chamber's knight statues and Tetra's ship (406, 358, 396, 57: tick_rules/cutscenes.txt), the
 	// Hyoi seagull (195: tick_rules/companions.txt), the Wind Temple's fans, the boulders
 	// Link lifts, the ladders that drop, the life ball, Tetra's gong, the fire walls, the goddess statues and
-	// the barriers (299, 455, 85, 399, 284, 286, 265, 285: tick_rules/objects_left.txt)
+	// the barriers (299, 455, 85, 399, 284, 286, 265, 285: tick_rules/objects_left.txt), Dragon Roost Cavern's
+	// falling rocks (FallRock 422: tick_rules/notes_bottom.txt)
 	// (session bottom); Windfall's
 	// windmill wheel (Obj_Ferris), pigs (KB),
 	// townsfolk (NPC_PEOPLE, NPC_KK1, NPC_MK, NPC_UK, NPC_GK1, NPC_TT, NPC_RSH1), market stalls (Obj_Roten),
@@ -116,7 +117,7 @@ namespace
 	// WWHD_60FPS_CONVERT= (empty) converts none.
 	constexpr const char* kConvertedByDefault =
 		"476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,"
-		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,443,221,305,47,48,49,50,52,122,129,148,166,289,159,272,267,275,140,138,139,46,75,469,94,96,478,479,406,358,396,57,195,299,455,85,399,284,286,265,285,241,334,167,379,370,141,251,260,"   // session bottom
+		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,443,221,305,47,48,49,50,52,122,129,148,166,289,159,272,267,275,140,138,139,46,75,469,94,96,478,479,406,358,396,57,195,299,455,85,399,284,286,265,285,241,334,167,379,370,141,251,260,422,"   // session bottom
 		// (session main's line, between comment lines so neighbours' edits don't conflict)
 		"51,276,367,301,302,303,113,112,314,361,382,380,321,30,92,104,107,145,157,273,323,451,153,377,124,"   // session main
 		// (session top's line)
@@ -1532,6 +1533,7 @@ namespace
 	}
 	void DebugStage()
 	{
+		wwhd::debug::BossBeatenHere();                  // the refights' boss beaten here sees a stage change's request
 		if (!g_rtHalfTick)
 		{
 			std::lock_guard lock(s_warpLock);
@@ -1760,15 +1762,20 @@ namespace
 
 void orig_f_025B8B94(PPCInterpreter_t* __restrict ctx);
 void orig_f_025BA0C0(PPCInterpreter_t* __restrict ctx);
-// dSv_event_c::isEventBit(event r3, number r4) -> r3: forced under WWHD_DEBUG_FLAGS (above)
+// dSv_event_c::isEventBit(event r3, number r4) -> r3: forced under WWHD_DEBUG_FLAGS (above); 3F10 (Puppet
+// Ganon beaten) "no" under the refights as a dungeon's boss bit is (f_025B9100)
 void f_025B8B94(PPCInterpreter_t* __restrict ctx)
 {
 	const ForcedFlags& f = Forced();
-	if (!f.any)
-		[[clang::musttail]] return orig_f_025B8B94(ctx);
-	if (const auto it = f.ev.find(GPR(4) & 0xFFFF); it != f.ev.end())
+	if (f.any)
+		if (const auto it = f.ev.find(GPR(4) & 0xFFFF); it != f.ev.end())
+		{
+			GPR(3) = it->second ? 1 : 0;
+			return;
+		}
+	if ((GPR(4) & 0xFFFF) == 0x3F10 && wwhd::debug::BossRefight() && !wwhd::debug::BossBeatenHere())
 	{
-		GPR(3) = it->second ? 1 : 0;
+		GPR(3) = 0;
 		return;
 	}
 	[[clang::musttail]] return orig_f_025B8B94(ctx);
@@ -1921,9 +1928,16 @@ namespace wwhd::debug
 // call sites test it). A test aid: WWHD_DEBUG_BOSS=1 answers "no" for it, so a boss appears again in
 // its room on a finished save (with WWHD_DEBUG_STAGE to get there); nothing is written to the save.
 // The debug menu turns it on and off (wwhd::debug::SetBossRefight, src/os/debug_menu.h).
+// Once the boss is beaten there (the game sets the bit: f_025B9098 below) the save's own answer, until
+// the game takes its next stage change: the boss's warp out is made then and is created only with the
+// bit set (the warp flower, daWarpf_c::CreateInit; B47: with "no" to the end, no warp after Gohma).
+// Puppet Ganon reads event bit 3F10 instead (d_a_bgn.cpp: set by his death, read by his create): the
+// same for it (f_025B8B94, f_025B8B68).
 namespace
 {
 	std::atomic<int> s_bossRefight{ -1 };            // -1: as WWHD_DEBUG_BOSS says
+	// a boss beaten in this stage, and the game's stage change asked for since (the new stage not yet in)
+	std::atomic<bool> s_beatenHere{ false }, s_beatenLeaving{ false };
 }
 namespace wwhd::debug
 {
@@ -1937,11 +1951,30 @@ namespace wwhd::debug
 	{
 		s_bossRefight.store(on ? 1 : 0);
 	}
+	void BossBeaten()
+	{
+		s_beatenLeaving = false;
+		s_beatenHere = true;
+		RushBossBeaten();
+	}
+	// dStage_nextStage_c's enable (play +0x5140 +0xC): set by a stage change's request, cleared by the new
+	// play scene's creation (d_s_play.cpp's phase_1, before phase_4's dStage_Create makes its rooms and
+	// their actors); also called each frame (DebugStage), so a request is seen even if no one asks
+	bool BossBeatenHere()
+	{
+		if (!s_beatenHere)
+			return false;
+		if (rd8(0x1046F0B0u + 0x5140u + 0xC) != 0)
+			s_beatenLeaving = true;
+		else if (s_beatenLeaving)
+			s_beatenHere = s_beatenLeaving = false;
+		return s_beatenHere;
+	}
 }
 void orig_f_025B9100(PPCInterpreter_t* __restrict ctx);
 void f_025B9100(PPCInterpreter_t* __restrict ctx)
 {
-	if (wwhd::debug::BossRefight() && ctx->gpr[4] == 3)
+	if (wwhd::debug::BossRefight() && ctx->gpr[4] == 3 && !wwhd::debug::BossBeatenHere())
 	{
 		ctx->gpr[3] = 0;
 		return;
@@ -1991,15 +2024,44 @@ void f_02520C0C(PPCInterpreter_t* __restrict ctx)
 }
 
 // dSv_memBit_c::onDungeonItem(mem, item): item 3 set is a boss beaten (onStageBossEnemy), which the debug
-// menu's boss rush waits for (wwhd::debug::RushBossBeaten)
+// menu's boss rush waits for (wwhd::debug::RushBossBeaten) and the refights answer from then (above)
 void f_025B9098(PPCInterpreter_t* __restrict ctx)
 {
 	if (ctx->gpr[4] == 3)
 	{
 		cemuLog_log(LogType::Force, "wwhd debug: a boss beaten (its dungeon's bit set)");
-		wwhd::debug::RushBossBeaten();
+		wwhd::debug::BossBeaten();
 	}
 	[[clang::musttail]] return orig_f_025B9098(ctx);
+}
+
+// dSv_event_c::onEventBit(event r3, number r4): 3F10 is Puppet Ganon beaten (d_a_bgn.cpp sets it just after
+// asking for GanonK point 4 layer 9, the scene after his fight): for the boss rush and the refights as a
+// dungeon's bit is (above)
+void f_025B8B68(PPCInterpreter_t* __restrict ctx)
+{
+	if ((GPR(4) & 0xFFFF) == 0x3F10)
+	{
+		cemuLog_log(LogType::Force, "wwhd debug: a boss beaten (Puppet Ganon's event bit set)");
+		wwhd::debug::BossBeaten();
+	}
+	[[clang::musttail]] return orig_f_025B8B68(ctx);
+}
+
+// fopAcM_createItemForBoss(pos, unused, room, angle, scale, kind) -> process ID: a beaten boss's heart
+// container (the decomp's: fopAcM_createItem, f_025D8870, item 8 and type 3, as daItemAct_BOSS 0xC for
+// kind 1, else 0x5; Gohdan and Molgera call it, the others through their disappearing body, d_a_disappear).
+// In the boss rush none (the owner's wish, B47): no process and the ID -1 (fpcM_ERROR_PROCESS_ID_e), by
+// which the bosses that hold it (Gohdan, Molgera) find nothing and go on with their scene.
+void f_025D8A5C(PPCInterpreter_t* __restrict ctx)
+{
+	if (wwhd::debug::RushRunning())
+	{
+		cemuLog_log(LogType::Force, "wwhd debug: boss rush: no heart container");
+		GPR(3) = 0xFFFFFFFFu;
+		return;
+	}
+	[[clang::musttail]] return orig_f_025D8A5C(ctx);
 }
 
 // ---- cutscenes at 60 (D21) ------------------------------------------------------------------------

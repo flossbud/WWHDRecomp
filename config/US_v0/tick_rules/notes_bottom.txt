@@ -1,0 +1,9 @@
+# The owner's notes from play that session bottom took (N3, N8...: the progress page's testing page), one
+# block per actor type. Format: ../tick_rules.txt.
+#
+# Dragon Roost Cavern's falling rocks (N3: "still 30fps"): FallRock (422, d_a_fallrock.cpp), which its tag
+# (TagRock 421, "frock" in M_NewD2 room 2, not converted: it makes a rock on whole ticks while the room's
+# quake runs) drops. Converted: its fall is fopAcM_posMoveF (calcSpeed and posMove, stepped) and its spin
+# cLib_chaseAngleS (stepped); its execute (f_02131520) also counts:
+02131568    whole       stw             fallrock: field_0x614 (+0x730) + 1, a count of ticks
+02131584    *h:f13      fabs            fallrock: field_0x610 (+0x72C, how far it fell: 7000 deletes it) += |speed.y| a tick

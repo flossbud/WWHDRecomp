@@ -1853,10 +1853,27 @@ it in a window; D21 "Step 2"):**
     (sixty.cpp's DebugStage); after the last, the game's own. A game over's restart isn't turned (the boss
     wasn't beaten): the same boss again. Another warp from the menu ends it. Checked with a test aid,
     WWHD_DEBUG_RUSHBEATEN=tick (the boss beaten at that frame), and a stage change after it: Gohma's room
-    (the menu), then the "beaten" boss's exit to Outset went to Kalle Demos's room, Kalle Demos there. Not yet
-    seen: a boss actually beaten setting the bit (the decomp: Gohma's death sequence calls onStageBossEnemy
-    and creates the warp flower at its count 0x118; poking its sequence, m6E16 +0x6F32, to 100 stops at its
-    event order). The log says "wwhd debug: a boss beaten" when the bit is set.
+    (the menu), then the "beaten" boss's exit to Outset went to Kalle Demos's room, Kalle Demos there. The log
+    says "wwhd debug: a boss beaten" when the bit is set.
+    **B47** (the owner: "after the first boss the heart container appears and nothing more happens"; their wish:
+    no heart container, the warp light in the middle as usual, leading to the next boss). The refights answered
+    "not beaten" for good, and the warp light (the warp flower, WARPFLOWER 104, d_a_warpf.cpp) is created only
+    when the boss is beaten (daWarpf_c::CreateInit: no `isStageBossEnemy`, cPhs_ERROR_e): Gohma's death made
+    its flower at the count 0x118 and it failed. Now (sixty.cpp, isDungeonItem f_025B9100) the refights answer
+    "not beaten" until the game sets the bit in that stage (BossBeaten, from onDungeonItem), then the save's
+    own answer until the game takes its next stage change (dStage_nextStage_c's enable, play +0x5140 +0xC: set
+    by the request, cleared in the new play scene's phase_1, before phase_4's dStage_Create makes the rooms and
+    their actors; BossBeatenHere, also called each frame by DebugStage so a request is always seen). Puppet
+    Ganon's "beaten" is event bit 3F10 (d_a_bgn.cpp sets it just after asking for GanonK point 4 layer 9):
+    onEventBit (f_025B8B68) counts it as the bit, and the refights answer "no" for isEventBit 3F10 the same way
+    (so a second rush, or the Bosses page, finds him again). In a rush the bosses' heart container isn't made:
+    fopAcM_createItemForBoss (f_025D8A5C, symbols.csv) returns -1 (Gohdan and Molgera, which hold its ID, find
+    nothing by it and go on; the others make it through their disappearing body, d_a_disappear.cpp). Test:
+    a route that starts the rush from the menu (`LCLICK+RCLICK 5` at f1000, `DOWN 3` at 1015, 1025 and 1035, `A 3`
+    at 1045), Gohma's rocks and health poked (`WWHD_DEBUG_POKE=1125:234,41e,1,1;1425:...;1725:...;2025:234,3a1,1,2`),
+    Z and B from 1975, Link put on the room's middle (`WWHD_DEBUG_PLACE=3150:0,100,0`): at 30 and at 60 "no
+    heart container", "a boss beaten", the warp flower (104) from f3403 (30) and f3239 (60), its WARP_WIND event,
+    and "boss rush: on to kinBOSS": Kalle Demos (235) there from f3638 and f3474.
   - **Counts a call without a rule, in session bottom's types (shared enemy code too; regress.sh rerun)**:
     session qa's `tools/sixty/counter_audit.py` lists every field loaded, +-1 and stored back with no
     rule. For my processes (and the enemies item) each site was classified from its code (a scratch
@@ -3154,6 +3171,18 @@ it in a window; D21 "Step 2"):**
   The Floormaster: M_Dai room 4's are switched off on the finished save; room 6's (spawn point 7, route en-fm) rises at
   f1214 (60: 1212.5) and doesn't reach Link in the route's window (its grab untested).
 
+- **Session bottom: the owner's notes from play (2026-10-06; `tick_rules/notes_bottom.txt`)**: B47 (the boss rush:
+  see the debug menu's "Boss rush" above), N3, N8, N12, N13.
+  - **N3, Dragon Roost Cavern's falling rocks "still 30fps"**: FallRock (422, d_a_fallrock.cpp; WWHD's process numbers
+    here are the GameCube's - 3: TagRock 421, "frock" in M_NewD2 room 2 at 0,6000,94, SteamTag 423) wasn't converted.
+    Its tag (unconverted) makes a rock every 10 ticks while the room's schedule bit 0x20 is on (dKy_get_schbit, the
+    environment's timer); the rock falls by fopAcM_posMoveF (stepped) and spins by cLib_chaseAngleS (stepped).
+    Converted with its tick count `whole` and its fall length (+0x72C, 7000 deletes it) `*h` on the |speed.y| it
+    adds. Test (spawn point 8 in room 2, `WWHD_DEBUG_STAGE=920:M_NewD2,8,2,-1`, idle to f2400, tracked): 20 rocks
+    from f1497 every 10 ticks at both rates, each rock's height at whole ticks 30's exactly (5994.7, 5984.7,
+    5969.7...), the half steps between (0.62 above the chord: the arc), the same lifetimes (105 ticks, or its
+    landing's). Their places differ from 30's (random): so they did before the conversion (the old build at 60:
+    the same places as the new one's), so the draw order that parts them is elsewhere.
 - **Session main: sail's launch (predeploy's sail, WARN ~51)**: from session top's look. At 60 the boat sets sail in
   the half step of f1119, a tick-half before 30's f1120; the 19 units gained then are most of the route's lag.
   The trigger is the ship's own mast animation (daShip's mpBodyAnm, frame >= 7 / checkFrame(7)), played in its

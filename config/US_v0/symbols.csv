@@ -63,6 +63,7 @@ address,name,evidence
 025D8870,fopAcM_createItem,twwhd-randomizer@f28d289 asm/linker.ld
 025D8120,fopAcM_createItemFromTable,twwhd-randomizer@f28d289 asm/linker.ld
 025D7DEC,fopAcM_createItemForPresentDemo,twwhd-randomizer@f28d289 asm/linker.ld
+025D8A5C,fopAcM_createItemForBoss,"WW-4 decompile (B47): the decomp's fopAcM_createItemForBoss (f_op_actor_mng.cpp): r8 == 1 calls fopAcM_createItem (f_025D8870) with item 8 (dItemNo_HEART_CONTAINER_e), type 3 and action 0xC (daItemAct_BOSS_e), else action 5 (BOSS_DISAPPEAR); the only call of f_025D8870 with item 8"
 025D7A58,fopAcM_orderOtherEventId,twwhd-randomizer@f28d289 asm/linker.ld
 025D76A8,fopAcM_orderSpeakEvent,twwhd-randomizer@f28d289 asm/linker.ld
 025BCECC,SoldOutItem,twwhd-randomizer@f28d289 asm/linker.ld

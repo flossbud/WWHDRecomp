@@ -44,8 +44,14 @@ namespace wwhd::debug
 	void RequestSpawn(int process, uint32 param, uint32 anglex);
 	void SetBossRefight(bool on);
 	bool BossRefight();
-	// the boss rush: the game set a boss's "beaten" bit (its dungeon item 3, f_025B9098)
+	// a boss beaten: the game set its "beaten" bit (its dungeon item 3, f_025B9098; Puppet Ganon's event bit
+	// 3F10, f_025B8B68); the refights answer the truth from then until the game's next stage change is in
+	void BossBeaten();
+	bool BossBeatenHere();
+	// the boss rush: a boss beaten (BossBeaten)
 	void RushBossBeaten();
+	// a rush is on (no heart containers then: the owner's wish, B47)
+	bool RushRunning();
 	// in a rush whose boss is beaten, the next boss for the game's next stage change (and on to it)
 	bool RushNextStage(const char*& name, int& point, int& room, int& layer);
 }
