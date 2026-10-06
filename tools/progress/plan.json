@@ -392,6 +392,10 @@
     {
       "id": "bossweapons",
       "name": "Round 7: Link's items on the bosses at 30 and 60 (the hookshot on Molgera's tongue, arrows at Gohdan's eyes, the hammer on Helmaroc's mask, light arrows on Ganondorf), and Gohdan's demo counter (bottom's)"
+    },
+    {
+      "id": "testaids",
+      "name": "Round 7: test aids every comparison needs: the random stream kept aligned at 60 (converted actors' half-step draws from their own stream or rolled back: WWHD_60FPS_RNDSYNC, maybe the default), and WWHD_DEBUG_PLACE working mid-fight and after a stage warp (bottom's)"
     }
   ],
   "later": [
