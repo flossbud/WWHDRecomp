@@ -1,0 +1,9 @@
+# Step and tick rules for the work queue's "objects-left" (session bottom; the format: ../tick_rules.txt).
+#
+# ---- FAN (299, d_a_fan.cpp: the Wind Temple's fans, kaze rooms 11 and 12, and GanonC; its joint callback
+# f_02131FF8). Converted: it turns in its draw (nodeCallBack: mFanAngle += mFanSpeed, then the joint's ZrotM).
+# Unconverted, the half tick's draw added a tick's speed and was put back after the frame (a draw's stores
+# into a process of the last whole tick are journaled), so the next tick's angle showed twice: 30 Hz;
+# converted, both draws' adds stood: twice the speed. drawsplit: half the speed in each of its two draws.
+# Its execute's speed chase (cLib_chaseS) and the wind's animations are stepped helpers.
+02132040    drawsplit@r10 add           fan nodeCallBack: mFanAngle (+0x634) += mFanSpeed (+0x636), a tick between two draws

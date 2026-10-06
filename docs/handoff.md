@@ -2554,6 +2554,15 @@ it in a window; D21 "Step 2"):**
   holds Link to ~f1060). SHUTTER (112, Siren's Htobi1: a frame countdown, a cLib_calcTimer wait and a count)
   SHUTTER (112) converted too (later); MBDOOR (115, placed in no stage file) is left.
 
+- **Session bottom: the queue's "objects-left" item (2026-10-06; `config/US_v0/tick_rules/objects_left.txt`)**:
+  - The Wind Temple's fans (FAN 299, d_a_fan.cpp; kaze rooms 11 and 12, GanonC) turn in their draw (a joint
+    callback, nodeCallBack f_02131FF8: mFanAngle += mFanSpeed). Unconverted, the half tick's draw added a
+    tick's speed and its store was put back after the frame (a draw's stores into a process of the last whole
+    tick are journaled: session top's reading), so each angle showed twice (30 Hz); converted, both draws'
+    adds stood (twice the speed). New step rule `drawsplit@rN` (generate.py: in a draw at 60, rN - rN/2 in the
+    whole tick's, rN/2 in the half tick's: only for a converted actor) on the add: 3750 a frame, 7500 a tick
+    as at 30 (its phase 3/4 of a step off 30's, from its first draws; a fan's blades don't show it).
+
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.
