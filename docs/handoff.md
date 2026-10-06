@@ -2869,6 +2869,30 @@ it in a window; D21 "Step 2"):**
   and its own At count, the Octorok's (227) m3E0, the windmill's (114) m469, Ebomzo's (162) wobble m320 + 8.
   Link's m34C4 += 2 on his At hits is a state step (left). Hit-once for every hit (a resolution's hit seen
   only by its first reader) wasn't taken: hits read every step to hold a state (Jalhalla's stun) would end.
+- **Session top: the queue's "ramp" (round 7, 2026-10-06; nothing kept)**: 30 moves a tick at the speed its
+  tick ends with; a whole step moves at the half-way one (mNormalSpeed's acceleration half done, and Link's
+  feet's share m3598, which setBlendMoveAnime computes from it), so Link falls a quarter of each speed change
+  behind while it changes (tour's walk start: 4 units by full speed), and a wall, a corner or a near-180-degree
+  turn can make that last (land: 1.2 units along the tower leg's wall, its corner reached 2.5 ticks late and
+  the pop round it 6.4 against 17.6; sidle). Two fixes, both exact for the ramp itself, both worse over the
+  routes, so neither is in:
+  (a) a tick-exact move (`tick@` on posMoveFromFootPos's add, 023FD39C: a whole step h of the speed, the half
+  step the rest of the tick's): the crawl's own motion within 0.05 of 30's (a quarter tick behind before),
+  but a speed the half step changes early (a slope seen half a tick early, a branch on a half-way value) then
+  moves the whole tick: predeploy's ends 308 -> 921 (crawl FAIL through its hang, leaf and swing WARN, tour
+  11 -> 18), actions in 30's tick 194 -> 185. (Judged against the wrong base the first time; this is fair.)
+  (b) setNormalSpeedF (f_02416230) once a tick in the whole step at a step of 1, for the plain walk's call
+  only (setSpeedAndAngleNormal, f_0241650C; the aim walk f_02416B70 passes steps it divided by h itself, so
+  for it this doubled the acceleration: items, bow): tour's walk start within 0.16 of 30's (4 before), but
+  ends 308 -> 470 (tour 11 -> 27, plants 9 -> 37, pot 8 -> 19, swing 11 -> 30, leaf 16 -> 94), path lengths
+  (below) |final| 353 -> 648.
+  Why the ends don't follow: Link's walking heading (the stick taken from the camera's angle) is 20 units
+  or more off 30's from the first walk on plants, swing and pot, with Link still within 0.2 units, and 30
+  to 70 on tour; a long walk turns that into a sideways drift (tour: 70 units of heading over 1400 of walk,
+  9 units), and anything that changes Link's motion moves the camera and that heading with it. A measure
+  without the heading: path lengths (tools/sixty/pathlen.py: the distance covered at 30
+  and 60, paired by state); land's is 153 units longer at 60 (its walls). The ramp is then best looked at
+  together with the camera's heading at 60.
 - **Session bottom: the queue's "bossfights" (round 7, 2026-10-06; `config/US_v0/tick_rules/bosses.txt`)**: each
   boss refought (`WWHD_DEBUG_BOSS=1`, warped in with `WWHD_DEBUG_STAGE`) from the 100% save at 30 and 60, its
   phases (state fields from `WWHD_STATE_TRACK`), its health (+0x3A1) and Link's life (0x145B7B80 by
