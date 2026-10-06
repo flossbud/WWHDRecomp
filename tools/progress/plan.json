@@ -128,6 +128,22 @@
     }
   ],
   "known_issues": [
+    {
+      "title": "Tower of the Gods: the rising water a tick ahead",
+      "detail": "Obj_Tide 39 / Tag_Waterlevel 471: the reader updates before the writer in process order, so at 60 the water reads a tick on (route tgbeam's notes)"
+    },
+    {
+      "title": "Beamos scorch marks last a few ticks longer",
+      "detail": "Hot_Floor 231 under a Beamos beam fades a few ticks later at 60"
+    },
+    {
+      "title": "A thrown water jar can break on an edge 30 misses",
+      "detail": "Dragon Roost room 8: thrown from about 100 units further back, the jar breaks on the floor's edge at 60 but in the lava at 30; 60's finer sampling catches an edge 30's step jumps over"
+    },
+    {
+      "title": "Ganon's Tower trial: Link's walk-in 1.5 ticks early",
+      "detail": "GanonB: half steps stop for f1030-1037 and the magma rocks' bob drifts; the route ends 5.7 units off"
+    },
     {"title": "Link: actions can start half a tick early", "detail": "An action set up in a whole step can start half a tick early (fixed for the turn in place and waiting, so a turn and walk now keeps 30's ticks); actions ending on an animation may end a tick early"},
     {"title": "Wind Waker conducting ends half a tick early", "detail": "The Wind Waker song's conducting and playback end half a tick early (a beat is crossed on a half tick); its wind change and end are on 30's ticks"},
     {"title": "Random-driven enemies drift from the 30 fps run", "detail": "Random-driven enemies (Magtail waits, Peahat flights) drift from the 30 fps run, as expected"},
