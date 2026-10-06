@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # movers.sh LIST: which actor types change state at 30 where they stand (the census item, session main). LIST has
-# lines "TYPE STAGE ROOM" (a room a stage file places the type in: tools/stage_actors.py). Each type: a warp at f920
-# to the room's first spawn point (point 0 if it has none; the default layer), the game at 30 to f1250 with
+# lines "TYPE STAGE ROOM [LAYER]" (a room a stage file places the type in: tools/stage_actors.py). Each type: a warp at f920
+# to the room's first spawn point (point 0 if it has none; LAYER, default -1: the save's), the game at 30 to f1250 with
 # WWHD_STATE_TRACK=TYPE, then over f1050-1250: its instances, the share of ticks on which any of their bytes
 # changed, and the offsets that changed most. "not created": the room made none (another layer, a save state).
 # MOVERS_JOBS runs at once (default 4), each with a binary of its own. Output: game state, it stays on the worker.
@@ -11,18 +11,18 @@ list=$1
 M=$OUT/movers; mkdir -p "$M"
 jobs=${MOVERS_JOBS:-4}
 run_one() {
-    local t=$1 st=$2 room=$3 slot=$4 pt
+    local t=$1 st=$2 room=$3 layer=$4 slot=$5 pt
     pt=$(python3 tools/stage_actors.py "$st" --spawns 2>/dev/null | grep " in room $room at" | head -1 | sed -E 's/.*spawn point ([0-9]+) .*/\1/')
     mkdir -p "$M/bin$slot"; cp build/wwhd/wwhd-null "$M/bin$slot/"
     rm -rf "$M/$t"
-    WWHD_DEBUG_STAGE="920:$st,${pt:-0},$room,-1" WWHD_STATE_TRACK=$t SIXTY_FRAMES=1250 CEMU_BIN="$M/bin$slot/wwhd-null" \
+    WWHD_DEBUG_STAGE="920:$st,${pt:-0},$room,${layer:--1}" WWHD_STATE_TRACK=$t SIXTY_FRAMES=1250 CEMU_BIN="$M/bin$slot/wwhd-null" \
         SIXTY_OUT="$M/slot$slot" tools/sixty/run.sh save "$M/$t" 30 > "$M/$t.log" 2>&1 || true
-    echo "$st,${pt:-0},$room" > "$M/$t.where"
+    echo "$st,${pt:-0},$room,${layer:--1}" > "$M/$t.where"
 }
 slot=0
-while read -r t st room; do
+while read -r t st room layer; do
     [ -z "$t" ] && continue
-    run_one "$t" "$st" "$room" $((slot % jobs)) &
+    run_one "$t" "$st" "$room" "$layer" $((slot % jobs)) &
     slot=$((slot + 1))
     [ $((slot % jobs)) -eq 0 ] && wait
 done < "$list"

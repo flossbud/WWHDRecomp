@@ -10,3 +10,10 @@
 0238284C    spliti      addi            pbka: the spin's angle + 0x500
 # NPC_P2 (323, Asoko): a count (+0x888, u8) + 1 a step to 255 in its head's joint callback (as Medli's nodeCallBack)
 022B5C10    keep:r9     addi            p2: a count (+0x888) + 1 to 255
+#
+# On their layers (bottom's placement survey: the layer each is placed on): 153 (sea,0,1,1, six), Obj_Xfuta 124
+# (GTower,0,0,0) and NPC_HI1 377
+# (kenroom,0,0,2; its blink's rule in npcs_left.txt): trials clean, converted with no rules. Placed only where the
+# default layer, a story state or an event decides, not created in a test: 32, 54, 77, 141, 155, 158, 160, 163,
+# 167, 241, 251, 256, 260, 266, 290, 334, 370, 379, 388, 393, 419, 429, 433, 434. Still where tested (no state
+# change at 30 in f1050-1250): the rest of tools/sixty/tests/movers.sh's list.
