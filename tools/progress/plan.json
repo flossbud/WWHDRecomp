@@ -364,6 +364,10 @@
     {
       "id": "pushes",
       "name": "Round 6: collision pushes for converted actors at 60 (cCcD_Stts::Move clears the push vector on half steps: lost or doubled?), as contacts' family; a known case: land's push at Outset's lookout tower legs (f1500) that 60 never gets (bottom's)"
+    },
+    {
+      "id": "hits",
+      "name": "Round 6: a whole tick's At/Tg hit flags stay until the next resolution, so a converted actor sees each hit on its half step and its next whole step: audit the converted types for hit checks with no whole-tick guard (double damage, double reactions) and fix them (bottom's)"
     }
   ],
   "later": [
