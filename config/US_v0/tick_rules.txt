@@ -603,6 +603,11 @@
 0246BDB0    *h@f31      fsubs           sea CalcFlatInter: the count - 1
 0246BE44    *h@f12      fadds           sea CalcFlatInter: flatness += (the land's target - it) / the count
 0246BE3C    *h@f31      fsubs           sea CalcFlatInter: the count - 1 (that branch)
+# daSea_WaveInfo::GetScale (f_0246B764, once an execute): the waves' height scale (the packet's +0x114) goes 1/100
+# of the way a tick to the height manager's value at the player (GetHeight f_0246B5E8: calmer near land). Unstepped
+# it got there twice as fast at 60: after a warp to the Flight Control Platform the race buoys (268) rode waves
+# 1.5 times 30's at first, the same by 400 ticks on (session top, sea-objects).
+0246B778    *h@f13      fadds           sea GetScale: mCurScale += (the target - it) / 100
 # the sea's draw (f_0246C7C8): its ripple texture scrolls by a counter (+0x22C, 1 a draw to 300): at
 # 60 every frame draws, so it counts on whole ticks (converted or not). The scroll is (count + 1) / k, so
 # a half tick's draw, seeing the whole tick's count, drew a whole count on and the scroll moved only on

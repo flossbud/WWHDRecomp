@@ -219,3 +219,77 @@
 0235FC5C    whole       sth             iceisland: the wind's volume + 1 while < 100
 # Fire Mountain's Obj_Volcano 51 and Obj_Yboil 276: converted in leftovers.txt (session main). Left at 30: liftable rocks (Stone2 455:
 # carried and thrown, untested).
+#
+# ---- the salvage points (Salvage 401, d_a_salvage.cpp; session top, the work queue's "sea-objects"): one per sea room,
+# placed 489 times over the 49 rooms. Idle (no point in reach: mRndDepthIdx, +0x41C, a cM_rndF % 3 each tick) it matches
+# 30 until the random stream parts at 60 (frame 905 on Outset's sea: every random field does). Its counters, from the
+# decomp: m302 (+0x41E, a u8: proc_salvage tests it == 0 at its top, then -1: `late` on both of the HD's copies), m2FC
+# (+0x418: `if (m2FC > 0) m2FC--` for each point in reach, then the light's fade waits for 0: `whole`); the fade itself
+# is cLib_chaseUC, stepped (sixty_step.cpp). Its salvaging (the crane's event, the chest SALVAGE_TBOX 402) not run.
+02466194    late        stb             salvage proc_salvage: m302 - 1 (tested == 0 at the top)
+024661E4    late        stb             salvage proc_salvage: m302 - 1 (its other path)
+024666F8    whole       stw             salvage: m2FC - 1 for a point in reach (read after, for the light's fade)
+# Ganon's ships off the Forsaken Fortress (Obj_Gaship 125, Obj_Gaship2 127; sea,0,1,-1): no counters; at 60 as at 30.
+# Tetra's ship's wheel (Kaji 60, d_a_kaji.cpp): the pirate ship (57, converted) makes it unless the ship's type is 3
+# (departure_DEMO's, Outset layer 10, has none; Outset layers 0, 2, 8 and Windfall's 2 and 3 have it). Each tick it
+# takes the ship's place (its base matrix x an offset) and angle and plays its anm: converted with the ship, or it
+# would stand half a step behind it on half frames (sea,0,11,2: 30 against 60 the same in every tick).
+#
+# ---- Spectacle Island's cannon game (Canon 61, d_a_canon.cpp; sea,0,10,-1 with WWHD_DEBUG_EVENT=990:CANON_GAME, the
+# sea's event with the staff Canon, Kg2, CAMERA, BOMB and ALL, and route cuta: A every 90 frames fires). m656 (+0x76E)
+# counts the start, the pause after a shot and the end down, tested before each - 1; the ball flies while m652 (+0x76A)
+# counts down, at m652 / m654 (+0x76C) of the way back from where it lands (fire_proc f_0210B228): late on that store
+# and lag on its float put the ball on 30's place on half ticks and half way between on whole ticks. The aim (PadMove:
+# cLib_addCalcAngleS to the angle plus the stick's amount, a divisor 4) is the stepped helper's (7, then 8): its target
+# moves with it, so it turns about 7% faster a tick than at 30 (not judged in play).
+0210AF58    late        sth             canon game_start_proc: m656 - 1 (tested < 0 first)
+0210B5B0    late        sth             canon pause_proc: m656 - 1 (tested < 0 first)
+0210B614    late        sth             canon end_proc: m656 - 1 (tested > 0 and == 30 first)
+0210B608    whole       bl 0210a494     canon end_proc: breakAllObj at m656 == 30 (the half tick sees 30 too)
+0210B2A0    spliti      addi            canon fire_proc: the ball's spin m65E (+0x776) + 0x3800
+0210B2FC    late        sth             canon fire_proc: the ball's count m652 - 1 (tested != 0 first)
+0210B354    lag:f9      frsp            canon fire_proc: (float)m652, the ball's place m652 / m654
+#
+# ---- The barrels' flags (Obj_Buoyflag 465, d_a_obj_buoyflag.cpp, stubs; sea,0,44,11: Outset's mine barrel, buoy bit
+# 0; Coming2 270, which the boat makes on sea stages, puts them on some of its barrels): a 7 x 5 cloth (Packet_c at
+# +0x520), positions and normals in two buffers (+0x5BC, 1260 bytes each, the index +0x1138 swapped each step),
+# speeds at +0xF94. calc_wind_base (f_02329CE4) adds twelve phases a tick, and when cM_rnd() is under its chance
+# six of them jump 2000 (a gust: whole, so once a tick at most); calc_pos (f_0232A218), per point: the force (+0x122C:
+# springs to the 4 neighbours, wind, the waves' push along the normal) added to the speed, a drag toward a jittered
+# wind (3 cM_rndF a point and step: more random draws at 60, as other converted processes' draws are), then the
+# new place = the old + the speed.
+02329D34    spliti      addi            buoyflag calc_wind_base: a wind phase (+0x1214) + 1400 a tick
+02329D48    spliti      addi            buoyflag calc_wind_base: a wind phase (+0x121A) + 7650
+02329D50    spliti      addi            buoyflag calc_wind_base: a wind phase (+0x1216) + 5500
+02329D60    spliti      addi            buoyflag calc_wind_base: a wind phase (+0x1218) + 1680
+02329D70    spliti      addi            buoyflag calc_wind_base: a wind phase (+0x121C) + 1900
+02329D78    spliti      addi            buoyflag calc_wind_base: a wind phase (+0x121E) + 6500
+02329DC4    whole       sth             buoyflag calc_wind_base: a gust: (+0x1214) + 2000
+02329DCC    whole       sth             buoyflag calc_wind_base: a gust: (+0x1216) + 2000
+02329DD0    whole       sth             buoyflag calc_wind_base: a gust: (+0x1218) + 2000
+02329DE0    whole       sth             buoyflag calc_wind_base: a gust: (+0x121A) + 2000
+02329DE8    whole       sth             buoyflag calc_wind_base: a gust: (+0x121C) + 2000
+02329DEC    whole       sth             buoyflag calc_wind_base: a gust: (+0x121E) + 2000
+02329DF4    spliti      addi            buoyflag calc_wind_base: a wave phase (+0x1220) + 430
+02329E18    spliti      addi            buoyflag calc_wind_base: a wave phase (+0x1222) + 1500
+02329E20    spliti      addi            buoyflag calc_wind_base: a wave phase (+0x1224) + 8000
+02329E30    spliti      addi            buoyflag calc_wind_base: a wave phase (+0x1226) + 1000
+02329E38    spliti      addi            buoyflag calc_wind_base: a wave phase (+0x1228) + 3210
+02329E40    spliti      addi            buoyflag calc_wind_base: a wave phase (+0x122A) + 8765
+0232A65C    vec@r4      bl 028e8d88     buoyflag calc_pos: a point's speed += the force
+0232A6F8    vec@r4      bl 028e8d88     buoyflag calc_pos: speed += the drag
+0232A708    vec@r5      bl 0201ad78     buoyflag calc_pos: the new place = the old + speed
+#
+# ---- The race buoys (Obj_Buoyrace 268, d_a_obj_buoyrace.cpp): the goal flag (291) makes them along its rope paths: the
+# Flight Control Platform's (sea,0,14,2, eighteen); the boating course's flag (room 48) has no rope path in WWHD's data.
+# afl_calc (f_0232F650): a bob (m2BC +0x3D8, its speed m2C0 +0x3DC: v = (v - 0.01 p) 0.94 once a tick, p += v), the wave
+# phase m2A0 (+0x3BC) + m10 (cM_rnd() + 1) a tick, the height chased to the wave's (cLib_chaseF, stepped); afl_calc_sway
+# (f_0232F554): a tilt spring to the water's slope (m2AC/m2B0 +0x3C8/+0x3CC, speeds m2B4/m2B8 +0x3D0/+0x3D4).
+0232F600    *h:f10      fnmsubs         buoyrace afl_calc_sway: the x tilt's force (spring and damping) x h
+0232F604    *h:f0       fnmsubs         buoyrace afl_calc_sway: the z tilt's force x h
+0232F610    *h@f13      fadds           buoyrace afl_calc_sway: m2AC += m2B4
+0232F618    *h@f8       fadds           buoyrace afl_calc_sway: m2B0 += m2B8
+0232F678    keep:f9     fmadds          buoyrace afl_calc: the bob's speed m2C0 + m2BC x -0.01 (once a tick)
+0232F680    keep:f9     fmuls           buoyrace afl_calc: m2C0 x 0.94 (once a tick)
+0232F688    *h@f9       fadds           buoyrace afl_calc: m2BC += m2C0
+0232F6E0    split@r0    add             buoyrace afl_calc: the wave phase m2A0 + m10 (cM_rnd() + 1)

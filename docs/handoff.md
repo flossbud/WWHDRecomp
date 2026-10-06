@@ -1334,6 +1334,26 @@ it in a window; D21 "Step 2"):**
     writes an address: g_rtJournalOn kept on, the quiet watch's resets too; the memory imports bypass it),
     GX2SetVertexUniformReg's values (who uploads a matrix), and the back chain (r1, then each frame's +4). Left:
     the message box's right edge steps at the whole -> half swap while it settles (another mechanism).
+  - **On the sea (session top; the work queue's "sea-objects"; `tick_rules/sea.txt`; shared: the sea's GetScale in
+    `tick_rules.txt`)**: area_test.sh where each is (seasurvey/room lists first). Converted: the salvage points
+    (Salvage 401, one a sea room: idle as at 30 but its random depth pick; its two counters late/whole from the
+    decomp), Ganon's ships (125/127, sea,0,1,-1: no counters), Tetra's ship's wheel (Kaji 60: the ship (57) makes it
+    unless the ship's type is 3, as departure_DEMO's is; sea,0,11,2: the same as 30 in every tick), the cannon
+    game (Canon 61: sea,0,10,-1 with `WWHD_DEBUG_EVENT=990:CANON_GAME` and the new route `cuta`, A every 90
+    frames; the ball's count late plus lag on its float: 60's half ticks are 30's ticks exactly, the whole
+    ticks half way; the aim not judged), the barrels' flags (Obj_Buoyflag 465: a 7 x 5 cloth; Outset's mine
+    barrel at sea,0,44,11, and Coming2 270, which the boat makes on every sea stage, flags some of its barrels;
+    twelve phases split, a random gust whole, the cloth's speed, drag and move by h: its points move 1.01 a tick
+    against 30's 1.08, unconverted they moved 1.84) and the race buoys (Obj_Buoyrace 268: the Flight Control
+    Platform's, sea,0,14,2; the boating course's flag has no rope path in WWHD's data). The buoys found a sea
+    bug: the waves' height scale (GetScale, 1/100 of the way a tick to the height manager's value) went twice
+    as fast at 60, so after a warp, or sailing between calm and open water, the waves grew or calmed twice as
+    fast (the buoys rode waves 1.5 times 30's at first); now stepped, their paths are 30's (1058 vs 1054).
+    Not run: salvaging itself (the crane's event, SALVAGE_TBOX 402). Finding events by name: scratch evlist.py
+    reads a stage's event list from the event_list.dat WWHD embeds in Stage.bfres (found by its header's shape).
+    A stepped process's late store at the tick its proc changes is dropped (m656 ends -1, not -2: harmless).
+    area_test's 30 against 60 (actor_types.py, same key) paired 30's tick with 60's next whole frame in the
+    cannon's run, so its moving ball read 0% the same: 60's frame before it (the half tick) held 30's values.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next

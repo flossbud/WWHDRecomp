@@ -1,0 +1,34 @@
+# Route: the 100% save's continue (continue-100.txt), then A every 90 frames from f1000 to f3400: a
+# cutscene ordered by test aids (WWHD_DEBUG_STAGE, WWHD_DEBUG_EVENT) plays on with its text boxes closed
+# (session bottom's CUT_INPUT lines for departure_DEMO; route cuta, session top). FRAME BUTTONS [FRAMES_HELD].
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+1000  A 5
+1090  A 5
+1180  A 5
+1270  A 5
+1360  A 5
+1450  A 5
+1540  A 5
+1630  A 5
+1720  A 5
+1810  A 5
+1900  A 5
+1990  A 5
+2080  A 5
+2170  A 5
+2260  A 5
+2350  A 5
+2440  A 5
+2530  A 5
+2620  A 5
+2710  A 5
+2800  A 5
+2890  A 5
+2980  A 5
+3070  A 5
+3160  A 5
+3250  A 5
+3340  A 5
