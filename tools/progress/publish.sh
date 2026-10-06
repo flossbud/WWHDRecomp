@@ -20,7 +20,7 @@
 #   publish.sh shot PPM CAPTION
 #                           add a capture: PPM is a path on the worker (/wwhd/...: the desktop's while
 #                           it's lent, else the worker's; WWHD_ON= forces one); it becomes a JPEG
-#                           on the worker, never on the editing machine or in git (captures are game data)
+#                           on the worker, never on the editing machine or in git (captures are game data); none is ever deleted
 #   publish.sh serve        start the server if it isn't running (http://TAILNET_IP:8765)
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
@@ -118,15 +118,20 @@ case "${1:-}" in
 		else
 			ssh $host "mkdir -p $dir/shots && docker exec wwhd-worker convert '$src' -resize 960x540 -quality 82 /wwhd/data/progress/shots/$name"
 		fi
-		ssh $host "python3 - $dir/shots.json $name $(printf %q "$cap") $(date +%s)" <<'PY'
+		# every shot is kept: shots.json holds the newest 24, older ones move to shots-archive.json (the page
+		# shows both, a page at a time). Kept short so a checkout from before this (it deleted the files of
+		# all but the newest 48 in shots.json) can't reach an archived shot's file
+		ssh $host "flock $dir/.claims.lock python3 - $dir/shots.json $name $(printf %q "$cap") $(date +%s)" <<'PY'
 import json, os, sys
 path, name, cap, t = sys.argv[1], sys.argv[2], json.loads(sys.argv[3]), int(sys.argv[4])
-shots = json.load(open(path)) if os.path.exists(path) else []
+arch = os.path.join(os.path.dirname(path), "shots-archive.json")
+def load(p): return json.load(open(p)) if os.path.exists(p) else []
+def save(p, v): json.dump(v, open(p + ".tmp", "w")); os.replace(p + ".tmp", p)
+shots = load(path)
 shots.insert(0, {"file": "shots/" + name, "caption": cap, "time": t})
-for old in shots[48:]:
-    try: os.remove(os.path.join(os.path.dirname(path), old["file"]))
-    except OSError: pass
-json.dump(shots[:48], open(path + ".tmp", "w")); os.replace(path + ".tmp", path)
+if len(shots) > 24:
+    save(arch, shots[24:] + load(arch))   # the archive first: a crash between leaves a duplicate, not a loss
+save(path, shots[:24])
 PY
 		;;
 	serve)

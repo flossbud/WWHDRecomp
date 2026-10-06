@@ -80,8 +80,16 @@ details summary { cursor: pointer; color: var(--accent); margin-top: 10px; }
 .tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 .shots { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .shots figure { margin: 0; }
-.shots img { width: 100%; border-radius: 8px; display: block; background: var(--bar); aspect-ratio: 16/9; object-fit: cover; cursor: zoom-in; }
-.shots figcaption { font-size: .82rem; color: var(--muted); margin-top: 4px; }
+.shots img { width: 100%; border-radius: 8px; display: block; background: var(--bar); aspect-ratio: 16/9; object-fit: cover; cursor: zoom-in;
+  overflow: hidden; color: transparent; }
+.shots figcaption { font-size: .82rem; color: var(--muted); margin-top: 4px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.pager button { font: inherit; font-size: .85rem; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); cursor: pointer; min-height: 36px; }
+.pager button:disabled { opacity: .4; cursor: default; }
+.pager span { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+@media (max-width: 520px) { .shots { grid-template-columns: 1fr 1fr; gap: 8px; } .shots figcaption { font-size: .75rem; } }
 ol.log { list-style: none; margin: 0; padding: 0; }
 ol.log li { padding: 7px 0; border-bottom: 1px solid var(--line); }
 ol.log li:last-child { border: 0; }
@@ -175,8 +183,9 @@ footer { color: var(--muted); font-size: .8rem; text-align: center; margin: 10px
   </section>
 
   <section class="card">
-    <h2>Screenshots</h2>
+    <h2>Screenshots <span class="sub" id="shotCount"></span></h2>
     <div class="shots" id="shots"><p class="empty">None yet.</p></div>
+    <div class="pager" id="shotPager" hidden><button class="newer">&#8249; Newer</button><span></span><button class="older">Older &#8250;</button></div>
   </section>
 
   <div class="grid">
@@ -256,7 +265,28 @@ function render() {
 }
 $("tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { tab = +b.dataset.i; render(); } });
 // the enlarged view: buttons, the arrow keys (Esc closes) and a swipe on phones go through the shots
-let shotList = [], shotAt = -1;
+let shotList = [], shotAt = -1, shotPage = 0;
+const SHOTS_PER_PAGE = 12;
+// the shots, newest first, a page at a time (the enlarged view goes through all of them)
+function renderShots() {
+  const pages = Math.max(1, Math.ceil(shotList.length / SHOTS_PER_PAGE));
+  shotPage = Math.min(shotPage, pages - 1);
+  const from = shotPage * SHOTS_PER_PAGE;
+  $("shots").innerHTML = shotList.slice(from, from + SHOTS_PER_PAGE).map((x, i) =>
+    `<figure><img loading="lazy" src="${esc(x.file)}" alt="${esc(x.caption)}" data-i="${from + i}"><figcaption>${esc(x.caption)} · ${ago(x.time)}</figcaption></figure>`).join("");
+  $("shotCount").textContent = `(${shotList.length})`;
+  const pager = $("shotPager");
+  pager.hidden = pages < 2;
+  pager.querySelector("span").textContent = `Page ${shotPage + 1} of ${pages}`;
+  pager.querySelector(".newer").disabled = shotPage === 0;
+  pager.querySelector(".older").disabled = shotPage === pages - 1;
+}
+$("shotPager").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b || b.disabled) return;
+  shotPage += b.classList.contains("older") ? 1 : -1;
+  renderShots();
+  $("shots").closest(".card").scrollIntoView({block: "start"});
+});
 const zoom = $("zoom");
 function showShot(i) {
   if (!shotList.length) return;
@@ -270,8 +300,7 @@ function showShot(i) {
 function closeShot() { zoom.style.display = "none"; shotAt = -1; }
 $("shots").addEventListener("click", e => {
   if (e.target.tagName !== "IMG") return;
-  const i = shotList.findIndex(x => e.target.getAttribute("src") === x.file);
-  showShot(i < 0 ? 0 : i);
+  showShot(+e.target.dataset.i || 0);
 });
 zoom.addEventListener("click", e => {
   const b = e.target.closest("button");
@@ -322,7 +351,8 @@ function renderBugs(b) {
   $("bugsClosed").innerHTML = closed.map(item).join("");
 }
 async function refresh() {
-  const [p, n, s, c, b] = await Promise.all([get("progress.json"), get("sessions.json"), get("shots.json"), get("claims.json"), get("bugs.json")]);
+  const [p, n, s, a, c, b] = await Promise.all([get("progress.json"), get("sessions.json"), get("shots.json"), get("shots-archive.json"),
+    get("claims.json"), get("bugs.json")]);
   if (b && b.length) renderBugs(b);
   if (c) claims = c;
   if (p) { data = p; render(); }
@@ -333,8 +363,12 @@ async function refresh() {
     return `<div class="now"><span class="dot${Date.now() / 1000 - last > 3 * 3600 ? " idle" : ""}"></span>
     <div><b>${esc(x.session)}:</b> <span class="sub">${esc(x.text && x.text.startsWith(x.session + ": ") ? x.text.slice(x.session.length + 2) : x.text || "idle")} · ${ago(x.time)}${c > x.time ? ` · last commit ${ago(c)}` : ""}</span></div></div>`;
   }).join("");
-  if (s && s.length) shotList = s;
-  if (s && s.length) $("shots").innerHTML = s.map(x => `<figure><img loading="lazy" src="${esc(x.file)}" alt="${esc(x.caption)}"><figcaption>${esc(x.caption)} · ${ago(x.time)}</figcaption></figure>`).join("");
+  if (s && s.length) {
+    // the newest in shots.json, older ones in shots-archive.json (a shot can be in both for a moment)
+    const seen = new Set();
+    shotList = s.concat(a || []).filter(x => !seen.has(x.file) && seen.add(x.file)).sort((x, y) => y.time - x.time);
+    renderShots();
+  }
 }
 for (const id of ["bugsCard", "queueCard"]) {
   const el = $(id);
