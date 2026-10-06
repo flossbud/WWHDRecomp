@@ -86,3 +86,40 @@
 02125560    whole       stfs            dk tail: its velocity (x)
 02125574    whole       stfs            dk tail: (y)
 02125598    whole       stfs            dk tail: (z)
+#
+# ---- Mt (NPC_MT 379, d_a_npc_mt.cpp: Carlov, the figurine maker; Pfigure entered at point 1 with
+# WWHD_DEBUG_FLAGS=ev:3D08=0, his phase_1's "collection finished" bit, whose check runs only from point 0): trial clean,
+# 30 against 60 0 apart; converted with no rules.
+#
+# ---- Co1 (NPC_CO1 370, Comori; the decomp has no code for it): its create (f_022286C0, _create f_02228598) is made
+# only while symbol 1 is clear (f_02227D74: dSv_player_collect_c::isSymbol f_025B7D90), so WWHD_DEBUG_FLAGS=sy:1=0
+# on the finished save. Its texture pattern and blink count frames tested on the register right after (keep, as
+# NPC_YM2's) and a sway phase adds a table's amount a tick (split):
+02227E18    keep:r30    addi            co1 (f_02227DFC): a texture frame (+0x868) + 1, then >= its length restarts it
+02227E74    keep:r30    addi            co1 (f_02227DFC): the blink's frame (+0x8E8) + 1, the same
+022283C0    split@r0    add             co1 (f_02228014): a sway phase (+0xA24) += its speed a tick
+#
+# ---- Rcloud (Obj_Rcloud 141, d_a_obj_rcloud.cpp: a cloud placed 12833 units above sea room 13): made with
+# WWHD_DEBUG_FLAGS=ev:3908=0 (its type 0 is made while that bit is clear, type 1 before Nayru's Pearl); trial clean (no
+# store differed), 0 apart: converted.
+#
+# ---- Made and still (their state unchanged over 200 ticks), so left at 30: MknjD (77, Edaichi, sw:62=0: its
+# switch, params & 0xFF), Eskban (160, Adanmae, sw:8=0), Kanat (163, kindan room 5, sw:28=0), Wall (429, Siren room
+# 0, sw:56=0,57=0,58=0), Vfan (54, above). Never a process (their creates hand themselves to a system or spawn
+# something and return cPhs_ERROR_e): Obj_Wood (266: dWood's put_unit), magma (434: the magma floors), Bitem (256,
+# f_020D0A70: the beaten boss's heart container, an ITEM 255, if not taken).
+# VmsMS (155, kenroom, ev:2D04=0: made before the Master Sword's cutscene) is still too. VgnFD (158, Ganon's Tower's
+# trials door, GanonA room 1, ev:3904=0,3902=0,3901=0,3A80=0: made while a door light is off) moves only in its
+# light-up cutscene (its countdowns end event cuts: dComIfGp_evmng_cutEnd), where it wouldn't step at 60: left at 30.
+#
+# ---- Ss (251, d_a_ss.cpp: a creature of hands and a core, the decomp's "Nonmatching"; kindan room 14, params
+# 16000200, made with WWHD_DEBUG_FLAGS=sw:22=0, its switch the params' top byte): its tick count (no equality tests).
+0248AF28    whole       sth             ss execute (f_0248ADE8): its tick count (+0x3DC) + 1
+0248C30C    whole       stb             ss execute: a hand's count (+0x3A of each of ten, 0x58C apart) + 1 up to 10 (tested < only)
+#
+# ---- The rest, left at 30: itemDek (260, Forest Haven layers 0/1, WWHD_DEBUG_FLAGS=im:2=0: made while its item bit,
+# params & 0xFF, is untaken and event 1801 set) moves with a moving ground (the ride transform f_024F5B78 writes its
+# pos.x/z, twice a tick in the trial: the ground's move applied on both steps), so it waits for rides on a stepping
+# ground; agbTBOX (433, kindan room 14, sw:120=0: its switch (params >> 16) & 0xFF) is still. Yfrlt00 (393, Omori's
+# SCO7) isn't reached: a warp to Omori layer 7 doesn't load (its create checks nothing). The tags (kytag5 388, Quake
+# 32) are skipped and TagCb12 (419) and Hsh2 (290), spawned, are still.

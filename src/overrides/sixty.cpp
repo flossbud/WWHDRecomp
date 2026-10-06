@@ -116,7 +116,7 @@ namespace
 	// WWHD_60FPS_CONVERT= (empty) converts none.
 	constexpr const char* kConvertedByDefault =
 		"476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,"
-		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,443,221,305,47,48,49,50,52,122,129,148,166,289,159,272,267,275,140,138,139,46,75,469,94,96,478,479,406,358,396,57,195,299,455,85,399,284,286,265,285,241,334,167,"   // session bottom
+		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,443,221,305,47,48,49,50,52,122,129,148,166,289,159,272,267,275,140,138,139,46,75,469,94,96,478,479,406,358,396,57,195,299,455,85,399,284,286,265,285,241,334,167,379,370,141,251,"   // session bottom
 		// (session main's line, between comment lines so neighbours' edits don't conflict)
 		"51,276,367,301,302,303,113,112,314,361,382,380,321,30,92,104,107,145,157,273,323,451,153,377,124,"   // session main
 		// (session top's line)
@@ -1636,16 +1636,18 @@ namespace
 	}
 }
 
-// WWHD_DEBUG_FLAGS=ev:XXYY=V[,...][;sw:N=V[,...]][;it:XX=V[,...]][;ac:N|*=V] (a test aid, session bottom's census-left): the
+// WWHD_DEBUG_FLAGS=ev:XXYY=V[,...][;sw:N=V[,...]][;it:XX=V[,...]][;ac:N|*=V][;sy:N=V][;im:N=V] (a test aid, session bottom's census-left): the
 // save's event bits (dSv_event_c::isEventBit f_025B8B94: XXYY hex, its byte XX and mask YY, as the decomp's
 // dSv_event_flag_c names them), switches (dSv_info_c::isSwitch f_025BA0C0: N decimal, in any room) and items got
 // (dComIfGs_checkGetItem f_02520C0C: XX hex, d_item_data.h's numbers) and placed actors done (dSv_info_c::isActor
 // f_025BA6A4, the stage loader's check of a placement's set ID: N decimal, or * for all, so beaten enemies are placed
-// again) read as V (0 or 1) by every caller, the save left as it is: an actor whose create returns cPhs_ERROR_e on
-// the finished save's story state (Phantom Ganon beaten, Makar's types...) is made by forcing what it checks.
+// again), the symbols got (dSv_player_collect_c::isSymbol f_025B7D90: N decimal, the bit, 0-7) and the stage's items
+// taken (dSv_info_c::isItem f_025BA494: N decimal, in any room) read as V (0 or 1)
+// by every caller, the save left as it is: an actor whose create returns cPhs_ERROR_e on the finished save's story
+// state (Phantom Ganon beaten, Makar's types, Co1 before symbol 1...) is made by forcing what it checks.
 namespace
 {
-	struct ForcedFlags { std::unordered_map<uint32, bool> ev, sw, it, ac; int acAll = -1; bool any = false; };
+	struct ForcedFlags { std::unordered_map<uint32, bool> ev, sw, it, ac, sy, im; int acAll = -1; bool any = false; };
 	const ForcedFlags& Forced()
 	{
 		static const ForcedFlags f = [] {
@@ -1662,8 +1664,8 @@ namespace
 				const std::string part = all.substr(at, end - at);
 				at = end + 1;
 				const bool isEv = part.rfind("ev:", 0) == 0, isSw = part.rfind("sw:", 0) == 0, isIt = part.rfind("it:", 0) == 0,
-					isAc = part.rfind("ac:", 0) == 0;
-				if (!isEv && !isSw && !isIt && !isAc)
+					isAc = part.rfind("ac:", 0) == 0, isSy = part.rfind("sy:", 0) == 0, isIm = part.rfind("im:", 0) == 0;
+				if (!isEv && !isSw && !isIt && !isAc && !isSy && !isIm)
 					continue;
 				for (size_t p = 3; p < part.size();)
 				{
@@ -1682,8 +1684,8 @@ namespace
 						r.acAll = v;
 						continue;
 					}
-					const uint32 key = (uint32)strtoul(item.substr(0, eq).c_str(), nullptr, isSw || isAc ? 10 : 16);
-					(isEv ? r.ev : isSw ? r.sw : isAc ? r.ac : r.it)[key] = v;
+					const uint32 key = (uint32)strtoul(item.substr(0, eq).c_str(), nullptr, isSw || isAc || isSy || isIm ? 10 : 16);
+					(isEv ? r.ev : isSw ? r.sw : isAc ? r.ac : isSy ? r.sy : isIm ? r.im : r.it)[key] = v;
 					r.any = true;
 				}
 			}
@@ -1707,6 +1709,36 @@ void f_025B8B94(PPCInterpreter_t* __restrict ctx)
 		return;
 	}
 	[[clang::musttail]] return orig_f_025B8B94(ctx);
+}
+
+void orig_f_025B7D90(PPCInterpreter_t* __restrict ctx);
+// dSv_player_collect_c::isSymbol(collect r3, number r4) -> r3: forced under WWHD_DEBUG_FLAGS (above)
+void f_025B7D90(PPCInterpreter_t* __restrict ctx)
+{
+	const ForcedFlags& f = Forced();
+	if (!f.any)
+		[[clang::musttail]] return orig_f_025B7D90(ctx);
+	if (const auto it = f.sy.find(GPR(4) & 0xFF); it != f.sy.end())
+	{
+		GPR(3) = it->second ? 1 : 0;
+		return;
+	}
+	[[clang::musttail]] return orig_f_025B7D90(ctx);
+}
+
+void orig_f_025BA494(PPCInterpreter_t* __restrict ctx);
+// dSv_info_c::isItem(info r3, number r4, room r5) -> r3: forced under WWHD_DEBUG_FLAGS (above)
+void f_025BA494(PPCInterpreter_t* __restrict ctx)
+{
+	const ForcedFlags& f = Forced();
+	if (!f.any)
+		[[clang::musttail]] return orig_f_025BA494(ctx);
+	if (const auto it = f.im.find(GPR(4)); it != f.im.end())
+	{
+		GPR(3) = it->second ? 1 : 0;
+		return;
+	}
+	[[clang::musttail]] return orig_f_025BA494(ctx);
 }
 
 void orig_f_025BA6A4(PPCInterpreter_t* __restrict ctx);

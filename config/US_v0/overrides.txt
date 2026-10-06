@@ -74,3 +74,5 @@
 025B8B94    src/overrides/sixty.cpp            dSv_event_c::isEventBit: forced under WWHD_DEBUG_FLAGS (a test aid)
 025BA0C0    src/overrides/sixty.cpp            dSv_info_c::isSwitch: forced under WWHD_DEBUG_FLAGS (a test aid)
 025BA6A4    src/overrides/sixty.cpp            dSv_info_c::isActor: forced under WWHD_DEBUG_FLAGS (a test aid)
+025B7D90    src/overrides/sixty.cpp            dSv_player_collect_c::isSymbol: forced under WWHD_DEBUG_FLAGS (a test aid)
+025BA494    src/overrides/sixty.cpp            dSv_info_c::isItem: forced under WWHD_DEBUG_FLAGS (a test aid)

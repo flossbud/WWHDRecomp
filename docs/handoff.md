@@ -746,12 +746,13 @@ it in a window; D21 "Step 2"):**
     stood by his next execute, as several notes below record). `WWHD_DEBUG_RNDLOG=path` logs cM_rnd's
     draws and the stream at each whole step's start (30 and 60 side by side: where the random stream parts);
     `WWHD_60FPS_RNDSYNC=0` turns off the random stream's sync (on by default: the "testaids" entry below).
-    `WWHD_DEBUG_FLAGS=ev:XXYY=V[,...][;sw:N=V,...][;it:XX=V,...][;ac:N|*=V,...]` (session bottom's census-left)
+    `WWHD_DEBUG_FLAGS=ev:XXYY=V[,...][;sw:N=V,...][;it:XX=V,...][;ac:N|*=V,...][;sy:N=V][;im:N=V]` (census-left)
     makes the story checks read V (0 or 1) at every caller, the save left as it is (reads only, never written):
     event bits (isEventBit f_025B8B94, hex XXYY as the decomp's dSv_event_flag_c UNK_XXYY), switches (isSwitch
     f_025BA0C0, decimal), items owned (dComIfGs_checkGetItem f_02520C0C, hex d_item_data.h numbers) and placed
     actors done (isActor f_025BA6A4, the stage loader's check of a placement's set ID: `ac:*=0` places a
-    room's beaten enemies again). An actor whose create errors on the finished save's story state is made by
+    room's beaten enemies again), symbols (isSymbol f_025B7D90, the bit 0-7) and the stage's items taken (isItem
+    f_025BA494, decimal). An actor whose create errors on the finished save's story state is made by
     forcing what it checks: Phantom Ganon in the Forsaken Fortress `sw:42=0`, Makar in Forest Haven
     `ev:2910=0,2E02=0,1610=0,1820=0;it:3E=0,3A=0`, GanonM's Vfan `ac:*=0;sw:24=0`.
     `WWHD_DEBUG_SPAWN=tick:process[/subtype],param,x,y,z[,anglex[,angley]][;...]` (subtype: the name table's argument, e.g. the sea's Octorok `Oqw` is 227/1) creates an actor there in
@@ -3034,7 +3035,14 @@ it in a window; D21 "Step 2"):**
   its return at f1302 as 30's (it parts after). Not a fix for Molgera's or the Moblin's partings (Link's
   route and their own half-step draws).
 
-- **Session bottom: the queue's "census-left" (round 7, 2026-10-06; in progress; `tick_rules/census_left.txt`)**:
+- **Session bottom: the queue's "census-left" (round 7, 2026-10-06; done; `tick_rules/census_left.txt`)**: all 24
+  types made or explained. Converted (7): Phantom Ganon 241, Makar 334, Dk 167, Mt 379, Co1 370 (`sy:1=0`: made only
+  before symbol 1; its texture and blink frames `keep`, a sway `split`), Rcloud 141 (`ev:3908=0`), Ss 251 (`sw:22=0`; its
+  tick count and its hands' counts `whole`). Made and left at 30: still (Vfan 54, MknjD 77, Eskban 160, Kanat 163, Wall
+  429, VmsMS 155, agbTBOX 433), moving only in its cutscene (VgnFD 158), riding a moving ground whose ride doubles on
+  half steps (itemDek 260, f_024F5B78). Never a process (they hand themselves to a system or spawn something): Obj_Wood
+  266, magma 434, Bitem 256. Not reached: Yfrlt00 393 (Omori layer 7 doesn't load from a warp). Tags: skipped (kytag5
+  388, Quake 32) or still (TagCb12 419, Hsh2 290). The flags each needed are in the rules file. The first part:
   the placed types no test had made, made with WWHD_DEBUG_FLAGS (above), PLACE and SPAWN. **Phantom Ganon**
   (FGANON 241, Forsaken Fortress sea,0,1,1, `sw:42=0`, Link placed by it at f1000): converted, 46 rules: its
   timers (m3A4[5], m68A, m3AE, m3B8, m6A6, m6AC, the ball's m40A; mB89 `keep`: decremented and tested on the
