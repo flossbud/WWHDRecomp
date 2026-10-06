@@ -23,3 +23,10 @@
 #
 # SHUTTER2 (113, d_a_shutter2.cpp: the Wind Temple's Htobi3): its rise and fall are cLib_addCalc (the helper):
 # converted with no rules (trial clean standing, kaze,4,4,-1).
+#
+# ---- SHUTTER (112, d_a_shutter.cpp: Siren's Htobi1, the Tower of the Gods' sliding bars): mFrameTimer (+0x453,
+# s8) - 1 a tick in _execute while >= 0 (the switch's change waits for it to be < 0: tested before, once a tick
+# at the tick's end), field_0x33A (+0x456) + 1 a tick while it opens; its slide is cLib_addCalc (the helper) and
+# its event wait cLib_calcTimer (the helper). Trial clean standing (Siren,0,1,-1); its opening not driven yet.
+02484D5C    late        stb             shutter _execute: mFrameTimer - 1
+024848D8    whole       stb             shutter shutter_move OPEN: field_0x33A + 1

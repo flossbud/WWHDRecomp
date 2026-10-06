@@ -2525,7 +2525,7 @@ it in a window; D21 "Step 2"):**
   Earth Temple's 22 doors), MDOOR (303), ATDOOR (302) and SHUTTER2 (113) converted; tests and what isn't
   tested are in the rules file. Route `dback` is route back 100 frames later (the Earth Temple's warp-in
   holds Link to ~f1060). SHUTTER (112, Siren's Htobi1: a frame countdown, a cLib_calcTimer wait and a count)
-  and MBDOOR (115, placed in no stage file) are left.
+  SHUTTER (112) converted too (later); MBDOOR (115, placed in no stage file) is left.
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
