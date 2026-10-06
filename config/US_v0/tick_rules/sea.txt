@@ -293,3 +293,24 @@
 0232F680    keep:f9     fmuls           buoyrace afl_calc: m2C0 x 0.94 (once a tick)
 0232F688    *h@f9       fadds           buoyrace afl_calc: m2BC += m2C0
 0232F6E0    split@r0    add             buoyrace afl_calc: the wave phase m2A0 + m10 (cM_rnd() + 1)
+#
+# ---- salvaging (session top, the work queue's "salvage"; route salvage: Outset's sea, the boat moved onto a live
+# kind-3 point, the grappling hook on X, X for the crane, A held to lower it). The boat's crane (daShip_c, converted)
+# pays its rope out and in by whole segments, incRopeCnt (f_02476204: mRopeCnt +0x686, 10 units a segment) once a
+# tick from its procs: at 60 the hook sank twice as fast and the salvage (the hook 1000-2000 units deep within the
+# point's radius) began 24 ticks early. Each call's count split between the tick's two steps (2: 1 and 1; -1: -1
+# and 0). setRopePos (f_024763B0) swings the rope's segments a tick at a time: speed *= 0.9 in air, 0.6 in water,
+# speed.y -= 3, place += speed, then each segment 10 from the next and speed += 0.05 of its move (that part follows
+# the step by itself). SALVAGE_TBOX (402, d_a_salvage_tbox.cpp) takes its place from the crane's top in its event.
+0247F6C8    split@r4    bl 02476204     ship procCraneReady: the rope out 2 segments a tick (to 20)
+0247F8E8    split@r4    bl 02476204     ship procCrane: the rope out 2 a tick while the button is held
+0247F99C    split@r4    bl 02476204     ship procCrane: the rope in 4 a tick when it is let go
+0247FC50    split@r4    bl 02476204     ship procCraneUp: the rope in 1 a tick
+0247FCD0    split@r4    bl 02476204     ship procCraneUp: the same (another branch)
+0247FD24    split@r4    bl 02476204     ship procCraneUp: the same
+0247FD70    split@r4    bl 02476204     ship procCraneUp: the same
+0247FDC4    split@r4    bl 02476204     ship procCraneUp: the same
+02479300    split@r4    bl 02476204     ship execute: the rope in 20 a tick out of the crane mode
+02476708    d@f1        bl 028e8e64     ship setRopePos: a segment's speed *= 0.9 in air, 0.6 in water
+02476718    *h@f11      fsubs           ship setRopePos: its speed.y -= 3
+0247672C    vec@r4      bl 028e8d88     ship setRopePos: its place += speed

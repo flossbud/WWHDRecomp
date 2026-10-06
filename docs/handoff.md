@@ -1377,6 +1377,21 @@ it in a window; D21 "Step 2"):**
     test (206) at 60 apart 19.9 from 30's (was 7.0): the boat (converted in spawn tests) now yawns on 30's ticks,
     and while it yawns it skips the idle test's cM_rnd, so the random stream the Chuchu draws from shifts; with
     the boat unconverted (BASE=476,171) the builds before and after give the same 7.3. Events (warp, hook) the same.
+  - **Salvaging (session top; the work queue's "salvage"; `tick_rules/sea.txt`; new route `salvage`)**: the route's
+    header has its setup: Link aboard at Outset's corner (`WWHD_DEBUG_STAGE=920:sea,100,44,-1`), the grappling hook put
+    on X (the heap save's X slot +9 and the play's X item, as route hyoi's pokes), the boat moved onto the kind-3
+    salvage point at (-232000, 323200) by process pokes (`1000:165,314,4,...`: WWHD_DEBUG_POKE's process form writes
+    at an offset of every process of that type, no address needed); X brings the crane out, A held lowers the hook
+    (procCrane pays the rope out while the button is held), and once the hook is 1000-2000 units deep within the
+    point's radius (checkArea, against the crane's top, not the boat) the salvage event pulls up SALVAGE_TBOX (402)
+    and opens it (a Purple Rupee). Outset's other points: kind 0 (the charts' light rings) are all salvaged on the
+    100% save; kind 3 with save bits 0-2 too, and poking the GameCube's place for the ocean bits (save +0x5C0 =
+    0x145B8140 + room x 2) didn't revive them (so WWHD's layout differs there; bit 3's point is live anyway: its entry
+    shows at 0x26A0E760, found with WWHD_60FPS_FIND). At 60 the crane's rope went twice as fast (incRopeCnt pays out
+    whole 10-unit segments a call, called once a tick: the chest came up 24 ticks early and surfaced 51 early) and
+    the rope's swing (setRopePos) moved twice a tick: now `split@r4` on each call's count and the swing's damping,
+    gravity and move by h; the chest appears (tick 1188) and surfaces (1253) on 30's ticks. The chest itself takes
+    its place from the crane's top in its event: converted with no rules.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next
