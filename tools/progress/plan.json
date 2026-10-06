@@ -356,6 +356,10 @@
     {
       "id": "heavythrow",
       "name": "Round 6: the heavy throw's tick lead (Link's hands a tick ahead from the throw's start: a boulder lands 37 units past 30's)"
+    },
+    {
+      "id": "walkstart",
+      "name": "Round 6: Link's first walking ticks differ from 30's (2.4 units in 3 ticks on tour), which the camera then follows: the root of predeploy's tour, land, crawl and sidle distances; and predeploy pairing 30's ticks with 60's frames by state (the pairing varies by run) (top's)"
     }
   ],
   "later": [
