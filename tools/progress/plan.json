@@ -368,6 +368,10 @@
     {
       "id": "hits",
       "name": "Round 6: a whole tick's At/Tg hit flags stay until the next resolution, so a converted actor sees each hit on its half step and its next whole step: audit the converted types for hit checks with no whole-tick guard (double damage, double reactions) and fix them (bottom's)"
+    },
+    {
+      "id": "animstart",
+      "name": "Round 6: an animation or action set up after Link's common update in a whole step advances on the half step at 60, a tick later at 30: the walk's first tick, the heavy throw (the carry animation's end found by a half step), swing's and sail's jump and swim transitions; a rule that knows which set-ups step in their own tick (top's)"
     }
   ],
   "later": [
