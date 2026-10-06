@@ -3265,7 +3265,13 @@ it in a window; D21 "Step 2"):**
     its swing started half a tick before Link's cut at 60 (f1239.5, a decision on a half step) and the cut landed;
     at 30 it started on the cut's tick and threw the sword back. So no duration is short; the enemies' decisions
     on half steps shift their cycles against Link's whole-tick presses. Whether that favours Link systematically
-    (5 of 6 variants) or by chance needs more samples. The Floormaster's grab (M_Dai room 6, Link placed by it):
+    (5 of 6 variants) or by chance needs more samples. Twelve variants since (spawn f950-958): systematic. The
+    Moblin takes 38 damage at 60 against 16 at 30 over six fights; the Bokoblin dies in all six at 60 (four at
+    f1050) against four at 30, later. Lead: after a hit the Bokoblin is pushed back ~51 units over 12 ticks at 30
+    and not at all at 60 (bk956, its hit at f1008: 0, 1, 1, 1 units), so it stays in reach; at 30 it then keeps
+    action 4 and jumps back (5/-10 at f1034), at 60 it goes into its swing (5/0 at f1017.5). The Moblin's own push
+    after a hit is alike (~30 units) but at 60 it walks back in, at 30 away. Next: d_a_bk.cpp's damage_check
+    (l.3518: the Tg hit, cc_at_check, the knockback) at 60. The Floormaster's grab (M_Dai room 6, Link placed by it):
     as at 30 (186 ticks held, the same exit), 2 ticks early (it notices Link on a half step, f1100.5 against 1101).
 - **Session main: sail's launch (predeploy's sail, WARN ~51)**: from session top's look. At 60 the boat sets sail in
   the half step of f1119, a tick-half before 30's f1120; the 19 units gained then are most of the route's lag.
