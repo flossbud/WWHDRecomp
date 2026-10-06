@@ -22,6 +22,54 @@ def read(path):
         return f.read()
 
 
+def converted_ids(text):
+    # the list is one string literal per session, from its declaration to the `;`
+    m = re.search(r'kConvertedByDefault =([^;]*);', text)
+    joined = "".join(re.findall(r'"([0-9,]*)"', m.group(1))) if m else ""
+    return sorted({int(x) for x in joined.split(",") if x})   # a process listed twice counts once
+
+
+def effort(items):
+    """Session-hours per unit of work, measured from WW-4's commits: each commit is credited the time since its
+    session's previous commit (at most 90 min: longer is a break), as a bug's (names B<n>, or session qa), an
+    actor's (the converted list grew: hours per type converted), a queue item's (tagged "(ITEM; session ...)"
+    with one of ITEMS, the queue's ids, but converting nothing: the scans, tests and captures) or nothing (tools, research, handoff)."""
+    log = subprocess.run(["git", "-C", ROOT, "log", "--reverse", "--format=%H\x1f%ct\x1f%s", "HEAD"],
+                         capture_output=True, text=True).stdout.splitlines()
+    log = [l.split("\x1f") for l in log]
+    log = [(h, int(t), s) for h, t, s in log if s.startswith("WW-4")]
+    if not log:
+        return None
+    blobs = subprocess.run(["git", "-C", ROOT, "cat-file", "--batch"], capture_output=True,
+                           input="".join(f"{h}:src/overrides/sixty.cpp\n" for h, _, _ in log).encode()).stdout
+    counts, at = [], 0
+    for _ in log:   # "<sha> blob <size>\n<content>\n", or "<name> missing\n"
+        nl = blobs.index(b"\n", at)
+        head = blobs[at:nl].split()
+        if head[-1] == b"missing":
+            counts.append(0); at = nl + 1; continue
+        size = int(head[2])
+        counts.append(len(converted_ids(blobs[nl + 1:nl + 1 + size].decode(errors="replace"))))
+        at = nl + 1 + size + 1
+    hours, units, last, prev = {"actor": 0.0, "queue": 0.0, "bug": 0.0}, {"actor": 0, "queue": set(), "bug": set()}, {}, 0
+    for (h, t, s), c in zip(log, counts):
+        m = re.search(r"session (\w+)", s)
+        sess = m.group(1) if m else "main"
+        gap = min(t - last[sess], 5400) if sess in last else 1800
+        last[sess] = t
+        bugs = re.findall(r"\bB\d+\b", s)
+        item = re.search(r"\(([\w-]+); session", s)
+        if bugs or sess == "qa":
+            hours["bug"] += gap / 3600; units["bug"].update(bugs)
+        elif c > prev:
+            hours["actor"] += gap / 3600; units["actor"] += c - prev
+        elif item and item.group(1) in items:
+            hours["queue"] += gap / 3600; units["queue"].add(item.group(1))
+        prev = c
+    n = {k: v if isinstance(v, int) else len(v) for k, v in units.items()}
+    return {k: round(hours[k] / n[k], 3) for k in hours if n[k]}
+
+
 def main():
     plan = json.loads(read("tools/progress/plan.json"))
     names = {}
@@ -32,10 +80,7 @@ def main():
             p = line.rstrip("\n").split("\t")
             if p and p[0].isdigit():
                 names[int(p[0])] = p[1] if len(p) > 1 and p[1] != "?" else ""
-    # the list is one string literal per session, from its declaration to the `;`
-    m = re.search(r'kConvertedByDefault =([^;]*);', read("src/overrides/sixty.cpp"))
-    joined = "".join(re.findall(r'"([0-9,]*)"', m.group(1))) if m else ""
-    converted = sorted({int(x) for x in joined.split(",") if x})   # a process listed twice counts once
+    converted = converted_ids(read("src/overrides/sixty.cpp"))
     rules_text = read("config/US_v0/tick_rules.txt")
     extra = os.path.join(ROOT, "config/US_v0/tick_rules")
     if os.path.isdir(extra):
@@ -88,6 +133,7 @@ def main():
             "functions": functions,
         },
         "commits": commits,
+        "effort": effort({q["id"] for q in plan.get("queue", [])} | set(plan.get("queue_done", []))),
     }
     json.dump(out, sys.stdout, separators=(",", ":"))
 

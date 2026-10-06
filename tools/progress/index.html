@@ -220,28 +220,33 @@ footer { color: var(--muted); font-size: .8rem; text-align: center; margin: 10px
 <script>
 const $ = id => document.getElementById(id);
 let data = null, tab = 0, claims = null, bugList = null;
-// every unit of work counted alike: actor types converted, work queue items done (with the earlier
-// rounds), bugs closed (fixed, verified or won't fix); in progress: types with rules, items being
-// worked on, bugs being fixed or waiting for a deploy
+// actor types converted, work queue items done (with the earlier rounds), bugs closed (fixed, verified or
+// won't fix), each weighted by the hours one took so far (collect.py's effort, from the commits; one each
+// without it); in progress: types with rules, items being worked on, bugs being fixed or waiting for a deploy
 function renderTotal() {
   if (!data) return;
   const all = data.groups.flatMap(g => g.actors), cl = claims || {};
   const queue = (data.queue || []).map(q => cl[q.id] ? cl[q.id].state : "open");
   const bugs = bugList || [];
+  const ef = data.effort || {};
   const parts = [
-    ["actor types", all.length, all.filter(a => a.status === "converted").length, all.filter(a => a.status === "rules").length],
+    ["actor types", all.length, all.filter(a => a.status === "converted").length, all.filter(a => a.status === "rules").length, ef.actor],
     ["queue items", queue.length + (data.queue_done || []).length, queue.filter(x => x === "done").length + (data.queue_done || []).length,
-      queue.filter(x => x === "working").length],
+      queue.filter(x => x === "working").length, ef.queue],
     ["bugs", bugs.length, bugs.filter(x => ["fixed", "verified", "wontfix"].includes(x.state)).length,
-      bugs.filter(x => x.state === "working" || x.state === "ready").length],
+      bugs.filter(x => x.state === "working" || x.state === "ready").length, ef.bug],
   ].filter(x => x[1]);
-  const n = parts.reduce((t, x) => t + x[1], 0), done = parts.reduce((t, x) => t + x[2], 0), going = parts.reduce((t, x) => t + x[3], 0);
+  const weighted = parts.every(x => x[4] > 0), w = x => weighted ? x[4] : 1;
+  const sum = i => parts.reduce((t, x) => t + x[i] * w(x), 0);
+  const n = sum(1), done = sum(2), going = sum(3);
   if (!n) return;
+  const each = h => h >= 0.95 ? `~${Math.round(h * 10) / 10} h each` : `~${Math.round(h * 60)} min each`;
   $("totalCard").hidden = false;
-  $("totLabel").textContent = `${done.toLocaleString()} of ${n.toLocaleString()} done` + (going ? `, ${going} in progress` : "");
+  $("totLabel").textContent = weighted ? `~${Math.round(done)} of ~${Math.round(n)} h of work done` : `${done} of ${n} done` + (going ? `, ${going} in progress` : "");
   $("totPct").textContent = pct(done, n) + "%";
   $("totBarC").style.width = (100 * done / n) + "%"; $("totBarR").style.width = (100 * going / n) + "%";
-  $("totParts").textContent = parts.map(([name, t, d]) => `${name} ${d} / ${t}`).join(" · ");
+  $("totParts").textContent = parts.map(([name, t, d, g, h]) => `${name} ${d} / ${t}` + (weighted ? ` (${each(h)})` : "")).join(" · ") +
+    (weighted ? " · weighted by the time each took so far" : "");
 }
 const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
 function ago(t) {
