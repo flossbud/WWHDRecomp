@@ -2848,7 +2848,23 @@ it in a window; D21 "Step 2"):**
   (60 half a tick ahead). Link loses 1 or 2 quarter hearts a hit at both rates. Its eye takes 2 from a cut and 4
   from a combo's finisher at both, but at 60 Link's combos never chain (B31, his combo window, top's). Its
   death (health poked to 2, then a cut): states 50-56 at the same ticks after the kill (439, 131, 2, 49 and
-  149 ticks at both).
+  149 ticks at both). **Kalle Demos** (BMD 235, vines BMDHAND 236, floor tentacles BMDFOOT 237, kinBOSS):
+  its fall driven by poking the vines' count m331 (+0x451) to 0 and m312 (+0x434) to 3 (what the last vine's
+  cut sets), with its position (x -12, z 1229: it settles at (-70, 708)) and facing (shape_angle.y 0x4000, a
+  petal toward Link: its facing is a random draw, another one at 60, where Link walked between two petals)
+  poked; Link walks in (stick up 38 frames from f1368) and cuts every 10 frames (scratch kalle-v38). Found:
+  the eat ran at double speed. Its event timeline counts mB76/mB78 (+0xC96/+0xC98), added at the end of
+  demo_camera on every step; its spit tests mB78 == 0x50 (the petals collapse) and == 0x55 (Link thrown out,
+  4 quarter hearts) after 50 ticks of chewing, and at 60 mB78 had passed them: Link was spat out unhurt and
+  let go early. `whole` on the two adds, eqwhole on their 22 equality tests (the eat, the intro's and the
+  death's timelines, the camera's cases) and on four timer edges (the fall, gravity on, two sounds). After:
+  eaten at f1493 / 1492.5, the petals collapse at 1575 / 1574, Link loses 4 at 1581 / 1579.5, let go at
+  1652 / 1651; its death (health poked to 2) gives the warp flower 629 / 630 ticks after the kill (half that
+  before). Its fall, opening and closing are in step (60 1.5-2 ticks ahead: transitions on half steps).
+  Damage given: 2 a cut and 4 a finisher at both, but at 60 four cuts landed against 30's two: the core's
+  hit read on the half step after the resolution at f1421 and f1449, contacts 30's resolutions never made
+  (Link's swing sampled half a tick off: his animations led by half a tick, top's animstart; recheck once
+  it's in). Damage taken in the idle fight (the floor tentacles): 1 a hit at both.
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,

@@ -2240,7 +2240,7 @@ namespace
 	void HitRead(uint32 obj, uint32 tg, bool hit)
 	{
 		static const bool all = getenv("WWHD_DEBUG_HITS_ALL") != nullptr;   // every hit read, "1" if on both steps
-		if (!hit || !g_rtSixty)
+		if (!hit || (!g_rtSixty && !all))                                    // (all: at 30 too, to compare)
 			return;
 		const uint32 key = obj * 2 + tg;
 		const auto it = s_hitSeen.find(key);

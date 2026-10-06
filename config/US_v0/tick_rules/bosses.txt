@@ -62,3 +62,44 @@
 020F1D84    spliti      addi            btd debris: angle x + 0x900 a tick
 020F1D8C    spliti      addi            btd debris: angle y + 0x600 a tick
 020F1D98    *h@f28      fsubs           btd debris: speed.y - gravity (f28) a tick
+#
+# ---- Kalle Demos (BMD 235, the core; BMDHAND 236, the vines; BMDFOOT 237, the floor tentacles; kinBOSS with
+# WWHD_DEBUG_BOSS=1; forest.txt has their rules). Its fall driven by poking the vines' count m331 (+0x451) to 0
+# and m312 (+0x434) to 3, what the last vine's cut sets. The edges on its whole-tick timers: m312 == 1 drops
+# it (damage_check: mode 3 and the "all vines cut" cry, again on the half step), m308[0] == 0x1E lets it fall
+# (gravity -3), m308[3] == 1 its body-up sound; the floor tentacles' sound countdown (+0xE04, `keep` after
+# the test) read 0x1E on a half step and the whole step after it. Its timers' `== 0` tests rest at 0.
+020B1ED0    eqwhole     cmpi            bmd wait: m308[3] (+0x430) == 1, its body-up sound
+020B2658    eqwhole     cmpi            bmd damage: m308[0] (+0x42A) == 0x1E, gravity on
+020B3B2C    eqwhole     cmpi            bmd damage_check: m312 (+0x434) == 1, the fall
+020B77C8    eqwhole     cmpi            bmdfoot execute: its sound countdown (+0xE04) == 0x1E
+# The eat (mode 5) and the death are events whose timeline counts mB76 (+0xC96) and mB78 (+0xC98), added at the
+# end of demo_camera (f_020B3BF8) each execute while an event runs (mB74): at 60 on both steps, so the eat ran
+# at double speed. Its spit tests mB78 == 0x50 (the petals collapse, m314 = 100) and == 0x55 (Link thrown out,
+# 4 quarter hearts) only after the 50 ticks of chewing, and mB78 had passed them: Link was spat out unhurt,
+# and the eat ended early (mB76 > 0x82). Counted once a tick, and their equality tests (the eat, the death's
+# timeline in end(), the camera's cases) read once a tick.
+020B5450    whole       sth             bmd demo_camera: mB78 (+0xC98) + 1, the event's sub count
+020B5458    whole       sth             bmd demo_camera: mB76 (+0xC96) + 1, the event's main count
+020B3018    eqwhole     cmpl            bmd move: mB78 == a value
+020B30A0    eqwhole     cmpi            bmd move: mB78 == 0x55
+020B350C    eqwhole     cmpi            bmd move: mB76 == 0x78
+020B3568    eqwhole     cmpi            bmd move: mB76 == 0x96
+020B35CC    eqwhole     cmpi            bmd move: mB76 == 0xb1
+020B3634    eqwhole     cmpi            bmd move: mB76 == 0xbe
+020B3660    eqwhole     cmpi            bmd move: mB76 == 0xd2
+020B36A4    eqwhole     cmpi            bmd move: mB76 == 0x1c2
+020B36E8    eqwhole     cmpi            bmd move: mB76 == 0x168
+020B3880    eqwhole     cmpl            bmd move: mB76 == a value
+020B38E0    eqwhole     cmpl            bmd move: mB76 == a value
+020B39EC    eqwhole     cmpi            bmd move: mB76 == 0x230
+020B3A30    eqwhole     cmpl            bmd move: mB76 == a value
+020B4194    eqwhole     cmpi            bmd demo_camera: mB78 == 0x1e
+020B42A8    eqwhole     cmpi            bmd demo_camera: mB78 == 0x1e
+020B4504    eqwhole     cmpi            bmd demo_camera: mB78 == 0x19
+020B473C    eqwhole     cmpi            bmd demo_camera: mB78 == 0x28
+020B4994    eqwhole     cmpl            bmd demo_camera: mB78 == a value
+020B49A8    eqwhole     cmpi            bmd demo_camera: mB78 == 0x96
+020B4B74    eqwhole     cmpi            bmd demo_camera: mB76 == 0x24e
+020B4D18    eqwhole     cmpi            bmd demo_camera: mB78 == 0x140
+020B5248    eqwhole     cmpi            bmd demo_camera: mB76 == 0x320
