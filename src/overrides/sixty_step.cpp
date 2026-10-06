@@ -408,8 +408,21 @@ void f_0207A9A0(PPCInterpreter_t* __restrict ctx)
 	GPR(3) = rd8(GPR(3));
 }
 
-// dCcD_GStts::Move(stts r3): clears last tick's hit state and counts a byte (+0xA8) down to 0. On a
-// half step the count stays.
+// dCcD_GObjInf::ClrAtHit(collider r3): clears its last At hit and counts its hit mark's effect counter
+// (+0x64, SubtractAtEffCounter: the spark and sound of a hit come back when it or the Tg's is 0) down to 0.
+// On a half step the count stays, as ClrTgHit's below.
+void f_02516094(PPCInterpreter_t* __restrict ctx)
+{
+	if (!HalfStep())
+		[[clang::musttail]] return orig_f_02516094(ctx);
+	const uint32 collider = GPR(3);
+	const uint8 count = rd8(collider + 0x64);
+	orig_f_02516094(ctx);
+	wr8(collider + 0x64, count);
+}
+
+// dCcD_GObjInf::ClrTgHit(collider r3): clears its last Tg hit and counts its hit mark's effect counter
+// (+0xA8, SubtractTgEffCounter) down to 0. On a half step the count stays.
 void f_0251621C(PPCInterpreter_t* __restrict ctx)
 {
 	if (!HalfStep())
@@ -418,6 +431,42 @@ void f_0251621C(PPCInterpreter_t* __restrict ctx)
 	const uint8 count = rd8(stts + 0xA8);
 	orig_f_0251621C(ctx);
 	wr8(stts + 0xA8, count);
+}
+
+// dCcS::ChkAtTgHitAfterCross(this r3, setAt r4, setTg r5, at r6, tg r7, atStts r8, tgStts r9, atGStts r10,
+// tgGStts on the stack): sets the hitters' ids and is true when a NoConHit collider's lasting contact is
+// skipped (the hitter still the old one, dCcD_GStts::Move below). A test aid: WWHD_DEBUG_CONHIT=path logs
+// each skip (game frame, half tick, the At's and the Tg's process names; their stts's actor at +0xC), the
+// contacts a converted process's extra Move made into new hits every tick.
+void f_025185F8(PPCInterpreter_t* __restrict ctx)
+{
+	static FILE* log = [] { const char* e = getenv("WWHD_DEBUG_CONHIT"); return e ? fopen(e, "w") : nullptr; }();
+	static const bool all = getenv("WWHD_DEBUG_CONHIT_ALL") != nullptr;   // every check, skipped or not
+	if (!log)
+		[[clang::musttail]] return orig_f_025185F8(ctx);
+	const uint32 atInf = GPR(6), tgInf = GPR(7), atStts = GPR(8), tgStts = GPR(9), setAt = GPR(4), setTg = GPR(5);
+	orig_f_025185F8(ctx);
+	if (GPR(3) || all)
+	{
+		const uint32 at = atStts ? rd32(atStts + 0xC) : 0, tg = tgStts ? rd32(tgStts + 0xC) : 0;
+		const auto name = [](uint32 a) { return a >= 0x10000000u && a < 0x50000000u ? (int)rd16(a + 8) : -1; };
+		// with all: the skip, setAt/setTg, the At's NoConHit and StopNoConHit bits, the Tg's NoConHit bit
+		fprintf(log, "%u %d %d %d %u %u%u %x %x\n", wwhd::rt::GameFrame(wwhd::os::SwapCount()), g_rtHalfTick ? 1 : 0,
+			name(at), name(tg), GPR(3), setAt & 1, setTg & 1, rd32(atInf + 0x50) & 5, rd32(tgInf + 0x94) & 2);
+		fflush(log);
+	}
+}
+
+// dCcD_GStts::Move(gstts r3), from an actor's execute: the At and Tg hitters' ids the last resolution set
+// become the old ones (+0xC -> +0x10, +0x14 -> +0x18) and the current ones 0. A NoConHit collider skips a
+// hitter that is still the old one (ChkAtTgHitAfterCross f_025185F8), so a contact that lasts hits once.
+// A converted process's half step moved them again between two resolutions, the old ids then 0: a lasting
+// contact hit again every tick (a converted barrier birthing a ripple a tick under Ganondorf; session
+// bottom's "contacts"). Not on a half step: the ids move once a tick, before the tick's resolution.
+void f_02515E50(PPCInterpreter_t* __restrict ctx)
+{
+	if (!HalfStep())
+		[[clang::musttail]] return orig_f_02515E50(ctx);
 }
 
 // dCcS::Set(manager r3, collider r4): enters a collider into the collision manager's lists for this

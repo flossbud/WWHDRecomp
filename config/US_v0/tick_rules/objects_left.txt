@@ -59,10 +59,10 @@
 # scanned at eight moments (f1100-2900): 0-1 blocks at 30 Hz.
 #
 # ---- Obj_Barrier (285, d_a_obj_barrier.cpp: the barrier round Hyrule Castle, gone on the 100% save, and Ganon's
-# Tower's, room 0 (the final arena), which draws only its hit ripples): left at 30. Converted (no rules: its
-# animations stepped, its glow's frame from Link's distance), a contact by process 548 there at f975 (once at
-# 30, and unconverted at 60) came back as a new hit every tick from f976, each birthing a ripple; skipping its
-# dCcD_GStts::Move on half steps (f_0251621C) didn't change that. Not found further: little to gain.
+# Tower's, room 0 (the final arena), which draws only its hit ripples): no rules (its animations stepped, its
+# glow's frame from Link's distance). Converted before sixty_step.cpp's dCcD_GStts::Move override, Ganondorf
+# standing in it (f975) came back as a new hit every tick, each birthing a ripple (its NoConHit Tg's old hitter
+# id moved again on half steps); with it, hit once at f975 as at 30.
 #
 # ---- Obj_Firewall (286, d_a_obj_firewall.cpp, stubs: the Master Sword chamber's fire walls, kenroom layers 4
 # and 5; act procs f_0234268C-f_02342C04, setPointLight f_02341EA4). Converted: its animations stepped (its

@@ -2648,10 +2648,9 @@ it in a window; D21 "Step 2"):**
     (-21882,454,28190), where he falls (0x27) every other tick at 30 as at 60 (rebirth_hyral's artifact), and a
     fall isn't in StepInEvents: converted processes whose whole step sees it don't step in that tick (the
     statues had half steps before the event and after f1140, none in it).
-  - Left at 30: the barriers (Obj_Barrier 285; on the 100% save only Ganon's Tower's final arena has one, drawing
-    only its hit ripples). Converted, a contact there (process 548, f975: once at 30 and unconverted at 60) came
-    back as a new hit every tick, each birthing a ripple, also with dCcD_GStts::Move skipped on half steps.
-    And Hyrule Castle's Triforce blocks (Obj_Tribox 44): on the 100% save only the three sunk markers remain
+  - The barriers (Obj_Barrier 285; on the 100% save only Ganon's Tower's final arena has one, drawing only its
+    hit ripples): converted once the contacts fix was in (below: Ganondorf standing in it was a new hit every
+    tick). Left at 30: Hyrule Castle's Triforce blocks (Obj_Tribox 44): on the 100% save only the three sunk markers remain
     (static); a block's push is a countdown-driven tumble that would need a `lag` the other way (+ 1/2 on whole
     ticks) and about ten counts' rules, untestable here (objects_left.txt has the addresses).
 
@@ -2679,6 +2678,21 @@ it in a window; D21 "Step 2"):**
   past. Not a set-up in his action call (WWHD_60FPS_HOLDEXTRA=71/74: no change); an animation's end found by
   a half step is the general case (a hold to the next whole tick would make it half a tick late instead).
   Left as is.
+- **Session bottom: the queue's "contacts" (round 6, 2026-10-06; `src/overrides/sixty_step.cpp`)**: a collider
+  with NoConHit (78 of the GameCube decomp's actor files: most enemies' bodies, Tg; many attacks and hazards,
+  At) is hit once by a contact that lasts: dCcS::ChkAtTgHitAfterCross (f_025185F8) skips a hitter whose id is
+  still the old one, and dCcD_GStts::Move (f_02515E50: At/Tg ids at +0xC/+0x14 become old at +0x10/+0x18, the
+  current 0), called from the actors' executes (73 calls), moves them once a tick before the tick's
+  resolution. A converted process's half step called it again between two resolutions, the old ids then 0,
+  so at 60 a lasting contact with a converted collider was a new hit every tick. Found with the barrier
+  (Obj_Barrier 285, converted: Ganondorf standing in it in Ganon's Tower's arena, f975, birthed its ripple
+  every tick from f976; once with the fix). Fix: f_02515E50 does nothing on a half step. Also on half steps
+  ClrAtHit's hit-mark counter (f_02516094, +0x64) keeps its count, as ClrTgHit's (f_0251621C, misnamed
+  dCcD_GStts::Move before) did. Test aid: `WWHD_DEBUG_CONHIT=path` logs each lasting contact skipped (frame,
+  half tick, At and Tg process names); `WWHD_DEBUG_CONHIT_ALL=1` every check with its NoConHit bits. In the
+  routes tried (save, slash, spin with a Bokoblin in its path, items, hook, a Bokoblin fight, a bomb held till
+  it blows) no lasting contact came up at 30: a hit knocks most targets out of the contact, and Link's sword
+  hit the Bokoblin once in the spin; regress unchanged.
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
