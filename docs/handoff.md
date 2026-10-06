@@ -2861,10 +2861,22 @@ it in a window; D21 "Step 2"):**
   eaten at f1493 / 1492.5, the petals collapse at 1575 / 1574, Link loses 4 at 1581 / 1579.5, let go at
   1652 / 1651; its death (health poked to 2) gives the warp flower 629 / 630 ticks after the kill (half that
   before). Its fall, opening and closing are in step (60 1.5-2 ticks ahead: transitions on half steps).
-  Damage given: 2 a cut and 4 a finisher at both, but at 60 four cuts landed against 30's two: the core's
-  hit read on the half step after the resolution at f1421 and f1449, contacts 30's resolutions never made
-  (Link's swing sampled half a tick off: his animations led by half a tick, top's animstart; recheck once
-  it's in). Damage taken in the idle fight (the floor tentacles): 1 a hit at both.
+  Damage given: 2 a cut and 4 a finisher at both, but at 60 four cuts landed against 30's two (f1421 and
+  f1449 at 60 only). With top's animstart (619dd4c) three: the combo chains as at 30 (its finisher at
+  f1464.5 against 1466), and the first cut still lands at 60 only: the sword's capsule (Link +0x7B1C, about
+  250 units long) ends at (-98, 60, 790) at 60's whole step f1421, at (-218, 50, 822) at 30's tick, the
+  core's sphere at (-85, 100, 779) r 50: the blade further back in the swing (sent to top). Damage taken in
+  the idle fight (the floor tentacles): 1 a hit at both. **Jalhalla** (BPW 211,
+  M_DaiB, spawn point 1): its mirror-shield stun counts m47E (+0x59A) up 1 an execute while its light hit
+  reads true, 200 to 255, then solid; the light's hit, from the tick's resolution, is read on both steps,
+  so at 60 it turned solid in 27.5 ticks against 30's 55. Driven: Link walks to the -z light tag (stick up
+  118 frames, a turn, ZR held: scratch jalw118), Jalhalla's attack timer held (timers[0] +0x56A = 500, its
+  wander speed m490 +0x5AC = 0) and its position set in front of him every 5 ticks (scratch jal5-poke).
+  `keep` on the add: solid 54.5 ticks after the light at 60, 55 at 30. And eqwhole on its timers' 13
+  `== 1` tests. Its waits and attacks (fire or the inhale, by distance) are cM_rndF draws: 60's first
+  attack came 26-28 ticks before 30's in every run, the random stream's own (its 65 + rnd(65) wait). Not
+  driven: the carry, the throw onto the spikes and the Poes. Link's damage: its fireballs 4, the curse 1
+  every 45 ticks at both.
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,

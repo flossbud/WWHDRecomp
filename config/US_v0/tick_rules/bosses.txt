@@ -103,3 +103,24 @@
 020B4B74    eqwhole     cmpi            bmd demo_camera: mB76 == 0x24e
 020B4D18    eqwhole     cmpi            bmd demo_camera: mB78 == 0x140
 020B5248    eqwhole     cmpi            bmd demo_camera: mB76 == 0x320
+#
+# ---- Jalhalla (BPW 211, M_DaiB with WWHD_DEBUG_BOSS=1; earth.txt has its rules; WWHD's fields are the
+# GameCube's + 0x11C). Its mirror-shield stun: each execute whose light hit reads true (mHitType 10, from the
+# tick's resolution, read on both steps at 60) adds 1 to m47E (+0x59A) from 200, solid at 255: in 27.5 ticks
+# at 60 against 30's 55 (Link in the -z light tag's beam guarding, Jalhalla held in front of him by pokes;
+# scratch jal5). Once a tick now. Its ten timers (+0x56A, `keep` before its states run) tested == 1 (the
+# environment's change, the carry's end, the Poes' phases): read once a tick.
+020D75D8    keep:r8     addi            bpw action_damage 0x51: m47E (+0x59A) + 1 a light hit, solid at 255
+020D1E60    eqwhole     cmpi            bpw kankyou_hendou: timers[5] (+0x574) == 1
+020D1EAC    eqwhole     cmpi            bpw kankyou_hendou: timers[5] (+0x574) == 1
+020D1EF8    eqwhole     cmpi            bpw kankyou_hendou: timers[5] (+0x574) == 1
+020D7CF4    eqwhole     cmpi            bpw action_damage 0x53: timers[1] (+0x56C) == 1, the carry ends
+020D8880    eqwhole     cmpi            bpw f_020D8564: a timer (+0x57C) == 1
+020D8E68    eqwhole     cmpi            bpw f_020D8564: a timer (+0x56C) == 1
+020D9D50    eqwhole     cmpi            bpw f_020D8564: a timer (+0x572) == 1
+020DA3A4    eqwhole     cmpi            bpw f_020D8564: a timer (+0x56C) == 1
+020DA554    eqwhole     cmpi            bpw f_020D8564: a timer (+0x56A) == 1
+020DA688    eqwhole     cmpi            bpw f_020D8564: a timer (+0x56C) == 1
+020DA6C4    eqwhole     cmpi            bpw f_020D8564: a timer (+0x56C) == 1
+020DB068    eqwhole     cmpi            bpw f_020D8564: a timer (+0x57C) == 1
+020DB08C    eqwhole     cmpi            bpw f_020D8564: a timer (+0x56C) == 1
