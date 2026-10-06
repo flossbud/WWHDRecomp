@@ -428,6 +428,10 @@
     {
       "id": "dungeons2",
       "name": "Round 8: predeploy routes for the dungeons' mechanics, 30 against 60 (as items2 did for the items): Dragon Roost's lava platforms and water jars, the Forbidden Woods' boomerang switches and Deku Leaf updrafts, the Tower of the Gods' beams, statues and rising water, the Earth Temple's mirrors and Medli's light, the Wind Temple's fans, springs and Iron Boots, Ganon's Tower's trials (top's)"
+    },
+    {
+      "id": "enemies2",
+      "name": "Round 8: predeploy routes fighting each enemy type, 30 against 60 (as items2 for the items): Moblin, Darknut (its armour cut off), Mighty Darknut, Wizzrobe, ReDead's freeze, Floormaster's grab, Armos, Peahat, Boko Baba, Kargaroc, Magtail, Stalfos (its head), Poe and the lantern, Miniblins, Bubbles, Gyorg; damage taken and given, reactions on 30's ticks (bottom's)"
     }
   ],
   "later": [
