@@ -1,0 +1,45 @@
+# ---- g_Counter.mTimer's readers (session top, the work queue's "mtimer"). The play scene's draw counts mTimer
+# (cCt_execCounter, 025B01B8 `whole`) after the plants' calc and before the actors' draws: on a whole tick the
+# executes read k and the draws k + 1; on a half tick a stepping process's execute reads k + 1 (a tick ahead) and
+# the draws k + 1 again (the whole tick's). So a count x speed read in a half step is half a tick back
+# (drawlag, or halfadd -IMM/2 on an integer), read in a draw half a tick on (halfadd +IMM/2), and a test that
+# picks one tick in N is kept off the half tick (else two chances a tick). Readers found by the worker's scratch
+# gcscan.py (every load of g_Counter's words), each placed by its callers (Link's proc table at 10036DF0:
+# entries of 12 bytes, {0000FFFF, function, flags}). Left as they are: the pigs (KB 220, `mTimer & 1`: not
+# converted, their execute reads 30's count), type 259 (a 4-step cycle, not converted), the Boko stick (463)'s
+# flame glow (mTimer x 120-200 a model: under a degree a tick) and its staggered ground probes (every 8 ticks
+# an element, more often at 60: same results), WWHD's slide wobble in procSlideFront/Back (0241B3E4,
+# 0241B630: only on the test stage ITest62).
+#
+# Link's damage flash (daPy_lk_c::draw f_023D9820, his draw method 023DBBE4 branches to it): the fog's start
+# swings with abs(sin(mTimer x 0x800)) (16 ticks a swing) while he's hurt, cursed or confused.
+023DA350    halfadd:0x400 rlwinm        link draw: the damage flash's angle (mTimer x 0x800 & 0xF800), half a tick on
+# daPy_npc_c::drawDamageFog (f_02445A00, from the draws of Medli, Makar and the Hyoi seagull): the same flash.
+02445A38    halfadd:0x400 rlwinm        npc drawDamageFog: the flash's angle (mTimer x 0x800), before its 16-bit mask
+# The hookshot's chain (daHookshot_shape::draw f_021768B0, from the draw lists): each link rolled by
+# z = (mTimer << 12) + ((mTimer >> 4) & 0xFFF), 22.5 degrees a tick, plus a parity term per link (on whole ticks).
+02176B6C    halfadd:0x800 rlwimi        hookshot chain draw: the first link's roll z, half a tick on
+# The Hero's Charm held up (procs DEMO_TALISMAN_WAIT 0xB7 and its init in a table of its own): the charm bobs by
+# sin(mTimer x 1512) and turns by mTimer x 511, read in Link's half step a tick ahead.
+02422ADC    halfadd:-756 mulli          link talisman wait init: mTimer x 1512 (the charm's bob), half a tick back
+02422C1C    halfadd:-756 mulli          link talisman wait: mTimer x 1512 (the charm's bob), half a tick back
+02422C80    halfadd:-255 mulli          link talisman wait: mTimer x 511 (the charm's turn), half a tick back
+# Conducting (procTactPlay f_0243A094, proc 0x9A; its other rules in tick_rules.txt): the beat's animation frame
+# from (mTimer % (2 x the beat's frames)) / that, in his half step a tick ahead.
+0243A95C    drawlag:f31 frsp            tact play: mTimer % the beat's length as a float, half a tick back
+0243AA24    drawlag:f31 frsp            tact play: the same (its other branch)
+# The King of Red Lions' yawn (daShip_c's head, f_02475DA8): idle, with cM_rnd() < 0.4 when (mTimer & 0x1FF) ==
+# 0x1FF, once in 512 ticks; his half step saw that count too, two chances (0.64): the half tick never matches.
+0247605C    halfadd:0x200 rlwinm        ship head: mTimer & 0x1FF, never 0x1FF on a half tick
+# The flags shown on Zunari's stands (STANDITEM 462, converted; the cloths dClothVobj03/04/05/07_0): one of each type
+# simulates (cloth_move when mTimer differs from the type's cloth_counter, which it then takes) and the others copy
+# its points. A half step saw the next tick's count, so the cloth moved on half ticks only, once a tick: each frame
+# gets a key of its own (mTimer on a whole tick, mTimer + 0x40000000 on a half tick) and the cloth steps every frame.
+0251ED08    halfadd:0x40000000 lwz      Vobj03 init: mTimer as the shared cloth's key
+0251EF20    halfadd:0x40000000 lwz      Vobj03 cloth_move: the same (compared, then kept as cloth_counter)
+0251F054    halfadd:0x40000000 lwz      Vobj04 init: the same
+0251F26C    halfadd:0x40000000 lwz      Vobj04 cloth_move: the same
+0251F390    halfadd:0x40000000 lwz      Vobj05 init: the same
+0251F5A8    halfadd:0x40000000 lwz      Vobj05 cloth_move: the same
+0251F6D4    halfadd:0x40000000 lwz      Vobj07_0 init: the same
+0251F8EC    halfadd:0x40000000 lwz      Vobj07_0 cloth_move: the same

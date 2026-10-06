@@ -1354,6 +1354,29 @@ it in a window; D21 "Step 2"):**
     A stepped process's late store at the tick its proc changes is dropped (m656 ends -1, not -2: harmless).
     area_test's 30 against 60 (actor_types.py, same key) paired 30's tick with 60's next whole frame in the
     cannon's run, so its moving ball read 0% the same: 60's frame before it (the half tick) held 30's values.
+  - **g_Counter.mTimer's readers (session top; the work queue's "mtimer"; `tick_rules/mtimer.txt`; shared:
+    generate.py's new `halfadd:N`, the cloth's move in `tick_rules.txt`)**: the play scene's draw counts mTimer
+    (cCt_execCounter, `whole`) after the plants' calc and before the actors' draws, so a whole tick's executes
+    read k and its draws k + 1, a half tick's stepping executes k + 1 (a tick ahead) and its draws k + 1 again.
+    `halfadd:N` adds N to the integer an instruction wrote on any half tick (g_rtHalfTick): -IMM/2 on a half step's
+    count x IMM, +IMM/2 on a draw's, +0x200 on a `count & 0x1FF` test to keep it off the half tick. Ruled: Link's
+    and the player-like NPCs' (Medli, Makar, Hyoi) damage flash in their draws, the hookshot chain's roll (its
+    draw lists), the Hero's Charm held up (procs 0xB7 and its init), the conducting's beat frame (drawlag), the
+    King of Red Lions' idle yawn (two chances a tick at 60: 0.64 instead of 0.4 every 512 ticks), and the flags on
+    Zunari's stands (STANDITEM 462: one cloth of a type simulates when mTimer differs from its key, the others copy;
+    a half step saw the next count, so they moved on half ticks only: now a key per frame). Readers placed by their
+    callers: scratch gcscan.py (the loads), a caller/pointer scan, and Link's proc table (10036DF0: 12-byte
+    entries {0000FFFF, function, flags}; the decomp's daPyProc numbers match). Left: the pigs (KB 220) and type 259
+    (not converted), the Boko stick's flame glow (under a degree a tick) and staggered ground probes, WWHD's slide
+    wobble (stage ITest62 only). Found on the way: the shared cloth (dCloth_packet_c::cloth_move f_0251D4EC: speed +=
+    force, speed *= drag, place += speed) had only its wave phases split, so every converted flag on it (Tori_Flag
+    175: Dragon Roost's path and the Flight Control Platform; Sie_Flag 176: the ships'; the stand items) moved twice
+    a tick: a probe of its points (kept out of git) measured 5.86 units a tick at 60 against 30's 3.05, 3.28 with
+    vec@/d@ on its three steps. The state track and a trial filtered by type miss it: the cloth is on the heap
+    (trial.py without --target shows its stores as "heap"). regress.sh after: one line moved, the Chuchu's spawn
+    test (206) at 60 apart 19.9 from 30's (was 7.0): the boat (converted in spawn tests) now yawns on 30's ticks,
+    and while it yawns it skips the idle test's cM_rnd, so the random stream the Chuchu draws from shifts; with
+    the boat unconverted (BASE=476,171) the builds before and after give the same 7.3. Events (warp, hook) the same.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next

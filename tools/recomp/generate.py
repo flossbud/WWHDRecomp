@@ -104,6 +104,12 @@ rules, for the code of processes that run every frame with a time step h
                draws half a count on from the whole tick's, not a whole one (the sea's ripple scroll); the
                same on any half tick, stepped or not (the plants' calc reading g_Counter.mTimer, which the
                whole tick's draw already moved on)
+  halfadd:N    after an instruction writing an integer register (a load, mulli, rlwinm...), on any half tick
+               (g_rtHalfTick: a stepping process's half step or a half tick's draw) that register + N, a
+               signed constant: g_Counter.mTimer (counted in the whole tick's draw) seen by a half step a
+               tick ahead (N = -IMM/2 on its count x IMM: half a tick back), by a half tick's draw the same as
+               the whole tick's draw (+IMM/2: half a tick on), or a once-a-tick test kept off the half tick
+               (+0x200 on count & 0x1FF, which then never equals 0x1FF)
   OP@REG       the same, for this instruction only: REG has its value back afterwards (unless the
                instruction writes it), as in `x += (t - x) * k` with k@f2 on its fmadds
   note:REG     after the instruction, the float REG is noted (g_rtNote) for an arc@ later in the step
@@ -285,6 +291,9 @@ class Program:
                 if kind in ("spliti", "lagi"):
                     assert not arg, f"tick_rules.txt:{n}: {kind} takes no argument"
                     value = None
+                elif kind == "halfadd":
+                    assert re.fullmatch(r"-?(0x[0-9a-fA-F]+|[0-9]+)", arg), f"tick_rules.txt:{n}: halfadd:N takes a signed constant"
+                    value = int(arg, 0)
                 elif kind in ("whole", "late", "hold"):
                     value = None
                     if arg:
@@ -330,6 +339,10 @@ class Program:
                 return f"{ea:08X}: spliti applies to addi rD, rA, IMM, not {i.op}"
             if kind == "lagi" and i.op != "mulli":
                 return f"{ea:08X}: lagi applies to mulli rD, rA, IMM, not {i.op}"
+            if kind == "halfadd" and i.op not in HALFADD_RD_OPS | HALFADD_RA_OPS:
+                return f"{ea:08X}: halfadd applies to an instruction writing an integer register ({', '.join(sorted(HALFADD_RD_OPS | HALFADD_RA_OPS))}), not {i.op}"
+            if kind == "halfadd" and getattr(i, "rc", 0):
+                return f"{ea:08X}: halfadd on {i.op}. would leave CR0 describing the value before the add"
             if kind == "exact" and i.op not in ("frsp", "fmr", "fsub", "fsubs", "fadd", "fadds"):
                 return f"{ea:08X}: exact applies to an instruction writing a float (frsp, fmr, fsub...), not {i.op}"
             if kind == "lagw" and (i.op != "mullw" or r3 not in (f"r{i.rA}", f"r{i.rB}")):
@@ -561,6 +574,10 @@ def emit_blocks(body, labels):
 
 WRITE = re.compile(r"\bwr(8|16|32|64)\(")   # a generated store's memory write (ppc_ops.h)
 KEEP_OPS = {"addi", "addic", "add", "fadds", "fsubs", "fadd", "fsub", "fmuls", "fmadds", "fmsubs", "fnmadds", "fnmsubs"}
+# halfadd's instructions: those writing rD (rT for the loads), and the logical ones writing rA
+HALFADD_LOADS = {"lwz", "lhz", "lha", "lbz", "lwzx", "lhzx", "lhax"}
+HALFADD_RD_OPS = {"lwz", "lhz", "lha", "lbz", "lwzx", "lhzx", "lhax", "mulli", "mullw", "add", "addi", "subf", "subfic", "divw", "divwu", "neg"}
+HALFADD_RA_OPS = {"rlwinm", "rlwimi", "rlwnm", "or", "and", "ori", "xori", "srawi", "sraw", "slw", "srw", "extsh", "extsb"}
 
 
 def reg_expr(reg):
@@ -606,6 +623,9 @@ def apply_tick_rule(rule, i, lines):
     if kind == "spliti":
         imm = emit.hx(i.simm & 0xFFFFFFFF)
         return lines + [f"if (RT_STEPPED()) GPR({i.rD}) = GPR({i.rD}) - {imm} + rt_step_split({imm});   // step rule: {what}"]
+    if kind == "halfadd":
+        dest = i.rA if i.op in HALFADD_RA_OPS else i.rT if i.op in HALFADD_LOADS else i.rD
+        return lines + [f"if (g_rtHalfTick) GPR({dest}) = GPR({dest}) + {emit.hx(arg & 0xFFFFFFFF)};   // step rule: {what}"]
     if kind == "lagi":
         half = emit.hx((int(i.simm / 2)) & 0xFFFFFFFF)
         return lines + [f"if (RT_STEPPED() && RT_WHOLE_TICK()) GPR({i.rD}) = GPR({i.rD}) - {half};   // step rule: {what}"]

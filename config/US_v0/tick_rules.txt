@@ -710,6 +710,13 @@
 # two phases advanced a tick, everything else computed from them
 0251C9A4    split@r0    add             cloth wave: a phase (+0x1B4) += its step (+0x1B6)
 0251C9AC    split@r4    add             cloth wave: a phase (+0x1B8) += its step (+0x1BA)
+# ... and its move (dCloth_packet_c::cloth_move f_0251D4EC: per point speed += getFactor's force, speed *= mDrag
+# (+0x1A8), the new place = the old + speed): unstepped, every converted cloth (Tori_Flag 175, Sie_Flag 176, the
+# stand items' flags 462) moved twice a tick at 60. A probe of the points (session top, mtimer: the Flight
+# Control Platform's flags, sea,0,14,2) measured 5.86 units a tick against 30's 3.05.
+0251D694    vec@r4      bl 028e8d88     cloth move: a point's speed += its force
+0251D6B4    d@f1        bl 028e8e64     cloth move: speed *= mDrag
+0251D704    vec@r4      bl 028e8d88     cloth move: the new place += speed
 #
 # ---- step rules: Chuchus (CC, process 206, d_a_cc.cpp). Found with the step-doubling trial on one
 # spawned on the Outset dock (WWHD_DEBUG_SPAWN=950:206,0,-201622,190,312700, route save).
