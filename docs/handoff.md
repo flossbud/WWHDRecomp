@@ -2713,6 +2713,23 @@ it in a window; D21 "Step 2"):**
   it blows) no lasting contact came up at 30: a hit knocks most targets out of the contact, and Link's sword
   hit the Bokoblin once in the spin; regress unchanged.
 
+- **Session bottom: the queue's "pushes" (round 6, 2026-10-06; `src/overrides/sixty.cpp`, "collision pushes
+  at 60")**: the collision resolution (cCcS::Move f_0200E558, whole ticks) clears each Co collider's push
+  (its Stts's cc_move: the Stts at the collider's +0x44, the push at +0) and sets it from the tick's overlaps;
+  the actor moves by it in its next execute (fopAcM_posMove(this, GetCCMoveP()), Link's posMove), and only
+  Link clears it after use. A converted actor steps twice before the next resolution, so it was pushed twice a
+  tick: a Bokoblin spawned in Link's walk on the Outset dock (WWHD_DEBUG_SPAWN=985:189,0,-201675,190,312560,0,
+  8000; route: the save route, then the stick down 70 frames from f960) drifted from 30's path, 11 units at
+  f989 to ~110 by f1013. Now the resolution notes its Co colliders and a converted, stepping actor's push is
+  half of it on the half tick and the other half on its whole step (all of it if its half step didn't run):
+  the Bokoblin within 4-54 units of 30's (the fight's own spread). Link's own pushes, which he cleared, now
+  come half and half too. Test aids: `WWHD_DEBUG_PUSHLOG=path` (every resolution's pushes, at 30 too),
+  `WWHD_60FPS_PUSHSPLIT=0`. Not this: the land route's tower-leg push (drifts) is the ground check's wall
+  correction, no Co push; at 60 Link meets that wall 4.9 units back (his heading, the camera item) and the
+  stick is let go before he reaches the leg; held 70 frames longer he is pushed there at 60 too (32 units in
+  four ticks against 30's 37). The pig Link walks into (KB 220) isn't pushed either: it runs from him (its
+  sideways drift at 60 is its own).
+
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.

@@ -2105,6 +2105,121 @@ namespace
 	}
 }
 
+// ---- collision pushes at 60 (session bottom's "pushes") ---------------------------------------------
+// The collision resolution (cCcS::Move, f_0200E558: whole ticks only) clears each Co collider's push
+// (its Stts's m_cc_move, +0: ClrCoHitInf) and sets it again from this tick's overlaps; the actor moves by
+// it in its next execute (fopAcM_posMove(this, GetCCMoveP()), Link's posMove), and most actors never clear
+// it: it stays until the next resolution. A converted process steps twice before that (its half step,
+// then the next whole one), so it was pushed twice a tick (a pig Link walks into slid sideways half as far
+// again and fell off the dock elsewhere). Now each whole tick's Co colliders are noted after the
+// resolution; on the half tick a stepping process's push is half of it, and after the half tick the other
+// half is left for its whole step (all of it, if it didn't step), so the two steps move it one tick's
+// push, half a step each. WWHD_60FPS_PUSHSPLIT=0 (a probe) turns it off.
+namespace
+{
+	bool PushSplit()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_PUSHSPLIT"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	struct CoPush { uint32 stts, actor, id; uint16 name; uint32 move[3]; bool halved; };
+	std::vector<CoPush> s_coPushes;                // the last whole tick's Co colliders' Stts
+	uint32 s_coPushesSwap = ~0u;                    // the swap whose resolution noted them
+
+	bool LiveActor(const CoPush& c)
+	{
+		return c.actor >= 0x10000000u && c.actor < 0x50000000u && rd32(c.stts + 0xC) == c.actor &&
+			rd32(c.actor + 4) == c.id && rd16(c.actor + 8) == c.name;
+	}
+
+	// a half tick's start: a stepping process's push, half of it
+	void PushesHalfTickBegin()
+	{
+		const bool fresh = s_coPushesSwap + 1 == wwhd::os::SwapCount();   // this tick's resolution's (not a pause's)
+		for (CoPush& c : s_coPushes)
+		{
+			c.halved = false;
+			if (!fresh)
+				continue;
+			if (!LiveActor(c) || !Converted(c.name))
+				continue;
+			const auto it = s_stepping.find(c.actor);
+			if (it == s_stepping.end() || !it->second)
+				continue;
+			for (int i = 0; i < 3; i++)
+			{
+				c.move[i] = rd32(c.stts + 4 * i);
+				wr32(c.stts + 4 * i, std::bit_cast<uint32>(std::bit_cast<float>(c.move[i]) * 0.5f));
+			}
+			c.halved = true;
+		}
+	}
+
+	// a half tick's end: the other half for its whole step (all of it if the half step didn't run)
+	void PushesHalfTickEnd()
+	{
+		for (const CoPush& c : s_coPushes)
+		{
+			if (!c.halved || !LiveActor(c))
+				continue;
+			const auto it = s_stepping.find(c.actor);
+			const bool stepped = it != s_stepping.end() && it->second;
+			for (int i = 0; i < 3; i++)
+				wr32(c.stts + 4 * i, std::bit_cast<uint32>(std::bit_cast<float>(c.move[i]) * (stepped ? 0.5f : 1.0f)));
+		}
+	}
+}
+
+// cCcS::Move(manager r3): the tick's collision resolution (CalcArea, ChkAtTg, ChkCo, MoveAfterCheck),
+// then the lists emptied (their counts, +0x2800 At, +0x2804 Tg, +0x2808 Co, +0x280C all; the Co list at
+// +0x1000, a collider's Stts at +0x44). At 60 the Co colliders are noted for the half tick (above).
+void f_0200E558(PPCInterpreter_t* __restrict ctx)
+{
+	// WWHD_DEBUG_PUSHLOG=path (a test aid, at 30 too): after each resolution, the Co colliders pushed (swap,
+	// process name, Stts, the push)
+	static FILE* dbg = [] { const char* e = getenv("WWHD_DEBUG_PUSHLOG"); return e ? fopen(e, "w") : nullptr; }();
+	if (!dbg && (!g_rtSixty || g_rtHalfTick || !PushSplit() || !AnyConverted()))
+		[[clang::musttail]] return orig_f_0200E558(ctx);
+	const uint32 ccs = GPR(3);
+	s_coPushes.clear();                              // (noted for the log at 30 too; the half tick needs 60)
+	s_coPushesSwap = wwhd::os::SwapCount();
+	const uint32 count = std::min(rd32(ccs + 0x2808), 0x100u);
+	for (uint32 i = 0; i < count; i++)
+	{
+		const uint32 obj = rd32(ccs + 0x1000 + 4 * i);
+		const uint32 stts = obj ? rd32(obj + 0x44) : 0;
+		if (!stts)
+			continue;
+		const uint32 actor = rd32(stts + 0xC);
+		if (actor < 0x10000000u || actor >= 0x50000000u)
+			continue;
+		bool seen = false;
+		for (const CoPush& c : s_coPushes)
+			seen = seen || c.stts == stts;
+		if (!seen)
+			s_coPushes.push_back({ stts, actor, rd32(actor + 4), rd16(actor + 8), {}, false });
+	}
+	orig_f_0200E558(ctx);
+	if (dbg)
+	{
+		bool any = false;
+		for (const CoPush& c : s_coPushes)
+			if (rd32(c.stts) || rd32(c.stts + 4) || rd32(c.stts + 8))
+			{
+				if (!any)
+					fprintf(dbg, "%u:", wwhd::os::SwapCount());
+				any = true;
+				fprintf(dbg, " [%u %08x %g,%g,%g]", c.name, c.stts, std::bit_cast<float>(rd32(c.stts)),
+					std::bit_cast<float>(rd32(c.stts + 4)), std::bit_cast<float>(rd32(c.stts + 8)));
+			}
+		if (any)
+		{
+			fprintf(dbg, "\n");
+			fflush(dbg);
+		}
+	}
+}
+
 // fw_procFrame, sead's procFrame_: one whole frame (the tick, the draw, the present, the vsync wait).
 // At 60 fps it decides whether the frame is a whole or a half tick (see the top); with the store
 // census on, a half tick's frame is watched from end to end.
@@ -2173,7 +2288,11 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 				g_rtStorePages = s_page.data();         // HalfTickStore does nothing with stores into other pages
 		}
 	}
+	if (PushSplit())
+		PushesHalfTickBegin();                       // a stepping process's push, half of it this half tick
 	orig_f_0274C264(ctx);
+	if (PushSplit())
+		PushesHalfTickEnd();                         // and the other half for its whole step
 	if (watch)
 	{
 		g_rtJournalOn = wwhd::rt::QuietWatching();   // a fast path's watch may still need it
