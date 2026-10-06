@@ -3256,6 +3256,17 @@ it in a window; D21 "Step 2"):**
     first. (2) the approaches' factor for a moving target (h k / (1 - k + h k), which keeps a steady pursuit's
     lag 30's) on the camera's steps: the circle -6.6, the octagon no better. (3) Link's half step reading the
     camera's control angle as the tick began: the circle -11.6. Neither kept.
+  - **B62, enemies take more sword hits at 60 (enemies2; open)**: the fight route (Outset's grass, the enemy 150
+    units ahead, Z and B every 15 frames f1000-1285; scratch hits.sh varies the spawn tick): Bokoblin f950 1 hit at
+    30 against 3 at 60, f954 3 and 3 (killed f1089 and f1050), f958 0 and 3; Moblin f950 1 and 3, f954 2 and 4,
+    f958 1 and 2; damage per hit the same. Bokoblin (WWHD's damagereaction at +0x49C: mMode +0x4A0, mAction
+    +0x4A2): its actions last as long at both rates (its stick swing, action 5 mode 1, 45 ticks), and Link's cuts
+    end in CUT_REVERSE (0x5A, his sword thrown back by its stick) at both until the fights' timing parts: at f1240
+    its swing started half a tick before Link's cut at 60 (f1239.5, a decision on a half step) and the cut landed;
+    at 30 it started on the cut's tick and threw the sword back. So no duration is short; the enemies' decisions
+    on half steps shift their cycles against Link's whole-tick presses. Whether that favours Link systematically
+    (5 of 6 variants) or by chance needs more samples. The Floormaster's grab (M_Dai room 6, Link placed by it):
+    as at 30 (186 ticks held, the same exit), 2 ticks early (it notices Link on a half step, f1100.5 against 1101).
 - **Session main: sail's launch (predeploy's sail, WARN ~51)**: from session top's look. At 60 the boat sets sail in
   the half step of f1119, a tick-half before 30's f1120; the 19 units gained then are most of the route's lag.
   The trigger is the ship's own mast animation (daShip's mpBodyAnm, frame >= 7 / checkFrame(7)), played in its
