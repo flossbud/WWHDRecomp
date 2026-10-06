@@ -3116,6 +3116,24 @@ it in a window; D21 "Step 2"):**
   walk's half step in the air took its foot-driven speed (17 where 30 had 14.4) and jumped off the dock higher, and the
   routes with it failed; the half step that waits must not move him. WWHD_60FPS_GROUNDHOLD=0 turns it off.
 
+- **Session bottom: the queue's "enemies2" (round 8, 2026-10-06; in progress; `tick_rules/enemies2.txt`)**: a fight
+  route per enemy type (tools/reference/routes/en-NAME-100.txt, routes.sh's `en-*`): Link placed on Outset's grass by
+  the lookout tower (WWHD_DEBUG_PLACE=940:-202850,375,317518; the dock threw fighters into the sea), the enemy spawned
+  150 units ahead facing him, ZL and a slash every 15 frames from f1000 to f1240; the Savage Labyrinth's one-type
+  rooms (Cave09 7 Armos, 6 Wizzrobe, 5 Magtail; Cave10 3 Boko Baba) for the ones a spawn doesn't make; the Mighty
+  Darknut as TN params 54 with angle x E0 (its helmet, shield and cape). Link's life: the save's 0x145B7B80 (current
+  and max quarter hearts) watched per rate. Damage to Link a hit is the same at both rates (Moblin 1, Darknut 2,
+  Stalfos 2, Poe 2, the ReDead's bite 1 every 30 ticks); the ReDead's freeze (0xB8) and grab (0xCE/0xCF) come within a
+  tick of 30's; the Darknut's knockback to its get-up 50 ticks at both. The step-doubling trial over each fight
+  (bottom's scratch ftrials) found the Darknut's and the Stalfos's dust swirl turning twice as fast (spliti/split) and
+  the Kargaroc's two halved angles (whole); its other lines are derived (eye, attention, old places), states reached
+  a step sooner, pushes (the Magtail's cc_move add, push split's in a real run) and the ReDead's grab-escape count
+  (presses a real half tick masks). predeploy takes the ReDead, Peahat, Miniblin and Boko Baba fights (ends within
+  34 units); the others part within a few ticks (half-tick AI starts: the Moblin walks off half a tick early and stops
+  at its range a step sooner; the Darknut's first blow came 61 ticks early at 60, its cause not found) and stay out.
+  The Floormaster: M_Dai room 4's are switched off on the finished save; room 6's (spawn point 7, route en-fm) rises at
+  f1214 (60: 1212.5) and doesn't reach Link in the route's window (its grab untested).
+
 - **Session main: sail's launch (predeploy's sail, WARN ~51)**: from session top's look. At 60 the boat sets sail in
   the half step of f1119, a tick-half before 30's f1120; the 19 units gained then are most of the route's lag.
   The trigger is the ship's own mast animation (daShip's mpBodyAnm, frame >= 7 / checkFrame(7)), played in its

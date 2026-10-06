@@ -17,3 +17,6 @@
 # down or a fall) whole, and the half step after the move that lost the ground neither calls his action nor moves him
 # (sixty.cpp's GroundHold): his next whole step starts where 30's next tick does (a drop: fall and land at 30's ticks).
 0240D5A4    whole:r3=0  bl 023f81a4     link execute: changeAutoJumpProc (the ground lost: auto jump, ledge, fall)
+# procLandDamage (f_0241DC30, 0x26) waits out m34D0 (+0x6916, mProcVar0) once its animation stops, a count a step:
+# whole (a drop from 1200 units: waiting again 1.5 ticks early before; session bottom's "landings").
+0241DCC8    whole       sth             link procLandDamage: m34D0 (+0x6916) - 1 (tested > 0 only)

@@ -60,7 +60,9 @@ route_info() {
         sail)  route=sail-100.txt      frames=2940  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/sail-det/a.zst ;;
         menus) route=menus-100.txt     frames=1920  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/menus-det/a.zst ;;
         warp)  route=warp-100.txt      frames=3780  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/warp-det/a.zst ;;
+        en-am|en-wz|en-mt|en-bo|en-fm) route=$1-100.txt frames=1500 save=/wwhd/data/saves/wwhd_100 trace= ;;   # enemies2's stage fights
+        en-*)  route=$1-100.txt        frames=1400  save=/wwhd/data/saves/wwhd_100 trace= ;;   # enemies2: en-NAME-100.txt
         *) return 1 ;;
     esac
 }
-route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock"
+route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo"

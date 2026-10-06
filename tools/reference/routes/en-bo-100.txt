@@ -1,0 +1,30 @@
+# Route: Boko Babas (BO 214) in the Savage Labyrinth (Cave10 room 3, warped to) (session bottom, the work queue's "enemies2"), with the 100% save: targeted (ZL) and slashed (B) every 15 frames, then left to it.
+# FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_STAGE=920:Cave10,0,3,-1
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+1060 ZL 350      # target it
+1075 B 3
+1090 B 3
+1105 B 3
+1120 B 3
+1135 B 3
+1150 B 3
+1165 B 3
+1180 B 3
+1195 B 3
+1210 B 3
+1225 B 3
+1240 B 3
+1255 B 3
+1270 B 3
+1285 B 3
+1300 B 3
+1315 B 3
+1330 B 3
+1345 B 3
+1360 B 3
+1375 B 3
+1390 B 3

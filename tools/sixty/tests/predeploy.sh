@@ -21,14 +21,18 @@
 # b924f3f) all 32 passed but land 82, sidle 62 and sail 51 (WARN, known); the item routes' ends 0-12 units. On
 # 2026-10-06 (dungeons2, on ww-4 4700fb6) all 38 passed but the same three; the dungeon routes' ends 0-25 units. Not in it: walk without a stage warp (Link swims off the
 # dock for 1900 ticks with camera-relative strokes: 7000 units apart, the runs' headings drift) and mob (a
-# fight: the random stream).
+# fight: the random stream). Enemy fights (session bottom's enemies2: tools/reference/routes/en-*-100.txt, Link on
+# Outset's grass or in the Savage Labyrinth, ZL and a slash every 15 frames): in it, the ReDead (its freeze and
+# grab), the Peahat, the Miniblins and the Boko Babas, which end within 34 units; not in it, the fights a knockback
+# or a dodge parts within a few ticks (half-tick AI starts and the random stream: Moblin 298, Darknut 790, Bokoblin
+# 665, Magtail 325; Kargaroc, Stalfos, Poe, Bubble, Armos, Wizzrobe 43-82).
 # The 30-tick runs are kept in $OUT/predeploy/ROUTE/30 and reused (30 is the same with every build: the
 # checks prove it); REDO30=1 plays them again (after a route's file or the 60 switch's start changed).
 # PREDEPLOY_JOBS routes run at once (default 4), each with a copy of the binary in a folder of its own.
 # Output: game state, it stays on the worker.
 set -e
 source "$(dirname "$0")/common.sh"
-routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land sidle pot plants slash sail menus tour boomerang bombs grapple boots hammer armor mirror heavy drcjar fwbud tgbeam wtspring medli gtrock)
+routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land sidle pot plants slash sail menus tour boomerang bombs grapple boots hammer armor mirror heavy drcjar fwbud tgbeam wtspring medli gtrock en-rd en-ph en-pz en-bo)
 P=$OUT/predeploy; mkdir -p "$P"
 jobs=${PREDEPLOY_JOBS:-4}
 run_one() {

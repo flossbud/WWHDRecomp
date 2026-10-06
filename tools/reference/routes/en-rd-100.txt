@@ -1,0 +1,27 @@
+# Route: a ReDead (RD 224) spawned 150 units ahead of Link on Outset's grass by the lookout tower (Link placed there), facing him (session bottom, the work queue's "enemies2"), with the 100% save: targeted (ZL) and
+# slashed (B) every 15 frames, then left to it. FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by
+# tools/sixty/run.sh.
+#env WWHD_DEBUG_PLACE=940:-202850,375,317518
+#env WWHD_DEBUG_SPAWN=950:224,0,-202850,375,317368,0,0
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+985 ZL 265      # target it
+1000 B 3
+1015 B 3
+1030 B 3
+1045 B 3
+1060 B 3
+1075 B 3
+1090 B 3
+1105 B 3
+1120 B 3
+1135 B 3
+1150 B 3
+1165 B 3
+1180 B 3
+1195 B 3
+1210 B 3
+1225 B 3
+1240 B 3

@@ -1,0 +1,18 @@
+# The work queue's "enemies2" (session bottom, 2026-10-06; format: ../tick_rules.txt): fight routes per enemy type at
+# 30 and 60 (tools/reference/routes/en-*-100.txt: Link placed on Outset's grass by the lookout tower, the enemy
+# spawned 150 units ahead, ZL and a slash every 15 frames; the Savage Labyrinth's and the Earth Temple's rooms for the
+# ones only made there), the step-doubling trial on each over its fight (most of its lines derived: eye and attention
+# places, old places, a state reached a step sooner; the ReDead's grab-escape count reads presses a real half tick
+# never has).
+#
+# ---- the dust swirl a Darknut and a Stalfos raise as they land or spin (smoke_set_s at a point on a circle whose
+# angle steps 2000 a tick, d_a_tn.cpp m042E, d_a_st.cpp m1F7E; REG0_S(7) beside it): the step split between the
+# steps, so it turns at its 30 Hz speed
+024BEC04    spliti      addi            tn smoke swirl (f_024BD170): m042E (+0x54A) += 2000 a tick
+024BEC78    spliti      addi            tn smoke swirl: m042E += 0x1FA0 a tick (its other kind)
+024956E8    spliti      addi            st smoke swirl (f_02493FB0): m1F7E (+0x21C6) += or -= 2000 a tick
+024956C8    split@r0    add             st smoke swirl: m1F7E += (5000 + REG) x m0308 a tick (its other kind)
+#
+# ---- the Kargaroc (BB 181): two angles halved toward another a tick (x = (x - y) / 2, f_0205EA58): once a tick
+020616FC    whole       sth             bb execute: +0xDB0 = (+0xDB0 - +0xDD0) / 2
+02061714    whole       sth             bb execute: +0xDAA = (+0xDAA - +0xDD0) / 2
