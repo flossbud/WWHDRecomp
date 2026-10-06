@@ -19,6 +19,7 @@
 // D21 ("Where the per-tick steps are"); the GameCube decomp has their source (c_lib.cpp,
 // f_op_actor_mng.cpp, J3DAnimation.cpp).
 #include "override.h"
+#include <algorithm>
 #include <bit>
 #include <cmath>
 #include <unordered_map>
@@ -117,6 +118,26 @@ void rt_step_fall(double dv)
 {
 	if (g_rtActor)
 		s_fall[g_rtActor] = { (float)dv, StepId() };
+}
+
+// surf step rules (tools/recomp/generate.py): a height put back on a surface (the water's) that the actor's
+// posMove then moves off by speed.y (+0x340). At 30 the tick puts it back and moves it a tick: speed.y + gravity
+// (+0x374), at least maxFallSpeed (+0x378). Sinking (speed.y <= 0: each step ends under the surface again and is
+// put back again) the put-back keeps (1 - h) of the speed it starts the step with and (1 - h)/2 of what gravity
+// adds in it, so that h of the speed after (the posMove override, with its arc correction) ends the step where
+// 30's tick ends: on the half step exactly 30's height, and a speed held at maxFallSpeed rests at 30's height on
+// both steps (put back on the whole step only, it rested 50 under the surface on the whole step and 100 on the
+// half step: the fishman's, outset.txt). Rising (a jump out of the water) the step leaves the surface and isn't
+// put back on the next: the plain put-back, two half moves make 30's tick.
+double rt_step_surface(double y)
+{
+	if (!g_rtActor)
+		return y;
+	const double h = Step(), vy = rdf(g_rtActor + 0x340);
+	if (vy > 0.0)
+		return y;
+	const double vy1 = std::max(vy + h * (double)rdf(g_rtActor + 0x374), (double)rdf(g_rtActor + 0x378));
+	return (double)(float)(y + (1.0 - h) * vy + (1.0 - h) * 0.5 * (vy1 - vy));
 }
 
 // ---- c_lib (c_lib.cpp): exponential approaches ------------------------------------------------------

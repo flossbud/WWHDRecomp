@@ -681,11 +681,33 @@
 # files them under the next profile, VigaH 297): keep where the count is tested after it changes (or its
 # value used right after), late on the store where it is tested before
 02041248    keep:r11    addi            enemy common: a count (+0xE(r28)) - 1, tested after
-02041BDC    late        sth             enemy common: a count (+0x8(r31)) - 1, tested before
+02041BDC    whole       sth             enemy_fire: mFireTimer (+0x8) - 1, tested before (whole + its test's eqwhole below: was late, which counted in the half step of the tick it was lit, a count ahead of 30's, and put it out half a tick early)
 02042AC4    keep:r8     addi            enemy update: a count (+0x4D2) - 1, its value multiplied after
 02043A7C    keep:r4     addi            enemy update: a count (+0x7C8) - 1, tested after
 02043AA4    late        sth             enemy update: a count (+0x7E6) - 1, tested before
-02041A1C    late        sthx            enemy common: a timer array (+0x44[i], 10 slots) - 1 a call, tested before (at 0 its slot is cleared; f_02041570)
+02041A1C    whole       sthx            enemy_fire: a flame's timer (+0x44[i], 10 slots) - 1 a call, tested before (at 0 the flame goes out; whole + eqwhole, as mFireTimer)
+# enemy_ice (c_damagereaction.cpp, f_020402C8; the struct is the enemy's mEnemyIce: Bokoblin, Moblin, Darknut,
+# ChuChu, Keese, Kargaroc, ReDead, Stalfos, Armos, Floormaster, Miniblin). Above: its freeze count (+0xE, keep).
+# The frozen block's own motion each call (session top, items2: an ice arrow on a Bokoblin): it pops up (speed.y
+# 30), falls 5 a tick, spins by a random angular speed, hangs 40 ticks first when the freeze killed it, slides
+# and halves its speed on the ground; a light arrow's shrink counts a call; at 60 each ran twice a tick.
+02040D10    vec@r4      bl 028e8d88     enemy_ice frozen: current.pos += mSpeed (+0x18), the block's move: h of it
+02040D20    late        stfs            enemy_ice frozen: mSpeed.y - 5 a tick, stored once at its end (the move before it takes the tick's speed: explicit Euler, as 30)
+02040D28    split@r0    add             enemy_ice frozen: shape_angle.y += mAngularVelY (+0x14) a tick
+02040CD0    split@r0    add             enemy_ice frozen: the same (m00C 2, no fall)
+02040D8C    d@f13       fmuls           enemy_ice frozen (ice_bg_check): on the ground mSpeedF (+0x24) x 0.5 a tick
+02040E9C    late        sth             enemy_ice frozen: mMoveDelayTimer (+0x10) - 1, tested at the next call's start (its hang in the air)
+0204037C    keep:r9     addi            enemy_ice light shrink: mLightShrinkTimer (+0x6, s8) + 1, tested after (its 70 and 90)
+020413FC    eqwhole     cmpi            enemy_ice: mFreezeTimer (+0xE) == 20, the thaw's particle and sound (the count keeps the half step at 20)
+# enemy_fire (f_02041570; the enemy's mEnemyFire), burning: the flames lean against the move and grow with its
+# speed, from pos - mPrevPos (+0x80), a step's move at 60 (half a tick's: half the lean); its one hitbox moves to
+# the next flame each call.
+020418B0    /h:f27      lfs             enemy_fire burning: vel.x (pos - mPrevPos, a step's move) made a tick's: the flames' lean and size
+020418B4    /h:f25      lfs             enemy_fire burning: vel.y
+020418BC    /h:f26      lfs             enemy_fire burning: vel.z
+02041B14    keep:r6     addi            enemy_fire burning: mHitboxFlameIdx (+0x9D) + 1, the flame that carries the fire's hitbox (once a tick)
+02041B64    eqwhole     cmpi            enemy_fire burning: mFireTimer == 0, the fire out (its count whole: lit in a whole step, its first count the next tick's, as 30's)
+020419E4    eqwhole     cmpi            enemy_fire burning: a flame's timer == 0, that flame out
 # the enemies' own counts a call (counter_audit.py, as above): Bokoblin, Darknut, Moblin, the Bokoblin's stick
 0209BF2C    keep:r4     addi            bk: a count (0x3fb(r30)) - 1 a call, tested after (f_0209BD1C)
 0209C0BC    late        sthx            bk: a count (r22,r7) - 1 a call, tested before (f_0209BD1C)

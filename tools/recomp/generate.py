@@ -75,6 +75,12 @@ rules, for the code of processes that run every frame with a time step h
   k75:REG      an approach whose result is then approached by 0.75 (k@ on that one): REG becomes
                approach(0.75 REG) / approach(0.75), so the two together approach as one tick does
   d:REG        after it, REG = REG^h (a damping factor)
+  surf:fREG    after it, while the executing actor's speed.y is 0 or down, the float REG plus (1 - h) of that
+               speed and (1 - h)/2 of what gravity will add to it this step (fopAcM_calcSpeed's, maxFallSpeed
+               held): a height put back on a surface that the actor's posMove then takes under again (the
+               fishman back on the water, then posMoveF): at 30 a tick's put-back and a tick's move; with h's
+               move after it the step ends where 30's tick does, a speed held at maxFallSpeed resting at the
+               same height on both steps (rising out of it, the plain put-back: the next step isn't put back)
   split:REG    after it, an integer per-tick amount split between the whole tick and the half tick
                (REG - REG/2, then REG/2: the two add up to the 30 Hz step exactly)
   eqwhole      on a compare (cmpi, cmpl...) whose next reader is a branch on its EQ bit (beq, bne): a count
@@ -257,7 +263,7 @@ class Program:
             self.entries |= {a for a, _, _ in self.synthetic}
 
     STEP_OPS = {"*h": "rt_step_mul", "/h": "rt_step_div", "k": "rt_step_approach", "d": "rt_step_damp",
-                "k75": "rt_step_approach75", "*hh": "rt_step_mul(rt_step_mul({}))",
+                "k75": "rt_step_approach75", "*hh": "rt_step_mul(rt_step_mul({}))", "surf": "rt_step_surface",
                 "lag": "({} - (RT_WHOLE_TICK() ? 0.5 : 0.0))", "drawlag": "({} - 0.5)"}
 
     def load_tick_rules(self, path):

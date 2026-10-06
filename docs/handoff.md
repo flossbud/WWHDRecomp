@@ -3111,17 +3111,37 @@ it in a window; D21 "Step 2"):**
   out on. **heavy** (session main's boulder; its spawn now an `#env` line): actions in 30's ticks; the boulder
   lands 32 units past 30's spot (main's heavythrow cause). **arrows** (an ice arrow on a Bokoblin, a fire arrow on
   the frozen block, a fire arrow on a second): not in predeploy until the random stream holds (the Bokoblin went
-  for Link at f1023.5 at 60). enemy_ice's timer and enemy_fire's were ruled already (02041248, 02041BDC,
-  02041A1C); its frozen block's pop and spin and the 40-tick hang (pos += speed, speed.y -= 5, mMoveDelayTimer)
-  are not, to look at once a frozen enemy can be compared.
+  for Link at f1023.5 at 60). **B40**: enemy_ice and enemy_fire (c_damagereaction.cpp, the twelve enemies that
+  freeze or burn) ran on both steps but for their counts: the frozen block's pop (speed.y 30, then 5 a tick:
+  `vec@` on its move, `late` on the fall), its spin (`split`), its slide's halving on the ground (`d`), the
+  40-tick hang when the freeze killed it (`late`), the light arrow's shrink count (`keep`; its sound at 70
+  still plays on both steps: the compare's equal case is a fall-through, not eqwhole's beq/bne), the thaw's cue
+  at 20 (`eqwhole`), the burning flames' lean and size (a step's move: `/h`) and the flame that carries the
+  fire's hitbox (`keep`). The burn's counts were `late` (session top's counter audit), which counted in the
+  half step of the tick the fire was lit: a count ahead of 30's and out half a tick early; now `whole` with
+  `eqwhole` on their `== 0` tests (tick_rules.txt, after the enemy common's). Tested by poking a spawned
+  Bokoblin (mEnemyIce at +0x13BC: `WWHD_DEBUG_POKE=1000:189,13c0,2,12c` freezes it 300 ticks; mEnemyFire at
+  +0x1774: `1000:189,1778,2,64` sets it burning 100): the block's speed.y, height steps and freeze count on
+  30's ticks, its thaw at f1299 at both rates; the fire's count 100 at f1000 to 0 at f1100, out at f1101 at
+  both, one count a tick for each flame.
   The random stream (with session bottom, whose RNDSYNC fix is b924f3f): on the save route 30 and 60 drew alike
   until a seagull's half-step draw (bottom's), then the fishman (NPC_SO 118): its _execute puts it back on the
   water's surface when under it and posMoveF then moves it by speed.y, which lies at maxFallSpeed (-100) while it
   waits under the water: at 30 it rests 100 under; put back on both steps it rested 50 under at 60, another height
-  for its ground check and mode, and its jump drew at f914.5 against 30's f918. The put-back and what its swim
-  modes do to its height before it (the pull toward the circling point, mB34 under the water, and modeNearSwim's
-  pos.y += mB34) are whole-tick only now (outset.txt): its half step's height equals 30's on every tick (-57.5,
-  -60, ... -100), x and z within 1.6 units, its heading within 85.
+  for its ground check and its swim animation (setAnmSwimSpeed plays it at the step's move / 10), so the random
+  choice at the animation's end drew at another tick (f914.5 against 30's f918). New step op **`surf`**
+  (generate.py, ppc_ops.h, sixty_step.cpp's rt_step_surface): the put-back keeps (1 - h) of the speed the step
+  starts with and (1 - h)/2 of what gravity adds in it, so the posMove after it ends the step where 30's tick
+  ends: its height is 30's on every half step (-57.5, -60, ... -100) and rests at -100 on both. (Put back on
+  whole ticks only, as tried first, it rested 50 under on the whole step and 100 on the half: its animation
+  then played at full speed from the 50-unit hop each step and drew two ticks early; and its swims' pull toward
+  the circling point, which the put-back wipes at 30, stood on the half step.) Rising out of the water (its
+  jump) the plain put-back: the next step isn't put back. Its near swim's pos.y += mB34 is `*h`, the swim
+  animation's speed from the step's move `/h` (outset.txt). **B41**. The stream still parts on the save route,
+  now at f908 (was 914.5): its swim animation's frame lags 30's by up to half a frame (the pull toward the
+  circling point is a stepped approach to a moving point: a step's move a few percent under half a tick's), and
+  setAnm draws when the frame is within 1 of the end: at f907 30's frame stepped over that window, 60's half
+  step landed in it. Frame-window draws are that fragile; not pursued.
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,

@@ -68,6 +68,9 @@ static inline double rt_step_approach75(double k)
 	const double h = (double)g_rtStep;
 	return (double)(float)((1.0 - __builtin_pow(1.0 - 0.75 * k, h)) / (1.0 - __builtin_pow(0.25, h)));
 }
+// surf (src/overrides/sixty_step.cpp): a height put back on a surface, with (1 - h) of the executing actor's
+// speed.y (and of gravity's part) so that its posMove's step ends where 30's tick does
+double rt_step_surface(double y);
 static inline uint32 rt_step_split(uint32 v) { const sint32 s = (sint32)v; return (uint32)(g_rtHalfTick ? s / 2 : s - s / 2); }
 extern float g_rtNote;                 // a value noted by a step rule for a later one in the same step
 // vec@ / arc@: for one call, the vector (three floats) at ea is h of itself; for arc@ (a velocity)
