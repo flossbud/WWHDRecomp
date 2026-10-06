@@ -2904,7 +2904,19 @@ it in a window; D21 "Step 2"):**
   (dLib_scaleAnime) runs twice as fast. Not driven: arrows at its eyes. **Gyorgs** (GY 228, the spawner
   230 ahead of the boat: WWHD_DEBUG_SPAWN=1450:230,ffff1441,-214000,0,312500): three at f1551, 1790 and
   2030 at both rates, chasing the boat until f2623 (30) / 2626.5 (60); none reached Link at either rate.
-  Their code isn't in the decomp (d_a_gy.cpp is stubs). Not driven: the sword from the boat.
+  Their code isn't in the decomp (d_a_gy.cpp is stubs). Not driven: the sword from the boat. **Puppet
+  Ganon** (BGN 243-245, GanonK; its forms' fields lie past the track's 0x8000 bytes, so watched by address:
+  WWHD_60FPS_WATCH=...,47C53080 (243's mode and state, +0x14EB4), 47C35E34/47C35E38 (245's +0x11E64:
+  its tick count, its turn); a watch line's frame at 60 is a swap: tick 900 + (swap - 900)/2): its first
+  form's states at 30's ticks (half a tick ahead at most); sent into its change at f1100 (the pokes in
+  ganon.txt) the spider's modes and states within a tick, its change at f2000 and the snake's tick count
+  from f2191 at both; the snake's turns (30 + rnd(50) ticks, a coin flip each) part, the random stream's.
+  Link standing still was not hit at either rate. Not driven: the strings, the tail. **Ganondorf** (GND
+  246, GTower, route gtower to f9600): his fight's process (from f8200) in step to f8356 (+0x3EA, +0x1008:
+  the same states at 8213, 8232, 8302, 8347/8348, 8355/8356), then his attacks part with Link's rolls and
+  the random stream; Link hit seven times for 4 at both rates (the first at f8515 / 8850.5). Not driven:
+  the light arrows and the parries.
+  Left for after "resolve" (session top's): per-hit counters in these fights (main: hold per-site `keep`s).
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
