@@ -115,3 +115,9 @@
 0240E418    whole       stw             execute (the other path): m36D0.x = mSwordTopPos.x
 0240E428    whole       stw             execute (the other path): m36D0.z = mSwordTopPos.z
 0240E430    whole       stw             execute (the other path): m36D0.y = mSwordTopPos.y
+# changeFrontWallTypeProc (GameCube d_a_player_main.cpp): the ticks Link has pushed against a ledge he can climb or
+# step onto, m3544 (+0x6994): read and zeroed at the call's start (02418E4C/02418E50), then old + 1 while he
+# pushes; over the HIO's count (14 against route climb's crate) he hops up (vertical jump 0x2A, the hang 0x2B),
+# catches a wall (0x31) or takes a small jump. At 60 it counted on both steps: route climb's hop 3.5 ticks early,
+# and the A at f1000 then came in the hang and let go (session qa).
+024193EC    keep:r6     addi            changeFrontWallTypeProc: m3544 (+0x6994) + 1, the ticks against a ledge

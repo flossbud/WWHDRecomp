@@ -1,0 +1,12 @@
+# Route: Link walking into a wooden crate (Obj_Movebox 43, spawned on the Outset dock as in route crate) and
+# climbing onto it (session qa): against a ledge he hops up to it after pushing for a set count of ticks
+# (changeFrontWallTypeProc's m3544, the vertical jump 0x2A, the hang 0x2B, the climb 0x30). At 60 it came 3.5
+# ticks early and the A at f1000 then made him let go. FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported
+# by tools/sixty/run.sh.
+#env WWHD_DEBUG_SPAWN=950:43,407fff3f,-201660,190,312520
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+960 LDOWN 40   # turn round and walk into the crate: he climbs it
+1000 A 3

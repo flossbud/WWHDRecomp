@@ -84,9 +84,29 @@ WW-4's actor conversion is split between two sessions working side by side:
 
 ### Session `qa` (from 2026-10-04): the owner's bugs
 
-**Session qa reactivated (2026-10-06, the owner's decision): qa again takes the owner's play bugs and notes, their F9
-recordings and the deploys to ~/wwhd-play; the main session only routes (assigns the owner's bugs and notes, keeps
-the queue). The retirement note below is history.**
+**Session qa reactivated (2026-10-06, the owner's decision; the main session `ww-4-d2` only routes: assigns the
+owner's bugs and notes, keeps the queue; the retirement note below is history):** qa again takes the owner's play bugs
+and notes, their F9 recordings and the deploys to `~/wwhd-play` (`predeploy.sh` first). Worker checkout
+`/wwhd/WWHDRecomp-qa` recreated by `sync.sh`. Recordings: copy `~/wwhd-play/flight/f-*.bin` (on the desktop) to
+`/wwhd/data/m6/WWHDRecomp-qa/flight/` and read them with `compare.load_track` (several Link processes after a stage or
+room change: take each by its keys). Found from the owner's 2026-10-06 recordings and notes:
+- **B46, Link's landing late on a slope** (sixty.cpp's `LandSnap`, beside GroundHold): an air action landing in
+  the whole step's move; the half step's move with half a tick's gravity ended 0.02 units above a down slope,
+  and autoGroundHit only puts a non-flying Link on the ground, so his action call saw air the next tick, every
+  tick, for 20 ticks. That half step now takes ground within 30.1 units below (his height, the ground check's
+  landing bits 0xE0, speed.y 0). Link's mAcch (+0x80C): m_flags +0x834, m_ground_h +0x8A0 (the GameCube's
+  layout). Route `slope` (DRC room 2, a roll off a block onto the slope): the landing in 30's tick.
+- **B48, push blocks twice as fast** (`tick_rules/movebox.txt`; generate.py's `lagdown`, a countdown's
+  float half a count back on the whole step; ActionHold now holds Link's push and pull set-ups 0x33, 0x34):
+  route `crate` (a crate spawned on the Outset dock) within 0.75 units of 30's.
+- **B49, the warp pot's camera** (`tick_rules/camera_vomit.txt`: vomitCamera f_02513518, not decompiled; its
+  ramp as shieldCamera's): route `warppot` (DRC room 2's pot to room 10) follows 30's shape. Left: Link's hop
+  out of the pot (vomit action 0x98) starts its forward speed ramp half a tick early (+1 a tick) and lands 7.5
+  units further than 30 (an action phase set in the whole step whose next step runs in the half step).
+- **B45 closed**: the Wind Waker's volume follows the left stick in the original code (procTactWait).
+- **B50, Link climbed onto ledges too soon** (found on the way: walking into route crate's crate): changeFrontWallTypeProc's
+  count of ticks pushing against a ledge (m3544, +0x6994; over the HIO's 14 he hops up, catches a wall or takes a
+  small jump) ran on both steps: keep on its add (`link_qa.txt`). Route `climb`: the hop was 3.5 ticks early.
 
 **Session qa retired (2026-10-05, the owner's decision; main takes over deploys and bug triage).**
 Its worker checkouts (`/wwhd/WWHDRecomp-qa` on both workers) were removed; don't start a session
