@@ -1392,6 +1392,23 @@ it in a window; D21 "Step 2"):**
     the rope's swing (setRopePos) moved twice a tick: now `split@r4` on each call's count and the swing's damping,
     gravity and move by h; the chest appears (tick 1188) and surfaces (1253) on 30's ticks. The chest itself takes
     its place from the crane's top in its event: converted with no rules.
+  - **The follow camera in a turn (session top; the work queue's "camera"; sixty.cpp's camera tick, a probe; new
+    route `swim`)**: pair 60's frames with 30's by the state, not the key: a track's key is tick x 2 (+1 on a half
+    tick), and which 60 frame holds 30's tick k depends on the run (sidle, swim and tour: 60's key 2k+1, the half
+    tick; the cannon's warp run: 2k-1). So paired (scratch camcmp2.py picks the offset that matches Link's place),
+    Link swimming in circles (route swim: off the Outset dock, stick up-left 300 frames) has the camera's control
+    angle (+0x2B4) within 150 of 30's all through the turn (83901 against 84001 turned), not 13% slower; sidle's
+    first turn (16 ticks) leaves it ~130 behind (0.7 degrees): two half steps toward a target that moves on the
+    half tick (Link's heading, his place) don't land where one tick's step does, and Link's heading target is the
+    stick's angle + the camera's (setStickData, each step), read in his half step from the camera's half step.
+    `WWHD_60FPS_CAMTICK=1` (sixty.cpp, the camera's tick) makes the camera's whole-tick half step for show (its
+    bytes before and after kept, every byte it changed that nothing changed since put back as the half tick's
+    frame begins) and replays its half step as a 30 fps tick (step 1, whole-tick rules on); its sound and rumble
+    calls are `hold` in the step for show. The camera is then exact: tour's half ticks equal 30's ticks to the
+    bit while it settles, and it follows Link from there. But it doesn't bring Link's paths nearer (his own steps
+    differ from his first walking ticks: tour 2.4 units in 3 ticks, with it or not) and predeploy got worse:
+    tour 20 -> 271 and land 99 -> 306 units (each a bifurcation: tour's Link, 20 units to one side, clears a
+    corner that stops him at 30), crawl 1 -> 77, sidle 53 -> 103, pot 8 -> 2. So it stays a probe, off.
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next

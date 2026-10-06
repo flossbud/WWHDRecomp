@@ -86,6 +86,12 @@
 # ticks with the sign flipping every frame (a harsher, shorter jitter). Once a tick, its offsets held
 # on the half tick as 30 shows them for both frames; its result (f1) isn't read
 024FEB14    whole       bl 024fc108     Run: shakeCamera(), once a tick
+# The camera's tick (sixty.cpp, the work queue's "camera"; WWHD_60FPS_CAMTICK=1, a probe): its whole tick's half step
+# is for show and is undone as the half tick begins, then runs again as a 30 fps tick. Its two calls with effects
+# outside the camera are held in the half step for show (sixty.cpp raises the hold flag there), so they come once a
+# tick, from the replay; with the probe off the hold flag never rises for them.
+024FF014    hold        bl 025e1988     Run: mDoAud_seStart(m248[i]), the camera's mode sounds (an edge of m254 over m258)
+02505568    hold        bl 025cb374     lockonCamera: the lock-on's rumble (StartShock(2, 0x10), then m39D = 1)
 024FE670    whole:r3=r4 bl 024fa410     Run: mNextType = nextType(mCurType) on whole ticks
 024FE89C    k@f1        bl 0200693c     Run: m148 += (forwardCheckAngle - m148) * FwdCushion (cSAngle *)
 024FEB00    k@f1        bl 0200693c     Run: mViewCache.mBank -= mBank * 0.05 (cSAngle *)

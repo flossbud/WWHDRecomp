@@ -1,0 +1,11 @@
+# Route: Link swimming in circles off the Outset dock (session top, the work queue's "camera"): the sail route's
+# way off the dock into the water, then the stick held up-left for 300 frames (the camera follows a sustained
+# turn: its control angle, the camera's +0x2B4, turns with Link, whose target heading is the stick's angle + that),
+# then treading water. FRAME BUTTONS [FRAMES_HELD].
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start; gameplay on the Outset dock from ~f870, Link at its end facing the sea
+900 LDOWN 15   # back along the dock
+915 LLEFT 30   # off the dock into the water
+980 LUP+LLEFT 300  # swimming in circles

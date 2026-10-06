@@ -2046,6 +2046,65 @@ void f_02002C90(PPCInterpreter_t* __restrict ctx)
 	[[clang::musttail]] return orig_f_02002C90(ctx);
 }
 
+// ---- the camera's tick (session top, the work queue's "camera") ------------------------------------------------
+// The camera (process 476: dCamera_c is inside it) approaches targets that move every frame: Link's heading, his
+// place. Two half steps toward a moving target don't land where one tick's step lands (the target the first half
+// step chases is half a tick old), so in a sustained turn the camera's control angle ran ~130 behind 30's (0.7
+// degrees), and Link, whose heading target is the stick's angle + the camera's (setStickData, every step), read
+// the half-stepped camera in his half step where 30's tick reads the tick's start: the camera-relative walk
+// drifted (route sidle 53 units). So the camera's whole-tick half step is for show (its frame draws it): its bytes
+// before and after that step are kept, and as the half tick's frame begins, every byte the step changed that
+// nothing has changed since goes back. Every half step then reads the tick-start camera, and the camera's own
+// half step runs as a 30 fps tick (step 1, the whole-tick rules on), which ends where 30's tick ends for 30's
+// inputs (route tour: its half ticks equal 30's ticks to the bit while the camera settles after the load).
+// WWHD_60FPS_CAMTICK=1: on, a probe. Off by default: it doesn't bring Link's paths nearer 30's (his own steps
+// differ from his first walking ticks, and the camera then follows that), and predeploy got worse (tour 20 ->
+// 271 and land 99 -> 306 units at the end, each a bifurcation: tour's Link 20 units to one side clears a
+// corner that stops him at 30; crawl 1 -> 77, sidle 53 -> 103; pot 8 -> 2).
+namespace
+{
+	bool CamTick()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_CAMTICK"); return e && atoi(e) == 1; }();
+		return on;
+	}
+	struct CamSave { uint32 proc = 0, id = 0, size = 0; std::vector<uint8> before, after; bool restored = false; };
+	CamSave s_cam;
+	// the camera's whole step is about to run (proc, the camera process): its bytes before it
+	void CamTickBefore(uint32 proc)
+	{
+		const uint32 profile = rd32(proc + 0x10);
+		const uint32 size = profile ? rd32(profile + 0x10) : 0;
+		s_cam = CamSave{};
+		if (size == 0 || size > 0x4000)
+			return;
+		s_cam.proc = proc;
+		s_cam.id = rd32(proc + 0x04);
+		s_cam.size = size;
+		s_cam.before.assign(memory_base + proc, memory_base + proc + size);
+	}
+	// ... and after it
+	void CamTickAfter()
+	{
+		if (s_cam.proc)
+			s_cam.after.assign(memory_base + s_cam.proc, memory_base + s_cam.proc + s_cam.size);
+	}
+	// the half tick's frame begins: what the camera's whole step changed goes back to the tick's start
+	void CamTickRestore()
+	{
+		if (!s_cam.proc || s_cam.after.size() != s_cam.size || rd32(s_cam.proc + 0x04) != s_cam.id || rd16(s_cam.proc + 0x08) != 476)
+		{
+			s_cam = CamSave{};
+			return;
+		}
+		uint8* const p = memory_base + s_cam.proc;
+		for (uint32 i = 0; i < s_cam.size; i++)
+			if (p[i] == s_cam.after[i] && s_cam.after[i] != s_cam.before[i])
+				p[i] = s_cam.before[i];
+		s_cam.restored = true;
+	}
+}
+
 // fw_procFrame, sead's procFrame_: one whole frame (the tick, the draw, the present, the vsync wait).
 // At 60 fps it decides whether the frame is a whole or a half tick (see the top); with the store
 // census on, a half tick's frame is watched from end to end.
@@ -2066,7 +2125,10 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 	{
 		s_uiAnims.clear();                           // the HD UI's animations that play this tick (above)
 		s_uiScreens.clear();
+		s_cam = CamSave{};                           // the camera's whole step (above) keeps its bytes anew
 	}
+	else if (CamTick())
+		CamTickRestore();                            // the half tick reads the tick-start camera (above)
 	// WWHD_STATE_CENSUS=2 watches whole ticks' frames too (from the switch on), for the trace
 	static const bool censusAll = [] { const char* e = getenv("WWHD_STATE_CENSUS"); return Probe() && e && atoi(e) == 2; }();
 	if (!g_rtHalfTick && censusAll && swap >= from)
@@ -2319,6 +2381,23 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	}
 	bool converted = from != ~0u && wwhd::os::SwapCount() >= from &&
 		(Converted(rd16(proc + 0x08)) || (ConvertAll() && s_knownActors.count(proc) && !ExcludedFromAll(rd16(proc + 0x08))));
+	if (converted && g_rtHalfTick && s_cam.restored && proc == s_cam.proc)
+	{
+		// the camera's half step: a whole 30 fps tick from the tick's start (the camera's tick, above)
+		if ((Probe() || Flight()) && Tracked(rd16(proc + 0x08)))
+			s_tracked.push_back(proc);
+		s_lateNoted.erase(proc);                        // its whole tick makes its late stores
+		const float step = g_rtStep;
+		g_rtStep = 1.0f;
+		g_rtHalfTick = false;
+		s_converting++;
+		orig_f_025DE58C(ctx);
+		s_converting--;
+		g_rtHalfTick = true;
+		g_rtStep = step;
+		s_cam.restored = false;
+		return;
+	}
 	if (converted)
 	{
 		if (!g_rtHalfTick)
@@ -2381,11 +2460,15 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	const float step = g_rtStep;
 	g_rtStep = 0.5f;
 	s_converting++;
+	const bool camTick = CamTick() && !g_rtHalfTick && rd16(proc + 0x08) == 476;
+	if (camTick)
+		CamTickBefore(proc);                        // its whole tick's half step is for show (the camera's tick)
 	if (link && !g_rtHalfTick)
 		s_linkActionChanged = false;                // until his action call changes it (rt_hold_leave)
 	const bool hold = g_rtHalfTick && link && s_linkActionChanged && ActionHold();
 	s_actionStops += hold;
-	g_rtHold = hold;                                // his half step leaves his new action's call out
+	g_rtHold = hold || camTick;                     // his half step leaves his new action's call out; the camera's
+	                                                // half step for show leaves its sound and rumble to its replay
 	// its whole step: the late stores it passes over are noted for its half step (s_lateNoted)
 	const bool notes = !g_rtHalfTick;
 	const bool notesOuter = g_rtLateNotes;
@@ -2396,6 +2479,8 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 		g_rtLateNotes = true;
 	}
 	orig_f_025DE58C(ctx);
+	if (camTick)
+		CamTickAfter();
 	if (notes)
 	{
 		g_rtLateNotes = notesOuter;
