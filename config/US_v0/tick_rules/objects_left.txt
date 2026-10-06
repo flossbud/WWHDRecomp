@@ -24,3 +24,58 @@
 02369940    spliti      addi            ladder mode_vib: the shake's x phase (+0x450) + 20000 a tick
 0236994C    spliti      addi            ladder mode_vib: the shake's y phase (+0x452) + 15555 a tick
 0236997C    keep:r12    addi            ladder mode_vib: the shake's countdown (+0x3F4) - 1, then the drop at 0
+#
+# ---- Iball (399, d_a_ib.cpp: the "life ball" a dying enemy may leave, holding its items; execute f_0217C444,
+# checkGeo f_0217B8C4, setPointLight f_0217B46C). Converted: its count of ticks on whole ticks (checkGeo moves it
+# only past 32, right after); its fall is fopAcM_posMoveF (stepped), its bounce happens on landing, its
+# animations are stepped helpers. Its light flickers toward a random target drawn each step: both once a tick,
+# as 30's draws (and the random stream). Spawned on the Outset dock in the air with a pop's speed
+# (WWHD_DEBUG_SPAWN=950:399,0,-201660,340,312465, WWHD_DEBUG_POKE=951:399,340,4,42540000): it moves on the
+# same tick, its half frames on 30's arc, and rests on the same spot (its bounces half a tick apart).
+0217C464    keep:r11    addi            iball execute: mTimer (+0x924) + 1 a tick, tested right after (> 32: it moves)
+0217B4F0    whole       bl 020198d8     iball setPointLight: the flicker's random target
+0217B514    whole       bl 0200ed84     iball setPointLight: the flicker toward it (cLib_addCalc2)
+#
+# ---- Obj_Doguu (265, d_a_obj_doguu.cpp: the goddess statues of the Triangle Islands, where the pearls go, and
+# in towerd (ADMumi layer 8); execute f_023368F0, privateCut f_02336408). Converted: in a cutscene it reads its
+# demo actor itself (place, angles, an untruncated setFrame of its three bcks), which sixty.cpp's demo time
+# steps. Its glow's light flickers toward a random target drawn each step (cM_rndF, then cLib_addCalc2): both
+# once a tick, as 30's draws (and the random stream); privateCut, its events' cuts (a quake's countdown, the
+# light cut's count to 200 and the scene's colour ratio from it), once a tick; the eye's pulse sound (its brk's
+# frame under 1) once a tick. Its event orders: re-ordered each tick until accepted or once with the state's
+# step (no rule; the pearls' events weren't run: on the 100% save all are placed).
+023369A0    whole       bl 02019918     doguu execute: the glow's random target (cM_rndF)
+023369C0    whole       bl 0200ed84     doguu execute: the glow's flicker toward it (cLib_addCalc2)
+02336A0C    whole       bl 02019918     doguu execute: the other glow's random target
+02336A28    whole       bl 0200ed84     doguu execute: the other glow's flicker
+02336BDC    whole       bl 02336408     doguu execute: privateCut (the first pearl event's cuts)
+02336C78    whole       bl 02336408     doguu execute: privateCut (the second)
+02336D04    whole       bl 02336408     doguu execute: privateCut (the third)
+02336DE4    whole       bl 02336408     doguu execute: privateCut (the goddess's)
+02336E6C    whole       bl 025e1a40     doguu execute: the eye's pulse sound (its brk's frame under 1)
+#
+# ---- Obj_Gong (284, d_a_obj_gong.cpp: Tetra's ship's gong, Outset's layer 10 (departure_DEMO)): its execute is
+# dDemo_setDemoData (tick_rules/cutscenes.txt), its morf's play and its matrix: no rules. departure_DEMO
+# scanned at eight moments (f1100-2900): 0-1 blocks at 30 Hz.
+#
+# ---- Obj_Barrier (285, d_a_obj_barrier.cpp: the barrier round Hyrule Castle, gone on the 100% save, and Ganon's
+# Tower's, room 0 (the final arena), which draws only its hit ripples): left at 30. Converted (no rules: its
+# animations stepped, its glow's frame from Link's distance), a contact by process 548 there at f975 (once at
+# 30, and unconverted at 60) came back as a new hit every tick from f976, each birthing a ripple; skipping its
+# dCcD_GStts::Move on half steps (f_0251621C) didn't change that. Not found further: little to gain.
+#
+# ---- Obj_Firewall (286, d_a_obj_firewall.cpp, stubs: the Master Sword chamber's fire walls, kenroom layers 4
+# and 5; act procs f_0234268C-f_02342C04, setPointLight f_02341EA4). Converted: its animations stepped (its
+# frames' half frames equal 30's ticks: kenroom layer 4's event), its cut handlers act once per cut; its light
+# flickers toward a random target drawn each step: both once a tick, as 30's draws.
+02341F30    whole       bl 020198d8     firewall setPointLight: the flicker's random target
+02341F48    whole       bl 0200ed84     firewall setPointLight: the flicker toward it (cLib_addCalc2)
+#
+# ---- Obj_Tribox (44, d_a_obj_tribox.cpp, stubs: Hyrule Castle's Triforce blocks, Hyroom room 0): left at 30. On
+# the 100% save only the three sunk markers (MtryBCr) remain, static; the pushable blocks (MtryB) are gone once
+# the puzzle is solved. A push tumbles a block over a triangle's edge (mode_block_walk f_023AA7A4): a countdown
+# (+0x4E8, - 1 a tick at 023AA7E8) made a float (023AA818 frsp f10) turns it about the edge, its place and
+# angle computed from it; at 0 it takes the next cell (+0x52C). Converting it would want the countdown kept to
+# whole ticks and that float half a count back on whole ticks (+ 1/2: `lag` is - 1/2, for counts that rise), and
+# rules for about ten more counts in its other modes (sink f_023AABB0, lower f_023AAD18, the correct modes
+# f_023AADD4-f_023AB018), tested with a block poked into its walk.

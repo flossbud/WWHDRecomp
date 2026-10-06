@@ -2619,6 +2619,26 @@ it in a window; D21 "Step 2"):**
     (WWHD_DEBUG_POKE=1000:85,3f0,4,2;1000:85,3f4,2,f;1000:85,318,4,44340000;1000:85,304,4,44340000): the
     shake's half frames equal 30's ticks, the drop starts on the same tick; its bounces peak ~20 units
     lower at 60 (a half step overshoots the ground less, and the bounce reflects the overshoot).
+  - The life ball (Iball 399, an enemy's item ball; none placed): converted (its tick count `keep`, its light's
+    random flicker once a tick). Spawned in the air on the Outset dock with a pop's speed: it moves on the same
+    tick, its half frames on 30's arc, and it rests on the same spot (its bounces half a tick apart).
+  - Tetra's gong (Obj_Gong 284, Outset layer 10): converted, no rules (dDemo_setDemoData, a morf). departure_DEMO
+    at eight moments (f1100-2900): 0-1 blocks at 30 Hz.
+  - The Master Sword chamber's fire walls (Obj_Firewall 286, kenroom layers 4 and 5): converted (its light's
+    random flicker once a tick). Its layer 4 arrival event: its animation frames' half frames equal 30's ticks.
+  - The goddess statues (Obj_Doguu 265; ADMumi layer 8, the Triangle Islands): converted (its glow's random
+    flicker, privateCut's cut counts, its eye pulse's sound: once a tick; its demo actor's values come from
+    sixty.cpp's demo time). towerd ordered in place (WWHD_DEBUG_EVENT=990:towerd, LkD00) still shows the statue
+    at 30 Hz (975 blocks at f1100): towerd's staff is PACKAGE and CAMERA, and the event puts Link at
+    (-21882,454,28190), where he falls (0x27) every other tick at 30 as at 60 (rebirth_hyral's artifact), and a
+    fall isn't in StepInEvents: converted processes whose whole step sees it don't step in that tick (the
+    statues had half steps before the event and after f1140, none in it).
+  - Left at 30: the barriers (Obj_Barrier 285; on the 100% save only Ganon's Tower's final arena has one, drawing
+    only its hit ripples). Converted, a contact there (process 548, f975: once at 30 and unconverted at 60) came
+    back as a new hit every tick, each birthing a ripple, also with dCcD_GStts::Move skipped on half steps.
+    And Hyrule Castle's Triforce blocks (Obj_Tribox 44): on the 100% save only the three sunk markers remain
+    (static); a block's push is a countdown-driven tumble that would need a `lag` the other way (+ 1/2 on whole
+    ticks) and about ten counts' rules, untestable here (objects_left.txt has the addresses).
 
 - **Session main: the queue's "drifts" item (round 5)**: predeploy's WARN routes, 30 against 60 (Link's position per
   tick; `WWHD_60FPS_HOLDEXTRA=hex,...` holds more of Link's set-ups, sixty.cpp HoldsAfter, to try):
