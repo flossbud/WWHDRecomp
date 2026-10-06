@@ -2922,6 +2922,20 @@ it in a window; D21 "Step 2"):**
   1761/1792/1858). `whole` on the add, eqwhole on its 46 tests and its timers' 4: every state at 30's tick
   (to f2382) and the heart container at f2289 at both.
   Left for after "resolve" (session top's): per-hit counters in these fights (main: hold per-site `keep`s).
+- **Session bottom: the queue's "bossweapons" (round 7, 2026-10-06)**: Link's items on the bosses. On the 100%
+  save R holds the bow with light arrows (play +0x5BBD = 0x36) and Y the grappling hook (0x25); a poke of the
+  Y item (play +0x5BBC, game info +0xA the slot) holds from f1000 (after the warp's stage start; at f950 it
+  is overwritten). With ZL held, R shoots at the locked target unaimed. **Light arrows on Gohdan** (SirenB,
+  scratch bowr-gohdan: ZL from f1000, R held 25 frames every 60): two arrows (the magic then runs out) made
+  at f1156/1201 (30) and 1155/1201 (60), hitting at f1169/1228 and 1168.5/1227.5 (the half step after the
+  whole tick's resolution): its fingers, a sound and no damage at both rates. Its eye and palm hits wait for
+  mState 0, which a hit sets to 10: one count a hit. **The hookshot on Molgera's tongue**: ZL doesn't lock
+  her tongue and her place is a random draw (another one at 60), so no fixed route reaches it (her rise
+  waits for Link below y 900: keep kazeb's moves to f3180). **The hammer on Helmaroc** (M2tower layer 3;
+  spawn point 30, (2400, 9800, -3600), is by its perch at (2785, 9579, -3872); its final phase, T_LASTATTACK
+  102, dies to one hammer hit on its head): Link stops on his ledge 690 units from its head whatever the
+  walk, so not reached. **Light arrows on Ganondorf**: Zelda's, in a fight the decomp has no code for; not
+  tried.
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
