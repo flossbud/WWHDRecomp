@@ -327,6 +327,23 @@
     {
       "id": "companions",
       "name": "Companions and the Hyoi seagull: Medli's glide with Link and Makar's (WWHD_DEBUG_COMPANION; Makar needs his story state to follow), the Hyoi seagull (NPC_KAM 195: route hyoi, it never answers the pear yet)"
+    },
+    {
+      "id": "mtimer",
+      "name": "Round 5: the other g_Counter.mTimer readers that converted processes see a tick ahead on half ticks (Link's damage flash, the hookshot's chain f_021768B0, the cloth stand-items f_0251ECE8, the Boko stick, the ship f_02475DA8): drawlag as the plants' (top's)"
+    },
+    {
+      "id": "salvage",
+      "name": "Round 5: salvaging (SALVAGE_TBOX 402 and the crane's pull) with a route",
+      "ids": [402]
+    },
+    {
+      "id": "drifts",
+      "name": "Round 5: predeploy's WARN routes, each's cause found and fixed or recorded: land 99, swing 70, sail 65, sidle 53, plants 45 units from 30's end (main's)"
+    },
+    {
+      "id": "census",
+      "name": "Round 5: the 180-odd types still at 30: a census of which move in play (placed in a stage and changing state at 30), the rest recorded as still; convert the movers"
     }
   ],
   "later": [
