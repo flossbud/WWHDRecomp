@@ -2680,8 +2680,10 @@ it in a window; D21 "Step 2"):**
   - land (99): Link walks into the lookout tower's legs (f1500-1502): at 30 a push slides him 17 units in three
     ticks, at 60 it never comes (20 units apart from there). At f1582 the lock-on (ZL) then turns him to 0
     degrees at 60 only (something in range at 60's place: its target), so the camera behind him is 18.7
-    degrees off and the camera-relative runs after go elsewhere. Left: the push (Cc mass resolution runs on
-    whole ticks; why it misses at 60 not found).
+    degrees off and the camera-relative runs after go elsewhere. Not a lost push (session bottom, the pushes
+    item): the legs push through the wall correction, and at 60 Link meets that wall 4.9 units back (his
+    heading), with the stick let go before he reaches the leg; held longer, 60 is pushed there too (32 units
+    against 30's 37). So the walk-start's heading (the walkstart item) is the root here too.
   - swing (70) and sail (64): Link's transitions into procAutoJump (0x24) and procSwimWait (0x36) come half a
     tick off; holding them didn't help (0x24 no change, 0x36 worse): the general rule the turn's notes ask
     for (which set-ups step in their own tick at 30).
