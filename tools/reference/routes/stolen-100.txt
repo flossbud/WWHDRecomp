@@ -1,0 +1,35 @@
+# Route: the stolensister cutscene (Aryll, NPC_LS1 321; session main, npcs-left; bottom's setup): the 100% save with
+# WWHD_DEBUG_STAGE=920:sea,0,44,9 WWHD_DEBUG_EVENT=990:STOLENSISTER and event bit 0x2D01 cleared (Link's LkD00 animations):
+# WWHD_DEBUG_POKE=915:0,145b81d1,1,fe;916:0,145b81d1,1,fe;917:0,145b81d1,1,fe;918:0,145b81d1,1,fe;919:0,145b81d1,1,fe
+# FRAME BUTTONS [FRAMES_HELD]; game frames: A every 90 frames through its dialogue.
+420 A 5        # title screen "Press Any Button" (up from ~f360)
+540 A 5        # Controller Selection (up from ~f480; cursor already on Pro Controller)
+660 A 5        # File Selection (up from ~f600; cursor on Quest Log 1: Outset Island)
+780 A 5        # Quest Log 1 (full Triforce, 3 pearls, 20 hearts, Normal Mode): cursor already on Start
+1000 A 3
+1090 A 3
+1180 A 3
+1270 A 3
+1360 A 3
+1450 A 3
+1540 A 3
+1630 A 3
+1720 A 3
+1810 A 3
+1900 A 3
+1990 A 3
+2080 A 3
+2170 A 3
+2260 A 3
+2350 A 3
+2440 A 3
+2530 A 3
+2620 A 3
+2710 A 3
+2800 A 3
+2890 A 3
+2980 A 3
+3070 A 3
+3160 A 3
+3250 A 3
+3340 A 3

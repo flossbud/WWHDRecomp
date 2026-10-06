@@ -1,0 +1,22 @@
+# The work queue's "npcs-left" item (session main): NPCs not converted with their areas (most are not placed by
+# day on the finished save: interiors, cutscenes, spawned by other actors). Format: ../tick_rules.txt.
+#
+# Their blinks (tools/sixty/blink_audit.py -a): a countdown in cLib_calcTimer<s16> (f_02055B64, `keep`), then the
+# blink's frame + 1 a step; on a half step the helper still says "out" and the frame stepped twice a tick:
+# `whole:r3=1` on the call (r3 = 1: not out), as the islands' NPCs (npcs item, docs/handoff.md).
+0227F278    whole:r3=1  bl 02055b64     ls1 (Aryll, 321): the blink's countdown
+02219164    whole:r3=1  bl 02055b64     btsw (349): the blink's countdown
+0221CF10    whole:r3=1  bl 02055b64     btsw2 (350): the blink's countdown
+022C9318    whole:r3=1  bl 02055b64     pf1 (356): the blink's countdown
+021ECE08    whole:r3=1  bl 02055b64     auction (361, the bidders): the blink's countdown
+02227E64    whole:r3=1  bl 02055b64     co1 (370): the blink's countdown
+0223C86C    whole:r3=1  bl 02055b64     hi1 (377): the blink's countdown
+022A15B0    whole:r3=1  bl 02055b64     mt (379, Carlov): the blink's countdown
+0229E0C4    whole:r3=1  bl 02055b64     mn (380): the blink's countdown
+#
+# Converted and tested standing (trial clean, 30 against 60 equal): the Tower of the Gods' statues (NPC_OS 314,
+# Siren,0,0,-1; their walk to the Command Melody not driven), the auction (AUCTION 382 and its eight bidders
+# NPC_AUCTION 361, Orichh,1,0,-1 at night: WWHD_DEBUG_TIME=905:345), Carlov's shop's MN (380, Pfigure,1,0,-1 at
+# night). Not created in a test, so left at 30 (their blink rules wait above): Aryll LS1 321 and YM1 315
+# (sea_E's cutscenes), HI1 377 (kenroom's cutscene), Carlov MT 379, and P2 323, KM1 333, BTSW 349/350, PM1 354,
+# PF1 356, CO1 370, SV 378 (placed in no stage file: spawned by others).
