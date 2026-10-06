@@ -109,6 +109,8 @@ rules, for the code of processes that run every frame with a time step h
   lag:fREG     the same for a tick count made a float (count x speed with fmuls, count x speed + base
                with fmadds; lag@ for that instruction only): on the whole tick's step the float REG is
                REG - 1/2
+  lagdown:fREG the same for a countdown made a float (a phase as count x speed, the count - 1 a tick, kept to
+               whole ticks by keep): on the whole tick's step the float REG is REG + 1/2, half a count back
   drawlag:fREG a draw's count kept to whole ticks (a `whole` store), made a float: in a half tick's draw
                (step 1, so not the step rules above) the float REG is REG - 1/2, so the half tick's frame
                draws half a count on from the whole tick's, not a whole one (the sea's ripple scroll); the
@@ -264,7 +266,8 @@ class Program:
 
     STEP_OPS = {"*h": "rt_step_mul", "/h": "rt_step_div", "k": "rt_step_approach", "d": "rt_step_damp",
                 "k75": "rt_step_approach75", "*hh": "rt_step_mul(rt_step_mul({}))", "surf": "rt_step_surface",
-                "lag": "({} - (RT_WHOLE_TICK() ? 0.5 : 0.0))", "drawlag": "({} - 0.5)"}
+                "lag": "({} - (RT_WHOLE_TICK() ? 0.5 : 0.0))", "lagdown": "({} + (RT_WHOLE_TICK() ? 0.5 : 0.0))",
+                "drawlag": "({} - 0.5)"}
 
     def load_tick_rules(self, path):
         """address -> (rule, argument, expected instruction text, what): see the docstring. rule is
@@ -326,7 +329,7 @@ class Program:
                     assert re.fullmatch(r"[rf]([12]?[0-9]|3[01])", arg), f"tick_rules.txt:{n}: {rule}: a register expected"
                     assert kind.rstrip("@") not in ("split", "splitd", "drawsplit") or arg[0] == "r", f"tick_rules.txt:{n}: split takes an integer register"
                     assert kind != "lagw" or arg[0] == "r", f"tick_rules.txt:{n}: lagw takes the multiplier's integer register"
-                    assert kind.rstrip("@") != "lag" or arg[0] == "f", f"tick_rules.txt:{n}: lag takes a float register (lagi: mulli)"
+                    assert kind.rstrip("@") not in ("lag", "lagdown") or arg[0] == "f", f"tick_rules.txt:{n}: lag takes a float register (lagi: mulli)"
                     assert kind.rstrip("@") != "drawlag" or arg[0] == "f", f"tick_rules.txt:{n}: drawlag takes a float register"
                     value = arg
                 assert self.function_containing(ea) is not None, f"tick_rules.txt:{n}: {ea:08X} is in no function"

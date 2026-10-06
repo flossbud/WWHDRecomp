@@ -1,0 +1,10 @@
+# Route: Dragon Roost Cavern's warp pot (OBJ_WARPT 65; session qa, the owner's note N7: the camera erratic as Link
+# hops out at 60). A stage warp to M_NewD2's room 2, Link placed above the pot the owner dropped into (room 2), the
+# warp to room 10 and the hop out of the other pot. FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by
+# tools/sixty/run.sh.
+#env WWHD_DEBUG_STAGE=920:M_NewD2,0,2,-1
+#env WWHD_DEBUG_PLACE=1000:421,3600,-1748
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; the warp at f920

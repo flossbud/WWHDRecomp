@@ -1,0 +1,20 @@
+# ---- push blocks (Obj_Movebox 43, daObjMovebox::Act_c, d_a_obj_movebox.cpp; session qa, bug B48, the owner's note
+# N6). Converted with no rules (they matched 30 standing still); pushed or pulled they ran on both steps. WWHD's
+# fields: the GameCube's + 0x118 (m644 at +0x75C). Route crate (a wooden crate, type 0, on the Outset dock): at 30
+# a pull waits 6 ticks, then moves 75 units in 20 ticks (attr m0A), then 5 ticks before the next; at 60 it was 3,
+# 10 and 2.5.
+# The push-pull callback (PPCallBack f_023775DC, from Link's push and pull actions, his half step too): the side
+# pushed counts up, the others are cleared; check_to_walk (mode_wait, the block's execute) starts a walk once it
+# reaches attr m00-m08 (4). Late: both of a tick's steps see the tick's count, so the walk starts in 30's tick.
+02377724    late        sthx            movebox PPCallBack: mMomentCnt[side] (+0x754) + 1
+# mode_walk (f_02379834): bool end = --m644 <= 0; the slide is (cos(m644 x m630) + 1) / 2 of attr m0C, m630 =
+# 0x8000 / the walk's ticks. The count once a tick (keep: the half step reads the whole step's), and the slide's
+# count as a float half a count back on the whole step (lagdown), so the block and Link with it move every frame and
+# are 30's at half ticks.
+023798D4    keep:r10    addi            movebox mode_walk: m644 (+0x75C) - 1, then the walk ends at 0
+023798F4    lagdown:f13 frsp            movebox mode_walk: (float)m644, the slide's phase m644 x m630
+# Timers tested before the - 1: the wait to float up after landing in water (m646, 20, mode_wait f_02379308) and
+# the landing sound's quiet ticks after its creation (m648, 20, Execute f_02378638).
+02379338    late        sth             movebox mode_wait: m646 (+0x75E) - 1 if above 0
+023788D0    late        sth             movebox Execute: m648 (+0x760) - 1 if above 0
+# Left: mode_afl's sway (m604 += attr m38 x (1 + cM_rnd()), floating in water), not seen in a test.

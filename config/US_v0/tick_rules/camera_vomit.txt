@@ -1,0 +1,22 @@
+# ---- the warp pot's camera: vomitCamera (f_02513518, dCamera_c::vomitCamera, between hookshotCamera and
+# shieldCamera; not decompiled: matched by its place in d_camera.cpp's order and the action it follows, Link's
+# vomit actions 0x98/0x99 as a warp pot (OBJ_WARPT 65) spits him out; session qa, the owner's note N7: the camera
+# erratic as Link hops out of a pot at 60). The camera at r31 (dCamera_c: the camera process + 0x248), its work
+# area at r30 (+0x37C). Found with the step-doubling trial over route warppot (WWHD_60FPS_TRIAL=476, ticks
+# 1066-1135): at 60 it rose and widened twice as fast (fovy 112 where 30 has 90, the eye 550 units off), then
+# snapped back. Its first phase ramps toward the style's view as shieldCamera's does: the factor f31 = (N - m11C) /
+# W with W -= N - m11C a tick (k on the factor, the store late as m11C is); the second follows Link with constant
+# factors from the style's table.
+0251388C    k@f12       fmadds          vomitCamera: work +0x1C += (Link's height - it) * c (both phases)
+025138DC    k:f31       fdivs           vomitCamera ramp: f31 = (N - m11C) / W, the approaches' factor
+02513940    k@f1        bl 0201ae48     vomitCamera ramp: mCenter += (work +0x38 - mCenter) * f21
+02513AA0    late        stfs            vomitCamera ramp: W (work +0x8) -= N - m11C
+02513B04    *h@f31      fadds           vomitCamera: work +0xC + 1, a tick count as a float
+02513B14    k@f10       fmadds          vomitCamera: work +0x2C += (c - it) * (count x c)
+02513B84    k@f21       stfs            vomitCamera: mCenter's approach factors (f21, f18, f21): x
+02513B8C    k@f18       stfs            vomitCamera: mCenter's approach factors: y
+02513B94    k@f21       stfs            vomitCamera: mCenter's approach factors: z
+02513C80    whole       stw             vomitCamera: work +0x14 + 1 (ticks below the pot's height)
+02513D3C    k@f29       fmadds          vomitCamera: the distance (+0x3C) += (target - it) * f29
+02513D60    k@f1        bl 0200693c     vomitCamera: the angle (+0x40) += (target - it) * f18 (cSAngle *)
+02513DD0    k@f27       fmadds          vomitCamera: fovy (+0x60) += (target - it) * f27

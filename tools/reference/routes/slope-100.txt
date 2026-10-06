@@ -1,0 +1,13 @@
+# Route: Link running off a block in Dragon Roost Cavern's room 2 and landing on the sloped floor below with
+# forward speed (session qa, the owner's B46: at 60 his auto jump went on for 20 ticks on the slope, the
+# landing late). A stage warp to M_NewD2's room 2, Link placed on the block a little back from where the
+# owner ran off, then run toward the owner's heading (0x20D7: the camera looks along -z here) and roll off.
+# FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_STAGE=920:M_NewD2,0,2,-1
+#env WWHD_DEBUG_PLACE=1000:-2100,460,1500
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; the warp at f920
+1005 LDOWN+LRIGHT 60 # run toward the block's edge
+1018 A 3       # roll off it, as the owner did

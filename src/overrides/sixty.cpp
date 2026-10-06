@@ -299,11 +299,11 @@ namespace
 			action == 0x9C || action == 0xAA || action == 0xAD || action == 0xAE || action == 0xB8 || action == 0xC1 || action == 0xC4 ||
 			action == 0xCE || action == 0xCF || action == 0xD2 || (action == 0xA9 && DemoSixty());
 	}
-	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0, s_edgeFinishes = 0, s_actionStops = 0;
+	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0, s_edgeFinishes = 0, s_actionStops = 0, s_landSnaps = 0;
 	void StepStats()
 	{
-		cemuLog_log(LogType::Force, "wwhd sixty: {} half steps of converted processes; {} stopped by a running event, {} by an ordered one, {} by an ending one; {} of Link's left his new action's call out; {} finished their tick at an event's edge; {} late stores made for stopped ones",
-			s_halfSteps, s_eventStops, s_orderStops, s_endStops, s_actionStops, s_edgeFinishes, s_lateMade);
+		cemuLog_log(LogType::Force, "wwhd sixty: {} half steps of converted processes; {} stopped by a running event, {} by an ordered one, {} by an ending one; {} of Link's left his new action's call out; {} finished their tick at an event's edge; {} late stores made for stopped ones; {} of Link's landings finished in the half step",
+			s_halfSteps, s_eventStops, s_orderStops, s_endStops, s_actionStops, s_edgeFinishes, s_lateMade, s_landSnaps);
 	}
 
 	// Link's action call (daPy_lk_c::execute's (this->*mCurProcFunc)(); `hold` rules on it, link_actions.txt)
@@ -326,7 +326,10 @@ namespace
 	// and the slash while moving (0x42, procCutF: predeploy's plants 45.5 -> 37.0 units, the rest unchanged), and the
 	// Deku Leaf's glide (0x93, procFanGlide: set up from a jump with X, its first step sets its lift, at 30 the next
 	// tick: route fwbud's glide 10-15 units low, missing the ledge 30 catches; now within 0.3 units, session top's
-	// dungeons2). Tried and not held: 0x24 (procAutoJump: no change) and 0x36 (procSwimWait: swing 70 -> 137).
+	// dungeons2), and pushing and pulling a block (0x33 procPushMove, 0x34 procPullMove, set up from 0x32 with the stick:
+	// their first step calls the block's push-pull callback, whose count starts the block's walk, at 30 the next tick;
+	// session qa, B48: route crate's crate a tick early, now its slide within 0.75 units of 30's).
+	// Tried and not held: 0x24 (procAutoJump: no change) and 0x36 (procSwimWait: swing 70 -> 137).
 	// WWHD_60FPS_HOLDEXTRA=a,b,... (hex action numbers): more of them, to try (the drifts item)
 	bool HoldsAfter(uint32 action)
 	{
@@ -342,7 +345,7 @@ namespace
 				}
 			return v;
 		}();
-		return action == 0x17 || action == 4 || action == 0x42 || action == 0x93 ||
+		return action == 0x17 || action == 4 || action == 0x42 || action == 0x93 || action == 0x33 || action == 0x34 ||
 			std::find(extra.begin(), extra.end(), action) != extra.end();
 	}
 	bool s_linkActionChanged = false;                 // by his action call in the last whole step
@@ -364,6 +367,33 @@ namespace
 	}
 	uint32 s_linkGroundAtWhole = 0;                   // his ground hit bit as his whole step began
 	uint64 s_groundStops = 0;
+	// The half step after a whole step whose move landed him finishes the tick's landing (session qa, bug B46): an air
+	// action (his auto jump) coming down on a slope with forward speed landed in the whole step's move (its speed.y then
+	// 0), and the half step's move, with half a tick's gravity, ended 0.02 units above the slope further on: no ground
+	// hit, and autoGroundHit (the GameCube's daPy_lk_c::autoGroundHit) puts a Link on ground within 30.1
+	// units below only when he isn't flying. His next whole step's action call saw no ground, and it went on for 20
+	// ticks down the owner's slope in Dragon Roost Cavern (each whole step landing, each half step losing it). At 30 the
+	// tick's one move went below the slope and landed at its end. So that half step's lost ground within 30.1 units
+	// below is his ground, as autoGroundHit's: his height, the ground check's landing bits and speed.y 0 (the next whole
+	// step's action call then lands him, where 30's tick does). WWHD_60FPS_LANDSNAP=0 turns it off.
+	bool LandSnap()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_LANDSNAP"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	void LandSnapAfter(uint32 link, uint32 landingBits)
+	{
+		const uint32 flags = rd32(link + 0x834);           // mAcch (+0x80C)'s m_flags: 0x20 the ground hit
+		const float y = std::bit_cast<float>(rd32(link + 0x318));
+		const float groundH = std::bit_cast<float>(rd32(link + 0x8A0));   // mAcch's m_ground_h (GameCube +0x94)
+		const float speedY = std::bit_cast<float>(rd32(link + 0x340));
+		if ((flags & 0x20) || !(groundH <= y && groundH >= y - 30.1f) || speedY > 0.0f)
+			return;
+		wr32(link + 0x318, std::bit_cast<uint32>(groundH));
+		wr32(link + 0x834, flags | landingBits);
+		wr32(link + 0x340, 0);
+		s_landSnaps++;
+	}
 	// the ground's actions whose lost ground changeAutoJumpProc reacts to: waiting, moving (and targeting), the turns,
 	// the rolls, a landing's
 	bool GroundAction(uint32 a)
@@ -3114,7 +3144,9 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	const uint32 groundNow = link ? rd32(proc + 0x834) & 0x20 : 0;
 	const bool groundLost = g_rtHalfTick && link && GroundHold() && s_linkGroundAtWhole && !groundNow &&
 		GroundAction(rd32(proc + 0x65F0));
-	const bool groundHold = (g_rtHalfTick && link && GroundHold() && !s_linkGroundAtWhole && groundNow) || groundLost;
+	const bool landing = g_rtHalfTick && link && GroundHold() && !s_linkGroundAtWhole && groundNow;
+	const uint32 landingBits = landing ? rd32(proc + 0x834) & 0xE0 : 0;   // the whole step's landing: hit, find, landing
+	const bool groundHold = landing || groundLost;
 	s_groundStops += groundHold;
 	g_rtLinkGroundLost = groundLost;
 	const bool hold = (g_rtHalfTick && link && s_linkActionChanged && ActionHold()) || groundHold;
@@ -3141,6 +3173,8 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 			wr32(proc + kLinkNoResetFlg1, f & ~oneShotHidden);
 	}
 	orig_f_025DE58C(ctx);
+	if (landing && LandSnap())
+		LandSnapAfter(proc, landingBits);
 	if (oneShotHidden)
 		wr32(proc + kLinkNoResetFlg1, rd32(proc + kLinkNoResetFlg1) | oneShotHidden);
 	else if (link && !g_rtHalfTick)

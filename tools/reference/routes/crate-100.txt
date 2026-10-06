@@ -1,0 +1,15 @@
+# Route: pushing and pulling a wooden crate (Obj_Movebox 43, type 0, spawned on the Outset dock where carry's
+# pot stands; session qa, the owner's note N6: blocks pushed and pulled too fast at 60). Walk to it, grab it
+# (A held), pull it (the stick away), push it back. FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported
+# by tools/sixty/run.sh.
+#env WWHD_DEBUG_SPAWN=950:43,407fff3f,-201660,190,312520
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+960 LDOWN 20   # turn round and walk to the crate
+985 A 25       # grab it
+1010 A+LUP 60  # pull it
+1070 A 10
+1080 A+LDOWN 60 # push it
+1140 A 10
