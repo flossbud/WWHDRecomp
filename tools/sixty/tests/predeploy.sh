@@ -28,8 +28,8 @@
 # grab), the Peahat, the Miniblins and the Boko Babas, which end within 34 units; not in it, the fights a knockback
 # or a dodge parts within a few ticks (half-tick AI starts and the random stream: Moblin 298, Darknut 790, Bokoblin
 # 665, Magtail 325; Kargaroc, Stalfos, Poe, Bubble, Armos, Wizzrobe 43-82).
-# The 30-tick runs are kept in $OUT/predeploy/ROUTE/30 and reused (30 is the same with every build: the
-# checks prove it); REDO30=1 plays them again (after a route's file or the 60 switch's start changed).
+# The 30-tick runs are kept in $OUT/predeploy/ROUTE/30 and reused once finished (ROUTE/30.ok; 30 is the same with
+# every build: the checks prove it); REDO30=1 plays them again (after a route's file or the 60 switch's start changed).
 # PREDEPLOY_JOBS routes run at once (default 4), each with a copy of the binary in a folder of its own.
 # Output: game state, it stays on the worker.
 set -e
@@ -42,10 +42,17 @@ run_one() {
     # warp ends at its arrival (f2460): the cyclone sets the boat down facing 28 degrees elsewhere at 60 (its
     # spin's last turns), so the route's sail into the tower after it goes another way: a heading, not a failure
     case $r in back) w=920:M_NewD2,5,14,-1 ;; talk) w=920:sea,0,11,-1 ;; house) w=920:sea,9,11,-1 ;; warp) n=2460 ;; esac
-    mkdir -p "$P/bin$slot"; cp build/wwhd/wwhd-null "$P/bin$slot/"
-    { [ -f "$P/$r/30/track.bin" ] && [ -z "${REDO30:-}" ]; } || rates="30 60"
-    env ${w:+WWHD_DEBUG_STAGE=$w} ${n:+SIXTY_FRAMES=$n} WWHD_STATE_TRACK=168 CEMU_BIN="$P/bin$slot/wwhd-null" SIXTY_OUT="$P/slot$slot" \
-        tools/sixty/run.sh "$r" "$P/$r" $rates > "$P/$r.log" 2>&1 || echo "predeploy: $r: the run failed (see $P/$r.log)"
+    local bin=$P/bin.$$.$slot                       # this invocation's own (two at once shared bin0: "text file busy")
+    mkdir -p "$bin"; cp build/wwhd/wwhd-null "$bin/"
+    # a 30 run is reused only once it finished (30.ok): a stopped predeploy left 30 runs cut at tick 325, which
+    # the next one reused and failed on ("the runs end on different ticks")
+    { [ -f "$P/$r/30.ok" ] && [ -z "${REDO30:-}" ]; } || { rates="30 60"; rm -f "$P/$r/30.ok"; }
+    if env ${w:+WWHD_DEBUG_STAGE=$w} ${n:+SIXTY_FRAMES=$n} WWHD_STATE_TRACK=168 CEMU_BIN="$bin/wwhd-null" SIXTY_OUT="$P/slot.$$.$slot" \
+        tools/sixty/run.sh "$r" "$P/$r" $rates > "$P/$r.log" 2>&1; then
+        [ "$rates" = 60 ] || touch "$P/$r/30.ok"
+    else
+        echo "predeploy: $r: the run failed (see $P/$r.log)"
+    fi
 }
 slot=0
 for r in "${routes[@]}"; do
@@ -54,6 +61,7 @@ for r in "${routes[@]}"; do
     [ $((slot % jobs)) -eq 0 ] && wait
 done
 wait
+rm -rf "$P"/bin.$$.* "$P"/slot.$$.*
 python3 - "$P" "${PREDEPLOY_FAIL:-150}" "${PREDEPLOY_WARN:-40}" "${routes[@]}" <<'PY'
 import math, os, struct, sys
 sys.path.insert(0, "tools/sixty")
