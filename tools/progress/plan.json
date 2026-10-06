@@ -372,6 +372,10 @@
     {
       "id": "animstart",
       "name": "Round 6: an animation or action set up after Link's common update in a whole step advances on the half step at 60, a tick later at 30: the walk's first tick, the heavy throw (the carry animation's end found by a half step), swing's and sail's jump and swim transitions; a rule that knows which set-ups step in their own tick (top's)"
+    },
+    {
+      "id": "bossfights",
+      "name": "Round 7: the bosses fought by a route at 30 and 60 (WWHD_DEBUG_BOSS, the debug menu's refights): phases, damage taken and given, on the same ticks; Gohma first (hookshot), then Kalle Demos (boomerang), Jalhalla (light), Molgera, Helmaroc, Gyorg, the Big Octo, Puppet Ganon, Ganondorf (bottom's)"
     }
   ],
   "later": [
