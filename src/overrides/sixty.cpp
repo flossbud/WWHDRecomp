@@ -87,7 +87,8 @@ namespace
 	// and light tags (469), the Wind Temple's propeller grates (AMI_PROP) and breakable floors (FLOOR),
 	// the weather's KYEFF and KYEFF2 (478, 479: tick_rules/weather.txt), the cutscenes' puppets DEMO00, Jabun, the
 	// Master Sword chamber's knight statues and Tetra's ship (406, 358, 396, 57: tick_rules/cutscenes.txt), the
-	// Hyoi seagull (195: tick_rules/companions.txt), the Wind Temple's fans (299: tick_rules/objects_left.txt)
+	// Hyoi seagull (195: tick_rules/companions.txt), the Wind Temple's fans, the boulders
+	// Link lifts and the ladders that drop (299, 455, 85: tick_rules/objects_left.txt)
 	// (session bottom); Windfall's
 	// windmill wheel (Obj_Ferris), pigs (KB),
 	// townsfolk (NPC_PEOPLE, NPC_KK1, NPC_MK, NPC_UK, NPC_GK1, NPC_TT, NPC_RSH1), market stalls (Obj_Roten),
@@ -114,7 +115,7 @@ namespace
 	// WWHD_60FPS_CONVERT= (empty) converts none.
 	constexpr const char* kConvertedByDefault =
 		"476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,"
-		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,443,221,305,47,48,49,50,52,122,129,148,166,289,159,272,267,275,140,138,139,46,75,469,94,96,478,479,406,358,396,57,195,299,"   // session bottom
+		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,443,221,305,47,48,49,50,52,122,129,148,166,289,159,272,267,275,140,138,139,46,75,469,94,96,478,479,406,358,396,57,195,299,455,85,"   // session bottom
 		// (session main's line, between comment lines so neighbours' edits don't conflict)
 		"51,276,367,301,302,303,113,112,314,361,382,380,321,"   // session main
 		// (session top's line)

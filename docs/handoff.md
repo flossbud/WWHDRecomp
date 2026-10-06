@@ -2582,6 +2582,20 @@ it in a window; D21 "Step 2"):**
     adds stood (twice the speed). New step rule `drawsplit@rN` (generate.py: in a draw at 60, rN - rN/2 in the
     whole tick's, rN/2 in the half tick's: only for a converted actor) on the add: 3750 a frame, 7500 a tick
     as at 30 (its phase 3/4 of a step off 30's, from its first draws; a fan's blades don't show it).
+  - The boulders Link lifts (Stone2 455, Ebrock/Ebrock2: Dragon Roost, Star Island; WWHD's fields at the
+    GameCube's + 0x118): converted (its tumble split, two countdowns `keep`). Tested spawned on the Outset
+    dock (WWHD_DEBUG_SPAWN=950:455,f47fff21,-201660,190,312465) with a lift, a walk and a throw (A f1000,
+    stick f1040, A f1110): the flight has its half frames; carried, it already followed Link's hands
+    unconverted (HeldDraw). Released on a half tick, its throw event (demo_req) starts a tick before 30's
+    (Link's action list: 0x71 with the event at f1120, not f1121). Converted or not, it lands 37 units past
+    30's spot: from f1118 Link's hands in the heavy throw are a tick ahead of 30's (his half step at f1118.5
+    puts it at 30's f1119 place, f1119 at 30's f1120); a thrown pot (light) lands 4.4 apart. Dragon Roost's
+    boulders idle: whole frames identical.
+  - The ladders that drop (Obj_Ladder 85, Mhsg; on the 100% save all have dropped): converted (the shake's
+    phases split, its countdown `keep`). Tested in sea room 41 (Mhsg15) poked back into the shake
+    (WWHD_DEBUG_POKE=1000:85,3f0,4,2;1000:85,3f4,2,f;1000:85,318,4,44340000;1000:85,304,4,44340000): the
+    shake's half frames equal 30's ticks, the drop starts on the same tick; its bounces peak ~20 units
+    lower at 60 (a half step overshoots the ground less, and the bounce reflects the overshoot).
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,

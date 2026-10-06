@@ -7,3 +7,20 @@
 # converted, both draws' adds stood: twice the speed. drawsplit: half the speed in each of its two draws.
 # Its execute's speed chase (cLib_chaseS) and the wind's animations are stepped helpers.
 02132040    drawsplit@r10 add           fan nodeCallBack: mFanAngle (+0x634) += mFanSpeed (+0x636), a tick between two draws
+#
+# ---- Stone2 (455, d_a_stone2.cpp: the boulders Link lifts, Ebrock/Ebrock2: Dragon Roost's, Star Island's;
+# WWHD's mode functions f_0249FA28 wait, f_0249FE90 drop, f_0249FFE0 fine). Converted: carried, Link places it
+# every step and its execute's matrix follows on half ticks too; thrown, daObj::posMoveF_stream (posMoveF_grade
+# f_023121C4: stepped) and its tumble (shape_angle.x += 1000 a tick); its two countdowns on whole ticks.
+0249FA44    keep:r12    addi            stone2 mode_wait: the lock's countdown (+0x772) - 1, then its BG locks at 0
+0249FF2C    spliti      addi            stone2 mode_drop: shape_angle.x += 1000, the throw's tumble
+0249FFFC    keep:r12    addi            stone2 mode_fine: a countdown (+0x76C) - 1, then a sound at 0
+#
+# ---- Obj_Ladder (85, d_a_obj_ladder.cpp: Mhsg, the ladders that drop when their switch goes on; mode_vib
+# f_02369934, mode_drop f_023699A0; WWHD's mMode +0x3F0, mVibTimer +0x3F4, the bounces left +0x3F6, the
+# shake's two phases +0x450/+0x452). Converted: the shake's phases split, its countdown on whole ticks (so
+# the drop starts on one, as at 30); the drop is daObj::posMoveF_stream (stepped) and its bounces happen as
+# it crosses the ground (no rule).
+02369940    spliti      addi            ladder mode_vib: the shake's x phase (+0x450) + 20000 a tick
+0236994C    spliti      addi            ladder mode_vib: the shake's y phase (+0x452) + 15555 a tick
+0236997C    keep:r12    addi            ladder mode_vib: the shake's countdown (+0x3F4) - 1, then the drop at 0
