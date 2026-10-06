@@ -1,0 +1,13 @@
+# Route: the Iron Boots (session top, the work queue's "items2"): put on X on the Outset dock; X puts them on, Link
+# walks along the dock in them (slow and heavy), X takes them off and he walks on. FRAME BUTTONS [FRAMES_HELD];
+# the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_POKE=950:0,1046F0B9,1,9;950:0,10474C6B,1,29
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+960 LDOWN 12   # turn round, toward the island
+1000 X 3       # the Iron Boots on
+1040 LUP 60    # walk in them (slow and heavy)
+1120 X 3       # off
+1150 LUP 25    # and on without

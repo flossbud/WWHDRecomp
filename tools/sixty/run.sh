@@ -22,6 +22,11 @@ rates=("$@"); [ ${#rates[@]} -gt 0 ] || rates=(30 60)
 . "$ref/routes.sh"
 route_info "$which" || { echo "routes: $route_names" >&2; exit 2; }
 frames=${SIXTY_FRAMES:-$frames}                    # SIXTY_FRAMES=N ends the route at game frame N
+# a route's own setup: its "#env NAME=VALUE" lines (stage warps, pokes, spawns), exported unless already set
+while IFS= read -r line; do
+    kv=${line#\#env }; name=${kv%%=*}
+    if [ -z "${!name:-}" ]; then export "$name=${kv#*=}"; fi
+done < <(grep '^#env [A-Z_0-9]*=' "$ref/routes/$route" || true)
 [ -n "$save" ] && export REF_SAVE=$save
 export CEMU_BIN=${CEMU_BIN:-$(cd "$here/../.." && pwd)/build/wwhd/wwhd-null} WWHD_NATIVE=${WWHD_NATIVE:-on}
 export WWHD_VIRTUAL_SPEED=${WWHD_VIRTUAL_SPEED:-3}

@@ -1,0 +1,14 @@
+# Route: the Skull Hammer (session top, the work queue's "items2"): put on X on the Outset dock; X takes it out, a
+# step forward, X pounds it down (0x52-0x54: its quake, the pause while it rests on the dock, the swing's end), then
+# put away (B). At 60 the pause was half as long (its count in both steps; link_items.txt). FRAME BUTTONS
+# [FRAMES_HELD]; the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_POKE=950:0,1046F0B9,1,14;950:0,10474C6B,1,33
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+960 LDOWN 12   # turn round, toward the island
+1000 X 3       # the hammer out
+1060 LUP 10    # a step forward
+1080 X 3       # pounded
+1140 B 3       # put away

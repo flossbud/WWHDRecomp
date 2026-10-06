@@ -11,8 +11,10 @@
 # units a tick read ~7 apart).
 # Default routes: warp (the Ballad of Gales to the Tower of the Gods), back and door (dungeon doors), talk,
 # items (a chest), cuts, leaf, hook, ladder, crawl, carry, spin, bow, shield, swing, land, sidle, pot, plants,
-# slash, sail, menus, tour, house (out of a Windfall house's door and back in); back, talk and house start
-# from their stage warps. On 2026-10-05 (ww-4 14a98dd) all
+# slash, sail, menus, tour, house (out of a Windfall house's door and back in), and Link's items (session top's
+# items2: boomerang, bombs, grapple, boots, hammer, armor, mirror; heavy, the Power Bracelets' lift, session
+# main's route); back, talk and house start from their stage warps, the items' routes spawn and poke what they
+# need (their "#env" lines, tools/sixty/run.sh). On 2026-10-05 (ww-4 14a98dd) all
 # passed but warp (262,106 units: B28; 17 with its fix, 29b66d9); the largest others were land 99, swing 70,
 # sail 65, sidle 53, plants 46 (WARN: known small drifts), the rest under 33. Not in it: walk without a stage warp (Link swims off the
 # dock for 1900 ticks with camera-relative strokes: 7000 units apart, the runs' headings drift) and mob (a
@@ -23,7 +25,7 @@
 # Output: game state, it stays on the worker.
 set -e
 source "$(dirname "$0")/common.sh"
-routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land sidle pot plants slash sail menus tour)
+routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land sidle pot plants slash sail menus tour boomerang bombs grapple boots hammer armor mirror heavy)
 P=$OUT/predeploy; mkdir -p "$P"
 jobs=${PREDEPLOY_JOBS:-4}
 run_one() {

@@ -254,3 +254,10 @@
 021ACF7C    late        sth             kui: a count (0x3fc(r31)) - 1 a call, tested before (f_021ACB0C)
 021ACFA8    late        sth             kui: a count (0x3f8(r31)) - 1 a call, tested before (f_021ACB0C)
 021AD548    keep:r11    addi            kui: a count (0x424(r31)) - 1 a call, tested after (f_021ACB0C)
+# The Skull Hammer's pound (procHammerFrontSwing f_0243CA98, proc 0x53): the hammer's swing stops where it meets
+# the ground (its animation's rate 0) and m34D0 (+0x6916) counts 10 ticks down before the swing's end
+# (procHammerFrontSwingEnd, 0x54); counted in both steps the pause was half as long, the end 6 ticks early (route
+# hammer; session top, items2). The count once a tick in the whole step, and its test (m34D0 == 0, then the end)
+# read unequal in the half step, so the end comes in 30's tick, not the half step after the last count.
+0243CAE8    eqwhole     cmpi            link hammer swing: m34D0 == 0, the pause over
+0243CB24    whole       sth             link hammer swing: m34D0 - 1, the pause after the pound

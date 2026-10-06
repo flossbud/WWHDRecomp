@@ -1,0 +1,18 @@
+# Route: the magic armor (session top, the work queue's "items2"): put on X and the bomb bag on Y on the Outset
+# dock; X puts the armor on (its aura), a bomb is put down at Link's feet and he stays; the explosion hits him,
+# which costs rupees in the armor (WWHD's: changeDragonShield f_023E9D50 tests the rupees, not the magic, and
+# nothing drains while it's on), not hearts (5000 -> 4980 at f1177, both rates); X takes it off. The blast's
+# knockback (0x68 at f1176, its get-up 0x69 at f1185, the wait at f1237) got up half a tick early at 60 and waited
+# a tick early (link_actions.txt: the landing's reaction on whole ticks). FRAME BUTTONS [FRAMES_HELD]; the #env
+# lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_POKE=950:0,1046F0B9,1,a;950:0,10474C6B,1,2A;950:0,1046F0BA,1,d;950:0,10474C6C,1,31
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+960 LDOWN 12   # turn round, toward the island
+1000 X 3       # the magic armor on
+1020 Y 3       # a bomb out
+1035 ZR 3      # put down at his feet; he waits for it
+1300 X 3       # the armor off
+1320 LUP 15    # and a few steps without

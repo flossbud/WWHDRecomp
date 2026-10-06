@@ -43,10 +43,19 @@ route_info() {
         dback) route=dback-100.txt     frames=1500  save=/wwhd/data/saves/wwhd_100 trace= ;;
         stolen) route=stolen-100.txt   frames=3400  save=/wwhd/data/saves/wwhd_100 trace= ;;
         heavy) route=heavy-100.txt     frames=1300  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        boomerang) route=boomerang-100.txt frames=1160 save=/wwhd/data/saves/wwhd_100 trace= ;;
+        bombs) route=bombs-100.txt     frames=1330  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        grapple) route=grapple-100.txt frames=1400  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        steal) route=steal-100.txt     frames=1200  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        boots) route=boots-100.txt     frames=1240  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        hammer) route=hammer-100.txt   frames=1200  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        armor) route=armor-100.txt     frames=1350  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        mirror) route=mirror-100.txt   frames=1150  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        arrows) route=arrows-100.txt   frames=1480  save=/wwhd/data/saves/wwhd_100 trace= ;;
         sail)  route=sail-100.txt      frames=2940  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/sail-det/a.zst ;;
         menus) route=menus-100.txt     frames=1920  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/menus-det/a.zst ;;
         warp)  route=warp-100.txt      frames=3780  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/warp-det/a.zst ;;
         *) return 1 ;;
     esac
 }
-route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy"
+route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows"

@@ -1,0 +1,14 @@
+# Route: stealing with the grappling hook (session top, the work queue's "items2"): a Bokoblin (189) spawned on the
+# Outset dock ahead; locked on (ZL held), the grappling hook (on Y on the 100% save) out and thrown at it: the hook's
+# At (446) hits it at f1043 (the steal), and the Bokoblin then strikes Link (f1121). At 60 (ww-4 0a43ffc) the Bokoblin
+# wanders the other way from its spawn: the random stream is a draw off 30's from f902 (a seagull's draw in a half
+# step, put back and not drawn again), so it isn't in predeploy's list. FRAME BUTTONS [FRAMES_HELD];
+# the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_SPAWN=950:189,0,-201632,190,312120,0,0
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+1000 ZL 90     # locked on the Bokoblin
+1015 Y 3       # the grappling hook out
+1030 Y 3       # thrown at it

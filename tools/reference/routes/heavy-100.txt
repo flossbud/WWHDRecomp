@@ -1,6 +1,7 @@
 # Route: a heavy lift and throw (a boulder, Stone2 455, spawned on the Outset dock where carry's pot stands;
 # session main, the heavythrow item, after session bottom's test): WWHD_DEBUG_SPAWN=950:455,f47fff21,-201660,190,312465.
 # Lift (A f1000), carry (stick f1040), throw (A f1110).
+#env WWHD_DEBUG_SPAWN=950:455,f47fff21,-201660,190,312465
 420 A 5        # title screen
 540 A 5        # Controller Selection
 660 A 5        # File Selection: Quest Log 1

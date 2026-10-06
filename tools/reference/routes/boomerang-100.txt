@@ -1,0 +1,16 @@
+# Route: the boomerang's multi-lock (session top, the work queue's "items2"; after session bottom's boomlock): the
+# boomerang put on Y, three ChuChus spawned on the Outset dock ahead (one hides: two lock); Y held (first-person
+# aim), the view swept down, left, then right across them (each locks as the line passes), Y released at f1070:
+# thrown, it flies to each in turn and back. At 30 both are hit at f1074; at 60 the second a tick later (the
+# boomerang's homing switches targets at each step's check). FRAME BUTTONS [FRAMES_HELD]; the #env lines are
+# exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_POKE=950:0,1046F0BA,1,5;950:0,10474C6C,1,2D
+#env WWHD_DEBUG_SPAWN=950:206,0,-201692,190,312100;950:206,0,-201632,190,312060;950:206,0,-201572,190,312100
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+1000 Y 70      # the boomerang out (first-person aim)
+1022 RDOWN 6   # the view down
+1030 RLEFT 10  # swept left
+1042 RRIGHT 20 # and right across them: locked; Y released at f1070, thrown

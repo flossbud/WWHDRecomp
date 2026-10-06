@@ -1,0 +1,21 @@
+# Route: fire and ice arrows on targets (session top, the work queue's "items2"): a Bokoblin (189) spawned on the
+# Outset dock 150 units in front of Link, facing him; R aims the bow (first-person, straight ahead), ZR swaps the
+# arrows (normal, fire, ice, light). An ice arrow freezes it (enemy_ice: 300 ticks, its block pops up and falls),
+# a fire arrow shatters the frozen block (an item ball); a second Bokoblin at the same spot is set burning by
+# another fire arrow (enemy_fire: 100 ticks). At 30 the ice arrow hits it at f1046. At 60 (ww-4 0a43ffc) the
+# Bokoblin went for Link first (struck him at f1023.5): the random stream was a draw off 30's (a seagull's draw,
+# then the fishman's height: outset.txt), so not in predeploy's list yet. FRAME BUTTONS [FRAMES_HELD]; the #env
+# lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_SPAWN=950:189,0,-201593,190,312096,0,f82d,0;1250:189,0,-201593,190,312096,0,f82d,0
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870, Link at its end
+1000 R 45      # the bow's aim
+1010 ZR 3      # fire arrows
+1020 ZR 3      # ice arrows; released at 1045: the Bokoblin frozen
+1150 R 40      # the aim again
+1160 ZR 3      # light arrows
+1170 ZR 3      # normal
+1180 ZR 3      # fire; released at 1190: the frozen block shattered
+1300 R 40      # the aim at the second; released at 1340: it burns

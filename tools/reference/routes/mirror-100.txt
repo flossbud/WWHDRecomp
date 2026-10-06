@@ -1,0 +1,16 @@
+# Route: the Mirror Shield reflecting light (session top, the work queue's "items2"): a light shaft (Tag_Light 469,
+# type 1, the Earth Temple's sunbeam: no switches, a straight cone) spawned where Link stands on the Outset dock;
+# standing in it he reflects it (checkLightHit: Link's reset flag 0x200000, the beam mFanLightCps from the shield,
+# wherever it is); ZR crouches behind the shield (the beam forward), ZL targets (the shield up), then he walks
+# out of the light. At 60 (ww-4 0a43ffc + items2) every action in 30's tick and the light on the same ticks but
+# the last (Link's walk out a few units behind 30's). FRAME BUTTONS [FRAMES_HELD]; the #env lines are
+# exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_SPAWN=950:469,00ff3ffd,-201638,120,312327
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+960 LDOWN 12   # turn round, toward the island
+1000 ZR 40     # crouched behind the shield in the light
+1060 ZL 30     # targeting: the shield up
+1110 LUP 15    # out of the light

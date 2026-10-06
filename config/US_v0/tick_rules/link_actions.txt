@@ -6,3 +6,9 @@
 # (route door2: turning half a tick early, then walking a tick and a half early, 25 units ahead).
 0240D6D8    hold        bctrl           link execute: (this->*mCurProcFunc)(), a member function
 0240D6F8    hold        bctrl           link execute: (this->*mCurProcFunc)(), a virtual one
+# A landing's reaction on whole ticks only (session top, items2: route armor, a bomb's blast). At 30 an action
+# that lands in a tick's move reacts in the next tick's action call; at 60 the arc reaches the ground up to half a
+# tick sooner (a whole step's move), and the half step after it reacted, in the state paired with 30's tick of
+# the landing: the knockback's get-up (0x69) half a tick early, 12.5 units short of 30's slide, the wait after it
+# (0x04) a tick early. Left to the next whole step it comes in 30's tick, either step it landed in.
+0241E8F8    whole:r3=0  bl 023f6020     link large damage (procLargeDamage f_0241E7D4, 0x68): on the ground, procLargeDamageUp_init (0x69)

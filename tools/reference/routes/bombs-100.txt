@@ -1,0 +1,16 @@
+# Route: bombs, thrown and put down (session top, the work queue's "items2"): the bomb bag put on Y on the Outset
+# dock; Link turns round toward the island, Y takes a bomb out and Y again throws it along the dock; a second taken
+# out and put down (ZR, the special action), Link walks off (off the dock's side, into the sea); both blow up
+# (BOMB 294: f1250 and f1310 at 30, the same ticks at 60; the thrown one at rest 11 units from 30's). FRAME BUTTONS [FRAMES_HELD];
+# the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_POKE=950:0,1046F0BA,1,d;950:0,10474C6C,1,31
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+960 LDOWN 12   # turn round, toward the island
+1000 Y 3       # a bomb out
+1015 Y 3       # thrown along the dock
+1060 Y 3       # a second out
+1075 ZR 3      # put down
+1085 LLEFT 30  # walk off to the side
