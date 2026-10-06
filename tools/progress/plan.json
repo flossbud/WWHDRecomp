@@ -128,13 +128,13 @@
     }
   ],
   "known_issues": [
-    "Link: an action set up in a whole step can start half a tick early (fixed for the turn in place and waiting, so a turn and walk now keeps 30's ticks); actions ending on an animation may end a tick early",
-    "The Wind Waker song's conducting and playback end half a tick early (a beat is crossed on a half tick); its wind change and end are on 30's ticks",
-    "Random-driven enemies (Magtail waits, Peahat flights) drift from the 30 fps run, as expected",
-    "Pots, sidling and ladders still need a hands-on check",
-    "Windfall at night (WWHD_DEBUG_TIME gives night): the lights converted; the shutters (259) not seen running, the auction's bidders and the auction (361, 382) run by night but wait for a test of the auction's event (pots, barrels, door knobs, item stands: converted)",
-    "Enemies falling into water: at 30 they hang at the surface about 2 ticks before sinking, at 60 they don't (the shared enemy move's ground check)",
-    "Hand-made gravity still ruled *h arcs about g/4 a tick off 30's; the exact rules: late on the speed.y store where the position moves first, keep on the add where gravity comes first, fall@ before fopAcM_posMove (done: Ganondorf, Puppet Ganon, Molgera's larvae, Chuchus)"
+    {"title": "Link: actions can start half a tick early", "detail": "An action set up in a whole step can start half a tick early (fixed for the turn in place and waiting, so a turn and walk now keeps 30's ticks); actions ending on an animation may end a tick early"},
+    {"title": "Wind Waker conducting ends half a tick early", "detail": "The Wind Waker song's conducting and playback end half a tick early (a beat is crossed on a half tick); its wind change and end are on 30's ticks"},
+    {"title": "Random-driven enemies drift from the 30 fps run", "detail": "Random-driven enemies (Magtail waits, Peahat flights) drift from the 30 fps run, as expected"},
+    {"title": "Pots, sidling and ladders", "detail": "Still need a hands-on check"},
+    {"title": "Windfall at night", "detail": "The lights converted (night via WWHD_DEBUG_TIME); the shutters (259) not seen running, the auction's bidders and the auction (361, 382) run by night but wait for a test of the auction's event (pots, barrels, door knobs, item stands: converted)"},
+    {"title": "Enemies falling into water", "detail": "At 30 they hang at the surface about 2 ticks before sinking, at 60 they don't (the shared enemy move's ground check)"},
+    {"title": "Hand-made gravity arcs", "detail": "Hand-made gravity still ruled *h arcs about g/4 a tick off 30's; the exact rules: late on the speed.y store where the position moves first, keep on the add where gravity comes first, fall@ before fopAcM_posMove (done: Ganondorf, Puppet Ganon, Molgera's larvae, Chuchus)"}
   ],
   "labels": {
     "168": "Link",

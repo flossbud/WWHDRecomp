@@ -20,8 +20,13 @@
 #                           retest) -> verified (the owner
 #                           confirmed); wontfix with the reason; reopen if the retest fails
 #   publish.sh bug note ID TEXT              add a finding to it
+#   publish.sh bug needs ID TEXT             what an open bug waits on from the owner, shown as "Needs TEXT"
+#                                            (e.g. "your F9 recording", "a yes/no: shooting stars?")
+#   publish.sh bug short ID TEXT             a one-line summary for its card (the full note shows on a tap)
 #   publish.sh bug list                      the bugs, newest first (also on the page)
-#   publish.sh shot PPM CAPTION
+#   publish.sh shot PPM CAPTION [PLACE]
+#                           PLACE: the shot's heading on the page (e.g. "Wind Temple, the fans' room"); without
+#                           it the page takes the caption's text before its first ": "
 #                           add a capture: PPM is a path on the worker (/wwhd/...: the desktop's while
 #                           it's lent, else the worker's; WWHD_ON= forces one); it becomes a JPEG
 #                           on the worker, never on the editing machine or in git (captures are game data); none is ever deleted
@@ -85,6 +90,8 @@ else:
     x = find(a)
     if op == "note":
         x["notes"].append({"text": b, "session": session, "time": t})
+    elif op in ("needs", "short"):
+        x[op] = b
     else:
         state = {"start": "working", "ready": "ready", "fixed": "fixed", "verified": "verified", "wontfix": "wontfix", "reopen": "open"}.get(op)
         if not state:
@@ -94,7 +101,8 @@ else:
             x["session"] = session
         if b:
             x["notes"].append({"text": f"{state}: {b}", "session": session, "time": t})
-    x["time"] = t
+    if op not in ("needs", "short"):   # its card's wording, not news about the bug
+        x["time"] = t
     print(f"{x['id']}: {x['state']} ({session})")
 json.dump(bugs, open(path + ".tmp", "w"), indent=1); os.replace(path + ".tmp", path)
 PY
@@ -113,7 +121,7 @@ case "${1:-}" in
 		echo "$who: retired"
 		;;
 	bug)
-		bugs "${2:?bug add|start|ready|fixed|verified|wontfix|reopen|note|list}" "${3:-}" "${4:-}"
+		bugs "${2:?bug add|start|ready|fixed|verified|wontfix|reopen|note|needs|short|list}" "${3:-}" "${4:-}"
 		;;
 	claim|done|release)
 		claims "$1" "${2:?item id}" "${3:-}"
@@ -122,7 +130,7 @@ case "${1:-}" in
 		claims step "${2:?item id}" "${3:?done}/${4:?total}"
 		;;
 	shot)
-		src=$2; cap=$(json_str "${3:-}"); name=shot-$(date +%Y%m%d-%H%M%S-%3N).jpg   # ms: two shots in one second
+		src=$2; cap=$(json_str "${3:-}"); place=$(json_str "${4:-}"); name=shot-$(date +%Y%m%d-%H%M%S-%3N).jpg   # ms: two shots in one second
 		# would share a file (one picture under both captions, deleted with the older one)
 		source "$root/tools/worker/target.sh"                # the worker the capture was made on (as for job)
 		if [ "$WWHD_ON" = desktop ]; then
@@ -134,14 +142,14 @@ case "${1:-}" in
 		# every shot is kept: shots.json holds the newest 24, older ones move to shots-archive.json (the page
 		# shows both, a page at a time). Kept short so a checkout from before this (it deleted the files of
 		# all but the newest 48 in shots.json) can't reach an archived shot's file
-		ssh $host "flock $dir/.claims.lock python3 - $dir/shots.json $name $(printf %q "$cap") $(date +%s)" <<'PY'
+		ssh $host "flock $dir/.claims.lock python3 - $dir/shots.json $name $(printf %q "$cap") $(date +%s) $(printf %q "$session") $(printf %q "$place")" <<'PY'
 import json, os, sys
-path, name, cap, t = sys.argv[1], sys.argv[2], json.loads(sys.argv[3]), int(sys.argv[4])
+path, name, cap, t, session, place = sys.argv[1], sys.argv[2], json.loads(sys.argv[3]), int(sys.argv[4]), sys.argv[5], json.loads(sys.argv[6])
 arch = os.path.join(os.path.dirname(path), "shots-archive.json")
 def load(p): return json.load(open(p)) if os.path.exists(p) else []
 def save(p, v): json.dump(v, open(p + ".tmp", "w")); os.replace(p + ".tmp", p)
 shots = load(path)
-shots.insert(0, {"file": "shots/" + name, "caption": cap, "time": t})
+shots.insert(0, dict({"file": "shots/" + name, "caption": cap, "time": t, "session": session}, **({"place": place} if place else {})))
 if len(shots) > 24:
     save(arch, shots[24:] + load(arch))   # the archive first: a crash between leaves a duplicate, not a loss
 save(path, shots[:24])
@@ -163,5 +171,5 @@ EOF
 		rm -f "$names"
 		ssh $host "cat > $dir/index.html" < "$here/index.html"
 		;;
-	*) echo "usage: publish.sh [now TEXT | retire [SESSION] | claim|done|release ID [NOTE] | step ID DONE TOTAL | bug ... | shot PPM CAPTION | serve]" >&2; exit 2 ;;
+	*) echo "usage: publish.sh [now TEXT | retire [SESSION] | claim|done|release ID [NOTE] | step ID DONE TOTAL | bug ... | shot PPM CAPTION [PLACE] | serve]" >&2; exit 2 ;;
 esac

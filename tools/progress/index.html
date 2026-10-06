@@ -4,104 +4,149 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WWHD Recomp Progress</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f7a8c'/%3E%3Ctext x='16' y='22' font-size='15' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'%3E60%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a1a2b'/%3E%3Ctext x='16' y='22' font-size='15' font-family='sans-serif' font-weight='700' fill='%231fb8a6' text-anchor='middle'%3E60%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+/* the design handoff (Claude Design, "Wind Waker Progress Tracker"): tokens and sizes as specified */
 :root {
-  --bg: #f4f6f8; --card: #ffffff; --ink: #18202a; --muted: #5d6b7a; --line: #dde3ea;
-  --accent: #1f7a8c; --good: #2e8b57; --warn: #c98a12; --todo: #aab4bf; --bar: #e6ebf0;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0f1418; --card: #172028; --ink: #e6edf3; --muted: #93a1b0; --line: #26323d;
-    --accent: #4fb3c8; --good: #4cc38a; --warn: #e3b341; --todo: #4a5866; --bar: #22303b;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #0f1418; --card: #172028; --ink: #e6edf3; --muted: #93a1b0; --line: #26323d;
-  --accent: #4fb3c8; --good: #4cc38a; --warn: #e3b341; --todo: #4a5866; --bar: #22303b;
+  --bg: #f3f6f8; --ink: #0f2233; --ink2: #3c556a; --ink3: #5b7286; --off: #9aabba;
+  --card: #ffffff; --line: #dce6ee; --line2: #e9eff4;
+  --navy: #0a1a2b; --navy2: #11263b; --navy3: #17304a; --side: #b9cadb; --side2: #8fa9c2;
+  --link: #1f5fb8; --link-hover: #4A8FE7; --link-dark: #6ba8f0;
+  --teal: #1fb8a6; --live: #56d66a; --retest: #ffb04d; --retest-ink: #d6e1ec;
+  --red: #b34848; --pill-bg: #fbe4e4; --pill-ink: #992f2f; --needs: #9a5512;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink);
-  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-main { max-width: 1080px; margin: 0 auto; padding: 16px; }
-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 8px 0 14px; }
-h1 { font-size: 1.5rem; margin: 0; }
-h2 { font-size: 1.05rem; margin: 0 0 10px; }
-.sub { color: var(--muted); }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
-.now { display: flex; gap: 10px; align-items: center; }
-.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--good); flex: none;
-  box-shadow: 0 0 0 0 var(--good); animation: pulse 2s infinite; }
-.dot.idle { background: var(--todo); animation: none; }
-@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent); }
-  70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
-.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-.bar { height: 12px; background: var(--bar); border-radius: 6px; overflow: hidden; display: flex; }
-.bar > span { display: block; height: 100%; }
-.bar .c { background: var(--good); } .bar .r { background: var(--warn); }
-.big .bar { height: 18px; border-radius: 9px; }
-#totalCard .bar { height: 24px; border-radius: 12px; }
-#totalCard .row { align-items: baseline; }
-#totalCard .row b { font-size: 1.35rem; }
-.totParts { margin-top: 8px; font-size: .85rem; }
-.row { display: flex; justify-content: space-between; gap: 10px; margin: 10px 0 4px; }
-.row b { font-variant-numeric: tabular-nums; }
-.tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
-.tile { background: var(--bg); border-radius: 10px; padding: 10px 12px; }
-.tile b { display: block; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
-.tile span { color: var(--muted); font-size: .85rem; }
-ul.ms { list-style: none; margin: 0; padding: 0; }
-ul.ms li { display: flex; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); }
-ul.ms li:last-child { border: 0; }
-.tick { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--todo); margin-top: 1px; }
-.tick.done { background: var(--good); border-color: var(--good); }
-.legend { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: .85rem; margin-bottom: 8px; }
-.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { font-size: .8rem; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); white-space: nowrap; }
-.chip.converted { border-color: var(--good); color: var(--good); }
-.chip.rules { border-color: var(--warn); color: var(--warn); }
-.chip.todo { color: var(--muted); }
-details summary { cursor: pointer; color: var(--accent); margin-top: 10px; }
-/* the bugs and the queue: side by side on wide screens, stacked on phones; each folds */
-.pair { display: grid; gap: 14px; grid-template-columns: 1fr; align-items: start; margin-bottom: 14px; }
-.pair > .card { margin-bottom: 0; min-width: 0; }
-@media (min-width: 900px) {
-  .pair { grid-template-columns: 1fr 1fr; }
-  .pair .foldBody { max-height: 70vh; overflow-y: auto; padding-right: 4px; }
-}
-.fold > summary { list-style: none; display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap;
-  margin: 0; color: var(--ink); cursor: pointer; user-select: none; position: relative; padding-right: 28px; }
-.fold > summary::-webkit-details-marker { display: none; }
-.fold > summary h2 { margin: 0; }
-.fold > summary .chev { position: absolute; right: 6px; top: 6px; width: 10px; height: 10px; border-right: 2px solid var(--muted);
-  border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .15s; }
-.fold:not([open]) > summary .chev { transform: rotate(-45deg); }
-.fold[open] > summary { margin-bottom: 10px; }
-.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-.tabs button { font: inherit; font-size: .85rem; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line);
-  background: var(--bg); color: var(--ink); cursor: pointer; }
-.tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
-.shots { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
-.shots figure { margin: 0; }
-.shots img { width: 100%; border-radius: 8px; display: block; background: var(--bar); aspect-ratio: 16/9; object-fit: cover; cursor: zoom-in;
-  overflow: hidden; color: transparent; }
-.shots figcaption { font-size: .82rem; color: var(--muted); margin-top: 4px;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
-.pager button { font: inherit; font-size: .85rem; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line);
-  background: var(--bg); color: var(--ink); cursor: pointer; min-height: 36px; }
-.pager button:disabled { opacity: .4; cursor: default; }
-.pager span { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
-@media (max-width: 520px) { .shots { grid-template-columns: 1fr 1fr; gap: 8px; } .shots figcaption { font-size: .75rem; } }
-ol.log { list-style: none; margin: 0; padding: 0; }
-ol.log li { padding: 7px 0; border-bottom: 1px solid var(--line); }
-ol.log li:last-child { border: 0; }
-ol.log code { color: var(--accent); font-size: .82rem; margin-right: 6px; }
-ol.log time { color: var(--muted); font-size: .82rem; float: right; margin-left: 8px; }
-.issues li { margin: 4px 0; }
-.empty { color: var(--muted); font-style: italic; }
-#zoom { position: fixed; inset: 0; background: rgba(0,0,0,.94); display: none; align-items: center; justify-content: center; padding: 16px 64px; z-index: 9; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+a { color: var(--link); text-decoration: none; cursor: pointer; }
+a:hover { color: var(--link-hover); }
+.mono { font-family: var(--mono); }
+.root { min-height: 100%; display: flex; flex-wrap: wrap; align-items: stretch; }
+
+/* the sidebar: ~280px beside the main column, a full-width block on top under ~840px */
+.side { flex: 1 1 280px; background: var(--navy); color: #fff; padding: 28px clamp(16px, 4vw, 24px);
+  display: flex; flex-direction: column; gap: 24px; }
+.brand { display: flex; flex-direction: column; gap: 4px; }
+.brand b { font-size: 19px; font-weight: 800; }
+.brand span { font-family: var(--mono); font-size: 11px; color: var(--side2); }
+.ringRow { display: flex; align-items: center; gap: 16px; }
+.ring { position: relative; width: 112px; height: 112px; flex: none; }
+.ring svg { display: block; transform: rotate(-90deg); }
+.ring div { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 800; }
+.stats { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--side); }
+.stats b { color: #fff; font-weight: 600; font-size: 13px; }
+.eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--side2); }
+.agents { display: flex; flex-direction: column; gap: 12px; }
+.agent { background: var(--navy2); border-radius: 9px; overflow: hidden; }
+.agent > i { display: block; height: 4px; }
+.agent > div { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 5px; }
+.agentHead { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.agentHead b { font-weight: 700; font-size: 14px; }
+.agentHead .task { font-family: var(--mono); font-size: 10.5px; color: var(--side); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agentHead .ago { margin-left: auto; font-size: 10.5px; font-weight: 600; white-space: nowrap; color: var(--side2); }
+.agentHead .ago.live { color: var(--live); }
+.agent p { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--side); text-wrap: pretty; overflow-wrap: anywhere; }
+.nums { display: flex; flex-direction: column; gap: 2px; }
+.nums .eyebrow { padding-bottom: 8px; }
+.num { display: flex; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--navy3); font-size: 12px; color: var(--side); }
+.num span { margin-left: auto; font-family: var(--mono); color: #fff; font-weight: 600; }
+.fresh { margin-top: auto; font-size: 11px; color: var(--side2); display: flex; align-items: center; gap: 8px; }
+.fresh i { width: 7px; height: 7px; border-radius: 50%; background: var(--live); flex: none; }
+.fresh i.stale { background: var(--retest); }
+.empty { color: var(--side2); font-size: 12px; }
+
+/* the main column */
+.main { flex: 999 1 560px; min-width: 0; padding: 28px clamp(16px, 4vw, 32px) 36px; display: flex; flex-direction: column; gap: 28px; }
+section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.head h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.head .meta { font-size: 12px; color: var(--ink2); }
+.pager { margin-left: auto; display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--ink2); }
+.pager button { font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 7px; background: #fff; border: 1px solid var(--line);
+  cursor: pointer; color: var(--ink); }
+.pager button:disabled { color: var(--off); cursor: default; }
+
+.shotBody { display: flex; flex-wrap: wrap; gap: 20px; }
+.hero { flex: 3 1 380px; min-width: 0; width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 12px; display: block;
+  background: var(--line); cursor: zoom-in; color: transparent; overflow: hidden; }
+.shotSide { flex: 2 1 260px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.shotText { display: flex; flex-direction: column; gap: 6px; }
+.shotText b { font-size: 20px; font-weight: 700; line-height: 1.25; }
+.shotText p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ink2); text-wrap: pretty; overflow-wrap: anywhere; }
+.shotText span { font-family: var(--mono); font-size: 11.5px; color: var(--ink3); }
+.thumbs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: auto; }
+.thumbs img { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 5px; display: block; cursor: pointer; opacity: .8;
+  background: var(--line); outline: 0 solid transparent; outline-offset: 1px; color: transparent; overflow: hidden; }
+.thumbs img.on { outline: 2px solid var(--link); opacity: 1; }
+
+.bugGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.bug { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column;
+  gap: 8px; cursor: pointer; min-width: 0; }
+.bugHead { display: flex; align-items: center; gap: 8px; }
+.bugHead .id { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--red); }
+.pill { font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--pill-bg); color: var(--pill-ink); }
+.bugHead .ago { margin-left: auto; font-size: 11px; color: var(--ink3); }
+.bug .title { font-size: 13.5px; font-weight: 600; line-height: 1.4; text-wrap: pretty; }
+.bug .body { font-size: 12px; color: var(--ink2); line-height: 1.5; text-wrap: pretty; overflow-wrap: anywhere; }
+.bugFoot { margin-top: auto; display: flex; align-items: baseline; gap: 8px; padding-top: 2px; }
+.bugFoot .needs { font-size: 12px; font-weight: 600; color: var(--needs); }
+.bugFoot .chev { margin-left: auto; font-size: 11px; color: var(--link); white-space: nowrap; }
+.retestTile { background: var(--navy); color: #fff; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;
+  justify-content: space-between; min-height: 120px; }
+.retestTile b { font-size: 40px; font-weight: 800; line-height: 1; color: var(--retest); }
+.retestTile span { font-size: 13px; line-height: 1.4; color: var(--retest-ink); }
+.retestTile a { font-size: 12px; font-weight: 600; color: var(--link-dark); }
+
+.kanban { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: start; }
+.col { border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.col.done { gap: 6px; }
+.colHead { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; padding: 2px 4px; }
+.colHead i { width: 8px; height: 8px; border-radius: 50%; }
+.colHead span { font-family: var(--mono); font-weight: 500; }
+.col.open { background: #e6edf2; } .col.open .colHead i { background: #8494a4; } .col.open .colHead span { color: var(--ink3); }
+.col.working { background: #f6ecdd; } .col.working .colHead i { background: #e0943a; } .col.working .colHead span { color: #8a5a22; }
+.col.done { background: #e1efe4; } .col.done .colHead i { background: #3da343; } .col.done .colHead span { color: #2f6b3a; }
+.q { background: #fff; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.q .name { font-family: var(--mono); font-size: 12.5px; font-weight: 700; }
+.q .desc { font-size: 12px; color: var(--ink2); line-height: 1.4; overflow-wrap: anywhere; }
+.q.working { gap: 6px; }
+.qHead { display: flex; align-items: center; gap: 6px; }
+.owner { margin-left: auto; display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink2); }
+.sq { width: 7px; height: 7px; border-radius: 2px; flex: none; background: #8494a4; }
+.qbar { height: 5px; border-radius: 3px; background: #efe3d2; overflow: hidden; }
+.qbar div { height: 100%; background: #e0943a; }
+.qcount { font-family: var(--mono); font-size: 10.5px; color: #8a5a22; }
+.q.done { padding: 8px 12px; flex-direction: row; align-items: baseline; gap: 8px; }
+.q.done .name { font-size: 12px; flex: none; }
+.q.done .desc { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.q.done .sq { align-self: center; }
+.earlier { font-size: 11.5px; color: var(--ink3); padding: 2px 4px; }
+a.earlier { color: var(--link); font-weight: 600; }
+
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; align-items: start; }
+@media (max-width: 400px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+.pair section { gap: 10px; }
+.issues { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 4px 18px; }
+.issue { padding: 11px 0; border-bottom: 1px solid var(--line2); display: flex; flex-direction: column; gap: 3px; }
+.issue:last-child { border-bottom: 0; }
+.issue b { font-size: 13px; font-weight: 600; }
+.issue span { font-size: 12px; line-height: 1.5; color: var(--ink2); overflow-wrap: anywhere; }
+.log { position: relative; display: flex; flex-direction: column; padding-left: 20px; }
+.log::before { content: ""; position: absolute; left: 5px; top: 8px; bottom: 8px; width: 2px; background: var(--line); }
+.entry { position: relative; padding: 0 0 14px; display: flex; flex-direction: column; gap: 3px; }
+.entry > i { position: absolute; left: -19px; top: 4px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg); box-sizing: content-box; margin: -2px 0 0 -2px; }
+.entry .meta { display: flex; gap: 8px; flex-wrap: wrap; font-family: var(--mono); font-size: 11px; color: var(--ink3); }
+.entry .meta b { color: var(--link); font-weight: 400; }
+.entry span:last-child { font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+
+/* the enlarged screenshot and the bug list: overlays */
+.overlay { position: fixed; inset: 0; z-index: 9; display: none; }
+#zoom { background: rgba(0,0,0,.94); align-items: center; justify-content: center; padding: 16px 64px; }
 #zoom figure { margin: 0; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 #zoom img { max-width: 100%; max-height: calc(100vh - 90px); border-radius: 8px; }
 #zoom figcaption { color: #e6edf3; font-size: .9rem; text-align: center; max-width: 900px; }
@@ -111,321 +156,394 @@ ol.log time { color: var(--muted); font-size: .82rem; float: right; margin-left:
 #zoom .prev { left: 10px; top: 50%; transform: translateY(-50%); }
 #zoom .next { right: 10px; top: 50%; transform: translateY(-50%); }
 #zoom .close { right: 10px; top: 10px; font-size: 24px; }
-@media (max-width: 520px) { #zoom { padding: 16px 8px 72px; } #zoom .prev, #zoom .next { top: auto; bottom: 14px; transform: none; } #zoom .prev { left: calc(50% - 54px); } #zoom .next { right: calc(50% - 54px); } }
-.now { display: flex; gap: 10px; align-items: center; padding: 4px 0; }
-.now + .now { border-top: 1px solid var(--line); }
-ol.queue { margin: 0; padding-left: 22px; }
-ol.bugs { list-style: none; padding-left: 0; }
-.badge.open { border-color: #d9534f; color: #d9534f; }
-.badge.ready { border-color: var(--warn); color: var(--warn); }
-.badge.fixed { border-color: var(--accent); color: var(--accent); }
-.badge.verified { border-color: var(--good); color: var(--good); }
-ol.queue li { padding: 6px 0; border-bottom: 1px solid var(--line); }
-.mini { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px; }
-.mini .bar { flex: 1; height: 6px; border-radius: 3px; max-width: 260px; }
-.mini small { color: var(--muted); font-size: .75rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
-ol.queue li:last-child { border: 0; }
-.badge { font-size: .75rem; padding: 1px 8px; border-radius: 999px; margin-left: 6px; white-space: nowrap; border: 1px solid var(--line); color: var(--muted); }
-.badge.working { border-color: var(--warn); color: var(--warn); }
-.badge.done { border-color: var(--good); color: var(--good); }
-footer { color: var(--muted); font-size: .8rem; text-align: center; margin: 10px 0 24px; }
-@media (max-width: 520px) { main { padding: 12px 16px; } h1 { font-size: 1.3rem; } ol.log time { float: none; display: block; margin: 0; } }
+@media (max-width: 520px) { #zoom { padding: 16px 8px 72px; } #zoom .prev, #zoom .next { top: auto; bottom: 14px; transform: none; }
+  #zoom .prev { left: calc(50% - 54px); } #zoom .next { right: calc(50% - 54px); } }
+#sheet { background: rgba(10,26,43,.55); justify-content: center; align-items: flex-start; overflow-y: auto; padding: 24px 12px; }
+.sheet { background: var(--bg); border-radius: 12px; width: 100%; max-width: 760px; padding: 20px clamp(14px, 4vw, 24px) 24px;
+  display: flex; flex-direction: column; gap: 14px; }
+.sheet .head button { margin-left: auto; font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 7px; background: #fff;
+  border: 1px solid var(--line); cursor: pointer; color: var(--ink); }
+#sheetBody { display: flex; flex-direction: column; gap: 10px; }
+.sheet h3 { margin: 14px 0 0; font-size: 13px; font-weight: 700; color: var(--ink2); }
+.sheet h3:first-child { margin-top: 0; }
+.sheet .common { font-size: 12px; color: var(--ink2); line-height: 1.5; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+.rbug { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.rbug .bugHead .id { color: var(--ink2); }
+.rbug .title { font-size: 13.5px; font-weight: 600; line-height: 1.4; }
+.rbug .body { font-size: 12px; color: var(--ink2); line-height: 1.5; overflow-wrap: anywhere; }
+.rbug .body.note { color: var(--ink3); }
+.colList { display: flex; flex-direction: column; gap: 8px; }
+.col.done .colList { gap: 6px; }
+.pill.fixed { background: #fdf0dc; color: #8a5a22; }
+.pill.working, .pill.ready { background: #f6ecdd; color: #8a5a22; }
+.pill.verified { background: #e1efe4; color: #2f6b3a; }
+.pill.wontfix { background: #e6edf2; color: var(--ink3); }
 </style>
 </head>
 <body>
-<main>
-  <header>
-    <h1 id="title">WWHD Recomp</h1>
-    <span class="sub" id="ticket"></span>
-  </header>
-
-  <section class="card big" id="totalCard" hidden>
-    <h2>Overall progress</h2>
-    <div class="row"><span id="totLabel"></span><b id="totPct"></b></div>
-    <div class="bar"><span class="c" id="totBarC"></span><span class="r" id="totBarR"></span></div>
-    <div class="sub totParts" id="totParts"></div>
-  </section>
-
-  <section class="card" id="sessions"><p class="empty">No session has reported yet.</p></section>
-
-  <div class="grid">
-    <section class="card big">
-      <h2>60 fps milestones</h2>
-      <div class="row"><span id="msLabel"></span><b id="msPct"></b></div>
-      <div class="bar"><span class="c" id="msBar"></span></div>
-      <details><summary>Show milestones</summary><ul class="ms" id="msList"></ul></details>
-    </section>
-    <section class="card big">
-      <h2>Actor types running at 60</h2>
-      <div class="row"><span id="allLabel"></span><b id="allPct"></b></div>
-      <div class="bar"><span class="c" id="allBarC"></span><span class="r" id="allBarR"></span></div>
-      <div id="groupBars"></div>
-    </section>
-  </div>
-
-  <div class="pair">
-    <details class="card fold" id="bugsCard" open>
-      <summary><h2>Bugs</h2><span class="sub" id="bugCounts"></span><span class="chev" aria-hidden="true"></span></summary>
-      <div class="foldBody">
-        <ol class="queue bugs" id="bugs"><li class="empty">None reported yet.</li></ol>
-        <details id="bugsRetestWrap" hidden><summary id="bugsRetestSum"></summary><p class="sub" id="bugsRetestCommon"></p><ol class="queue bugs" id="bugsRetest"></ol></details>
-        <details id="bugsClosedWrap" hidden><summary id="bugsClosedSum"></summary><ol class="queue bugs" id="bugsClosed"></ol></details>
+<div class="root">
+  <aside class="side">
+    <div class="brand"><b id="title">WWHD Recomp</b><span id="ticket"></span></div>
+    <div class="ringRow">
+      <div class="ring">
+        <svg width="112" height="112" viewBox="0 0 112 112"><circle cx="56" cy="56" r="48" fill="none" stroke="#17304a" stroke-width="10"></circle>
+          <circle id="ringArc" cx="56" cy="56" r="48" fill="none" stroke="#1fb8a6" stroke-width="10" stroke-linecap="round" stroke-dasharray="0 302"></circle></svg>
+        <div id="ringPct">–</div>
       </div>
-    </details>
-    <details class="card fold" id="queueCard" open>
-      <summary><h2>Work queue</h2><span class="sub" id="queueCounts"></span><span class="chev" aria-hidden="true"></span></summary>
-      <div class="foldBody">
-        <p class="sub" id="queueNote"></p>
-        <ol class="queue" id="queue"></ol>
-        <p class="sub" id="later"></p>
+      <div class="stats" id="stats"></div>
+    </div>
+    <div class="agents">
+      <div class="eyebrow">On deck</div>
+      <div class="agents" id="agents"><span class="empty">No session has reported yet.</span></div>
+    </div>
+    <div class="nums" id="nums"><div class="eyebrow">Numbers</div></div>
+    <div class="fresh"><i id="freshDot"></i><span id="fresh">Loading…</span></div>
+  </aside>
+
+  <main class="main">
+    <section id="shotsSec">
+      <div class="head"><h2>Screenshots</h2><span class="meta" id="shotMeta"></span>
+        <span class="pager" id="pager"><button class="newer">&#8249; Newer</button><span></span><button class="older">Older &#8250;</button></span></div>
+      <div class="shotBody">
+        <img class="hero" id="hero" alt="">
+        <div class="shotSide">
+          <div class="shotText"><b id="heroPlace"></b><p id="heroCap"></p><span id="heroMeta"></span></div>
+          <div class="thumbs" id="thumbs"></div>
+        </div>
       </div>
-    </details>
-  </div>
-
-  <section class="card">
-    <h2>Numbers</h2>
-    <div class="tiles" id="tiles"></div>
-  </section>
-
-  <section class="card">
-    <h2>Actor types</h2>
-    <div class="legend"><span><i style="background:var(--good)"></i>converted (runs at 60)</span>
-      <span><i style="background:var(--warn)"></i>rules written, not on by default</span>
-      <span><i style="background:var(--todo)"></i>to do (runs at 30)</span></div>
-    <div class="tabs" id="tabs"></div>
-    <div class="chips" id="chips"></div>
-  </section>
-
-  <section class="card">
-    <h2>Screenshots <span class="sub" id="shotCount"></span></h2>
-    <div class="shots" id="shots"><p class="empty">None yet.</p></div>
-    <div class="pager" id="shotPager" hidden><button class="newer">&#8249; Newer</button><span></span><button class="older">Older &#8250;</button></div>
-  </section>
-
-  <div class="grid">
-    <section class="card">
-      <h2>Recent work</h2>
-      <ol class="log" id="log"></ol>
     </section>
-    <section class="card">
-      <h2>Known issues</h2>
-      <ul class="issues" id="issues"></ul>
+
+    <section>
+      <div class="head"><h2>Needs you</h2><span class="meta" id="bugMeta"></span></div>
+      <div class="bugGrid" id="bugs"></div>
     </section>
-  </div>
-  <footer id="foot"></footer>
-</main>
-<div id="zoom" role="dialog" aria-modal="true" aria-label="Screenshot">
+
+    <section>
+      <div class="head"><h2>Work queue</h2><span class="meta" id="queueMeta"></span></div>
+      <div class="kanban">
+        <div class="col open"><div class="colHead"><i></i>Open<span id="nOpen">0</span></div><div class="colList" id="qOpen"></div></div>
+        <div class="col working"><div class="colHead"><i></i>Working<span id="nWorking">0</span></div><div class="colList" id="qWorking"></div></div>
+        <div class="col done"><div class="colHead"><i></i>Done<span id="nDone">0</span></div><div class="colList" id="qDone"></div></div>
+      </div>
+    </section>
+
+    <div class="pair">
+      <section>
+        <div class="head"><h2>Known issues</h2><span class="meta" id="issueMeta"></span></div>
+        <div class="issues" id="issues"></div>
+      </section>
+      <section>
+        <div class="head"><h2>Log</h2><span class="meta">commits to WW-4</span></div>
+        <div class="log" id="log"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div id="zoom" class="overlay" role="dialog" aria-modal="true" aria-label="Screenshot">
   <button class="prev" aria-label="Previous screenshot">&#8249;</button>
   <figure><img alt=""><figcaption id="zoomCap"></figcaption></figure>
   <button class="next" aria-label="Next screenshot">&#8250;</button>
   <button class="close" aria-label="Close">&#215;</button>
 </div>
+<div id="sheet" class="overlay" role="dialog" aria-modal="true" aria-label="Bugs">
+  <div class="sheet">
+    <div class="head"><h2>Bugs</h2><span class="meta" id="sheetMeta"></span><button id="sheetClose">Close</button></div>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+
 <script>
 const $ = id => document.getElementById(id);
-let data = null, tab = 0, claims = null, bugList = null;
-// actor types converted, work queue items done (with the earlier rounds), bugs closed (fixed, verified or
-// won't fix), each weighted by the hours one took so far (collect.py's effort, from the commits; one each
-// without it); in progress: types with rules, items being worked on, bugs being fixed or waiting for a deploy
-function renderTotal() {
-  if (!data) return;
-  const all = data.groups.flatMap(g => g.actors), cl = claims || {};
-  const queue = (data.queue || []).map(q => cl[q.id] ? cl[q.id].state : "open");
-  const bugs = bugList || [];
-  const ef = data.effort || {};
-  const parts = [
-    ["actor types", all.length, all.filter(a => a.status === "converted").length, all.filter(a => a.status === "rules").length, ef.actor],
-    ["queue items", queue.length + (data.queue_done || []).length, queue.filter(x => x === "done").length + (data.queue_done || []).length,
-      queue.filter(x => x === "working").length, ef.queue],
-    ["bugs", bugs.length, bugs.filter(x => ["fixed", "verified", "wontfix"].includes(x.state)).length,
-      bugs.filter(x => x.state === "working" || x.state === "ready").length, ef.bug],
-  ].filter(x => x[1]);
-  const weighted = parts.every(x => x[4] > 0), w = x => weighted ? x[4] : 1;
-  const sum = i => parts.reduce((t, x) => t + x[i] * w(x), 0);
-  const n = sum(1), done = sum(2), going = sum(3);
-  if (!n) return;
-  const each = h => h >= 0.95 ? `~${Math.round(h * 10) / 10} h each` : `~${Math.round(h * 60)} min each`;
-  $("totalCard").hidden = false;
-  $("totLabel").textContent = weighted ? `~${Math.round(done)} of ~${Math.round(n)} h of work done` : `${done} of ${n} done` + (going ? `, ${going} in progress` : "");
-  $("totPct").textContent = pct(done, n) + "%";
-  $("totBarC").style.width = (100 * done / n) + "%"; $("totBarR").style.width = (100 * going / n) + "%";
-  $("totParts").textContent = parts.map(([name, t, d, g, h]) => `${name} ${d} / ${t}` + (weighted ? ` (${each(h)})` : "")).join(" · ") +
-    (weighted ? " · weighted by the time each took so far" : "");
-}
+const COLORS = {bottom: "#1fb8a6", main: "#4A8FE7", top: "#DAA520", web: "#d4548a", qa: "#8494a4"};
+const color = s => COLORS[s] || "#8494a4";
+const SHOTS_PER_PAGE = 12, LOG_COUNT = 12, LIVE_SECONDS = 600;
+let data = null, claims = {}, bugList = [], sessions = [], shotList = [];
+let page = 0, sel = 0, openBugs = {}, lastOk = 0, doneAll = false;
+const DONE_SHOWN = 8;
+
 const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
 function ago(t) {
   const s = Math.max(0, Date.now() / 1000 - t);
   if (s < 90) return "just now";
-  if (s < 5400) return Math.round(s / 60) + " min ago";
-  if (s < 129600) return Math.round(s / 3600) + " h ago";
-  return Math.round(s / 86400) + " d ago";
+  if (s < 5400) return Math.round(s / 60) + " min";
+  if (s < 129600) return Math.round(s / 3600) + " h";
+  return Math.round(s / 86400) + " d";
 }
-function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c])); }
+const agoText = t => { const a = ago(t); return a === "just now" ? a : a + " ago"; };
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c])); }
 async function get(name) {
   try { const r = await fetch(name + "?t=" + Date.now(), {cache: "no-store"}); return r.ok ? r.json() : null; }
   catch (e) { return null; }
 }
-function render() {
-  const d = data; if (!d) return;
-  $("title").textContent = d.title; $("ticket").textContent = d.ticket;
-  const ms = d.milestones, done = ms.filter(m => m.done).length;
-  $("msLabel").textContent = done + " of " + ms.length + " done";
-  $("msPct").textContent = pct(done, ms.length) + "%";
-  $("msBar").style.width = pct(done, ms.length) + "%";
-  $("msList").innerHTML = ms.map(m => `<li><span class="tick ${m.done ? "done" : ""}"></span>${esc(m.name)}</li>`).join("");
-  const all = d.groups.flatMap(g => g.actors);
-  const c = all.filter(a => a.status === "converted").length, r = all.filter(a => a.status === "rules").length;
-  $("allLabel").textContent = `${c} converted, ${r} in progress, ${all.length - c - r} to do (of ${all.length})`;
-  $("allPct").textContent = pct(c, all.length) + "%";
-  $("allBarC").style.width = (100 * c / all.length) + "%"; $("allBarR").style.width = (100 * r / all.length) + "%";
-  $("groupBars").innerHTML = d.groups.map(g => {
-    const gc = g.actors.filter(a => a.status === "converted").length, gr = g.actors.filter(a => a.status === "rules").length, n = g.actors.length;
-    return `<div class="row"><span>${esc(g.name)}</span><b>${gc} / ${n}</b></div>
-      <div class="bar"><span class="c" style="width:${100 * gc / n}%"></span><span class="r" style="width:${100 * gr / n}%"></span></div>`;
-  }).join("");
-  const k = d.counts;
-  const tiles = [[k.converted, "types converted"], [k.types - k.converted, "types left at 30"], [k.with_rules, "types in progress"],
-    [k.tick_rules, "tick & step rules"], [k.overrides, "functions overridden"], [k.named_functions, "functions named"], [k.functions, "functions recompiled"]];
-  $("tiles").innerHTML = tiles.map(([v, l]) => `<div class="tile"><b>${Number(v).toLocaleString()}</b><span>${l}</span></div>`).join("");
-  $("tabs").innerHTML = d.groups.map((g, i) => `<button class="${i === tab ? "on" : ""}" data-i="${i}">${esc(g.name)} (${g.actors.length})</button>`).join("");
-  const order = {converted: 0, rules: 1, todo: 2};
-  $("chips").innerHTML = d.groups[tab].actors.slice().sort((a, b) => order[a.status] - order[b.status] || a.id - b.id)
-    .map(a => `<span class="chip ${a.status}" title="process ${a.id}${a.code ? " (" + esc(a.code) + ")" : ""}">${a.name ? esc(a.name) + " " : ""}<small>${a.id}</small></span>`).join("");
-  $("log").innerHTML = d.commits.map(m => `<li><time>${ago(m.time)}</time><code>${m.hash}</code>${esc(m.subject.replace(/^WW-4: /, ""))}</li>`).join("");
-  const cl = claims || {};
-  $("queueNote").textContent = d.queue_note || "";
-  const qs = (d.queue || []).map(q => cl[q.id] ? cl[q.id].state : "open");
-  $("queueCounts").textContent = `${qs.filter(x => x === "done").length} done · ${qs.filter(x => x === "working").length} working · ${qs.filter(x => x === "open").length} open`;
-  $("queue").innerHTML = (d.queue || []).map(q => {
-    const c = cl[q.id];
-    const badge = c ? `<span class="badge ${c.state}">${c.state === "done" ? "done" : "working"} · ${esc(c.session)}</span>` : `<span class="badge">open</span>`;
-    // its bar: full once done, else the session's own count (publish.sh step), else its actor types converted
-    let prog = null;
-    if (c && c.state === "done") prog = [1, 1, "done"];
-    else if (c && c.progress) prog = [c.progress[0], c.progress[1], `${c.progress[0]} / ${c.progress[1]}`];
-    else if (q.ids && q.ids.length) prog = [q.converted || 0, q.ids.length, `${q.converted || 0} / ${q.ids.length} types`];
-    else prog = [0, 1, c ? "no count yet" : "not started"];
-    const mini = prog ? `<div class="mini"><div class="bar"><span class="c" style="width:${100 * prog[0] / prog[1]}%"></span></div><small>${esc(prog[2])}</small></div>` : "";
-    return `<li><b>${esc(q.id)}</b>${badge}${mini}<div class="sub">${esc(q.name)}</div>${c && c.note ? `<div class="sub">${esc(c.note)}</div>` : ""}</li>`;
-  }).join("");
-  const earlier = (d.queue_done || []).map(id => id + (cl[id] ? " (" + cl[id].session + ")" : ""));
-  $("later").textContent = (earlier.length ? "Done earlier: " + earlier.join(", ") + ". " : "") + (d.later && d.later.length ? "Later: " + d.later.join(" · ") : "");
-  $("issues").innerHTML = d.known_issues.map(i => `<li>${esc(i)}</li>`).join("");
-  $("foot").textContent = "Data from " + ago(d.generated) + " · refreshes every 20 s";
+
+// --- the sidebar: overall progress, the sessions, the numbers ---
+// actor types converted, work queue items done (with the earlier rounds), bugs closed (fixed, verified or
+// won't fix), each weighted by the hours one took so far (collect.py's effort, from the commits; one each without it)
+function overall() {
+  const all = data.groups.flatMap(g => g.actors), ef = data.effort || {};
+  const queue = (data.queue || []).map(q => claims[q.id] ? claims[q.id].state : "open"), earlier = (data.queue_done || []).length;
+  const parts = [
+    ["actor", all.length, all.filter(a => a.status === "converted").length, ef.actor],
+    ["queue", queue.length + earlier, queue.filter(x => x === "done").length + earlier, ef.queue],
+    ["bug", bugList.length, bugList.filter(x => ["fixed", "verified", "wontfix"].includes(x.state)).length, ef.bug],
+  ].filter(x => x[1]);
+  const weighted = parts.every(x => x[3] > 0), w = x => weighted ? x[3] : 1;
+  const n = parts.reduce((t, x) => t + x[1] * w(x), 0), done = parts.reduce((t, x) => t + x[2] * w(x), 0);
+  const by = Object.fromEntries(parts.map(x => [x[0], x]));
+  return {n, done, weighted, by};
 }
-$("tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { tab = +b.dataset.i; render(); } });
-// the enlarged view: buttons, the arrow keys (Esc closes) and a swipe on phones go through the shots
-let shotList = [], shotAt = -1, shotPage = 0;
-const SHOTS_PER_PAGE = 12;
-// the shots, newest first, a page at a time (the enlarged view goes through all of them)
+function renderSide() {
+  $("title").textContent = data.title || "WWHD Recomp";
+  $("ticket").textContent = (data.ticket || "").replace(/^(WW-\d+): /, "$1 · ").replace("native 60 fps, then uncapped", "native 60, then uncapped");
+  const o = overall(), p = o.n ? pct(o.done, o.n) : 0;
+  $("ringPct").textContent = p + "%";
+  $("ringArc").setAttribute("stroke-dasharray", `${(o.n ? o.done / o.n : 0) * 301.6} 302`);
+  const ms = data.milestones || [], f = x => x ? `${x[2]}/${x[1]}` : "–";
+  $("stats").innerHTML = (o.weighted ? `<b>~${Math.round(o.done)} of ~${Math.round(o.n)} h</b>` : `<b>${Math.round(o.done)} of ${o.n} done</b>`) +
+    `<span>Milestones ${ms.filter(m => m.done).length}/${ms.length}</span><span>Actor types ${f(o.by.actor)}</span>` +
+    `<span>Queue ${f(o.by.queue)} · Bugs ${f(o.by.bug)}</span>`;
+  const k = data.counts;
+  const nums = [["types converted", k.converted], ["types left at 30", k.types - k.converted - k.with_rules], ["types in progress", k.with_rules],
+    ["tick & step rules", k.tick_rules], ["functions overridden", k.overrides], ["functions named", k.named_functions], ["functions recompiled", k.functions]];
+  $("nums").innerHTML = `<div class="eyebrow">Numbers</div>` +
+    nums.map(([l, v]) => `<div class="num">${l}<span>${Number(v).toLocaleString()}</span></div>`).join("");
+}
+function renderAgents() {
+  if (!sessions.length) return;
+  // a session's latest activity: its status line or its latest commit ("session NAME" in the subject)
+  const lastCommit = name => Math.max(0, ...((data && data.commits) || []).filter(m => m.subject.includes("session " + name)).map(m => m.time));
+  $("agents").innerHTML = sessions.map(x => {
+    const last = Math.max(x.time, lastCommit(x.session));
+    const live = Date.now() / 1000 - last < LIVE_SECONDS;
+    const task = Object.keys(claims).filter(id => claims[id].state === "working" && claims[id].session === x.session).join(" · ");
+    const text = x.text && x.text.startsWith(x.session + ": ") ? x.text.slice(x.session.length + 2) : x.text || "idle";
+    return `<div class="agent"><i style="background:${color(x.session)}"></i><div>
+      <div class="agentHead"><b>${esc(x.session)}</b><span class="task">${esc(task)}</span><span class="ago${live ? " live" : ""}">${agoText(last)}</span></div>
+      <p>${esc(text)}</p></div></div>`;
+  }).join("");
+}
+
+// --- screenshots: a hero and twelve thumbnails a page, newest first ---
+// a caption reads "PLACE (session NAME): what it shows"; shots with place/session fields need no parsing
+function splitCaption(x) {
+  let c = x.caption || "", tag = x.tag || x.session || "", place = x.place || "";
+  if (!tag) { const m = c.match(/\bsession (\w+)/); if (m) tag = m[1]; }
+  if (place) return {place, cap: c, tag};
+  let depth = 0, at = -1;
+  for (let i = 0; i < c.length - 1; i++) {
+    const ch = c[i];
+    if (ch === "(") depth++; else if (ch === ")") depth = Math.max(0, depth - 1);
+    else if (ch === ":" && c[i + 1] === " " && depth === 0) { at = i; break; }
+  }
+  let head = at >= 0 ? c.slice(0, at) : c, cap = at >= 0 ? c.slice(at + 2) : "";
+  // "(session top: the Darknut's timers)": the session is the tag, the rest belongs to the caption
+  head = head.replace(/\s*\(([^()]*?)\bsession \w+(?:[:;,] ?([^()]*))?\)/, (m, pre, post) => {
+    const extra = [pre.replace(/[,;]\s*$/, "").trim(), (post || "").trim()].filter(Boolean).join("; ");
+    if (extra) cap = cap ? cap + " (" + extra + ")" : extra;
+    return "";
+  });
+  head = head.replace(/ at 60(?: fps)?\b/, "").replace(/ on ww-4 \w+/, "").trim();
+  if (!cap) { cap = head; head = head.length > 60 ? head.slice(0, 57).replace(/\s+\S*$/, "") + "…" : head; if (cap === head) cap = ""; }
+  return {place: head, cap, tag};
+}
 function renderShots() {
-  const pages = Math.max(1, Math.ceil(shotList.length / SHOTS_PER_PAGE));
-  shotPage = Math.min(shotPage, pages - 1);
-  const from = shotPage * SHOTS_PER_PAGE;
-  $("shots").innerHTML = shotList.slice(from, from + SHOTS_PER_PAGE).map((x, i) =>
-    `<figure><img loading="lazy" src="${esc(x.file)}" alt="${esc(x.caption)}" data-i="${from + i}"><figcaption>${esc(x.caption)} · ${ago(x.time)}</figcaption></figure>`).join("");
-  $("shotCount").textContent = `(${shotList.length})`;
-  const pager = $("shotPager");
-  pager.hidden = pages < 2;
-  pager.querySelector("span").textContent = `Page ${shotPage + 1} of ${pages}`;
-  pager.querySelector(".newer").disabled = shotPage === 0;
-  pager.querySelector(".older").disabled = shotPage === pages - 1;
+  const n = shotList.length, pages = Math.max(1, Math.ceil(n / SHOTS_PER_PAGE));
+  page = Math.min(page, pages - 1);
+  const from = page * SHOTS_PER_PAGE, list = shotList.slice(from, from + SHOTS_PER_PAGE);
+  if (sel < from || sel >= from + list.length) sel = from;
+  $("shotMeta").textContent = n ? `${n} screenshots · newest first` : "none yet";
+  const pager = $("pager");
+  pager.querySelector("span").textContent = `${page + 1} of ${pages}`;
+  pager.querySelector(".newer").disabled = page === 0;
+  pager.querySelector(".older").disabled = page === pages - 1;
+  $("thumbs").innerHTML = list.map((x, i) =>
+    `<img src="${esc(x.file)}" alt="${esc(splitCaption(x).place)}" loading="lazy" data-i="${from + i}" class="${from + i === sel ? "on" : ""}">`).join("");
+  const x = shotList[sel];
+  if (!x) return;
+  const s = splitCaption(x), hero = $("hero");
+  if (hero.getAttribute("src") !== x.file) hero.setAttribute("src", x.file);
+  hero.alt = s.place;
+  $("heroPlace").textContent = s.place;
+  $("heroCap").textContent = s.cap;
+  $("heroMeta").textContent = (s.tag ? s.tag + " · " : "") + agoText(x.time);
 }
-$("shotPager").addEventListener("click", e => {
+$("thumbs").addEventListener("click", e => { if (e.target.tagName === "IMG") { sel = +e.target.dataset.i; renderShots(); } });
+$("pager").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b || b.disabled) return;
-  shotPage += b.classList.contains("older") ? 1 : -1;
-  renderShots();
-  $("shots").closest(".card").scrollIntoView({block: "start"});
+  page += b.classList.contains("older") ? 1 : -1; sel = page * SHOTS_PER_PAGE; renderShots();
 });
+
+// the enlarged view: buttons, the arrow keys (Esc closes) and a swipe on phones go through every shot
 const zoom = $("zoom");
+let zoomAt = -1;
 function showShot(i) {
   if (!shotList.length) return;
-  shotAt = (i + shotList.length) % shotList.length;
-  const x = shotList[shotAt];
+  zoomAt = (i + shotList.length) % shotList.length;
+  const x = shotList[zoomAt];
   zoom.querySelector("img").src = x.file;
   zoom.querySelector("img").alt = x.caption;
-  $("zoomCap").textContent = `${shotAt + 1} / ${shotList.length} · ${x.caption} · ${ago(x.time)}`;
+  $("zoomCap").textContent = `${zoomAt + 1} / ${shotList.length} · ${x.caption} · ${agoText(x.time)}`;
   zoom.style.display = "flex";
 }
-function closeShot() { zoom.style.display = "none"; shotAt = -1; }
-$("shots").addEventListener("click", e => {
-  if (e.target.tagName !== "IMG") return;
-  showShot(+e.target.dataset.i || 0);
-});
+function closeShot() { zoom.style.display = "none"; zoomAt = -1; }
+$("hero").addEventListener("click", () => showShot(sel));
 zoom.addEventListener("click", e => {
   const b = e.target.closest("button");
-  if (b && b.classList.contains("prev")) showShot(shotAt - 1);
-  else if (b && b.classList.contains("next")) showShot(shotAt + 1);
+  if (b && b.classList.contains("prev")) showShot(zoomAt - 1);
+  else if (b && b.classList.contains("next")) showShot(zoomAt + 1);
   else if (b || e.target === zoom) closeShot();
 });
 document.addEventListener("keydown", e => {
-  if (shotAt < 0) return;
-  if (e.key === "ArrowLeft") { showShot(shotAt - 1); e.preventDefault(); }
-  else if (e.key === "ArrowRight") { showShot(shotAt + 1); e.preventDefault(); }
-  else if (e.key === "Escape") closeShot();
+  if (e.key === "Escape") { closeShot(); closeSheet(); return; }
+  if (zoomAt < 0) return;
+  if (e.key === "ArrowLeft") { showShot(zoomAt - 1); e.preventDefault(); }
+  else if (e.key === "ArrowRight") { showShot(zoomAt + 1); e.preventDefault(); }
 });
 let touchX = null;
 zoom.addEventListener("touchstart", e => { touchX = e.touches[0].clientX; }, {passive: true});
 zoom.addEventListener("touchend", e => {
   if (touchX === null) return;
   const dx = e.changedTouches[0].clientX - touchX; touchX = null;
-  if (Math.abs(dx) > 40) showShot(shotAt + (dx < 0 ? 1 : -1));
+  if (Math.abs(dx) > 40) showShot(zoomAt + (dx < 0 ? 1 : -1));
 });
-function renderBugs(b) {
-  const label = {open: "open", working: "working", ready: "ready · awaiting deploy", fixed: "fixed · retest", verified: "verified", wontfix: "won't fix"};
-  // fixed bugs wait for the owner's retest: folded, with a note many of them share shown once above them
-  const fixed = b.filter(x => x.state === "fixed").sort((x, y) => y.time - x.time);
-  const lastNote = x => x.notes && x.notes.length ? x.notes[x.notes.length - 1] : null;
-  const seen = {};
+
+// --- bugs: the open ones need the owner (a short summary, the full note on a tap); the rest are in the list ---
+const lastNote = x => x.notes && x.notes.length ? x.notes[x.notes.length - 1] : null;
+function renderBugs() {
+  const open = bugList.filter(x => x.state === "open").sort((a, b) => b.time - a.time);
+  const fixed = bugList.filter(x => x.state === "fixed");
+  $("bugMeta").textContent = `${open.length} open bug${open.length === 1 ? "" : "s"} · ${fixed.length} waiting for your retest`;
+  $("bugs").innerHTML = open.map(x => {
+    const note = lastNote(x), ex = !!openBugs[x.id];
+    const short = x.short || x.details || (note ? note.text : "");
+    const full = note ? note.text : x.details || "";
+    return `<div class="bug" data-id="${esc(x.id)}">
+      <div class="bugHead"><span class="id">${esc(x.id)}</span><span class="pill">open</span><span class="ago">${agoText(x.time)}</span></div>
+      <div class="title">${esc(x.title)}</div>
+      <div class="body">${esc(ex ? (x.details && full !== x.details ? x.details + " " : "") + full : short)}</div>
+      <div class="bugFoot"><span class="needs">Needs ${esc(x.needs || "your input")}</span>${full && full !== short ? `<span class="chev">${ex ? "Less" : esc((note && note.session) || "the") + "’s note"}</span>` : ""}</div>
+    </div>`;
+  }).join("") + `<div class="retestTile"><b>${fixed.length}</b><span>fixed, waiting for your retest</span><a id="openList">Open the list →</a></div>`;
+}
+$("bugs").addEventListener("click", e => {
+  if (e.target.closest("#openList")) { openSheet(); return; }
+  const card = e.target.closest(".bug"); if (!card) return;
+  openBugs[card.dataset.id] = !openBugs[card.dataset.id]; renderBugs();
+});
+const sheet = $("sheet");
+function openSheet() { renderSheet(); sheet.style.display = "flex"; if (location.hash !== "#retest") history.replaceState(null, "", "#retest"); }
+function closeSheet() { sheet.style.display = "none"; if (location.hash === "#retest") history.replaceState(null, "", location.pathname); }
+$("sheetClose").addEventListener("click", closeSheet);
+sheet.addEventListener("click", e => { if (e.target === sheet) closeSheet(); });
+function renderSheet() {
+  const label = {open: "open", working: "working", ready: "awaiting deploy", fixed: "retest", verified: "verified", wontfix: "won't fix"};
+  const groups = [["Fixed, waiting for your retest", ["fixed"]], ["Being fixed", ["working", "ready"]], ["Closed", ["verified", "wontfix"]]];
+  // a note most of the retest bugs share is shown once, above them
+  const fixed = bugList.filter(x => x.state === "fixed"), seen = {};
   for (const x of fixed) { const l = lastNote(x); if (l) seen[l.text] = (seen[l.text] || 0) + 1; }
   const common = Object.keys(seen).filter(t => seen[t] >= 3);
   const item = x => {
-    let last = lastNote(x);
-    if (last && x.state === "fixed" && common.includes(last.text)) last = null;
-    return `<li><b>${esc(x.id)}</b> ${esc(x.title)}<span class="badge ${x.state}">${label[x.state] || x.state}${x.session ? " · " + esc(x.session) : ""}</span>
-      ${x.details ? `<div class="sub">${esc(x.details)}</div>` : ""}${last ? `<div class="sub">${esc(last.text)} · ${ago(last.time)}</div>` : ""}</li>`;
+    let l = lastNote(x); if (l && x.state === "fixed" && common.includes(l.text)) l = null;
+    return `<div class="rbug"><div class="bugHead"><span class="id">${esc(x.id)}</span><span class="pill ${x.state}">${label[x.state] || x.state}</span>
+      <span class="ago">${x.session ? esc(x.session) + " · " : ""}${agoText(x.time)}</span></div>
+      <div class="title">${esc(x.title)}</div>
+      ${x.details ? `<div class="body">${esc(x.details)}</div>` : ""}
+      ${l ? `<div class="body note">${esc(l.text)} · ${agoText(l.time)}</div>` : ""}</div>`;
   };
-  const order = {working: 0, open: 1, ready: 2, fixed: 3, verified: 4, wontfix: 5};
-  const sorted = b.slice().sort((x, y) => order[x.state] - order[y.state] || y.time - x.time);
-  const live = sorted.filter(x => x.state === "open" || x.state === "working" || x.state === "ready");
-  const closed = sorted.filter(x => x.state === "verified" || x.state === "wontfix");
-  const count = st => b.filter(x => x.state === st).length;
-  $("bugCounts").textContent = `${count("open")} open · ${count("working")} working · ${count("ready")} awaiting deploy · ${count("fixed")} to retest · ${count("verified")} verified`;
-  $("bugs").innerHTML = live.length ? live.map(item).join("") : `<li class="empty">Nothing open.</li>`;
-  $("bugsRetestWrap").hidden = !fixed.length;
-  $("bugsRetestSum").textContent = `Fixed, waiting for your retest (${fixed.length})`;
-  $("bugsRetestCommon").textContent = common.join(" · ");
-  $("bugsRetest").innerHTML = fixed.map(item).join("");
-  $("bugsClosedWrap").hidden = !closed.length;
-  $("bugsClosedSum").textContent = `Closed (${closed.length})`;
-  $("bugsClosed").innerHTML = closed.map(item).join("");
+  $("sheetMeta").textContent = `${bugList.length} reported`;
+  $("sheetBody").innerHTML = groups.map(([name, states]) => {
+    const list = bugList.filter(x => states.includes(x.state)).sort((a, b) => b.time - a.time);
+    if (!list.length) return "";
+    return `<h3>${name} (${list.length})</h3>` + (states[0] === "fixed" && common.length ? `<div class="common">${common.map(esc).join("<br>")}</div>` : "") +
+      list.map(item).join("");
+  }).join("") || `<p class="meta">No bugs.</p>`;
 }
+
+// --- the work queue as a board: open, working, done ---
+function renderQueue() {
+  const items = (data.queue || []).map(q => {
+    const c = claims[q.id], state = c ? (c.state === "done" ? "done" : "working") : "open";
+    const round = (q.name.match(/^Round (\d+):/) || [])[1];
+    const name = q.name.replace(/^Round \d+:\s*/, "");
+    // its bar: the session's own count (publish.sh step), else its actor types converted
+    let prog = null;
+    if (c && c.progress) prog = [c.progress[0], c.progress[1], ""];
+    else if (q.ids && q.ids.length) prog = [q.converted || 0, q.ids.length, " types"];
+    return {id: q.id, state, round, name, note: c && c.note ? c.note.replace(new RegExp("^" + c.session + ": "), "") : "", owner: c ? c.session : "", prog,
+      time: c ? c.time : 0};
+  });
+  const by = s => items.filter(x => x.state === s);
+  const rounds = items.map(x => +x.round).filter(Boolean), round = rounds.length ? Math.max(...rounds) : 0;
+  $("queueMeta").textContent = (round ? `round ${round} · ` : "") + `${by("done").length} done · ${by("working").length} working · ${by("open").length} open`;
+  $("nOpen").textContent = by("open").length; $("nWorking").textContent = by("working").length; $("nDone").textContent = by("done").length;
+  $("qOpen").innerHTML = by("open").map(x => `<div class="q"><span class="name">${esc(x.id)}</span><span class="desc">${esc(x.name)}</span></div>`).join("");
+  $("qWorking").innerHTML = by("working").map(x => {
+    const w = x.prog ? 100 * x.prog[0] / x.prog[1] : 0;
+    return `<div class="q working"><div class="qHead"><span class="name">${esc(x.id)}</span>
+      <span class="owner"><span class="sq" style="background:${color(x.owner)}"></span>${esc(x.owner)}</span></div>
+      <div class="qbar"><div style="width:${w}%"></div></div>
+      <span class="qcount">${x.prog ? `${x.prog[0]} / ${x.prog[1]}${x.prog[2]}` : "no count yet"}</span>
+      <span class="desc">${esc(x.note || x.name)}</span></div>`;
+  }).join("");
+  // the newest done first; past DONE_SHOWN the rest fold behind a "+ N more"
+  const done = by("done").sort((a, b) => b.time - a.time), more = done.length - DONE_SHOWN;
+  const earlier = (data.queue_done || []).length;
+  $("qDone").innerHTML = (doneAll ? done : done.slice(0, DONE_SHOWN)).map(x => `<div class="q done" title="${esc(x.note || x.name)}"><span class="name">${esc(x.id)}</span>
+    <span class="desc">${esc(x.note || x.name)}</span><span class="sq" style="background:${color(x.owner)}"></span></div>`).join("") +
+    (more > 0 ? `<a class="earlier" id="doneMore">${doneAll ? "Show fewer" : `+ ${more} more`}</a>` : "") +
+    (earlier ? `<div class="earlier" title="${esc(data.queue_done.join(", "))}">+ ${earlier} from earlier rounds</div>` : "");
+}
+
+$("qDone").addEventListener("click", e => { if (e.target.id === "doneMore") { doneAll = !doneAll; renderQueue(); } });
+
+// --- known issues and the commit log ---
+function renderIssues() {
+  const list = (data.known_issues || []).map(i => {
+    if (typeof i === "object") return i;
+    const m = i.match(/^([^:]{3,60}): (.+)$/s);   // a plain "Title: detail" string, else the whole line as the title
+    return m ? {title: m[1], detail: m[2]} : {title: i, detail: ""};
+  });
+  $("issueMeta").textContent = list.length;
+  $("issues").innerHTML = list.map(k => `<div class="issue"><b>${esc(k.title)}</b>${k.detail ? `<span>${esc(k.detail)}</span>` : ""}</div>`).join("");
+}
+function renderLog() {
+  $("log").innerHTML = (data.commits || []).slice(0, LOG_COUNT).map(m => {
+    const t = (m.subject.match(/^(WW-\d+): /) || [])[1] || "";
+    const sess = (m.subject.match(/\bsession (\w+)/) || [])[1] || (t === "WW-10" ? "web" : "main");
+    const scope = (m.subject.match(/\(([\w-]+)[;,] session \w+\)\s*$/) || [])[1] || t;
+    const msg = m.subject.replace(/^WW-\d+: /, "").replace(/\s*\((?:[\w-]+[;,] )?session \w+\)\s*$/, "").replace(/\s*\(([^()]*)[;,] session \w+\)\s*$/, " ($1)");
+    return `<div class="entry"><i style="background:${color(sess)}"></i>
+      <span class="meta"><b>${esc(m.hash)}</b>${esc(sess)} · ${esc(scope)} · ${ago(m.time)}</span><span>${esc(msg)}</span></div>`;
+  }).join("");
+}
+
+function renderFresh(ok) {
+  if (ok) lastOk = Date.now() / 1000;
+  $("freshDot").className = ok ? "" : "stale";
+  $("fresh").textContent = data ? `Data from ${agoText(data.generated)} · every 20 s` + (ok ? "" : " · can't reach the server") : "Loading…";
+}
+
 async function refresh() {
   const [p, n, s, a, c, b] = await Promise.all([get("progress.json"), get("sessions.json"), get("shots.json"), get("shots-archive.json"),
     get("claims.json"), get("bugs.json")]);
-  if (b && b.length) { bugList = b; renderBugs(b); }
   if (c) claims = c;
-  if (p) { data = p; render(); }
-  renderTotal();
-  // a session is active if its status line or its latest commit ("(session NAME)" in the subject) is recent
-  const lastCommit = name => Math.max(0, ...((data && data.commits) || []).filter(m => m.subject.includes("session " + name)).map(m => m.time));
-  if (n && n.length) $("sessions").innerHTML = n.map(x => {
-    const c = lastCommit(x.session), last = Math.max(x.time, c);
-    return `<div class="now"><span class="dot${Date.now() / 1000 - last > 3 * 3600 ? " idle" : ""}"></span>
-    <div><b>${esc(x.session)}:</b> <span class="sub">${esc(x.text && x.text.startsWith(x.session + ": ") ? x.text.slice(x.session.length + 2) : x.text || "idle")} · ${ago(x.time)}${c > x.time ? ` · last commit ${ago(c)}` : ""}</span></div></div>`;
-  }).join("");
-  if (s && s.length) {
+  if (b) bugList = b;
+  if (n) sessions = n;
+  if (s) {
     // the newest in shots.json, older ones in shots-archive.json (a shot can be in both for a moment)
     const seen = new Set();
-    shotList = s.concat(a || []).filter(x => !seen.has(x.file) && seen.add(x.file)).sort((x, y) => y.time - x.time);
-    renderShots();
+    const list = s.concat(a || []).filter(x => !seen.has(x.file) && seen.add(x.file)).sort((x, y) => y.time - x.time);
+    shotList = list;
   }
+  if (p) data = p;
+  if (data) { renderSide(); renderQueue(); renderIssues(); renderLog(); }
+  renderAgents(); renderShots(); renderBugs();
+  if (sheet.style.display === "flex") renderSheet();
+  renderFresh(!!p);
 }
-for (const id of ["bugsCard", "queueCard"]) {
-  const el = $(id);
-  try { const v = localStorage.getItem("fold:" + id); if (v !== null) el.open = v === "1"; } catch (e) {}
-  el.addEventListener("toggle", () => { try { localStorage.setItem("fold:" + id, el.open ? "1" : "0"); } catch (e) {} });
-}
-refresh(); setInterval(refresh, 20000);
+refresh().then(() => { if (location.hash === "#retest") openSheet(); });
+setInterval(refresh, 20000);
 </script>
 </body>
 </html>
