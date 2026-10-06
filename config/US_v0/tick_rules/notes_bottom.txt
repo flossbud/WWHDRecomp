@@ -7,3 +7,16 @@
 # cLib_chaseAngleS (stepped); its execute (f_02131520) also counts:
 02131568    whole       stw             fallrock: field_0x614 (+0x730) + 1, a count of ticks
 02131584    *h:f13      fabs            fallrock: field_0x610 (+0x72C, how far it fell: 7000 deletes it) += |speed.y| a tick
+#
+# Gohma's fight (N8): Valoo's tail (DR2 223, d_a_dr2.cpp, move f_0212B3D0) thrashes while the rock is on Gohma
+# (unk_40A == 3, set by the grappling hook's scene, d_a_himo2.cpp's m24D9 8): its joints' angles are
+# unk_414 x sin(count x 2800 + i x 3000) and cos(count x 2300 + i x 2000), count its tick count (+0x3D8, whole), so
+# the thrash moved on whole ticks only. lagi: half a count back on the whole step, the phase moves every frame.
+0212B4E8    lagi        mulli           dr2: the thrash's phase, count (+0x3D8) x 2800
+0212B520    lagi        mulli           dr2: the thrash's phase, count (+0x3D8) x 2300
+#
+# Princess Zelda (PZ 210, d_a_pz.cpp, stubs in the decomp): her blink is a frame count (+0x1197, a byte) her draw
+# (f_02455074) hands to two texture animations (+0x12AC, +0x1320) as their frame. In Ganondorf's arrival (N13,
+# route gtower) it ran twice a tick wherever she stepped (frames 56, 57, 58 at 60 against 28, 29 at 30). Session
+# top's islands.txt keeps f_02453E00's two + 1s; the third, f_0245323C's (held at its end), the same:
+02453340    keep:r5     addi            pz: the blink's frame count (+0x1197) + 1, held at its end (f_0245323C)

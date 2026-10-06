@@ -3183,6 +3183,46 @@ it in a window; D21 "Step 2"):**
     5969.7...), the half steps between (0.62 above the chord: the arc), the same lifetimes (105 ticks, or its
     landing's). Their places differ from 30's (random): so they did before the conversion (the old build at 60:
     the same places as the new one's), so the draw order that parts them is elsewhere.
+  - **N8, Gohma's fight "some parts 30fps"** (the grapple onto Valoo's tail, the tail's wag, the lava falling as Gohma
+    rises, Link's jump off the hook and landing, the shell's crack, the death): those are events, potential events
+    whose camera an actor sets each step (the grappling hook's scene, d_a_himo2.cpp's m24D9 states 2-9: the
+    tail's grab, the swing, the jump off, the rock's fall on Gohma, the thrash; Gohma's death, d_a_btd.cpp's
+    m6E16 100 on), and converted processes step in an event only while Link's action is one checked there
+    (StepInEvents): his rope's, his jump off it, landing and fall, and Z-targeting weren't, so all of it held to
+    whole ticks. Added (sixty.cpp, shared): 7-9 (Z-targeted walk, wait, move), 0x24, 0x25, 0x27 (a jump off,
+    a landing, a fall), 0xB9 (turning back: a boss door's event); `WWHD_60FPS_EVENTS=1` is the old list. Not the
+    rope's actions (0x76-0x7F): the hook's catch is an event everywhere, and stepped in it predeploy's grapple
+    ended 29.7 units from 30's (7.2 without) and gtgrapple 86.8 (7.1), so the tail's grab and swing stay on
+    whole ticks. Why it parts: every catch is an event (HIMO2's m24D9 0xFF, a potential event, NOPARTNER,
+    and its own camera until the coil count passes 0x82), and its coil count (m24BC, WWHD +0x2AEC: += its
+    pace (+0x2AF4, + 1 a tick) a step, at f_0216F7FC +0x19E4) has no rule, so stepped the catch's event ends in
+    half the time. Open: `whole` on 021711D8, 021711E0 and 021711F4 would keep it a tick's, but its coil
+    sounds test the count before and after its add (>= 13 and <= the add + 13) and would sound again in the
+    half step; then the rope's actions could go on the list. And the tail's thrash while
+    the rock sits on Gohma (unk_40A 3) is a sine of its tick count (whole): `lagi` on its two phases. Test (route
+    gohma-100 with the rocks and its health poked, Z and B: the death event with Link Z-targeting, 0x8): Gohma,
+    the tail and Link now step through the death (600 of 600 ticks with half steps, none before); the death's
+    length 683 ticks against 30's 677 (684 before); the boss room's opening (0xB9) ends at f1096 as before.
+    regress.sh: one line moved, Gohma's room (234, 0.0 apart as before) compared on 399 states (382 with
+    `WWHD_60FPS_EVENTS=1`: the opening's turn-back now steps), so its lines' md5 is now
+    294bb6ce739e6465cd24839252e97b42 (91c42945... before). predeploy (50 routes): the three known WARNs only. Not
+    exercised: the hook's own scene (a route grappling the tail: from the door's spawn the first-person aim
+    stayed on Gohma; LUP/LDOWN tilt it a little; Gohma attacks a Link placed nearer).
+  - **N13, the hair in the cutscene before Ganondorf's fight**: Zelda (PZ 210) there: her own state matches
+    30's but her blink, a frame count her draw hands to two texture animations, which ran twice a tick while
+    she stepped (session top's islands.txt keeps two of its three + 1s; notes_bottom.txt the third, f_0245323C's). Her hair's place in captures differs from 30's frames by the half
+    tick a cutscene's cast shows at whole frames; nothing in her state moves twice. Link: two of his
+    animation controls (+0x668, +0x6C0) move on whole ticks only in the cutscene (W +1, H 0). Ganondorf's hair
+    (GND 246, ke_control f_02154810, a one-pass Verlet chain stepped with h^2 forces and ^h damping): the trial
+    over the cutscene shows its points moving 2.1-2.3 times a game step's in two half steps (8% of its ticks:
+    as the Stalfos' hair did, the chain swings wider stepped), so it may be what looked too aggressive. Given
+    the Stalfos' cure: its four calls `whole` (ganon.txt; its h^2 and ^h rules gone) and its lines (3D lines,
+    drawn by f_021544EC) in ChainLines, drawn half a tick on in a half tick's draw: the trial over the
+    cutscene then shows no line on his hair (228 before), and its tips make 37% of their drawn motion on half
+    frames (WWHD_60FPS_CHAINS_LOG, route gtower to f2600). (N12 and the rest of N13 went to session qa.)
+  - **N12, Ganondorf's animations "still 30fps"**: four windows of the cutscene (Link's close-up f1290, the laugh
+    f6390, Zelda f7290, the swords f7890) captured at 30 and 60: hz30 finds no block at 30 Hz, and the whole
+    frames equal 30's at its ticks. Not found yet.
 - **Session main: sail's launch (predeploy's sail, WARN ~51)**: from session top's look. At 60 the boat sets sail in
   the half step of f1119, a tick-half before 30's f1120; the 19 units gained then are most of the route's lag.
   The trigger is the ship's own mast animation (daShip's mpBodyAnm, frame >= 7 / checkFrame(7)), played in its

@@ -211,8 +211,7 @@
 #
 # ---- GND (246, d_a_gnd.cpp: Ganondorf, at the top of the tower, stage GTower; the decomp has no code;
 # execute f_02154EE0). Found with the trial along route gtower (A through the arrival's cutscene, which
-# ends ~f8220; then Link rolls about while Ganondorf attacks). ke_control (f_02154810), his hair: a
-# Verlet chain like the capes (the pull down h^2, the velocity's damping ^h).
+# ends ~f8220; then Link rolls about while Ganondorf attacks). ke_control (f_02154810), his hair: below.
 021554E8    whole       sth             gnd execute: a tick count (+0x3E8) + 1
 021554FC    whole       sthx            gnd execute: its timers (+0x41E) count down
 0215551C    whole       sth             gnd execute: a timer (+0x428) - 1
@@ -235,10 +234,15 @@
 02154D60    late        stfs            gnd pos_move: speed.y += gravity (+0x374), stored once a tick at its end: pos.y took
 #                                       speed.y before it (explicit Euler), so both half steps move by the tick's speed (with *h
 #                                       on the add instead the leap peaked 5.5 units higher than 30's)
-02154A60    *hh@f23     fadds           gnd ke_control: a hair point's y + the pull down
-02154B34    d@f24       fmuls           gnd ke_control: velocity.x = move * damping
-02154B48    d@f24       fmuls           gnd ke_control: velocity.y = move * damping
-02154B5C    d@f24       fmuls           gnd ke_control: velocity.z = move * damping
+# His hair (ke_control f_02154810: four strands of 3D lines, drawn by f_021544EC; one-pass Verlet chains) was
+# stepped with the pull down h^2 and the damping ^h: as the Stalfos' hair (earth.txt) it swung wider than at
+# 30 (the trial over his arrival's cutscene: its points moved 2.1-2.3 times a game step's in two half steps;
+# the owner's N13, "the hair in that cutscene too aggressive"). So it keeps the 30 Hz step: its four calls on
+# whole ticks, and its lines drawn half a tick on in a half tick's draw (sixty.cpp's ChainLines, 246).
+02155314    whole       bl 02154810     gnd execute: ke_control (his hair), on whole ticks
+0215698C    whole       bl 02154810     gnd: ke_control (another state), on whole ticks
+02156C4C    whole       bl 02154810     gnd: ke_control (another state), on whole ticks
+021574B0    whole       bl 02154810     gnd: ke_control (another state), on whole ticks
 #
 # ---- doors (DOOR10 300, converted by default, and the door helpers): a door's rattle (f_0252B2D8, from
 # f_021268C8 and f_021978D4: a counter +0x34 and an offset +0x28/+0x30 of its shake, alternating a tick

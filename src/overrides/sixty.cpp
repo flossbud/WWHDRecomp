@@ -278,9 +278,14 @@ namespace
 	// (their cameras ruled), 0xB8, 0xCE and 0xCF startled, frozen and held by a ReDead (its two-actor
 	// camera ruled), 0xC1 opening a house's door (KNOB00's event, tick_rules/doors.txt), 0xC4 the Wind's
 	// Requiem's change of wind (its camera ruled), 0xD2 rising in a warp light (bug B20; his rise and the
-	// rolling event camera ruled). Others hold the event to
+	// rolling event camera ruled). In the boss fights' camera events (N8, session bottom: Gohma's fight, the
+	// grappling hook's own scene, d_a_himo2.cpp, and Gohma's death, d_a_btd.cpp, each a potential event whose
+	// camera the actor sets each step): 7, 8 and 9 the Z-targeted walk, wait and move (as 4 and 6), 0x24,
+	// 0x25 and 0x27 a jump off a rope, its landing and a fall, 0xB9 turning back (a boss door's event). Not the
+	// rope's own (0x76-0x7F: the grappling hook's catch is an event, and stepped there predeploy's grapple ended
+	// 29.7 units from 30's against 7.2, gtgrapple 86.8 against 7.1). Others hold the event to
 	// whole ticks as before; so does the half tick after an event starts, is ordered or is asked to end.
-	// WWHD_60FPS_EVENTS=0: no stepping in events at all.
+	// WWHD_60FPS_EVENTS=0: no stepping in events at all; WWHD_60FPS_EVENTS=1: not for N8's actions.
 	uint32 s_link = 0;                              // Link (168) as he last executed
 	// Cutscenes at 60 (below, "cutscenes at 60"; WWHD_60FPS_DEMOS=0 turns it off): Link's cutscene action
 	// (0xA9, dProcTool f_0241FD7C: his place, angle and animation's frame from the cutscene's data) steps
@@ -292,10 +297,13 @@ namespace
 	}
 	bool StepInEvents()
 	{
-		static const bool on = [] { const char* e = getenv("WWHD_60FPS_EVENTS"); return !(e && atoi(e) == 0); }();
-		if (!on || !s_link || rd16(s_link + 0x08) != 168)
+		static const int level = [] { const char* e = getenv("WWHD_60FPS_EVENTS"); return e ? atoi(e) : 2; }();
+		if (level == 0 || !s_link || rd16(s_link + 0x08) != 168)
 			return false;
 		const uint32 action = rd32(s_link + 0x65F0);
+		if (level >= 2 && ((action >= 7 && action <= 9) || action == 0x24 || action == 0x25 || action == 0x27 ||
+			action == 0xB9))
+			return true;
 		return action == 4 || action == 6 || action == 0x88 || action == 0x89 || action == 0x9A || action == 0x9B ||
 			action == 0x9C || action == 0xAA || action == 0xAD || action == 0xAE || action == 0xB8 || action == 0xC1 || action == 0xC4 ||
 			action == 0xCE || action == 0xCF || action == 0xD2 || (action == 0xA9 && DemoSixty());
@@ -3651,10 +3659,11 @@ namespace
 	}
 
 	// the actors whose 3D lines are such chains, by process name: a Stalfos (190: its hair, ke_move on whole
-	// ticks), a rat (198: its tail, tail_control on whole ticks)
+	// ticks), a rat (198: its tail, tail_control on whole ticks), Ganondorf (246: his hair, ke_control on whole
+	// ticks; session bottom's N13)
 	bool ChainLines(uint16 name)
 	{
-		return name == 190 || name == 198;
+		return name == 190 || name == 198 || name == 246;
 	}
 
 	// a process about to draw: its chain arrays noted (a whole tick) or moved on (a half tick it stepped)
