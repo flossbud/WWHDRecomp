@@ -416,6 +416,10 @@
     {
       "id": "items2",
       "name": "Round 8: predeploy routes for Link's items not covered yet (boomerang, bombs, grappling hook, Iron Boots, Skull Hammer, Mirror Shield, Power Bracelets, fire and ice arrows, magic armor), 30 against 60, what parts fixed (top's)"
+    },
+    {
+      "id": "rides",
+      "name": "Round 8: riding moving grounds at 60 (dBgS::MoveBg*: a stepping ground stopping on its half step leaves its move flag into the next whole step; a stepping rider on a 30 Hz ground moves with it on whole steps only): Link on lifts and platforms, then items and enemies (bottom's)"
     }
   ],
   "later": [
