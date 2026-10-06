@@ -3190,15 +3190,16 @@ it in a window; D21 "Step 2"):**
     m6E16 100 on), and converted processes step in an event only while Link's action is one checked there
     (StepInEvents): his rope's, his jump off it, landing and fall, and Z-targeting weren't, so all of it held to
     whole ticks. Added (sixty.cpp, shared): 7-9 (Z-targeted walk, wait, move), 0x24, 0x25, 0x27 (a jump off,
-    a landing, a fall), 0xB9 (turning back: a boss door's event); `WWHD_60FPS_EVENTS=1` is the old list. Not the
-    rope's actions (0x76-0x7F): the hook's catch is an event everywhere, and stepped in it predeploy's grapple
-    ended 29.7 units from 30's (7.2 without) and gtgrapple 86.8 (7.1), so the tail's grab and swing stay on
-    whole ticks. Why it parts: every catch is an event (HIMO2's m24D9 0xFF, a potential event, NOPARTNER,
-    and its own camera until the coil count passes 0x82), and its coil count (m24BC, WWHD +0x2AEC: += its
-    pace (+0x2AF4, + 1 a tick) a step, at f_0216F7FC +0x19E4) has no rule, so stepped the catch's event ends in
-    half the time. Open: `whole` on 021711D8, 021711E0 and 021711F4 would keep it a tick's, but its coil
-    sounds test the count before and after its add (>= 13 and <= the add + 13) and would sound again in the
-    half step; then the rope's actions could go on the list. And the tail's thrash while
+    a landing, a fall), 0x76-0x7F (the rope's), 0xB9 (turning back: a boss door's event); `WWHD_60FPS_EVENTS=1`
+    is the old list. The rope's needed the hook's catch ruled first: every catch is an event (HIMO2's m24D9
+    0xFF, a potential event, NOPARTNER, with its own camera until its coil count passes 0x82), and its coil
+    count (m24BC, WWHD +0x2AEC: += its pace, +0x2AF4, + 1 a tick) had no rule, so stepped the catch ended in half
+    the time (predeploy's grapple 29.7 units from 30's against 7.2, gtgrapple 86.8 against 7.1). Its three stores
+    and its three coil sounds (which test the count before and after its add) `whole` (notes_bottom.txt): then
+    grapple 13.0 and gtgrapple 16.3, the coil and the catch's end a tick late at 60 (f1116 against 1115): the
+    half tick after an event starts holds, and the hook's approach of its camera offset (m24B4) loses that
+    step. Link and the hook step through the catch (30 of 30 ticks with half steps), and so the tail's grab in
+    Gohma's room. And the tail's thrash while
     the rock sits on Gohma (unk_40A 3) is a sine of its tick count (whole): `lagi` on its two phases. Test (route
     gohma-100 with the rocks and its health poked, Z and B: the death event with Link Z-targeting, 0x8): Gohma,
     the tail and Link now step through the death (600 of 600 ticks with half steps, none before); the death's
@@ -3206,8 +3207,8 @@ it in a window; D21 "Step 2"):**
     regress.sh: one line moved, Gohma's room (234, 0.0 apart as before) compared on 399 states (382 with
     `WWHD_60FPS_EVENTS=1`: the opening's turn-back now steps), so its lines' md5 is now
     294bb6ce739e6465cd24839252e97b42 (91c42945... before). predeploy (50 routes): the three known WARNs only. Not
-    exercised: the hook's own scene (a route grappling the tail: from the door's spawn the first-person aim
-    stayed on Gohma; LUP/LDOWN tilt it a little; Gohma attacks a Link placed nearer).
+    exercised in Gohma's room: the hook's scene there (a route grappling the tail: from the door's spawn the
+    first-person aim stayed on Gohma; LUP/LDOWN tilt it a little; Gohma attacks a Link placed nearer).
   - **N13, the hair in the cutscene before Ganondorf's fight**: Zelda (PZ 210) there: her own state matches
     30's but her blink, a frame count her draw hands to two texture animations, which ran twice a tick while
     she stepped (session top's islands.txt keeps two of its three + 1s; notes_bottom.txt the third, f_0245323C's). Her hair's place in captures differs from 30's frames by the half

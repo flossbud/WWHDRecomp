@@ -281,9 +281,10 @@ namespace
 	// rolling event camera ruled). In the boss fights' camera events (N8, session bottom: Gohma's fight, the
 	// grappling hook's own scene, d_a_himo2.cpp, and Gohma's death, d_a_btd.cpp, each a potential event whose
 	// camera the actor sets each step): 7, 8 and 9 the Z-targeted walk, wait and move (as 4 and 6), 0x24,
-	// 0x25 and 0x27 a jump off a rope, its landing and a fall, 0xB9 turning back (a boss door's event). Not the
-	// rope's own (0x76-0x7F: the grappling hook's catch is an event, and stepped there predeploy's grapple ended
-	// 29.7 units from 30's against 7.2, gtgrapple 86.8 against 7.1). Others hold the event to
+	// 0x25 and 0x27 a jump off a rope, its landing and a fall, 0x76-0x7F the rope's (the grappling hook's catch
+	// is an event: its coil count once a tick, tick_rules/notes_bottom.txt, without which predeploy's grapple
+	// ended 29.7 units from 30's against 7.2, gtgrapple 86.8 against 7.1), 0xB9 turning back (a boss door's
+	// event). Others hold the event to
 	// whole ticks as before; so does the half tick after an event starts, is ordered or is asked to end.
 	// WWHD_60FPS_EVENTS=0: no stepping in events at all; WWHD_60FPS_EVENTS=1: not for N8's actions.
 	uint32 s_link = 0;                              // Link (168) as he last executed
@@ -302,7 +303,7 @@ namespace
 			return false;
 		const uint32 action = rd32(s_link + 0x65F0);
 		if (level >= 2 && ((action >= 7 && action <= 9) || action == 0x24 || action == 0x25 || action == 0x27 ||
-			action == 0xB9))
+			(action >= 0x76 && action <= 0x7F) || action == 0xB9))
 			return true;
 		return action == 4 || action == 6 || action == 0x88 || action == 0x89 || action == 0x9A || action == 0x9B ||
 			action == 0x9C || action == 0xAA || action == 0xAD || action == 0xAE || action == 0xB8 || action == 0xC1 || action == 0xC4 ||

@@ -20,3 +20,17 @@
 # route gtower) it ran twice a tick wherever she stepped (frames 56, 57, 58 at 60 against 28, 29 at 30). Session
 # top's islands.txt keeps f_02453E00's two + 1s; the third, f_0245323C's (held at its end), the same:
 02453340    keep:r5     addi            pz: the blink's frame count (+0x1197) + 1, held at its end (f_0245323C)
+#
+# The grappling hook's catch (HIMO2 446, d_a_himo2.cpp; new_himo2_move f_0216F7FC; this part of WWHD's struct at
+# the GameCube's + 0x630): every catch is an event with the hook's own camera (m24D9 0xFF, then 2) that ends
+# once its coil count m24BC (+0x2AEC) passes 0x82; the count adds its pace (m24C4 +0x2AF4, + 1 a tick) a tick and
+# three coil sounds test it before and after (== 0, then the first count past 13, 26, 39). For Link's rope
+# actions to step in it (N8: the tail's grab in Gohma's room is that event, then the scene), the coil once a
+# tick: its three stores and its sounds on whole steps (in a half step the count before is the whole step's
+# after, so a sound's test would pass again).
+021711D8    whole       stw             himo2 catch: m24C0 (+0x2AF0) = the coil count before its add
+021711E0    whole       stw             himo2 catch: m24BC (+0x2AEC), the coil count, += its pace a tick
+021711F4    whole       stfs            himo2 catch: m24C4 (+0x2AF4), the coil's pace, + 1 a tick
+02171220    whole       bl 025e1a40     himo2 catch: the coil's first sound (ROPE_COIL_1)
+02171264    whole       bl 025e1a40     himo2 catch: the coil's sound at 13 (ROPE_COIL_2)
+021712B8    whole       bl 025e1a40     himo2 catch: the coil's sound at 26 and 39 (ROPE_COIL_3)
