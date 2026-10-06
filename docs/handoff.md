@@ -2520,6 +2520,23 @@ it in a window; D21 "Step 2"):**
     the glide ended ~15 ticks early and 14 units lower (count 100 -> 0 by f1280 against 30's f1293).
     `keep` on both counts, `*h@` on the 0.5: the count runs a tick a tick (2 behind 30's: the glide starts
     on a half tick), the height -73 against 30's -72, the drop and landing within a tick of 30's.
+  - The Hyoi seagull (NPC_KAM 195; d_a_npc_kamome.cpp; WWHD execute f_0225E598): HD hides it in its
+    room's sky (the HyoiKam SCOB, e.g. sea room 2 at -200132,2713,-320264): its wait action (f_02260220,
+    called through an action pointer) puts it at home, sets +0xBCA (the execute and draw skip all but the
+    event part) and, with Link within scale.x (13000), event state 6 (+0xBA6), attention ACTION_SPEAK
+    (0x02000008 at +0x39C) and, in eventOrder (f_0225E1E0), CANTALK|CANTALKITEM (0x21 at +0xFA); the call's
+    event (kamome_call) reveals it (f_0225F674, also through a pointer). With route hyoi's pokes on Star
+    Island (sea,0,2,-1), X sets the pear on Link's head (FOOD_SET 0xA8, a compulsory event, 65 ticks) at
+    30 as at 60, but the seagull's XyCheckCB never runs: a census trace on its call check's cache
+    (l_demo_start_chk_cnt, 0x101BEC50: WWHD_STATE_CENSUS=2 WWHD_STATE_CENSUS_TRACE=101BEC50) shows only
+    the execute's reset (0225E5E0), also with its home poked 300 units from Link (195,2ec/2f0/2f4). Link's
+    attention flags are all set (0xFFFFFFFF), its distance entry 0x26 has no front check: left is
+    getActionBtnX's first test, dComIfGs_checkGetItemNum of the X item: WWHD's save data is a heap object
+    (*0x101F84DC + 0x20), so pokes into the static g_dComIfG_gameInfo (0x1046F0B0 + ...) don't add a pear
+    to the bait bag; a pear set on X through the menu (or the bag's bait slot found) would tell.
+  - Makar (NPC_CB1 334): created in the Wind Temple by the aid as the waiting kind (event bit 0x2910 picks
+    isTypeKaze); following Link needs his rescue's state (0x1610/0x1604 and the temple's switches): not
+    done.
 
 - **Session main: the queue's "doors" item (round 4; `config/US_v0/tick_rules/doors2.txt`)**: DOOR12 (301, the
   Earth Temple's 22 doors), MDOOR (303), ATDOOR (302) and SHUTTER2 (113) converted; tests and what isn't
