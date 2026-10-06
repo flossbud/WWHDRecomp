@@ -9,6 +9,10 @@
 #                           the work queue (plan.json "queue"): claim an item before starting it, so
 #                           parallel sessions never take the same one; done when it's converted and
 #                           committed; release to hand it back
+#   publish.sh step ID DONE TOTAL
+#                           an item's progress for its bar on the page (e.g. step ui30 3 5: three of five
+#                           parts done); an item with "ids" in plan.json fills its bar from the actor types
+#                           converted without it
 #   publish.sh bug add TITLE [DETAILS]       record a bug the owner reported (prints its id, B1...)
 #   publish.sh bug start|ready|fixed|verified|wontfix|reopen ID [NOTE]
 #                           its state: open -> working (by this session) -> ready (the fix is in ww-4,
@@ -47,6 +51,12 @@ elif op == "done":
     c[item] = {"session": session, "state": "done", "note": note, "time": t}
 elif op == "release":
     c.pop(item, None)
+elif op == "step":
+    done, total = (int(x) for x in note.split("/"))
+    if not 0 <= done <= total or not total:
+        sys.exit(f"step: {done} of {total}?")
+    c.setdefault(item, {"session": session, "state": "working", "note": "", "time": t})["progress"] = [done, total]
+    c[item]["time"] = t
 json.dump(c, open(path + ".tmp", "w"), indent=1); os.replace(path + ".tmp", path)
 print(f"{item}: {op} ({session})")
 PY
@@ -108,6 +118,9 @@ case "${1:-}" in
 	claim|done|release)
 		claims "$1" "${2:?item id}" "${3:-}"
 		;;
+	step)
+		claims step "${2:?item id}" "${3:?done}/${4:?total}"
+		;;
 	shot)
 		src=$2; cap=$(json_str "${3:-}"); name=shot-$(date +%Y%m%d-%H%M%S-%3N).jpg   # ms: two shots in one second
 		# would share a file (one picture under both captions, deleted with the older one)
@@ -150,5 +163,5 @@ EOF
 		rm -f "$names"
 		ssh $host "cat > $dir/index.html" < "$here/index.html"
 		;;
-	*) echo "usage: publish.sh [now TEXT | retire [SESSION] | claim|done|release ID [NOTE] | bug ... | shot PPM CAPTION | serve]" >&2; exit 2 ;;
+	*) echo "usage: publish.sh [now TEXT | retire [SESSION] | claim|done|release ID [NOTE] | step ID DONE TOTAL | bug ... | shot PPM CAPTION | serve]" >&2; exit 2 ;;
 esac

@@ -9,7 +9,9 @@ A small status page for the owner (desktop and phone), served from the worker ho
   symbols, functions, recent commits) and `plan.json` (milestones, actor groups, known issues).
 - `publish.sh`: `publish.sh` publishes the data and the page; `publish.sh now TEXT` sets the
   "working on" line (cheap: call it at each step); `publish.sh retire [SESSION]` takes a session's line off
-  the page when the session ends; `publish.sh shot PPM CAPTION` adds a capture made
+  the page when the session ends; `publish.sh step ID DONE TOTAL` sets a queue item's progress bar
+  (items with "ids" in `plan.json`, the actor types they cover, fill theirs on their own);
+  `publish.sh shot PPM CAPTION` adds a capture made
   on the worker; `publish.sh serve` starts the server (a crontab `@reboot` entry on the worker, tagged
   `wwhd-progress`, starts it after a reboot).
 

@@ -119,7 +119,9 @@ def main():
         "title": plan["title"],
         "ticket": plan["ticket"],
         "milestones": plan["milestones"],
-        "queue": plan.get("queue", []),
+        # an item with "ids" (the actor types it covers) gets their count converted, for its bar
+        "queue": [dict(q, converted=sum(1 for i in q["ids"] if i in converted)) if q.get("ids") else q
+                  for q in plan.get("queue", [])],
         "queue_done": plan.get("queue_done", []),
         "known_issues": plan["known_issues"],
         "groups": groups,

@@ -310,19 +310,19 @@
     },
     {
       "id": "doors",
-      "name": "Dungeon doors and shutters still at 30: DOOR12 301 (22 in the Earth Temple alone), ATDOOR 302, MDOOR 303, SHUTTER 112/113, MBDOOR 115 (their opening and closing, door routes back/door2) (main's)"
+      "name": "Dungeon doors and shutters still at 30: DOOR12 301 (22 in the Earth Temple alone), ATDOOR 302, MDOOR 303, SHUTTER 112/113, MBDOOR 115 (their opening and closing, door routes back/door2) (main's)", "ids": [301, 302, 303, 112, 113, 115]
     },
     {
       "id": "sea-objects",
-      "name": "On the sea, still at 30: the salvage arm (Salvage 401, SALVAGE_TBOX 402), the rudder (Kaji 60), Tetra's ship (Obj_Pirateship 57), Ganon's ships (Obj_Gaship 125/127), the buoy race (Obj_Buoyrace 268, Obj_Buoyflag 465), sea cannons (Canon 61)"
+      "name": "On the sea, still at 30: the salvage arm (Salvage 401, SALVAGE_TBOX 402), the rudder (Kaji 60), Tetra's ship (Obj_Pirateship 57), Ganon's ships (Obj_Gaship 125/127), the buoy race (Obj_Buoyrace 268, Obj_Buoyflag 465), sea cannons (Canon 61)", "ids": [401, 402, 60, 57, 125, 127, 268, 465, 61]
     },
     {
       "id": "npcs-left",
-      "name": "NPCs still at 30 (blink rules per blink_audit.py -a): NPC_OS 314, YM1 315, LS1 321, P2 323, KM1 333, BTSW 349/350, PM1 354, PF1 356, the auction (361, 382), CO1 370, HI1 377, SV 378, Carlov's MT/MN 379/380"
+      "name": "NPCs still at 30 (blink rules per blink_audit.py -a): NPC_OS 314, YM1 315, LS1 321, P2 323, KM1 333, BTSW 349/350, PM1 354, PF1 356, the auction (361, 382), CO1 370, HI1 377, SV 378, Carlov's MT/MN 379/380", "ids": [314, 315, 321, 323, 333, 349, 350, 354, 356, 361, 382, 370, 377, 378, 379, 380]
     },
     {
       "id": "objects-left",
-      "name": "Moving objects still at 30: the gong (Obj_Gong 284), ladders (Obj_Ladder 85), liftable rocks (Stone2 455), fire walls (Obj_Firewall 286), barriers (Obj_Barrier 285), Iball 399, the Triangle statues (Obj_Doguu 265), the Wind Temple's fans (FAN 299: its joint callback), Obj_Tribox 44"
+      "name": "Moving objects still at 30: the gong (Obj_Gong 284), ladders (Obj_Ladder 85), liftable rocks (Stone2 455), fire walls (Obj_Firewall 286), barriers (Obj_Barrier 285), Iball 399, the Triangle statues (Obj_Doguu 265), the Wind Temple's fans (FAN 299: its joint callback), Obj_Tribox 44", "ids": [284, 85, 455, 286, 285, 399, 265, 299, 44]
     },
     {
       "id": "companions",
