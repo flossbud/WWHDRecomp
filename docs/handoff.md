@@ -2975,6 +2975,14 @@ it in a window; D21 "Step 2"):**
   walk, so not reached. **Light arrows on Ganondorf**: Zelda's, in a fight the decomp has no code for; not
   tried.
 
+- **Session main: sail's launch (predeploy's sail, WARN ~51)**: from session top's look. At 60 the boat sets sail in
+  the half step of f1119, a tick-half before 30's f1120; the 19 units gained then are most of the route's lag.
+  The trigger is the ship's own mast animation (daShip's mpBodyAnm, frame >= 7 / checkFrame(7)), played in its
+  execute before its procedure: a threshold crossed within a tick fires in the half step when the crossing
+  falls in the tick's first half (at most half a tick early, 1/60 s). Extending animstart's rule to every
+  stepping process put the launch a step earlier still (68 at the end), so it was reverted. Left as is:
+  invisible in play; only the route's end distance shows it.
+
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.
