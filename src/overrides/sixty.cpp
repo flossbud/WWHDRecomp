@@ -322,9 +322,24 @@ namespace
 	// the actions whose set-up in his action call holds the half step's call: the turn in place (0x17,
 	// procWaitTurn, set up from waiting or moving by checkNextMode with no turn that tick at 30) and waiting
 	// (4, set up when a turn or a move ends, its own step, the stick's check, coming the next tick at 30)
+	// and the slash while moving (0x42, procCutF: predeploy's plants 45.5 -> 37.0 units, the rest unchanged). Tried
+	// and not held: 0x24 (procAutoJump: no change) and 0x36 (procSwimWait: swing 70 -> 137).
+	// WWHD_60FPS_HOLDEXTRA=a,b,... (hex action numbers): more of them, to try (the drifts item)
 	bool HoldsAfter(uint32 action)
 	{
-		return action == 0x17 || action == 4;
+		static const std::vector<uint32> extra = [] {
+			std::vector<uint32> v;
+			if (const char* e = getenv("WWHD_60FPS_HOLDEXTRA"))
+				for (const char* p = e; *p;)
+				{
+					char* end;
+					v.push_back(uint32(strtoul(p, &end, 16)));
+					p = *end == ',' ? end + 1 : end;
+					if (end == p && *p) break;
+				}
+			return v;
+		}();
+		return action == 0x17 || action == 4 || action == 0x42 || std::find(extra.begin(), extra.end(), action) != extra.end();
 	}
 	bool s_linkActionChanged = false;                 // by his action call in the last whole step
 	uint32 s_linkActionAtCall = 0;

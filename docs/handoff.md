@@ -2597,6 +2597,21 @@ it in a window; D21 "Step 2"):**
     shake's half frames equal 30's ticks, the drop starts on the same tick; its bounces peak ~20 units
     lower at 60 (a half step overshoots the ground less, and the bounce reflects the overshoot).
 
+- **Session main: the queue's "drifts" item (round 5)**: predeploy's WARN routes, 30 against 60 (Link's position per
+  tick; `WWHD_60FPS_HOLDEXTRA=hex,...` holds more of Link's set-ups, sixty.cpp HoldsAfter, to try):
+  - plants (45.5 -> 37.0, now ok): the slash while moving (0x42 procCutF) was set up in the whole step and
+    stepped in the half step too; held as the turn and waiting are.
+  - land (99): Link walks into the lookout tower's legs (f1500-1502): at 30 a push slides him 17 units in three
+    ticks, at 60 it never comes (20 units apart from there). At f1582 the lock-on (ZL) then turns him to 0
+    degrees at 60 only (something in range at 60's place: its target), so the camera behind him is 18.7
+    degrees off and the camera-relative runs after go elsewhere. Left: the push (Cc mass resolution runs on
+    whole ticks; why it misses at 60 not found).
+  - swing (70) and sail (64): Link's transitions into procAutoJump (0x24) and procSwimWait (0x36) come half a
+    tick off; holding them didn't help (0x24 no change, 0x36 worse): the general rule the turn's notes ask
+    for (which set-ups step in their own tick at 30).
+  - sidle (53): no action changes, walking only: the camera's yaw (the known k75 approximation in a sustained
+    turn) sending the camera-relative walk elsewhere.
+
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.
