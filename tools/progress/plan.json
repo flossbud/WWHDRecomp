@@ -360,6 +360,10 @@
     {
       "id": "walkstart",
       "name": "Round 6: Link's first walking ticks differ from 30's (2.4 units in 3 ticks on tour), which the camera then follows: the root of predeploy's tour, land, crawl and sidle distances; and predeploy pairing 30's ticks with 60's frames by state (the pairing varies by run) (top's)"
+    },
+    {
+      "id": "pushes",
+      "name": "Round 6: collision pushes for converted actors at 60 (cCcD_Stts::Move clears the push vector on half steps: lost or doubled?), as contacts' family; a known case: land's push at Outset's lookout tower legs (f1500) that 60 never gets (bottom's)"
     }
   ],
   "later": [
