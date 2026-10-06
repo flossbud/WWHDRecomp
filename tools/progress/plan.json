@@ -380,6 +380,14 @@
     {
       "id": "eqwhole",
       "name": "Round 7: equality tests of whole-tick counts in converted types (`if (timer == N)` seen again on the half step: an event twice a tick, Gohma's armor cracking after 2 rocks): audit every converted type (bottom's eqsites.py) and rule the sites with eqwhole (main's)"
+    },
+    {
+      "id": "resolve",
+      "name": "Round 7: the collision resolution after the half step, so converted actors (and Link's pose since animstart) are at 30's tick end when hits are resolved (Kalle Demos' extra sword hit); the Co push split redone for it (top's, with bottom)"
+    },
+    {
+      "id": "hitcounts",
+      "name": "Round 7: counters added to while a hit reads true (the tick's hits persist until the next resolution, so both steps read them: Jalhalla's m47E): audit the converted types and keep them to whole ticks (main's)"
     }
   ],
   "later": [
