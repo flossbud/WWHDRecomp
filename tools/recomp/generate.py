@@ -77,6 +77,10 @@ rules, for the code of processes that run every frame with a time step h
   d:REG        after it, REG = REG^h (a damping factor)
   split:REG    after it, an integer per-tick amount split between the whole tick and the half tick
                (REG - REG/2, then REG/2: the two add up to the 30 Hz step exactly)
+  eqwhole      on a compare (cmpi, cmpl...) whose next reader is a branch on its EQ bit (beq, bne): a count
+               kept to whole ticks tested for equality (`if (timer == 40) ...`) reads equal on the whole step
+               and on the half step after it: on a stepping process's half step the compare reads unequal, so
+               what hangs on it (a crack counted, a sound, a spawn) happens once a tick, as at 30
   drawsplit@REG a per-tick add in a converted actor's draw (a joint callback: a fan's spin): in a draw at 60
                (step 1) REG - REG/2 in the whole tick's draw, REG/2 in the half tick's, so its two draws add
                a tick's amount (an unconverted actor's half-tick draw is put back after the frame: only for
@@ -288,7 +292,7 @@ class Program:
                     assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
                     rules[ea] = (kind, value, expect, what)
                     continue
-                if kind in ("spliti", "lagi"):
+                if kind in ("spliti", "lagi", "eqwhole"):
                     assert not arg, f"tick_rules.txt:{n}: {kind} takes no argument"
                     value = None
                 elif kind == "halfadd":
@@ -301,7 +305,7 @@ class Program:
                         assert key == "r3", f"tick_rules.txt:{n}: unknown rule argument {arg}"
                         value = v if re.fullmatch(r"r([12]?[0-9]|3[01])", v) else int(v, 0)
                 else:
-                    assert kind.rstrip("@") in ("keep", "split", "splitd", "drawsplit", "note", "vec", "arc", "fall", "ssplit", "lagw", "exact") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert kind.rstrip("@") in ("keep", "split", "splitd", "drawsplit", "note", "vec", "arc", "fall", "ssplit", "lagw", "exact", "eqwhole") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
                     assert kind != "drawsplit", f"tick_rules.txt:{n}: drawsplit takes @: drawsplit@rN"
                     assert kind != "exact@" and (kind != "exact" or arg[0] == "f" or arg == "note"), f"tick_rules.txt:{n}: exact:fS takes a float register or note"
                     if kind == "exact" and arg == "note":
@@ -339,6 +343,33 @@ class Program:
                 return f"{ea:08X}: spliti applies to addi rD, rA, IMM, not {i.op}"
             if kind == "lagi" and i.op != "mulli":
                 return f"{ea:08X}: lagi applies to mulli rD, rA, IMM, not {i.op}"
+            if kind == "eqwhole":
+                if i.op not in ("cmp", "cmpl", "cmpi", "cmpli"):
+                    return f"{ea:08X}: eqwhole applies to a compare (cmp, cmpl, cmpi, cmpli), not {i.op}"
+                # the field's next reader must be a branch on its EQ bit alone (beq/bne): a half step's "not
+                # equal" made "greater" would change an ordering test (blt, bge...)
+                for k in range(1, 13):
+                    j = ppc.decode(self.word(ea + 4 * k))
+                    if j is None:
+                        return f"{ea:08X}: eqwhole: undecodable instruction after the compare"
+                    if j.op in ("bc", "bclr", "bcctr"):
+                        if (j.bo & 0x10) == 0 and j.bi // 4 == i.crfD:
+                            if j.bi % 4 != 2:
+                                return f"{ea:08X}: eqwhole: cr{i.crfD} is read for another bit than EQ ({ea + 4 * k:08X})"
+                            break
+                        if j.op != "bc" or (j.bo & 0x14) == 0x14:
+                            return f"{ea:08X}: eqwhole: a branch leaves before cr{i.crfD} is read ({ea + 4 * k:08X})"
+                        continue
+                    if j.op == "b" and not j.lk:
+                        return f"{ea:08X}: eqwhole: a jump leaves before cr{i.crfD} is read ({ea + 4 * k:08X})"
+                    if j.op.startswith("cr") or j.op in ("mfcr", "mtcrf", "mcrf", "mcrxr"):
+                        return f"{ea:08X}: eqwhole: cr{i.crfD} is used by {j.op} before a branch"
+                    if j.op in ("cmp", "cmpl", "cmpi", "cmpli") and j.crfD == i.crfD:
+                        return f"{ea:08X}: eqwhole: cr{i.crfD} is compared again before a branch reads it"
+                    if i.crfD == 0 and (getattr(j, "rc", 0) or j.op.endswith(".")):
+                        return f"{ea:08X}: eqwhole: cr0 is recorded again before a branch reads it"
+                else:
+                    return f"{ea:08X}: eqwhole: no branch reads cr{i.crfD} within 12 instructions"
             if kind == "halfadd" and i.op not in HALFADD_RD_OPS | HALFADD_RA_OPS:
                 return f"{ea:08X}: halfadd applies to an instruction writing an integer register ({', '.join(sorted(HALFADD_RD_OPS | HALFADD_RA_OPS))}), not {i.op}"
             if kind == "halfadd" and getattr(i, "rc", 0):
@@ -620,6 +651,10 @@ def apply_tick_rule(rule, i, lines):
         gate = "RT_SIXTY()" if kind == "reload" else "RT_STEPPED()"
         return lines + [f"if ({gate}) {{ const uint32 w_ = rd32({ea}); float f_; memcpy(&f_, &w_, 4); "
                         f"{d}.fp0 = (double)f_; {d}.fp1 = {d}.fp0; }}   // step rule: {what}"]
+    if kind == "eqwhole":
+        # on a stepping process's half step an equal compare reads unequal (greater): its beq/bne act once a tick
+        return lines + [f"if (RT_STEPPED() && !RT_WHOLE_TICK()) {{ uint8* c_ = ctx->cr + {i.crfD} * 4; if (c_[CR_BIT_EQ]) {{ c_[CR_BIT_EQ] = 0; "
+                        f"c_[CR_BIT_GT] = 1; }} }}   // step rule: {what}"]
     if kind == "spliti":
         imm = emit.hx(i.simm & 0xFFFFFFFF)
         return lines + [f"if (RT_STEPPED()) GPR({i.rD}) = GPR({i.rD}) - {imm} + rt_step_split({imm});   // step rule: {what}"]

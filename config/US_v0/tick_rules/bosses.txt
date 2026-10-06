@@ -1,0 +1,64 @@
+# Step and tick rules for the work queue's "bossfights" (session bottom; format: ../tick_rules.txt), the boss fights
+# scripted at 30 and 60 and compared phase by phase.
+#
+# ---- Gohma (BTD 234, d_a_btd.cpp; M_DragB with WWHD_DEBUG_BOSS=1; execute f_020F1494, its state machine
+# f_020F6004, its death f_020F52B8). The ceiling's rocks (poked: its rock-hit flag m02F6, +0x41E, = 1, as a rock
+# sets it) cracked its armour after two at 60, three at 30: in the stun (state 0x16) `if (timer == 40)` counted
+# the crack (m6190, +0x63D4), and its timer (+0x414) counts on whole ticks, so the half step saw 40 again and
+# counted it twice (with its brk, sound and particles). New step rule `eqwhole` (generate.py) on the equality
+# tests of its counts kept to whole ticks (the timer, the opening's and the death's sequence counts +0x705E and
+# +0x705C): on a half step they read unequal, so what hangs on them happens once a tick. Not on its six
+# `timer == 0` tests: the timer rests at 0 (`if (t != 0) t--`), so 0 holds on every tick after, a state, not
+# an event; read unequal, a half step would take the running timer's branch. Its falling debris (35 pieces
+# from +0x63D8) move, turn and fall a tick's worth over its two steps.
+020F2310    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705E) == 0x6f
+020F24AC    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705E) == 0x8c
+020F2620    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705E) == 0x1e
+020F264C    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705E) == 0x50
+020F2660    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705E) == 0x91
+020F2674    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705E) == 0x96
+020F26F4    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705E) == 0xa
+020F2710    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705E) == 0x32
+020F2CD8    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705E) == 0x5a
+020F306C    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705E) == 0x118
+020F30C0    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705E) == 0x1c2
+020F3310    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705C) == 0x2
+020F3328    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705C) == 0x73
+020F333C    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705C) == 0x136
+020F3350    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705C) == 0x1c4
+020F3364    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705C) == 0x1d1
+020F3380    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705C) == 0x294
+020F339C    eqwhole     cmpl            btd f_020F1494: a sequence count (+0x705C) == a value
+020F33E4    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705C) == 0xa
+020F3408    eqwhole     cmpl            btd f_020F1494: a sequence count (+0x705C) == a value
+020F3424    eqwhole     cmpl            btd f_020F1494: a sequence count (+0x705C) == a value
+020F4BD8    eqwhole     cmpi            btd f_020F4924: a sequence count (+0x705E) == 0x28
+020F4C2C    eqwhole     cmpi            btd f_020F4924: a sequence count (+0x705E) == 0xd7
+020F54C8    eqwhole     cmpi            btd f_020F52B8: a sequence count (+0x705E) == 0x3
+020F551C    eqwhole     cmpi            btd f_020F52B8: a sequence count (+0x705E) == 0x40
+020F5574    eqwhole     cmpi            btd f_020F52B8: a sequence count (+0x705E) == 0x78
+020F55B8    eqwhole     cmpi            btd f_020F52B8: a sequence count (+0x705E) == 0xa0
+020F5608    eqwhole     cmpi            btd f_020F52B8: a sequence count (+0x705E) == 0xc8
+020F5684    eqwhole     cmpi            btd f_020F52B8: a sequence count (+0x705E) == 0x136
+020F56B0    eqwhole     cmpi            btd f_020F52B8: its timer (+0x414) == 0x65
+020F5818    eqwhole     cmpi            btd f_020F52B8: its timer (+0x414) == 0xf1
+020F58C8    eqwhole     cmpi            btd f_020F52B8: its timer (+0x414) == 0xbf
+020F5E88    eqwhole     cmpi            btd f_020F52B8: its timer (+0x414) == 0x1
+020F5F44    eqwhole     cmpi            btd f_020F52B8: its timer (+0x414) == 0x2
+020F5F70    eqwhole     cmpi            btd f_020F52B8: its timer (+0x414) == 0x1
+020F6EFC    eqwhole     cmpl            btd f_020F6004: its timer (+0x414) == a value
+020F6F10    eqwhole     cmpi            btd f_020F6004: its timer (+0x414) == 0x1f
+020F72EC    eqwhole     cmpi            btd f_020F6004: its timer (+0x414) == 0x1
+020F8270    eqwhole     cmpl            btd f_020F6004: its timer (+0x414) == a value
+020F86B4    eqwhole     cmpi            btd f_020F6004: its timer (+0x414) == 0x1
+020F86BC    eqwhole     cmpi            btd f_020F6004: its timer (+0x414) == 0x46 (the == 1 test's other half)
+020F87B8    eqwhole     cmpi            btd f_020F6004: its timer (+0x414) == 0x37
+020F87CC    eqwhole     cmpi            btd f_020F6004: its timer (+0x414) == 0x1
+020F8914    eqwhole     cmpi            btd f_020F6004: its timer (+0x414) == 0x14
+020F89DC    eqwhole     cmpl            btd f_020F6004: its timer (+0x414) == a value
+020F8C58    eqwhole     cmpi            btd f_020F6004: its timer (+0x414) == 0x65
+020F1584    *h@f7       fadds           btd: +0x70C0 += a tick's amount (f7), to its cap
+020F1D74    vec@r4      bl 028e8d88     btd debris (35 from +0x63D8): pos += speed
+020F1D84    spliti      addi            btd debris: angle x + 0x900 a tick
+020F1D8C    spliti      addi            btd debris: angle y + 0x600 a tick
+020F1D98    *h@f28      fsubs           btd debris: speed.y - gravity (f28) a tick

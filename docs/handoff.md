@@ -2787,6 +2787,29 @@ it in a window; D21 "Step 2"):**
   waits for mActionState 0, which the hit sets to 7 (its timers `whole`), Kalle Demos ignores hits while m310
   runs (8, `whole`, 020AECA8), Jalhalla's sword damage needs mActionState 0x53; none calls cLib_calcTimer<u8>.
   Not played: their fights need the hookshot, boomerang and light puzzles driven.
+- **Session bottom: the queue's "bossfights" (round 7, 2026-10-06; `config/US_v0/tick_rules/bosses.txt`)**: each
+  boss refought (`WWHD_DEBUG_BOSS=1`, warped in with `WWHD_DEBUG_STAGE`) from the 100% save at 30 and 60, its
+  phases (state fields from `WWHD_STATE_TRACK`), its health (+0x3A1) and Link's life (0x145B7B80 by
+  `WWHD_60FPS_WATCH`) compared on the same ticks. **Gohma** (BTD 234, M_DragB): the ceiling's three rocks
+  driven by poking its rock-hit flag (`WWHD_DEBUG_POKE=1000:234,41e,1,1;1300:...;1600:...`, what a falling rock
+  sets), then Z-targeting and B every 15 frames. Its armour cracked after two rocks at 60 (B32): in its stun
+  `if (timer == 40)` counted the crack (m6190, +0x63D4), and the timer (+0x414) counts whole ticks, so the
+  half step saw 40 again. New step rule **`eqwhole`** (generate.py) on a compare whose branch tests only EQ:
+  on a stepping process's half step it reads unequal, so what hangs on it happens once a tick. Every
+  converted type with `whole` timers tested for equality has this hazard (main's "eqwhole" audit;
+  `tools/sixty/eqsites.py` lists the compares). Gohma has 46 (its timer and its opening's and death's
+  sequence counts +0x705E/+0x705C), plus step rules for its falling debris. Not on `timer == 0`: a
+  countdown that rests at 0 reads 0 on every tick after, a state rather than an event (30 takes that branch
+  every tick), and read unequal the half step would take the running timer's branch. Correct for counts
+  changed on whole steps (`whole`, `keep`), the test before or after the change; for a `late` count only
+  when the test comes before its store. Not for animation frames (`(s16)frame == 30`: N on the whole
+  step, N.5 on the half, so their sounds and particles double too): an animation started on a half step
+  is N.5 on its whole steps and the event would be lost. After: cracks at
+  f1071/1371/1671 (30) and f1070/1370/1670 (60), the armour broken at f1829 and f1827.5, states in step
+  (60 half a tick ahead). Link loses 1 or 2 quarter hearts a hit at both rates. Its eye takes 2 from a cut and 4
+  from a combo's finisher at both, but at 60 Link's combos never chain (B31, his combo window, top's). Its
+  death (health poked to 2, then a cut): states 50-56 at the same ticks after the kill (439, 131, 2, 49 and
+  149 ticks at both).
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
