@@ -3402,7 +3402,17 @@ it in a window; D21 "Step 2"):**
     change); his trial shows only his own stores. Measure in the bug's note. Particle counts at 60 read lower for an
     unrelated reason: WWHD's JPA keeps a dead particle 2 calcs (+0x10C) and an emptied emitter 2 (+0x3D4, f_0282014C)
     before deleting them, a frame count, so a tick at 60 (not visible); lifetimes round to half ticks at 60 (tried,
-    `ceil(life)`: no visible change, not kept).
+    `ceil(life)`: no visible change, not kept). Handed to qa (2026-10-06, main's rule: the hardest items to qa),
+    with the census lead: settingTevStruct (f_025615B8) writes g_env_light +0xF48-0xF56 from Link's and the jet's
+    executes.
+  - **B61, Link's walk start** (fixed; main's priority, found by bottom on route tour): at 30 a tick's move takes
+    the speed mNormalSpeed (+0x6A14) ends the tick with; at 60 the whole step moved at the half-way speed, so a
+    walk's start left him ~4 units behind and an exact camera (bottom's `WWHD_60FPS_CAMTICK=1`, B57) turned off
+    30's. setSpeedAndAngleNormal's setNormalSpeedF takes the tick's change in the whole step (a step of 1) and none
+    in the half step (sixty_step.cpp f_0241650C/f_02416230; `WWHD_60FPS_SPEEDTICK=0` off). Tour's walk start
+    0.2 apart (3.3 before), 0.1 with CAMTICK; moveangle's end gaps about halved (e.g. 37/54/67 to 18/28/40) and the
+    half-stick segments' extra stops gone; movecircle's ccw circle 668 to 174, with CAMTICK its cw circle 72 to 17
+    (the camera -7 to +0.8 degrees). Checks, regress (unchanged) and predeploy (50, land/sidle/sail WARN) pass.
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.

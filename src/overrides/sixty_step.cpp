@@ -737,6 +737,48 @@ void f_023FCB9C(PPCInterpreter_t* __restrict ctx)
 	history.lastStep = step;
 }
 
+// Link's walking speed (B61, session top; the main session's priority, found by session bottom on route tour): at
+// 30 a tick's move takes the speed mNormalSpeed (+0x6A14) ends the tick with; at 60 the whole step moved at the
+// half-way one (half the tick's acceleration), and his feet's share and foot-measured speed with it (setBlendMoveAnime
+// from mNormalSpeed), so a walk's start ramp left him ~1.2 units a tick behind, ~4 units in all (tour f966-970),
+// and an exact-tick camera following him turned off 30's. The plain walk's speed (setNormalSpeedF from
+// setSpeedAndAngleNormal) takes the whole tick's change in the whole step (a step of 1) and none in the half step:
+// both of a tick's steps move at 30's speed for the tick. (The aim walk f_02416B70 passes steps it divided by h
+// itself: not this.) WWHD_60FPS_SPEEDTICK=0 turns it off.
+namespace
+{
+	bool s_inNormalSpeed = false;                  // in setSpeedAndAngleNormal's call
+	bool SpeedTick()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_SPEEDTICK"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+}
+
+// daPy_lk_c::setSpeedAndAngleNormal(Link r3, ...): the plain walk's speed and heading
+void f_0241650C(PPCInterpreter_t* __restrict ctx)
+{
+	if (!Stepped() || !SpeedTick())
+		[[clang::musttail]] return orig_f_0241650C(ctx);
+	const bool outer = s_inNormalSpeed;
+	s_inNormalSpeed = true;
+	orig_f_0241650C(ctx);
+	s_inNormalSpeed = outer;
+}
+
+// daPy_lk_c::setNormalSpeedF(Link r3, target f1, ...): mNormalSpeed toward the stick's speed
+void f_02416230(PPCInterpreter_t* __restrict ctx)
+{
+	if (!s_inNormalSpeed || !Stepped())
+		[[clang::musttail]] return orig_f_02416230(ctx);
+	if (g_rtHalfTick)
+		return;                                        // the whole step took the tick's change
+	const float step = g_rtStep;
+	g_rtStep = 1.0f;
+	orig_f_02416230(ctx);
+	g_rtStep = step;
+}
+
 // ---- the camera (d_camera.cpp) ----------------------------------------------------------------------
 
 namespace

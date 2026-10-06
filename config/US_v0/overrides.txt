@@ -51,6 +51,8 @@
 02516C14    src/overrides/sixty_step.cpp       a per-tick request list read on whole ticks: once a tick (D21)
 025E3EC8    src/overrides/sixty_step.cpp       mDoExt_MtxCalcOldFrame::decOldFrameMorfCounter: the old pose's blend, with a time step (D21)
 023FCB9C    src/overrides/sixty_step.cpp       daPy_lk_c::posMoveFromFootPos: the feet's move measured over a whole tick (D21)
+0241650C    src/overrides/sixty_step.cpp       daPy_lk_c::setSpeedAndAngleNormal: notes its setNormalSpeedF call (D21, B61)
+02416230    src/overrides/sixty_step.cpp       daPy_lk_c::setNormalSpeedF: the plain walk's speed change once a tick, in the whole step (D21, B61)
 024F9A48    src/overrides/sixty_step.cpp       dCamera_c::updateMonitor: the player's move measured over a whole tick (D21)
 0281F878    src/overrides/sixty_step.cpp       JPABaseEmitter::calcCreatePtcls: strips (the wake, bow waves) emit every frame when converted (D21)
 023A14A8    src/overrides/sixty_step.cpp       daObjTide::Act_c::mode_norm: a stepped tide reads the water level a step older, as at 30 (D21)
