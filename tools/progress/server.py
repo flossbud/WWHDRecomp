@@ -1,18 +1,27 @@
-"""The progress page's server (tools/progress/README.md): the page and its data as static files, plus the
-owner's testing notes, which the page writes.
+"""The progress page's server (tools/progress/README.md): the pages and their data as static files, plus what
+the owner writes on the testing page (testing.html): bug verdicts and reports, notes, checks of new work.
 
 Usage (on the worker host, from the data directory): python3 server.py PORT BIND_ADDRESS
 
 Static files are served as python's http.server serves them, but for dot files (the pid, the log, the
-locks). The notes API (JSON; every request carries the header X-WWHD, so another site can't post from the
+locks). The API (JSON; every request carries the header X-WWHD, so another site can't post from the
 owner's browser: a custom header needs a CORS preflight, which this server never grants):
-  POST   /api/notes/image   an image as the body (Content-Type image/png|jpeg|webp|gif, at most 10 MB)
-                            -> {"file": "notes/img-....png"}
-  POST   /api/notes         {"text", "images": [files from /api/notes/image]} -> the note
-  PATCH  /api/notes/ID      {"text"?, "images"?, "done"?} -> the note
-  DELETE /api/notes/ID      -> {"ok": true} (its images stay on disk)
-notes.json holds them, newest first: [{id, text, images, time, edited, done, replies: [{text, session, time}]}].
-Every change takes .notes.lock, which publish.sh notes (the sessions' replies) takes too.
+  POST   /api/image              an image as the body (Content-Type image/png|jpeg|webp|gif, at most 10 MB)
+                                 -> {"file": "notes/img-....png"} (also at /api/notes/image)
+  bugs.json (under .claims.lock, as publish.sh bug takes it); the owner's notes are {text, session: "owner",
+  time, images}:
+  POST   /api/bugs               {"title", "details"?, "images"?} -> the new bug (open, by the owner)
+  POST   /api/bugs/ID/verify     {"text"?, "images"?}  fixed and confirmed in play -> verified
+  POST   /api/bugs/ID/reopen     {"text", "images"?}   still broken -> open
+  POST   /api/bugs/ID/close      {"text"?}             not a bug / gone -> wontfix
+  POST   /api/bugs/ID/note       {"text"?, "images"?}  a note, the state unchanged
+  POST   /api/bugs/ID/retest     {}                    a verdict taken back -> fixed (to retest) again
+  notes.json (general testing notes, newest first) and checks.json (the owner's verdict on finished queue
+  items: {ITEM: {state: ok|problem, time, bug?}}), under .notes.lock:
+  POST   /api/notes              {"text", "images"} -> the note
+  PATCH  /api/notes/ID           {"text"?, "images"?, "done"?} -> the note
+  DELETE /api/notes/ID           -> {"ok": true} (its images stay on disk)
+  POST   /api/checks/ITEM        {"state": "ok"|"problem"|null, "bug"?} -> checks.json
 """
 import fcntl
 import http.server
@@ -24,7 +33,6 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-NOTES = os.path.join(ROOT, "notes.json")
 IMAGES = os.path.join(ROOT, "notes")
 MAX_IMAGE = 10 * 1024 * 1024
 MAX_TEXT = 20000
@@ -32,25 +40,25 @@ KINDS = {"image/png": (".png", b"\x89PNG\r\n\x1a\n"), "image/jpeg": (".jpg", b"\
          "image/gif": (".gif", b"GIF8"), "image/webp": (".webp", b"RIFF")}
 
 
-class Notes:
-    """notes.json, read and written under .notes.lock (the page's writes here, the sessions' replies by ssh)."""
+class Store:
+    """A JSON file read and written under a lock file (the server's writes, and publish.sh's over ssh)."""
+
+    def __init__(self, name, lock, empty):
+        self.path, self.lockpath, self.empty = os.path.join(ROOT, name), os.path.join(ROOT, lock), empty
 
     def __enter__(self):
-        self.lock = open(os.path.join(ROOT, ".notes.lock"), "a")
+        self.lock = open(self.lockpath, "a")
         fcntl.flock(self.lock, fcntl.LOCK_EX)
         try:
-            self.list = json.load(open(NOTES)) if os.path.exists(NOTES) else []
+            self.data = json.load(open(self.path)) if os.path.exists(self.path) else self.empty()
         except ValueError:
-            self.list = []
+            self.data = self.empty()
         return self
 
     def save(self):
-        with open(NOTES + ".tmp", "w") as f:
-            json.dump(self.list, f, indent=1)
-        os.replace(NOTES + ".tmp", NOTES)
-
-    def find(self, nid):
-        return next((n for n in self.list if n["id"] == nid), None)
+        with open(self.path + ".tmp", "w") as f:
+            json.dump(self.data, f, indent=1)
+        os.replace(self.path + ".tmp", self.path)
 
     def __exit__(self, *exc):
         fcntl.flock(self.lock, fcntl.LOCK_UN)
@@ -61,11 +69,8 @@ def clean_images(images):
     """Only files this server stored: notes/img-*.ext that exist."""
     if not isinstance(images, list):
         return []
-    out = []
-    for f in images[:20]:
-        if isinstance(f, str) and re.fullmatch(r"notes/img-[\w-]+\.(png|jpg|gif|webp)", f) and os.path.exists(os.path.join(ROOT, f)):
-            out.append(f)
-    return out
+    return [f for f in images[:20] if isinstance(f, str) and re.fullmatch(r"notes/img-[\w-]+\.(png|jpg|gif|webp)", f)
+            and os.path.exists(os.path.join(ROOT, f))]
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -94,37 +99,93 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return None
         return self.rfile.read(n)
 
+    def image(self):
+        kind = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if kind not in KINDS:
+            return self.reply(415, {"error": "PNG, JPEG, GIF or WebP only"})
+        data = self.body(MAX_IMAGE)
+        if data is None:
+            return self.reply(413, {"error": "empty, or over 10 MB"})
+        ext, magic = KINDS[kind]
+        if not data.startswith(magic) or (kind == "image/webp" and data[8:12] != b"WEBP"):
+            return self.reply(415, {"error": "that isn't a " + kind})
+        os.makedirs(IMAGES, exist_ok=True)
+        name = f"notes/img-{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}{ext}"
+        with open(os.path.join(ROOT, name), "wb") as f:
+            f.write(data)
+        return self.reply(200, {"file": name})
+
     def api(self, method):
-        if not self.path.startswith("/api/notes"):
+        if not self.path.startswith("/api/"):
             return self.reply(404, {"error": "no such thing"})
         if not self.headers.get("X-WWHD"):
             return self.reply(403, {"error": "missing X-WWHD"})
         path = self.path.split("?")[0].rstrip("/")
-        if method == "POST" and path == "/api/notes/image":
-            kind = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
-            if kind not in KINDS:
-                return self.reply(415, {"error": "PNG, JPEG, GIF or WebP only"})
-            data = self.body(MAX_IMAGE)
-            if data is None:
-                return self.reply(413, {"error": "empty, or over 10 MB"})
-            ext, magic = KINDS[kind]
-            if not data.startswith(magic) or (kind == "image/webp" and data[8:12] != b"WEBP"):
-                return self.reply(415, {"error": "that isn't a " + kind})
-            os.makedirs(IMAGES, exist_ok=True)
-            name = f"notes/img-{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}{ext}"
-            with open(os.path.join(ROOT, name), "wb") as f:
-                f.write(data)
-            return self.reply(200, {"file": name})
+        if method == "POST" and path in ("/api/image", "/api/notes/image"):
+            return self.image()
         raw = self.body(1024 * 1024) if method in ("POST", "PATCH") else b"{}"
         try:
             req = json.loads(raw or b"null")
             assert isinstance(req, dict)
         except (ValueError, AssertionError):
             return self.reply(400, {"error": "send a JSON object"})
-        text = req.get("text")
-        if text is not None and (not isinstance(text, str) or len(text) > MAX_TEXT):
-            return self.reply(400, {"error": f"text: a string of at most {MAX_TEXT} characters"})
-        with Notes() as notes:
+        for k in ("text", "title", "details"):
+            v = req.get(k)
+            if v is not None and (not isinstance(v, str) or len(v) > MAX_TEXT):
+                return self.reply(400, {"error": f"{k}: a string of at most {MAX_TEXT} characters"})
+        now = int(time.time())
+        if path.startswith("/api/bugs"):
+            return self.bugs(method, path, req, now)
+        if path.startswith("/api/checks/"):
+            item = path[len("/api/checks/"):]
+            if method != "POST" or not re.fullmatch(r"[\w-]{1,64}", item) or req.get("state") not in ("ok", "problem", None):
+                return self.reply(400, {"error": "POST /api/checks/ITEM {state: ok|problem|null}"})
+            with Store("checks.json", ".notes.lock", dict) as checks:
+                if req["state"] is None:
+                    checks.data.pop(item, None)
+                else:
+                    checks.data[item] = {"state": req["state"], "time": now,
+                                         **({"bug": req["bug"]} if isinstance(req.get("bug"), str) else {})}
+                checks.save()
+                return self.reply(200, checks.data)
+        if path.startswith("/api/notes"):
+            return self.notes(method, path, req, now)
+        return self.reply(404, {"error": "no such thing"})
+
+    def bugs(self, method, path, req, now):
+        text, images = (req.get("text") or "").strip(), clean_images(req.get("images"))
+        with Store("bugs.json", ".claims.lock", list) as bugs:
+            if method == "POST" and path == "/api/bugs":
+                title = (req.get("title") or "").strip()
+                if not title:
+                    return self.reply(400, {"error": "a bug needs a title"})
+                n = max([int(x["id"][1:]) for x in bugs.data] or [0]) + 1
+                bug = {"id": f"B{n}", "title": title, "details": (req.get("details") or "").strip(), "state": "open",
+                       "session": "", "notes": [], "reported": now, "time": now, "by": "owner", "images": images}
+                bugs.data.append(bug)
+                bugs.save()
+                return self.reply(200, bug)
+            m = re.fullmatch(r"/api/bugs/(B\d+)/(verify|reopen|close|note|retest)", path)
+            bug = next((x for x in bugs.data if m and x["id"] == m.group(1)), None)
+            if method != "POST" or not bug:
+                return self.reply(404, {"error": "no such bug"})
+            op = m.group(2)
+            if op in ("reopen", "note") and not text and not images:
+                return self.reply(400, {"error": "say what you saw"})
+            state = {"verify": "verified", "reopen": "open", "close": "wontfix", "retest": "fixed"}.get(op)
+            label = {"verify": "verified in play", "reopen": "still broken", "close": "closed", "retest": "back to retest (undone)"}.get(op)
+            if state:
+                bug["state"] = state
+            if text or images or label:
+                bug["notes"].append({"text": (f"{label}: {text}" if text else label) if label else text,
+                                     "session": "owner", "time": now, **({"images": images} if images else {})})
+            bug["time"] = now
+            bugs.save()
+            return self.reply(200, bug)
+
+    def notes(self, method, path, req, now):
+        with Store("notes.json", ".notes.lock", list) as notes:
+            text = req.get("text")
             if method == "POST" and path == "/api/notes":
                 text, images = (text or "").strip(), clean_images(req.get("images"))
                 if not text and not images:
@@ -132,19 +193,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 # numbers never come back after a delete (a session may have replied to it): .notes.seq keeps the last
                 seq = os.path.join(ROOT, ".notes.seq")
                 last = int(open(seq).read() or 0) if os.path.exists(seq) else 0
-                nid = max([last] + [int(n["id"][1:]) for n in notes.list]) + 1
+                nid = max([last] + [int(n["id"][1:]) for n in notes.data]) + 1
                 open(seq, "w").write(str(nid))
-                note = {"id": f"N{nid}", "text": text, "images": images, "time": int(time.time()), "edited": None,
-                        "done": False, "replies": []}
-                notes.list.insert(0, note)
+                note = {"id": f"N{nid}", "text": text, "images": images, "time": now, "edited": None, "done": False, "replies": []}
+                notes.data.insert(0, note)
                 notes.save()
                 return self.reply(200, note)
             m = re.fullmatch(r"/api/notes/(N\d+)", path)
-            note = notes.find(m.group(1)) if m else None
+            note = next((n for n in notes.data if m and n["id"] == m.group(1)), None)
             if not note:
                 return self.reply(404, {"error": "no such note"})
             if method == "DELETE":
-                notes.list.remove(note)
+                notes.data.remove(note)
                 notes.save()
                 return self.reply(200, {"ok": True})
             if method == "PATCH":
@@ -155,7 +215,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if "done" in req:
                     note["done"] = bool(req["done"])
                 if text is not None or "images" in req:
-                    note["edited"] = int(time.time())
+                    note["edited"] = now
                 notes.save()
                 return self.reply(200, note)
         return self.reply(405, {"error": "not allowed"})

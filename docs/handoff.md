@@ -39,12 +39,14 @@ WW-4's actor conversion is split between two sessions working side by side:
   other session integrated first: fetch, rebase, check again.
 - Shared code (sixty.cpp, sixty_step.cpp, generate.py, ppc_ops.h, the helpers): change it only
   when needed, say so in the commit, and rerun `regress.sh`: the other session's actors use it too.
-- **The owner's testing notes** (from 2026-10-06): the owner writes what they notice while testing on the
-  progress page ("Testing notes", with screenshots). Read them with `tools/progress/publish.sh notes`
-  at each step; answer under one with `publish.sh notes reply ID "TEXT"` (e.g. "filed as B45", "fixed in
-  abc1234, in the next deploy") and `publish.sh notes done ID "TEXT"` once it's handled. Main triages new
-  ones (a bug: `publish.sh bug add`, then reply with its id); an image is at the URL the list prints
-  (game data: look at it in a scratchpad, then delete it).
+- **The owner's testing page** (http://WORKER_ADDR:8765/testing.html, from 2026-10-06): the owner
+  retests fixed bugs there (**Fixed** -> `verified`; **Still broken** -> `open` again, with what they saw),
+  reports new bugs (open, `"by": "owner"`), adds notes and screenshots to any bug, checks finished queue
+  items (a problem becomes a bug) and writes general notes. Their entries are notes from `owner`. At each
+  step: `publish.sh bug list` ("you:" marks the owner's latest word; reopened and new bugs show as open),
+  `publish.sh bug show ID` (every note and image link; images are game data: look in a scratchpad, then
+  delete), `publish.sh notes` (general notes; answer with `notes reply|done ID "TEXT"`). Main triages:
+  a reopened or new bug gets `bug start` by whoever takes it, as before.
 - **Usage: wrap up at 75% of the week** (the owner's rule from 2026-10-06; it replaces "stop at 50%").
   The Claude account's usage is on the progress page (the sidebar; the phone's Now tab) and in
   `curl -s http://WORKER_ADDR:8765/usage.json` (`weekly_all`'s `percent`, every 5 minutes). Below

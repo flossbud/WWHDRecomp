@@ -23,7 +23,9 @@
 #   publish.sh bug needs ID TEXT             what an open bug waits on from the owner, shown as "Needs TEXT"
 #                                            (e.g. "your F9 recording", "a yes/no: shooting stars?")
 #   publish.sh bug short ID TEXT             a one-line summary for its card (the full note shows on a tap)
-#   publish.sh bug list                      the bugs, newest first (also on the page)
+#   publish.sh bug list                      the bugs, newest first (also on the page; "you:" marks the owner's
+#                                            latest note, from the testing page: verified, still broken, a note)
+#   publish.sh bug show ID                   one bug in full: its details, every note, the image links
 #   publish.sh shot PPM CAPTION [PLACE]
 #                           PLACE: the shot's heading on the page (e.g. "Wind Temple, the fans' room"); without
 #                           it the page takes the caption's text before its first ": "
@@ -92,7 +94,24 @@ if op == "add":
     print(f"B{n}: {a}")
 elif op == "list":
     for x in sorted(bugs, key=lambda x: -x["time"]):
-        print(f"{x['id']:5} {x['state']:9} {x['session'] or '-':7} {x['title']}" + (f"  [{x['notes'][-1]['text']}]" if x["notes"] else ""))
+        last = x["notes"][-1] if x["notes"] else None
+        who = "you: " if last and last.get("session") == "owner" else ""
+        pics = sum(len(n.get("images", [])) for n in x["notes"]) + len(x.get("images", []))
+        print(f"{x['id']:5} {x['state']:9} {x['session'] or '-':7} {x['title']}" + (f"  [{who}{last['text']}]" if last else "")
+              + (f"  ({pics} image{'s' * (pics > 1)}: bug show {x['id']})" if pics else ""))
+    sys.exit(0)
+elif op == "show":
+    x = find(a)
+    url = lambda f: "http://WORKER_ADDR:8765/" + f
+    print(f"{x['id']} {x['state']} {x['session'] or '-'}{' (reported by the owner)' if x.get('by') == 'owner' else ''}: {x['title']}")
+    if x["details"]:
+        print("  " + x["details"])
+    for f in x.get("images", []):
+        print("  image: " + url(f))
+    for n in x["notes"]:
+        print(f"  {'owner' if n.get('session') == 'owner' else n.get('session') or '?'}: {n['text']}")
+        for f in n.get("images", []):
+            print("    image: " + url(f))
     sys.exit(0)
 else:
     x = find(a)
@@ -129,7 +148,7 @@ case "${1:-}" in
 		echo "$who: retired"
 		;;
 	bug)
-		bugs "${2:?bug add|start|ready|fixed|verified|wontfix|reopen|note|needs|short|list}" "${3:-}" "${4:-}"
+		bugs "${2:?bug add|start|ready|fixed|verified|wontfix|reopen|note|needs|short|list|show}" "${3:-}" "${4:-}"
 		;;
 	claim|done|release)
 		claims "$1" "${2:?item id}" "${3:-}"
@@ -216,6 +235,7 @@ EOF
 		python3 "$root/tools/progress/collect.py" "$names" | ssh $host "mkdir -p $dir && cat > $dir/progress.json.tmp && mv $dir/progress.json.tmp $dir/progress.json"
 		rm -f "$names"
 		ssh $host "cat > $dir/index.html" < "$here/index.html"
+		ssh $host "cat > $dir/testing.html" < "$here/testing.html"
 		;;
 	*) echo "usage: publish.sh [now TEXT | retire [SESSION] | claim|done|release ID [NOTE] | step ID DONE TOTAL | bug ... | shot PPM CAPTION [PLACE] | notes ... | usage | serve]" >&2; exit 2 ;;
 esac

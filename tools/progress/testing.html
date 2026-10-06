@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WWHD Testing</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a1a2b'/%3E%3Ctext x='16' y='22' font-size='15' font-family='sans-serif' font-weight='700' fill='%23ffb04d' text-anchor='middle'%3ET%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* the progress page's tokens (index.html), for the owner's testing workspace */
+:root {
+  --bg: #f3f6f8; --ink: #0f2233; --ink2: #3c556a; --ink3: #5b7286; --off: #9aabba;
+  --line: #dce6ee; --line2: #e9eff4; --navy: #0a1a2b; --navy2: #11263b; --side: #b9cadb; --side2: #8fa9c2;
+  --link: #1f5fb8; --link-dark: #6ba8f0; --teal: #1fb8a6; --retest: #ffb04d;
+  --red: #b34848; --pill-bg: #fbe4e4; --pill-ink: #992f2f; --needs: #9a5512;
+  --ok: #2f6b3a; --ok-bg: #e1efe4; --warm: #8a5a22; --warm-bg: #f6ecdd;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
+a { color: var(--link); text-decoration: none; }
+button { font: inherit; }
+.top { background: var(--navy); color: #fff; }
+.topIn { max-width: 960px; margin: 0 auto; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+.back { color: var(--link-dark); font-size: 13px; font-weight: 600; }
+.title { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.title h1 { margin: 0; font-size: 22px; font-weight: 800; }
+.title span { font-family: var(--mono); font-size: 12px; color: var(--side2); }
+.title span i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #56d66a; margin-right: 6px; vertical-align: 1px; }
+.title span i.stale { background: var(--retest); }
+.nav { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+.navIn { max-width: 960px; margin: 0 auto; padding: 8px 16px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.navIn::-webkit-scrollbar { display: none; }
+.navIn a { flex: none; display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: #fff; border: 1px solid var(--line);
+  font-size: 13px; font-weight: 600; color: var(--ink2); white-space: nowrap; }
+.navIn a span { font-family: var(--mono); font-weight: 500; color: var(--ink3); }
+.navIn a.hot span { color: var(--needs); font-weight: 700; }
+main { max-width: 960px; margin: 0 auto; padding: 18px 16px 48px; display: flex; flex-direction: column; gap: 30px; }
+section { display: flex; flex-direction: column; gap: 12px; scroll-margin-top: 60px; }
+.head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.head h2 { margin: 0; font-size: 19px; font-weight: 700; }
+.head .meta { font-size: 12.5px; color: var(--ink2); }
+.hint { font-size: 12.5px; color: var(--ink3); margin: -4px 0 0; line-height: 1.5; }
+.list { display: flex; flex-direction: column; gap: 12px; }
+.empty { font-size: 13px; color: var(--ink3); background: #fff; border: 1px dashed var(--line); border-radius: 10px; padding: 14px 16px; }
+details.fold > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink2); margin-bottom: 10px; }
+
+/* a card: a bug, a queue item or a note */
+.card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cardHead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cardHead .id { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--red); }
+.cardHead .id.q { color: var(--ink); }
+.cardHead .id.n { color: var(--link); }
+.cardHead .ago { margin-left: auto; font-size: 11.5px; color: var(--ink3); }
+.pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--line2); color: var(--ink3); white-space: nowrap; }
+.pill.open { background: var(--pill-bg); color: var(--pill-ink); }
+.pill.fixed, .pill.working, .pill.ready { background: var(--warm-bg); color: var(--warm); }
+.pill.verified, .pill.ok { background: var(--ok-bg); color: var(--ok); }
+.pill.problem { background: var(--pill-bg); color: var(--pill-ink); }
+.ctitle { font-size: 15px; font-weight: 600; line-height: 1.4; text-wrap: pretty; }
+.ctext { font-size: 13.5px; line-height: 1.55; color: var(--ink2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.imgs { display: flex; gap: 8px; flex-wrap: wrap; }
+.imgs img { height: 96px; max-width: 100%; border-radius: 6px; cursor: zoom-in; object-fit: cover; background: var(--line); display: block; }
+.hist { display: flex; flex-direction: column; gap: 6px; }
+.hnote { font-size: 12.5px; line-height: 1.5; color: var(--ink2); background: var(--bg); border-radius: 8px; padding: 8px 10px; display: flex; gap: 8px; align-items: baseline; }
+.hnote.owner { background: #eef4fb; }
+.hnote > i { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.hnote b { color: var(--ink); font-weight: 600; }
+.hnote > div { min-width: 0; overflow-wrap: anywhere; display: flex; flex-direction: column; gap: 6px; }
+.hnote .imgs img { height: 72px; }
+.more { background: none; border: 0; padding: 0; font-size: 12px; font-weight: 600; color: var(--link); cursor: pointer; align-self: flex-start; }
+.acts { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 2px; }
+.btn { border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--line); background: #fff; color: var(--ink); min-height: 36px; }
+.btn.yes { background: var(--ok); border-color: var(--ok); color: #fff; }
+.btn.no { background: #fff; border-color: #e3b4b4; color: var(--pill-ink); }
+.btn.dark { background: var(--navy); border-color: var(--navy); color: #fff; }
+.btn.link { border-color: transparent; background: none; color: var(--link); padding-left: 6px; padding-right: 6px; }
+.btn.quiet { border-color: transparent; background: none; color: var(--ink3); padding-left: 6px; padding-right: 6px; }
+.btn:disabled { opacity: .45; cursor: default; }
+
+/* the composer: text, a title for a bug, images pasted, dropped or picked */
+.comp { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background: #fff; }
+.card .comp { background: #fbfcfd; }
+.comp.drag { border-color: var(--link); background: #f4f8fd; }
+.comp input[type=text], .comp textarea { font: inherit; font-size: 14px; line-height: 1.5; border: 0; outline: none; background: transparent; color: var(--ink); padding: 0; width: 100%; }
+.comp input[type=text] { font-weight: 600; border-bottom: 1px solid var(--line2); padding-bottom: 8px; }
+.comp textarea { resize: vertical; min-height: 64px; }
+.pend { display: flex; gap: 8px; flex-wrap: wrap; }
+.pend:empty { display: none; }
+.thumb { position: relative; width: 96px; aspect-ratio: 16/10; border-radius: 6px; overflow: hidden; background: var(--line); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb.up img { opacity: .45; }
+.thumb.up::after { content: "uploading…"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+.thumb.err { outline: 2px solid var(--red); }
+.thumb button { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(10,26,43,.75); color: #fff;
+  font-size: 14px; line-height: 22px; padding: 0; cursor: pointer; }
+.cbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line2); padding-top: 8px; }
+.cbar label { font-size: 13px; font-weight: 600; padding: 7px 11px; border-radius: 8px; border: 1px solid var(--line); color: var(--link); cursor: pointer; background: #fff; }
+.cbar .tip { font-size: 11.5px; color: var(--ink3); }
+.cbar .go { margin-left: auto; display: flex; gap: 6px; }
+.cerr { font-size: 12px; color: var(--red); }
+.kind { display: inline-flex; gap: 3px; padding: 3px; border-radius: 10px; background: #e6edf2; align-self: flex-start; }
+.kind button { border: 0; background: transparent; border-radius: 7px; padding: 7px 14px; font-size: 13px; font-weight: 600; color: var(--ink2); cursor: pointer; }
+.kind button.on { background: #fff; color: var(--ink); }
+@media (max-width: 599px) {
+  .comp input[type=text], .comp textarea { font-size: 16px; }   /* no zoom on focus (iOS) */
+  .btn { min-height: 40px; }
+  .cbar .tip { display: none; }
+}
+
+#toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--navy); color: #fff; border-radius: 10px; padding: 10px 14px;
+  font-size: 13px; display: none; align-items: center; gap: 14px; z-index: 8; box-shadow: 0 6px 24px rgba(10,26,43,.25); max-width: calc(100% - 32px); }
+#toast button { background: none; border: 0; color: var(--link-dark); font-weight: 700; cursor: pointer; padding: 0; }
+#zoom { position: fixed; inset: 0; z-index: 9; display: none; background: rgba(0,0,0,.94); align-items: center; justify-content: center; padding: 16px 64px; }
+#zoom figure { margin: 0; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+#zoom img { max-width: 100%; max-height: calc(100vh - 90px); border-radius: 8px; }
+#zoom figcaption { color: #e6edf3; font-size: .9rem; text-align: center; }
+#zoom button { position: absolute; background: rgba(255,255,255,.12); color: #fff; border: 0; border-radius: 999px; width: 44px; height: 44px; font-size: 28px;
+  line-height: 44px; cursor: pointer; padding: 0; }
+#zoom .prev { left: 10px; top: 50%; transform: translateY(-50%); }
+#zoom .next { right: 10px; top: 50%; transform: translateY(-50%); }
+#zoom .close { right: 10px; top: 10px; font-size: 24px; }
+@media (max-width: 520px) { #zoom { padding: 16px 8px 72px; } #zoom .prev, #zoom .next { top: auto; bottom: 14px; transform: none; }
+  #zoom .prev { left: calc(50% - 54px); } #zoom .next { right: calc(50% - 54px); } }
+</style>
+</head>
+<body>
+<header class="top"><div class="topIn">
+  <a class="back" href="./">‹ Progress</a>
+  <div class="title"><h1>Testing</h1><span><i id="dot"></i><span id="fresh">Loading…</span></span></div>
+</div></header>
+<nav class="nav"><div class="navIn" id="nav"></div></nav>
+<main>
+  <section id="report">
+    <div class="head"><h2>Report</h2><span class="meta">a bug you found, or a note for the sessions</span></div>
+    <div id="reportBox"></div>
+  </section>
+  <section id="retest">
+    <div class="head"><h2>Retest these fixes</h2><span class="meta" id="retestMeta"></span></div>
+    <p class="hint">Deployed to your copy and waiting for you. Try each in play: <b>Fixed</b> closes it, <b>Still broken</b> sends it back with what you saw.</p>
+    <div class="list" id="retestList"></div>
+  </section>
+  <section id="new">
+    <div class="head"><h2>Check new work</h2><span class="meta" id="newMeta"></span></div>
+    <p class="hint">Finished work-queue items. Have a look in play: <b>Looks right</b>, or <b>Found a problem</b> to report it as a bug.</p>
+    <div class="list" id="newList"></div>
+    <details class="fold" id="newDoneWrap" hidden><summary id="newDoneSum"></summary><div class="list" id="newDoneList"></div></details>
+  </section>
+  <section id="open">
+    <div class="head"><h2>Open bugs</h2><span class="meta" id="openMeta"></span></div>
+    <p class="hint">Still being worked on. Add what you know: a note, a screenshot, an answer to a session's question.</p>
+    <div class="list" id="openList"></div>
+  </section>
+  <section id="notes">
+    <div class="head"><h2>Notes</h2><span class="meta" id="notesMeta"></span></div>
+    <div class="list" id="notesList"></div>
+    <details class="fold" id="notesDoneWrap" hidden><summary id="notesDoneSum"></summary><div class="list" id="notesDoneList"></div></details>
+  </section>
+  <section id="closed">
+    <div class="head"><h2>Verified &amp; closed</h2><span class="meta" id="closedMeta"></span></div>
+    <details class="fold" id="closedWrap"><summary id="closedSum"></summary><div class="list" id="closedList"></div></details>
+  </section>
+</main>
+<div id="toast"><span id="toastText"></span><button id="toastUndo">Undo</button></div>
+<div id="zoom" role="dialog" aria-modal="true" aria-label="Image">
+  <button class="prev" aria-label="Previous image">&#8249;</button>
+  <figure><img alt=""><figcaption id="zoomCap"></figcaption></figure>
+  <button class="next" aria-label="Next image">&#8250;</button>
+  <button class="close" aria-label="Close">&#215;</button>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const COLORS = {bottom: "#1fb8a6", main: "#4A8FE7", top: "#DAA520", web: "#d4548a", qa: "#8494a4", owner: "#0f2233"};
+const color = s => COLORS[s] || "#8494a4";
+let bugs = [], claims = {}, progress = null, notes = [], checks = {}, loaded = false;
+const SHOWN_NOTES = 2;
+
+function ago(t) {
+  const s = Math.max(0, Date.now() / 1000 - t);
+  if (s < 90) return "just now";
+  if (s < 5400) return Math.round(s / 60) + " min ago";
+  if (s < 129600) return Math.round(s / 3600) + " h ago";
+  return Math.round(s / 86400) + " d ago";
+}
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c])); }
+async function get(name) {
+  try { const r = await fetch(name + "?t=" + Date.now(), {cache: "no-store"}); return r.ok ? r.json() : null; }
+  catch (e) { return null; }
+}
+async function api(method, path, body, type) {
+  const r = await fetch(path, {method, body, headers: {"X-WWHD": "1", "Content-Type": type || "application/json"}});
+  let j = null; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error((j && j.error) || `the server said ${r.status}`);
+  return j;
+}
+const post = (path, obj) => api("POST", path, JSON.stringify(obj || {}));
+
+// --- the viewer: buttons, the arrow keys (Esc closes) and a swipe go through one card's images ---
+const zoom = $("zoom");
+let view = [], at = -1;
+function openViewer(list, i) { view = list; show(i); }
+function show(i) {
+  at = (i + view.length) % view.length;
+  zoom.querySelector("img").src = view[at].file;
+  $("zoomCap").textContent = `${at + 1} / ${view.length} · ${view[at].caption}`;
+  zoom.style.display = "flex";
+}
+function closeZoom() { zoom.style.display = "none"; at = -1; }
+zoom.addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (b && b.classList.contains("prev")) show(at - 1); else if (b && b.classList.contains("next")) show(at + 1);
+  else if (b || e.target === zoom) closeZoom();
+});
+document.addEventListener("keydown", e => {
+  if (at < 0) return;
+  if (e.key === "Escape") closeZoom(); else if (e.key === "ArrowLeft") show(at - 1); else if (e.key === "ArrowRight") show(at + 1);
+});
+let touchX = null;
+zoom.addEventListener("touchstart", e => { touchX = e.touches[0].clientX; }, {passive: true});
+zoom.addEventListener("touchend", e => {
+  if (touchX === null) return;
+  const dx = e.changedTouches[0].clientX - touchX; touchX = null;
+  if (Math.abs(dx) > 40) show(at + (dx < 0 ? 1 : -1));
+});
+const imgsHtml = (files, caption) => files && files.length ?
+  `<div class="imgs">${files.map((f, i) => `<img src="${esc(f)}" alt="${esc(caption)} image ${i + 1}" loading="lazy" data-imgs="${esc(JSON.stringify(files))}" data-cap="${esc(caption)}" data-i="${i}">`).join("")}</div>` : "";
+document.addEventListener("click", e => {
+  const img = e.target.closest("img[data-imgs]");
+  if (img) openViewer(JSON.parse(img.dataset.imgs).map(f => ({file: f, caption: img.dataset.cap})), +img.dataset.i);
+});
+
+// --- the undo toast: a verdict is one tap, and one tap takes it back ---
+let toastTimer = null, undoFn = null;
+function toast(text, undo) {
+  $("toastText").textContent = text; undoFn = undo; $("toastUndo").hidden = !undo;
+  $("toast").style.display = "flex"; clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $("toast").style.display = "none"; undoFn = null; }, 6000);
+}
+$("toastUndo").addEventListener("click", async () => {
+  const f = undoFn; $("toast").style.display = "none"; undoFn = null;
+  if (f) { try { await f(); await reload(); } catch (e) { alert("Couldn't undo: " + e.message); } }
+});
+
+// --- the composer: a bug's title (when asked), text, images pasted, dropped or picked (uploaded at once) ---
+async function uploadable(file) {
+  const ok = ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type);
+  if (ok && file.size <= 8 * 1024 * 1024) return file;
+  // a big photo, or a type the server won't take (HEIC from a phone): a JPEG of at most 2560 px
+  const bmp = await createImageBitmap(file), k = Math.min(1, 2560 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas"); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  return await new Promise(res => c.toBlob(res, "image/jpeg", 0.88));
+}
+function composer({placeholder, title, titleValue, submit, label, cancel, needText}) {
+  const el = document.createElement("div");
+  el.className = "comp";
+  const fine = matchMedia("(pointer: fine)").matches;
+  el.innerHTML = `${title ? `<input type="text" placeholder="${esc(title)}">` : ""}<textarea placeholder="${esc(placeholder)}"></textarea>
+    <div class="pend"></div>
+    <div class="cbar"><label>Add image<input type="file" accept="image/*" multiple hidden></label><span class="tip">${fine ? "paste or drop images · Ctrl+Enter" : ""}</span>
+      <span class="go">${cancel ? `<button class="btn quiet" data-c="cancel">Cancel</button>` : ""}<button class="btn dark" data-c="send">${esc(label)}</button></span></div>
+    <div class="cerr" hidden></div>`;
+  const ta = el.querySelector("textarea"), ti = el.querySelector("input[type=text]"), send = el.querySelector("[data-c=send]"), err = el.querySelector(".cerr");
+  if (ti && titleValue) ti.value = titleValue;
+  let pending = [];
+  const busy = () => pending.some(p => p.state === "up");
+  const showErr = m => { err.hidden = !m; err.textContent = m || ""; };
+  const draw = () => {
+    el.querySelector(".pend").innerHTML = pending.map((p, i) => `<div class="thumb ${p.state}"><img src="${p.url}" alt=""><button data-i="${i}" aria-label="Remove image">×</button></div>`).join("");
+    send.disabled = busy();
+  };
+  async function add(files) {
+    for (const f of files) {
+      if (!f || !f.type.startsWith("image/")) continue;
+      const p = {url: URL.createObjectURL(f), state: "up", file: null};
+      pending.push(p); draw();
+      try { const b = await uploadable(f); p.file = (await api("POST", "/api/image", b, b.type)).file; p.state = "ok"; }
+      catch (e) { p.state = "err"; showErr("An image didn't upload: " + e.message); }
+      draw();
+    }
+  }
+  function reset() { ta.value = ""; if (ti) ti.value = ""; pending.forEach(p => URL.revokeObjectURL(p.url)); pending = []; draw(); showErr(""); }
+  async function go() {
+    const text = ta.value.trim(), images = pending.filter(p => p.state === "ok").map(p => p.file), t = ti ? ti.value.trim() : "";
+    if (busy()) return;
+    if (title && !t) { showErr("Give it a short title."); ti.focus(); return; }
+    if (needText && !text && !images.length) { showErr("Say what you saw (or add a screenshot)."); ta.focus(); return; }
+    if (!title && !needText && !text && !images.length) return;
+    send.disabled = true; showErr("");
+    try { await submit({text, images, title: t}); reset(); }
+    catch (e) { showErr("Not saved: " + e.message); }
+    send.disabled = busy();
+  }
+  ta.addEventListener("paste", e => {
+    const files = [...(e.clipboardData ? e.clipboardData.items : [])].filter(i => i.kind === "file").map(i => i.getAsFile()).filter(Boolean);
+    if (!files.length) return;
+    if (!e.clipboardData.getData("text/plain")) e.preventDefault();
+    add(files);
+  });
+  ta.addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); go(); } });
+  el.addEventListener("dragover", e => { e.preventDefault(); el.classList.add("drag"); });
+  el.addEventListener("dragleave", () => el.classList.remove("drag"));
+  el.addEventListener("drop", e => { e.preventDefault(); el.classList.remove("drag"); add([...e.dataTransfer.files]); });
+  el.querySelector("input[type=file]").addEventListener("change", e => { add([...e.target.files]); e.target.value = ""; });
+  el.addEventListener("click", e => {
+    const x = e.target.closest(".thumb button");
+    if (x) { URL.revokeObjectURL(pending[+x.dataset.i].url); pending.splice(+x.dataset.i, 1); draw(); return; }
+    const c = e.target.closest("[data-c]"); if (!c) return;
+    if (c.dataset.c === "send") go(); else if (cancel) cancel();
+  });
+  el.focusFirst = () => (ti && !ti.value ? ti : ta).focus();
+  return el;
+}
+
+// --- the report box: a new bug, or a general note ---
+let reportKind = "bug";
+const reportBox = $("reportBox");
+reportBox.innerHTML = `<div class="kind" id="kind"><button data-k="bug" class="on">Bug</button><button data-k="note">Note</button></div><div id="reportComp"></div>`;
+function drawReport(prefill) {
+  const c = reportKind === "bug" ?
+    composer({title: "What's wrong, in a line (e.g. “Bow: the string arm looks 30 on Outset”)", titleValue: prefill && prefill.title,
+      placeholder: "Where, what you did, what you saw (and what 30 fps does, if you know). Paste or drop screenshots.", label: "Report bug",
+      submit: async r => {
+        const bug = await post("/api/bugs", {title: r.title, details: r.text, images: r.images});
+        if (prefill && prefill.item) await post("/api/checks/" + prefill.item, {state: "problem", bug: bug.id});
+        reportPrefill = null; await reload(); toast(`Reported as ${bug.id}`);
+      }}) :
+    composer({placeholder: "Anything for the sessions: an idea, an impression, a question. Paste or drop screenshots.", label: "Save note",
+      submit: async r => { await post("/api/notes", {text: r.text, images: r.images}); await reload(); toast("Note saved"); }});
+  $("reportComp").replaceChildren(c);
+  return c;
+}
+let reportPrefill = null;
+$("kind").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  reportKind = b.dataset.k;
+  for (const x of $("kind").children) x.classList.toggle("on", x === b);
+  drawReport(reportPrefill);
+});
+drawReport();
+
+// --- cards; an open composer inside a card survives the 20 s refresh (it's kept and put back) ---
+const openComps = {};   // "B12:reopen" -> the composer element
+function compFor(key, opts) {
+  if (!openComps[key]) openComps[key] = composer({...opts, cancel: () => { delete openComps[key]; render(); }});
+  return openComps[key];
+}
+function history(b) {
+  const list = b.notes || [], showAll = expanded[b.id], from = showAll ? 0 : Math.max(0, list.length - SHOWN_NOTES);
+  return `${from > 0 ? `<button class="more" data-more="${esc(b.id)}">Show the earlier ${from} note${from === 1 ? "" : "s"}</button>` : ""}
+    <div class="hist">${list.slice(from).map(n => `<div class="hnote${n.session === "owner" ? " owner" : ""}"><i style="background:${color(n.session)}"></i>
+      <div><span><b>${n.session === "owner" ? "you" : esc(n.session || "?")}</b> ${esc(n.text)} · ${ago(n.time)}</span>${imgsHtml(n.images, b.id)}</div></div>`).join("")}</div>`;
+}
+const expanded = {};
+const label = {open: "open", working: "being fixed", ready: "fixed, awaiting deploy", fixed: "to retest", verified: "verified", wontfix: "won't fix"};
+function bugCard(b, acts) {
+  return `<div class="card" data-bug="${esc(b.id)}">
+    <div class="cardHead"><span class="id">${esc(b.id)}</span><span class="pill ${b.state}">${label[b.state] || b.state}</span>
+      ${b.session ? `<span class="pill">${esc(b.session)}</span>` : ""}<span class="ago">${ago(b.time)}</span></div>
+    <div class="ctitle">${esc(b.title)}</div>
+    ${b.details ? `<div class="ctext">${esc(b.details)}</div>` : ""}${imgsHtml(b.images, b.id)}
+    ${history(b)}
+    <div class="acts">${acts}</div><div class="slot"></div></div>`;
+}
+const queueItems = () => ((progress && progress.queue) || []).map(q => ({...q, c: claims[q.id], name: q.name.replace(/^Round \d+:\s*/, "")}));
+
+function render() {
+  const fixed = bugs.filter(b => b.state === "fixed").sort((a, b) => b.time - a.time);
+  const open = bugs.filter(b => ["open", "working", "ready"].includes(b.state)).sort((a, b) => b.time - a.time);
+  const closed = bugs.filter(b => ["verified", "wontfix"].includes(b.state)).sort((a, b) => b.time - a.time);
+  const done = queueItems().filter(q => q.c && q.c.state === "done").sort((a, b) => b.c.time - a.c.time);
+  const unchecked = done.filter(q => !checks[q.id]), checked = done.filter(q => checks[q.id]);
+  const openNotes = notes.filter(n => !n.done), doneNotes = notes.filter(n => n.done);
+
+  $("nav").innerHTML = [["report", "Report", ""], ["retest", "Retest", fixed.length], ["new", "New", unchecked.length], ["open", "Open", open.length],
+    ["notes", "Notes", openNotes.length], ["closed", "Closed", closed.length]]
+    .map(([id, name, n]) => `<a href="#${id}" class="${n && id !== "closed" ? "hot" : ""}">${name}${n !== "" ? `<span>${n}</span>` : ""}</a>`).join("");
+
+  $("retestMeta").textContent = fixed.length ? `${fixed.length} waiting` : "";
+  $("retestList").innerHTML = fixed.map(b => bugCard(b, `<button class="btn yes" data-act="verify">✓ Fixed</button>
+    <button class="btn no" data-act="reopen">✗ Still broken</button><button class="btn link" data-act="note">Add note</button>`)).join("") ||
+    `<div class="empty">Nothing to retest. Fixes land here once they're deployed to your copy.</div>`;
+
+  $("newMeta").textContent = done.length ? `${unchecked.length} to check · ${checked.length} checked` : "";
+  const qCard = q => {
+    const ck = checks[q.id];
+    return `<div class="card" data-item="${esc(q.id)}">
+      <div class="cardHead"><span class="id q">${esc(q.id)}</span>${ck ? `<span class="pill ${ck.state}">${ck.state === "ok" ? "looks right" : "problem" + (ck.bug ? " · " + esc(ck.bug) : "")}</span>` : ""}
+        <span class="pill">${esc(q.c.session)}</span><span class="ago">done ${ago(q.c.time)}</span></div>
+      <div class="ctext">${esc(q.c.note || q.name)}</div>
+      ${q.c.note ? `<div class="ctext" style="font-size:12.5px;color:var(--ink3)">${esc(q.name)}</div>` : ""}
+      <div class="acts">${ck ? `<button class="btn quiet" data-act="uncheck">Undo</button>` :
+        `<button class="btn yes" data-act="ok">✓ Looks right</button><button class="btn no" data-act="problem">✗ Found a problem</button>`}</div></div>`;
+  };
+  $("newList").innerHTML = unchecked.map(qCard).join("") || `<div class="empty">${done.length ? "All checked." : "Nothing finished in this round yet."}</div>`;
+  $("newDoneWrap").hidden = !checked.length;
+  $("newDoneSum").textContent = `Checked (${checked.length})`;
+  $("newDoneList").innerHTML = checked.map(qCard).join("");
+
+  $("openMeta").textContent = open.length ? `${open.length}` : "";
+  $("openList").innerHTML = open.map(b => bugCard(b, `<button class="btn link" data-act="note">Add note</button><button class="btn quiet" data-act="close">Close it…</button>`)).join("") ||
+    `<div class="empty">No open bugs.</div>`;
+
+  const noteCard = n => `<div class="card" data-note="${esc(n.id)}">
+    <div class="cardHead"><span class="id n">${esc(n.id)}</span>${n.done ? `<span class="pill ok">done</span>` : ""}<span class="ago">${ago(n.time)}${n.edited ? " · edited" : ""}</span></div>
+    ${n.text ? `<div class="ctext" style="color:var(--ink)">${esc(n.text)}</div>` : ""}${imgsHtml(n.images, n.id)}
+    ${(n.replies || []).length ? `<div class="hist">${n.replies.map(r => `<div class="hnote"><i style="background:${color(r.session)}"></i><div><span><b>${esc(r.session)}</b> ${esc(r.text)} · ${ago(r.time)}</span></div></div>`).join("")}</div>` : ""}
+    <div class="acts"><button class="btn link" data-act="ndone">${n.done ? "Reopen" : "Mark done"}</button><button class="btn quiet" data-act="ndelete">Delete</button></div></div>`;
+  $("notesMeta").textContent = notes.length ? `${openNotes.length} open · ${doneNotes.length} done` : "";
+  $("notesList").innerHTML = openNotes.map(noteCard).join("") || `<div class="empty">No notes. Write one under Report; sessions answer them here.</div>`;
+  $("notesDoneWrap").hidden = !doneNotes.length;
+  $("notesDoneSum").textContent = `Done (${doneNotes.length})`;
+  $("notesDoneList").innerHTML = doneNotes.map(noteCard).join("");
+
+  $("closedMeta").textContent = `${closed.length}`;
+  $("closedSum").textContent = closed.length ? `Show ${closed.length} verified or closed` : "None yet";
+  $("closedList").innerHTML = closed.map(b => bugCard(b, `<button class="btn no" data-act="reopen">Reopen</button>`)).join("");
+
+  // put the open composers back into their cards
+  for (const key of Object.keys(openComps)) {
+    const [id] = key.split(":"), card = document.querySelector(`[data-bug="${id}"] .slot`);
+    if (card) { card.replaceChildren(openComps[key]); const acts = card.parentElement.querySelector(".acts"); if (acts) acts.hidden = true; }
+    else delete openComps[key];
+  }
+}
+
+document.querySelector("main").addEventListener("click", async e => {
+  const more = e.target.closest("[data-more]");
+  if (more) { expanded[more.dataset.more] = true; render(); return; }
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const act = b.dataset.act, bugEl = b.closest("[data-bug]"), itemEl = b.closest("[data-item]"), noteEl = b.closest("[data-note]");
+  try {
+    if (bugEl) {
+      const id = bugEl.dataset.bug, bug = bugs.find(x => x.id === id), prev = bug.state;
+      if (act === "verify") {
+        await post(`/api/bugs/${id}/verify`); await reload();
+        toast(`${id} verified`, () => post(`/api/bugs/${id}/retest`));
+        return;
+      }
+      const spec = {reopen: {placeholder: "What did you see? Where, and what you did. Paste or drop screenshots.", label: prev === "fixed" ? "Send back as still broken" : "Reopen", needText: true},
+        note: {placeholder: "A note for this bug: what you saw, an answer, a screenshot.", label: "Add note", needText: true},
+        close: {placeholder: "Why close it? (optional: not a bug, can't see it any more...)", label: "Close bug"}}[act];
+      const key = `${id}:${act}`;
+      const c = compFor(key, {...spec, submit: async r => {
+        await post(`/api/bugs/${id}/${act}`, {text: r.text, images: r.images});
+        delete openComps[key]; await reload();
+        toast(act === "reopen" ? `${id} sent back to the sessions` : act === "close" ? `${id} closed` : `Note added to ${id}`);
+      }});
+      render(); c.focusFirst();
+    } else if (itemEl) {
+      const item = itemEl.dataset.item;
+      if (act === "ok") { await post(`/api/checks/${item}`, {state: "ok"}); await reload(); toast(`${item}: looks right`, () => post(`/api/checks/${item}`, {state: null})); }
+      if (act === "uncheck") { await post(`/api/checks/${item}`, {state: null}); await reload(); }
+      if (act === "problem") {
+        reportKind = "bug"; for (const x of $("kind").children) x.classList.toggle("on", x.dataset.k === "bug");
+        reportPrefill = {title: item + ": ", item};
+        const c = drawReport(reportPrefill);
+        $("report").scrollIntoView({behavior: "smooth"}); setTimeout(() => { const t = c.querySelector("input"); t.focus(); t.setSelectionRange(t.value.length, t.value.length); }, 300);
+      }
+    } else if (noteEl) {
+      const id = noteEl.dataset.note, n = notes.find(x => x.id === id);
+      if (act === "ndone") { await api("PATCH", "/api/notes/" + id, JSON.stringify({done: !n.done})); await reload(); }
+      if (act === "ndelete" && confirm(`Delete note ${id}?`)) { await api("DELETE", "/api/notes/" + id); await reload(); }
+    }
+  } catch (err) { alert("That didn't work: " + err.message); }
+});
+
+async function reload() {
+  const [b, c, p, n, k] = await Promise.all([get("bugs.json"), get("claims.json"), get("progress.json"), get("notes.json"), get("checks.json")]);
+  const ok = !!b;
+  if (b) bugs = b; if (c) claims = c; if (p) progress = p; if (n) notes = n; if (k) checks = k;
+  $("dot").className = ok ? "" : "stale";
+  $("fresh").textContent = ok ? `${bugs.length} bugs reported · updated ${ago(Date.now() / 1000)}` : "can't reach the server";
+  render();
+  if (!loaded && location.hash) { loaded = true; const t = document.querySelector(location.hash); if (t) t.scrollIntoView(); }
+  loaded = true;
+}
+reload(); setInterval(reload, 20000);
+</script>
+</body>
+</html>

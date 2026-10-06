@@ -5,9 +5,11 @@ A small status page for the owner (desktop and phone), served from the worker ho
 
 - `index.html`: the page (no external files). It reads `progress.json`, `sessions.json` (the "working
   on" lines), `shots.json` and `shots-archive.json`, `claims.json` (the queue) and `bugs.json` next to it every 20 seconds.
+- `testing.html`: the owner's testing page: fixed bugs to retest (verified / still broken), new bugs and
+  notes with pasted images, finished queue items to check in play (`checks.json`), general notes (`notes.json`).
 - `server.py`: the server (installed as `.server.py` beside the data by `publish.sh serve`): the files as
-  static, plus the owner's **testing notes**, which the page writes (`notes.json`; pasted images in `notes/`).
-  Sessions read them with `publish.sh notes` and answer with `publish.sh notes reply|done ID TEXT`.
+  static, plus the API the testing page writes through (bugs.json under `.claims.lock` like `publish.sh bug`;
+  images in `notes/`). Sessions read the owner's entries with `publish.sh bug list|show` and `publish.sh notes`.
 - `collect.py`: builds `progress.json` from the repo (default conversions, tick rules, overrides,
   symbols, functions, recent commits) and `plan.json` (milestones, actor groups, known issues).
 - `publish.sh`: `publish.sh` publishes the data and the page; `publish.sh now TEXT` sets the
