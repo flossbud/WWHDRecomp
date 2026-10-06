@@ -2778,6 +2778,15 @@ it in a window; D21 "Step 2"):**
   then unhurt (its cooldown m2C4, +0x3E0, at 5 for good); with the rule gone it takes 30's three hits
   (10 -> 8 -> 6 -> 4), each half a tick before 30's. A rule inside an overridden function that skips its
   half steps is a trap: no other rule is in one (checked against overrides.txt).
+  Link's own damage (scratch linkdmg.sh: an attacker spawned in front of Link idle on the Outset dock, his
+  life from the heap save's player status, 0x145B7B80 low half, at 30 and 60): a Darknut's hit 2 quarter
+  hearts at both, a Bokoblin's and a Keese's 1 a hit, an Octorok's rocks 1 a hit (two hits at both rates,
+  frames within 20 ticks); never doubled, no two drops in a tick, Link's Tg never read on both steps. Hit
+  counts differ where the fight does (a Moblin speared him at f993 at 30 and not at all at 60: its waits and
+  choices are cM_rndF draws, the random stream 60's own). Bosses, read in the decomp: Gohma's eye damage
+  waits for mActionState 0, which the hit sets to 7 (its timers `whole`), Kalle Demos ignores hits while m310
+  runs (8, `whole`, 020AECA8), Jalhalla's sword damage needs mActionState 0x53; none calls cLib_calcTimer<u8>.
+  Not played: their fights need the hookshot, boomerang and light puzzles driven.
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
