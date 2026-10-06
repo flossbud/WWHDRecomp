@@ -39,6 +39,12 @@ WW-4's actor conversion is split between two sessions working side by side:
   other session integrated first: fetch, rebase, check again.
 - Shared code (sixty.cpp, sixty_step.cpp, generate.py, ppc_ops.h, the helpers): change it only
   when needed, say so in the commit, and rerun `regress.sh`: the other session's actors use it too.
+- **The owner's testing notes** (from 2026-10-06): the owner writes what they notice while testing on the
+  progress page ("Testing notes", with screenshots). Read them with `tools/progress/publish.sh notes`
+  at each step; answer under one with `publish.sh notes reply ID "TEXT"` (e.g. "filed as B45", "fixed in
+  abc1234, in the next deploy") and `publish.sh notes done ID "TEXT"` once it's handled. Main triages new
+  ones (a bug: `publish.sh bug add`, then reply with its id); an image is at the URL the list prints
+  (game data: look at it in a scratchpad, then delete it).
 - **Usage: wrap up at 75% of the week** (the owner's rule from 2026-10-06; it replaces "stop at 50%").
   The Claude account's usage is on the progress page (the sidebar; the phone's Now tab) and in
   `curl -s http://WORKER_ADDR:8765/usage.json` (`weekly_all`'s `percent`, every 5 minutes). Below
