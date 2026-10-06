@@ -3036,11 +3036,11 @@ it in a window; D21 "Step 2"):**
   route and their own half-step draws).
 
 - **Session bottom: the queue's "census-left" (round 7, 2026-10-06; done; `tick_rules/census_left.txt`)**: all 24
-  types made or explained. Converted (7): Phantom Ganon 241, Makar 334, Dk 167, Mt 379, Co1 370 (`sy:1=0`: made only
+  types made or explained. Converted (8): Phantom Ganon 241, Makar 334, Dk 167, Mt 379, Co1 370 (`sy:1=0`: made only
   before symbol 1; its texture and blink frames `keep`, a sway `split`), Rcloud 141 (`ev:3908=0`), Ss 251 (`sw:22=0`; its
-  tick count and its hands' counts `whole`). Made and left at 30: still (Vfan 54, MknjD 77, Eskban 160, Kanat 163, Wall
-  429, VmsMS 155, agbTBOX 433), moving only in its cutscene (VgnFD 158), riding a moving ground whose ride doubles on
-  half steps (itemDek 260, f_024F5B78). Never a process (they hand themselves to a system or spawn something): Obj_Wood
+  tick count and its hands' counts `whole`), itemDek 260 (`im:2=0`; it rides a moving ground: see "rides"). Made and left
+  at 30: still (Vfan 54, MknjD 77, Eskban 160, Kanat 163, Wall 429, VmsMS 155, agbTBOX 433), moving only in its cutscene
+  (VgnFD 158). Never a process (they hand themselves to a system or spawn something): Obj_Wood
   266, magma 434, Bitem 256. Not reached: Yfrlt00 393 (Omori layer 7 doesn't load from a warp). Tags: skipped (kytag5
   388, Quake 32) or still (TagCb12 419, Hsh2 290). The flags each needed are in the rules file. The first part:
   the placed types no test had made, made with WWHD_DEBUG_FLAGS (above), PLACE and SPAWN. **Phantom Ganon**
@@ -3064,6 +3064,22 @@ it in a window; D21 "Step 2"):**
   and eqwhole.txt (22 with disassembly) found each compare's register loaded from its field on every path.
   Session top's fishman (118) parts from 30 on its first stepped tick at Outset (its height snaps by 26 units:
   the ground check's water fields, `only half` in the trial): sent to top.
+
+- **Session bottom: the queue's "rides" (round 7, 2026-10-06; `rides` in plan.json)**: a rider on a moving ground at 60.
+  The ground's move (dBgW's TransPos, CrrPos, MatrixCrrPos: f_024F5CBC's per-triangle transform f_024F5B78 maps a
+  rider's place from the ground's old vertices to its new) is applied only while the ground's move flag is up
+  (dBgS::MoveBgTransPos...), and the flags are cleared in the scene's draw (ClrMoveFlag 025AF944: a `whole` rule).
+  So a stepping rider takes a stepping ground's move in each step (each half of it), and a 30 Hz ground's move once, at
+  its whole step (right in total; its ground and it move at 30 together). Checked: Link placed on Beedle's ship at
+  Outset (OBJ_IKADA 68, converted: bobbing, rocking, then sailing 600 units) keeps his place on it at both rates
+  (`WWHD_DEBUG_PLACE=1000:-203566,500,311654`, save route; within the landing's 5 units, not growing), and a spawned
+  pot (TSUBO 453) on its deck rides with it within 5 units of 30's world place (the ship turning). A 30 Hz rider on
+  a stepping ground loses the ground's half-step moves (each half step's move replaces the last before its next
+  whole step): Link unconverted on the ship slid 58 units in 375 ticks. Nothing that rides is unconverted now (Link,
+  items, enemies); a type converted later that rides one is right, one left at 30 would slide (the fix would be
+  the ground's vertices at the last whole step as the old ones for a whole-tick rider). The step-doubling trial
+  shows every ride twice (its two half steps both take the ground's move: no scene draw between them), so
+  trial_filter (tests/common.sh) leaves f_024F5B78 out; itemDek (260) was such a case and is converted.
 
 - **Session main: sail's launch (predeploy's sail, WARN ~51)**: from session top's look. At 60 the boat sets sail in
   the half step of f1119, a tick-half before 30's f1120; the 19 units gained then are most of the route's lag.

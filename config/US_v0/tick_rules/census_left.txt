@@ -117,9 +117,10 @@
 0248AF28    whole       sth             ss execute (f_0248ADE8): its tick count (+0x3DC) + 1
 0248C30C    whole       stb             ss execute: a hand's count (+0x3A of each of ten, 0x58C apart) + 1 up to 10 (tested < only)
 #
-# ---- The rest, left at 30: itemDek (260, Forest Haven layers 0/1, WWHD_DEBUG_FLAGS=im:2=0: made while its item bit,
-# params & 0xFF, is untaken and event 1801 set) moves with a moving ground (the ride transform f_024F5B78 writes its
-# pos.x/z, twice a tick in the trial: the ground's move applied on both steps), so it waits for rides on a stepping
-# ground; agbTBOX (433, kindan room 14, sw:120=0: its switch (params >> 16) & 0xFF) is still. Yfrlt00 (393, Omori's
+# ---- itemDek (260, Forest Haven layers 0/1, WWHD_DEBUG_FLAGS=im:2=0: made while its item bit, params & 0xFF, is untaken
+# and event 1801 set) moves with a moving ground (the ride transform f_024F5B78 writes its pos.x/z): twice a tick in the
+# trial, whose half steps both take the ground's move, but once at 60 (the ground's move flag is cleared in the whole
+# tick's scene draw; the "rides" item), 0 apart with it converted: converted, no rules.
+# ---- The rest, left at 30: agbTBOX (433, kindan room 14, sw:120=0: its switch (params >> 16) & 0xFF) is still. Yfrlt00 (393, Omori's
 # SCO7) isn't reached: a warp to Omori layer 7 doesn't load (its create checks nothing). The tags (kytag5 388, Quake
 # 32) are skipped and TagCb12 (419) and Hsh2 (290), spawned, are still.
