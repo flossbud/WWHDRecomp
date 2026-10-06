@@ -1,0 +1,19 @@
+# Route: Dragon Roost Cavern's water jars (session top, the work queue's "dungeons2"): a stage warp to M_NewD2's
+# room 8 (spawn 14), a water jar (TSUBO 453, Kmtub) spawned in front of Link, placed by the lava channel; A lifts
+# it, A throws it into the lava: it breaks (dWpotWater 23, the splash) and the lava under it hardens, a magma
+# rock (Obj_Magmarock 42) at f1065 (a camera event holds Link to f1170); Link walks off the edge, jumps (0x24)
+# and lands on the rock. At 60 (ww-4 16e0faf): the jar, the splash and the rock in 30's ticks, the rock 1.1 units
+# from 30's; the jump half a tick early and its landing a tick early (Link's landing reactions: "landings").
+# Thrown from 100 units further back the jar breaks on the floor's edge at 60 and in the lava at 30: its arc
+# grazes the edge between two of 30's ticks, which 60's whole step samples (finer collision sampling).
+# FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_STAGE=920:M_NewD2,14,8,-1
+#env WWHD_DEBUG_PLACE=1000:440,4100,4550
+#env WWHD_DEBUG_SPAWN=990:453,727fff3f,440,4100,4610
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; the warp at f920
+1010 A 3       # the jar lifted
+1050 A 3       # thrown into the lava: a magma rock
+1175 LUP 40    # off the edge, a jump onto the rock

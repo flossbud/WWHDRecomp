@@ -4,6 +4,9 @@
 # him, once the warp-in is over (WWHD_DEBUG_PLACE doesn't move Link after a stage warp; walks are camera-relative):
 # WWHD_DEBUG_POKE=1100:367,314,4,c5dac000;1100:367,318,4,c3160000;1100:367,31c,4,45afa000;1100:367,32a,2,0
 # FRAME BUTTONS [FRAMES_HELD]; game frames.
+#env WWHD_DEBUG_COMPANION=1
+#env WWHD_DEBUG_STAGE=920:M_Dai,0,0,-1
+#env WWHD_DEBUG_POKE=1100:367,314,4,c5dac000;1100:367,318,4,c3160000;1100:367,31c,4,45afa000;1100:367,32a,2,0
 420 A 5        # title screen
 540 A 5        # Controller Selection
 660 A 5        # File Selection

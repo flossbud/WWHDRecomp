@@ -1,0 +1,14 @@
+# Route: a Beamos in the Tower of the Gods (session top, the work queue's "dungeons2"): a stage warp to Siren's
+# room 6 (spawn 0, facing its Beamos 1112 units ahead: Bemos 233, Hmos2), Link walks toward it and stops 600
+# units off; its eye charges, the beam (232) fires and knocks him back (0x68 at f1048, his get-up 0x69 at f1057).
+# At 60 (ww-4 16e0faf + dungeons2) his actions on 30's ticks, 10.5 units at the end; the beam's scorches (Hot_Floor
+# 231, unconverted: it heats 5 an execute while the beam is on it, cools 0.4) come a tick early and the second
+# lives 5.5 ticks longer (the beam's half steps sweep it once more); the Beamos's body read its Tg hit on both steps
+# (its sparks and hit sound twice a tick; now once, tower.txt). FRAME BUTTONS [FRAMES_HELD]; the #env lines are
+# exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_STAGE=920:Siren,0,6,-1
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; the warp at f920
+1000 LUP 30    # toward the Beamos; it fires

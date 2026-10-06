@@ -1,0 +1,14 @@
+# Route: a trial in Ganon's Tower (session top, the work queue's "dungeons2"): GanonB, the Dragon Roost trial (a lava
+# corridor: grapple stakes KUI 250 high over it, Bubbles round them, magma rocks Magrock 42 bobbing in the lava). A
+# stage warp to its room 0 (spawn 0: Link walks in, stops at f1010), then placed over the first magma rock: he lands
+# on it (0x25, f1030) and rides its bob. (The first stake is 1800 units from where the walk-in stops, out of the
+# hook's reach: the swing isn't driven.) At 60 (ww-4 16e0faf + dungeons2) 5.7 units at the end, 29.5 at most: the
+# walk-in ends 1.5 ticks early, the landing a tick early (Link's landing reactions: "landings"), and the rocks'
+# bob drifts up to 23 units from 30's after he lands (their half steps stop for f1030-1037, an event's edge?).
+# FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_STAGE=920:GanonB,0,0,-1
+#env WWHD_DEBUG_PLACE=1020:-5,-380,-2385
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; the warp at f920, then the walk-in

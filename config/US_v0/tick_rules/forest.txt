@@ -29,6 +29,8 @@
 # while the count is 1, which both steps of the tick would see).
 0218474C    whole       sth             jbo execute: mFramesUntilJump (+0x3DA) - 1
 02184564    split@r0    add             jbo jbo_draw_SUB: mAnimRotation (+0x3DC) += mAnimationSpeed
+# The flag is one of Link's one-shot flags: set in the bud's whole step, his half step leaves it to his next whole
+# step (sixty.cpp's execute override, "Link's one-shot flags"; route fwbud).
 02184884    whole       stw             jbo jbo_move: onForceVomitJump, Link's flag (+0x3BC |= 0x10)
 #
 # ---- trees (Lwood, process 407, d_a_lwood.cpp: "Object - Normal tree"): mTimer + 1 a tick; WWHD sways

@@ -52,10 +52,15 @@ route_info() {
         armor) route=armor-100.txt     frames=1350  save=/wwhd/data/saves/wwhd_100 trace= ;;
         mirror) route=mirror-100.txt   frames=1150  save=/wwhd/data/saves/wwhd_100 trace= ;;
         arrows) route=arrows-100.txt   frames=1480  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        drcjar) route=drcjar-100.txt   frames=1320  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        fwbud) route=fwbud-100.txt     frames=1280  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        tgbeam) route=tgbeam-100.txt   frames=1300  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        wtspring) route=wtspring-100.txt frames=1300 save=/wwhd/data/saves/wwhd_100 trace= ;;
+        gtrock) route=gtrock-100.txt   frames=1250  save=/wwhd/data/saves/wwhd_100 trace= ;;
         sail)  route=sail-100.txt      frames=2940  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/sail-det/a.zst ;;
         menus) route=menus-100.txt     frames=1920  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/menus-det/a.zst ;;
         warp)  route=warp-100.txt      frames=3780  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/warp-det/a.zst ;;
         *) return 1 ;;
     esac
 }
-route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows"
+route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock"

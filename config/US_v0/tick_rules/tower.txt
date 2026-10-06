@@ -10,6 +10,9 @@
 # Beamos spawned facing Link on the Outset dock: WWHD_DEBUG_SPAWN=950:233,00000002,-201622,168,311893).
 # keep on each add: the compare after it sees the tick's count on half ticks
 02327334    split@r10   add             bemos: its head's angle (+0x3B6) += its turn speed (+0x88A)
+# its body's Tg hit (mCyl +0x58C: sparks and a hit sound a read, HitEff_hibana and HitSeStart) read on both steps
+# of a tick at 60 (session top, dungeons2: route tgbeam, Siren room 6, f1048-1055): the half step reads none
+023260F0    whole:r3=0  bl 025162a4     bemos _execute (f_02326020): mCyl's Tg hit, its sparks and sound once a tick
 023269D0    keep:r12    addi            bemos blue_eye_charge: ++m6AC (>= 5: the beam)
 02326AE0    keep:r11    addi            bemos blue_eye_charge: m6AE + 1 (charging)
 02326C3C    keep:r10    addi            bemos blue_eye_charge: m6AC - 1 (Link out of range)

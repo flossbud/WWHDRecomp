@@ -1,0 +1,15 @@
+# Route: the Forbidden Woods' baba buds and the Deku Leaf (session top, the work queue's "dungeons2"): a stage warp
+# to kindan's room 9 (spawn 0), Link placed 140 units in front of a baba bud (JBO 213) and walked into it: he hops
+# in (0x96), waits inside (0x97), the bud launches him (0x98, f1104), X opens the Deku Leaf (0x93, f1115) and he
+# glides onto the ledge (0x25, f1128). At 60 the launch was half a tick early (the bud's flag on Link set in its
+# whole step reached his half step: Link's one-shot flags, sixty.cpp) and the glide's first step half a tick
+# early (the action hold's list: 0x93); now the launch arc is 30's and the glide within 0.3 units, landing on
+# 30's tick. FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_STAGE=920:kindan,0,9,-1
+#env WWHD_DEBUG_PLACE=1000:-516,6052,-8296
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; the warp at f920
+1010 LUP 15    # into the bud
+1115 X 3       # the Deku Leaf as the launch tops out: a glide onto the ledge

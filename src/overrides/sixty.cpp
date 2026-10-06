@@ -323,8 +323,10 @@ namespace
 	// the actions whose set-up in his action call holds the half step's call: the turn in place (0x17,
 	// procWaitTurn, set up from waiting or moving by checkNextMode with no turn that tick at 30) and waiting
 	// (4, set up when a turn or a move ends, its own step, the stick's check, coming the next tick at 30)
-	// and the slash while moving (0x42, procCutF: predeploy's plants 45.5 -> 37.0 units, the rest unchanged). Tried
-	// and not held: 0x24 (procAutoJump: no change) and 0x36 (procSwimWait: swing 70 -> 137).
+	// and the slash while moving (0x42, procCutF: predeploy's plants 45.5 -> 37.0 units, the rest unchanged), and the
+	// Deku Leaf's glide (0x93, procFanGlide: set up from a jump with X, its first step sets its lift, at 30 the next
+	// tick: route fwbud's glide 10-15 units low, missing the ledge 30 catches; now within 0.3 units, session top's
+	// dungeons2). Tried and not held: 0x24 (procAutoJump: no change) and 0x36 (procSwimWait: swing 70 -> 137).
 	// WWHD_60FPS_HOLDEXTRA=a,b,... (hex action numbers): more of them, to try (the drifts item)
 	bool HoldsAfter(uint32 action)
 	{
@@ -340,7 +342,8 @@ namespace
 				}
 			return v;
 		}();
-		return action == 0x17 || action == 4 || action == 0x42 || std::find(extra.begin(), extra.end(), action) != extra.end();
+		return action == 0x17 || action == 4 || action == 0x42 || action == 0x93 ||
+			std::find(extra.begin(), extra.end(), action) != extra.end();
 	}
 	bool s_linkActionChanged = false;                 // by his action call in the last whole step
 	uint32 s_linkActionAtCall = 0;
@@ -2883,6 +2886,25 @@ namespace
 	}
 }
 
+// Link's one-shot flags (daPy_py_c::mNoResetFlg1, WWHD's +0x3BC: FORCE_VOMIT_JUMP 0x10, FORCE_VOMIT_JUMP_SHORT
+// 0x10000, 0x4, 0x10000000): set by other processes for his next execute, which reads them and clears them at its
+// end (d_a_player_main.cpp's execute, offNoResetFlg1 of these four). One set in a whole step after his reached his
+// half step, half a tick before 30's next tick: a baba bud's launch (JBO 213 sets FORCE_VOMIT_JUMP; procVomitWait,
+// checkNextMode) came half a tick early, 30 units high at the pairing, and the Deku Leaf's glide after it landed
+// 2 ticks late (session top, dungeons2: route fwbud). His half step leaves the ones set since his whole step to his
+// next whole step: hidden while it runs, put back after it. WWHD_60FPS_ONESHOT=0 (a probe): as before.
+namespace
+{
+	constexpr uint32 kLinkNoResetFlg1 = 0x3BCu;
+	constexpr uint32 kLinkOneShot = 0x10u | 0x10000u | 0x4u | 0x10000000u;
+	uint32 s_oneShotAfterWhole = 0;                 // what of them his last whole step left
+	bool OneShotDefer()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ONESHOT"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+}
+
 // fpcM_Execute: every process's execute goes through it (fpcM_Management's execute pass, f_025DE788):
 // actors, the camera, the environment, the HUD and menus, scenes. Noted for the half ticks' rollback.
 uint32 g_rtActor = 0;                               // the process whose execute runs (rt_step_fall's)
@@ -3110,7 +3132,19 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	}
 	const uint32 rndOuter = s_rndExec;
 	s_rndExec = proc;                               // its draws are its own (the random stream, f_02019788)
+	uint32 oneShotHidden = 0;                       // Link's one-shot flags set since his whole step (above)
+	if (link && g_rtHalfTick && OneShotDefer())
+	{
+		const uint32 f = rd32(proc + kLinkNoResetFlg1);
+		oneShotHidden = f & kLinkOneShot & ~s_oneShotAfterWhole;
+		if (oneShotHidden)
+			wr32(proc + kLinkNoResetFlg1, f & ~oneShotHidden);
+	}
 	orig_f_025DE58C(ctx);
+	if (oneShotHidden)
+		wr32(proc + kLinkNoResetFlg1, rd32(proc + kLinkNoResetFlg1) | oneShotHidden);
+	else if (link && !g_rtHalfTick)
+		s_oneShotAfterWhole = rd32(proc + kLinkNoResetFlg1) & kLinkOneShot;
 	s_rndExec = rndOuter;
 	if (!g_rtHalfTick && RndSync())
 		RndFlush(proc);                             // its half step's draws its whole step didn't make again

@@ -3160,6 +3160,44 @@ it in a window; D21 "Step 2"):**
   setAnm draws when the frame is within 1 of the end: at f907 30's frame stepped over that window, 60's half
   step landed in it. Frame-window draws are that fragile; not pursued.
 
+- **Session top: the queue's "dungeons2" (round 8, 2026-10-06)**: a route per dungeon's mechanics, 30 against 60, in
+  predeploy's default list (each warps, places, spawns and pokes by its `#env` lines). **drcjar** (Dragon Roost
+  Cavern room 8: a water jar Kmtub spawned before Link, thrown into the lava: dWpotWater 23's splash makes a magma
+  rock Magrock 42, a camera event holds Link to f1170, he jumps onto the rock): the jar, splash and rock in 30's
+  ticks (the rock 1.1 units off); the jump half a tick early and its landing a tick early (Link's landing reactions,
+  session bottom's "landings"). Thrown 100 units further back the jar broke on the floor's edge at 60 and in the
+  lava at 30: its arc grazes the edge between two of 30's ticks, which 60's whole step samples (finer collision
+  sampling; any thrown or falling thing can). **fwbud** (the Forbidden Woods room 9: Link walked into a baba bud JBO
+  213, launched, the Deku Leaf, a glide onto a ledge): the launch came half a tick early: the bud sets Link's
+  FORCE_VOMIT_JUMP (+0x3BC 0x10) in its whole step, his half step took it (it's one of four one-shot flags his
+  execute clears at its end: FORCE_VOMIT_JUMP, its SHORT form, 0x4, 0x10000000); now his half step leaves the ones
+  set since his whole step to his next whole step (sixty.cpp, "Link's one-shot flags"; WWHD_60FPS_ONESHOT=0 as
+  before; a `whole:r3=0` on procVomitWait's launch lost the launch: the half step had cleared the flag, and `late`
+  on the bud's store never stored it: the bud's whole step had left the state). The glide's first step was half a
+  tick early too (its set-up in the whole step's action call, its lift set by the half step): 0x93 joins the action
+  hold's list (sixty.cpp HoldsAfter). Now the launch arc is 30's and the glide within 0.3 units, landing on 30's
+  tick; predeploy's other routes unchanged. **tgbeam** (the Tower of the Gods room 6: walking at a Beamos, its beam
+  knocks Link back): his actions on 30's ticks; the Beamos's body read its Tg hit on both steps (sparks and its hit
+  sound twice a tick; `whole:r3=0`, tower.txt); the scorches (Hot_Floor 231, unconverted: +5 heat an execute while
+  the beam is on it, -0.4 off) come a tick early and one lives 5.5 ticks longer (the beam's half steps sweep it once
+  more): left. The tower's water (Obj_Tide 39 in rooms 0-5) rises and falls on its own (the environment's schedule
+  bit, SetSchbit; Tag_Waterlevel 471's level, the tide's height a function of it): at 60 it runs one tick ahead,
+  smoothly (the tide executes before the tag, so its half step reads the level the tag moved in that tick's whole
+  step); holding its half step's read would make the water move at 30 Hz: left. The statues and the Command
+  Melody (NPC_OS 314, conducted in 3/4) aren't driven. **wtspring** (the Wind Temple room 15, no enemies; a
+  springboard Obj_Jump 166 spawned there: its model is the temple's own, it doesn't spawn on Outset): climb on,
+  Iron Boots on (it sinks), off (it launches him), land on it: every action in 30's ticks, the launch arc 30's,
+  1.3 units at the end; the board's rise at the release 24.8 units off for a tick (its ride). Room 5's has a
+  Floormaster by it (it grabbed Link). **medli** (session main's: Medli carried and thrown at the Earth Temple's
+  entrance; its env now `#env` lines): one walk start half a tick early, 25.2 at the end. The Earth Temple's light
+  (its shafts Tag_Light 1, receivers Tag_Light 2 on the light faces Obj_Mkie 75) on this save: room 2's reflection
+  works (nine ChuChus in it), room 16's puzzle is solved; Medli's harp needs the Command Melody: not driven. The
+  Mirror Shield's reflection is route mirror's. **gtrock** (Ganon's Tower, GanonB: the Dragon Roost trial; Link
+  placed over a magma rock rides its bob): 5.7 units at the end, 29.5 at most: the walk-in after the warp ends 1.5
+  ticks early, the landing a tick early (landings), and the rocks' bob drifts up to 23 units after he lands (their
+  half steps stop for f1030-1037: an event's edge?). The trial's first grapple stake is out of the hook's reach
+  from where the walk-in stops. The Forbidden Woods' boomerang switches (SW_HIT0 451, room 13, 480 units above the
+  floor) weren't hit: the boomerang's aim wasn't steered blind there.
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.
