@@ -20,3 +20,7 @@
 # night). Not created in a test, so left at 30 (their blink rules wait above): Aryll LS1 321 and YM1 315
 # (sea_E's cutscenes), HI1 377 (kenroom's cutscene), Carlov MT 379, and P2 323, KM1 333, BTSW 349/350, PM1 354,
 # PF1 356, CO1 370, SV 378 (placed in no stage file: spawned by others).
+#
+# Aryll (NPC_LS1 321, d_a_npc_ls1.cpp), route stolen (her cutscene, bottom's setup): a count (+0x8F0, u8) + 1 a
+# step up to a limit a call returns (f_022801BC): kept on half steps.
+0228030C    keep:r8     addi            ls1: a count (+0x8F0) + 1 to its limit
