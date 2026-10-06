@@ -3243,6 +3243,19 @@ it in a window; D21 "Step 2"):**
   - **N12, Ganondorf's animations "still 30fps"**: four windows of the cutscene (Link's close-up f1290, the laugh
     f6390, Zelda f7290, the swords f7890) captured at 30 and 60: hz30 finds no block at 30 Hz, and the whole
     frames equal 30's at its ticks. Not found yet.
+  - **B57, the follow camera behind 30's in long turns (from session top's N4 movement routes; open)**: movecircle's
+    first circle ends with the camera's control angle (+0x2B4) 7.3 degrees behind 30's, moveangle's octagon
+    drifts to -10. Tried: (1) `WWHD_60FPS_CAMTICK=1` (the camera's tick replayed whole on the half tick): the
+    circle -0.6 (the drift is the camera's half steps), the octagon unchanged (Link's path there parts at his
+    ledge hops), predeploy (50 routes, 2026-10-06): tour 11 -> 284 and land 82 -> 306 (FAIL), plants 9 -> 68,
+    medli 25 -> 52, ladder 2 -> 42, sidle 62 -> 114; slope 29 -> 3, boots 12 -> 2, pot 8 -> 3. In tour the
+    exact camera turns away from 30's on the first straight walk (-0.5 degrees by f1000, -0.9 by f1040; the
+    stepped one stays within 0.1) and Link's walk drifts 43 units with it: Link at 60 walks a third of a tick
+    behind 30 from his first steps (f966-970: 30's tick k between 60's keys 2k+1 and 2k+2, ~4 units at 14.5 a
+    tick), and the exact camera follows that Link exactly. So the camera's exactness needs Link's walk phase
+    first. (2) the approaches' factor for a moving target (h k / (1 - k + h k), which keeps a steady pursuit's
+    lag 30's) on the camera's steps: the circle -6.6, the octagon no better. (3) Link's half step reading the
+    camera's control angle as the tick began: the circle -11.6. Neither kept.
 - **Session main: sail's launch (predeploy's sail, WARN ~51)**: from session top's look. At 60 the boat sets sail in
   the half step of f1119, a tick-half before 30's f1120; the 19 units gained then are most of the route's lag.
   The trigger is the ship's own mast animation (daShip's mpBodyAnm, frame >= 7 / checkFrame(7)), played in its
