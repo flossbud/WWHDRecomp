@@ -70,3 +70,4 @@
 025291C8    src/overrides/sixty.cpp            dDemo_manager_c::update, a cutscene's tick: its values at age - 1/2 for the whole step at 60 fps (D21, cutscenes)
 02872DFC    src/overrides/sixty.cpp            the HD UI layouts' AnimTransform frame step: notes those playing, for the half tick's step (D21, ui30)
 02002C90    src/overrides/sixty.cpp            the HD UI's per-screen update: notes the screens, for the half tick's calculate (D21, ui30)
+02019788    src/overrides/sixty.cpp            cM_rnd: each draw logged under WWHD_DEBUG_RNDLOG=path (frame, half tick, process, caller, state; a test aid)

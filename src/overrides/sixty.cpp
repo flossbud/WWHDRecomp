@@ -2435,6 +2435,106 @@ void f_025162A4(PPCInterpreter_t* __restrict ctx)
 	HitRead(obj, 1, GPR(3) != 0);
 }
 
+// ---- the random stream's draws (session bottom's "testaids") --------------------------------------------
+// WWHD_DEBUG_RNDLOG=path (a probe): every cM_rnd draw (f_02019788; cM_rndF and cM_rndFX call it), at 30 too:
+// game frame, half tick, the executing process's name, the caller, the state before it (Wichmann-Hill's three
+// seeds at 0x101FF9D4); two runs' logs side by side show where 60's stream parts from 30's.
+// A half tick's draws are put back after its frame (f_0274C264, below), so a converted process's draw on its
+// half step takes the number the next whole tick will draw again, and the stream moves only on whole ticks.
+// What still parts it from 30's: a draw that moved to the half step (a state changed there and drew; at 30 it
+// draws in the next tick, at 60 not again in the whole step). WWHD_60FPS_RNDSYNC=0 turns off what follows: such a
+// draw is made up for, the stream moved one on when the whole tick's frame is over, once for each half-step
+// draw (its caller) a process didn't make again in its whole step, execute or draw (one it did is a draw
+// each step), so the next tick starts where 30's does (within the tick a process after it still draws a
+// number early).
+extern uint32 g_rtActor;
+namespace
+{
+	bool RndSync()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_RNDSYNC"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	std::unordered_map<uint32, std::vector<uint32>> s_rndHalf;   // a stepping process's half-step draws (callers)
+	uint64 s_rndMadeUp = 0;
+	FILE* RndLog()
+	{
+		static FILE* f = [] { const char* e = getenv("WWHD_DEBUG_RNDLOG"); return e ? fopen(e, "w") : nullptr; }();
+		return f;
+	}
+	void RndAdvance(uint32 n)
+	{
+		uint32 r0 = rd32(0x101FF9D4u), r1 = rd32(0x101FF9D8u), r2 = rd32(0x101FF9DCu);
+		for (uint32 i = 0; i < n; i++)
+		{
+			r0 = (uint32)(((int)r0 * 171) % 30269);
+			r1 = (uint32)(((int)r1 * 172) % 30307);
+			r2 = (uint32)(((int)r2 * 170) % 30323);
+		}
+		wr32(0x101FF9D4u, r0);
+		wr32(0x101FF9D8u, r1);
+		wr32(0x101FF9DCu, r2);
+		s_rndMadeUp += n;
+		if (FILE* f = RndLog(); f && n)
+			fprintf(f, "%u %d A %u\n", wwhd::rt::GameFrame(wwhd::os::SwapCount()), g_rtHalfTick ? 1 : 0, n);
+	}
+	// a process's whole step is over: its half step's draws that didn't come again, made up for
+	void RndFlush(uint32 proc)
+	{
+		const auto it = s_rndHalf.find(proc);
+		if (it == s_rndHalf.end())
+			return;
+		if (FILE* f = RndLog(); f && !it->second.empty())
+			fprintf(f, "%u %d F %d %u\n", wwhd::rt::GameFrame(wwhd::os::SwapCount()), g_rtHalfTick ? 1 : 0,
+				(int)rd16(proc + 0x08), (uint32)it->second.size());
+		RndAdvance((uint32)it->second.size());
+		s_rndHalf.erase(it);
+	}
+	void RndFlushAll()
+	{
+		for (const auto& [proc, callers] : s_rndHalf)
+		{
+			if (FILE* f = RndLog(); f && !callers.empty())
+				fprintf(f, "%u %d F* %d %u\n", wwhd::rt::GameFrame(wwhd::os::SwapCount()), g_rtHalfTick ? 1 : 0,
+					(int)rd16(proc + 0x08), (uint32)callers.size());
+			RndAdvance((uint32)callers.size());
+		}
+		s_rndHalf.clear();
+	}
+}
+void f_02019788(PPCInterpreter_t* __restrict ctx)
+{
+	FILE* const f = RndLog();
+	if (!f && !(RndSync() && g_rtSixty))
+		[[clang::musttail]] return orig_f_02019788(ctx);
+	const uint32 actor = g_rtActor, lr = (uint32)ctx->spr.LR;
+	const bool live = actor >= 0x10000000u && actor < 0x50000000u;
+	if (f)
+		fprintf(f, "%u %d %d %08x %08x %08x %08x\n", wwhd::rt::GameFrame(wwhd::os::SwapCount()), g_rtHalfTick ? 1 : 0,
+			live ? (int)rd16(actor + 8) : -1, lr, rd32(0x101FF9D4u), rd32(0x101FF9D8u), rd32(0x101FF9DCu));
+	if (RndSync() && g_rtSixty)
+	{
+		if (g_rtHalfTick)
+		{
+			const auto st = s_stepping.find(actor);     // (a half step's own draws: not its draw's)
+			if (live && s_drawing == 0 && st != s_stepping.end() && st->second && Converted(rd16(actor + 8)))
+				s_rndHalf[actor].push_back(lr);
+		}
+		else
+		{
+			// drawn on the whole tick too, in its execute or its draw: a draw a step, nothing to make up
+			const uint32 owner = s_drawing ? s_drawing : actor;
+			if (const auto it = s_rndHalf.find(owner); it != s_rndHalf.end())
+			{
+				auto& callers = it->second;
+				if (const auto c = std::find(callers.begin(), callers.end(), lr); c != callers.end())
+					callers.erase(c);
+			}
+		}
+	}
+	orig_f_02019788(ctx);
+}
+
 // fw_procFrame, sead's procFrame_: one whole frame (the tick, the draw, the present, the vsync wait).
 // At 60 fps it decides whether the frame is a whole or a half tick (see the top); with the store
 // census on, a half tick's frame is watched from end to end.
@@ -2449,6 +2549,8 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		wwhd_SetSwapInterval(1);                       // from here on the game presents every vsync
 		cemuLog_log(LogType::Force, "wwhd sixty: 60 fps from swap {}", swap);
 	}
+	if (RndSync() && g_rtSixty && !g_rtHalfTick)
+		RndFlushAll();                              // the whole tick's steps and draws are over (the random stream)
 	g_rtHalfTick = swap >= from && (swap - from) % 2 != 0;
 	g_rtSixty = swap >= from;
 	if (!g_rtHalfTick)
@@ -2618,28 +2720,34 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	const uint32 from = wwhd::rt::SixtyFrom();      // ~0 when 60 fps is off
 	const uint32 proc = GPR(3);
 	g_rtActor = proc;
+	if (FILE* f = RndLog(); f && !g_rtHalfTick)     // (the probe: the stream as each whole step begins)
+		fprintf(f, "%u 0 E %d %08x %08x %08x\n", wwhd::rt::GameFrame(wwhd::os::SwapCount()), (int)rd16(proc + 0x08),
+			rd32(0x101FF9D4u), rd32(0x101FF9D8u), rd32(0x101FF9DCu));
+	// WWHD_DEBUG_PLACE=tick:x,y,z (a test aid): Link's position set at that game frame, to reach an actor
+	// without steering a route there: current and old (the ground check runs a line from the old one), and
+	// the copy his execute starts from (daPy_lk_c::execute's current.pos = l_debug_keep_pos, kept at the end
+	// of each execute; WWHD's at 0x1046CD48, f_0240CDD0), without which he stood back where he was by his
+	// next execute (session bottom's testaids); his speed 0.
+	static const std::array<float, 4> place = [] {
+		std::array<float, 4> p{ -1.0f, 0, 0, 0 };
+		if (const char* e = getenv("WWHD_DEBUG_PLACE"))
+			sscanf(e, "%f:%f,%f,%f", &p[0], &p[1], &p[2], &p[3]);
+		return p;
+	}();
 	// Link's process: noted for the test aids at every rate (WWHD_DEBUG_SPAWN uses his room)
 	if (rd16(proc + 0x08) == 168)
 	{
 		s_link = proc;
-		// WWHD_DEBUG_PLACE=tick:x,y,z (a test aid): Link's position set at that game frame, to reach an
-		// actor without steering a route there
-		static const std::array<float, 4> place = [] {
-			std::array<float, 4> p{ -1.0f, 0, 0, 0 };
-			if (const char* e = getenv("WWHD_DEBUG_PLACE"))
-				sscanf(e, "%f:%f,%f,%f", &p[0], &p[1], &p[2], &p[3]);
-			return p;
-		}();
 		if (place[0] >= 0 && !g_rtHalfTick && wwhd::rt::GameFrame(wwhd::os::SwapCount()) == (uint32)place[0])
-		{
 			for (uint32 i = 0; i < 3; i++)
 			{
-				// current and old position: the ground check runs a line from the old one, which
-				// would stop Link at the first wall on the way
-				wr32(proc + 0x314 + 4 * i, std::bit_cast<uint32>(place[1 + i]));
-				wr32(proc + 0x300 + 4 * i, std::bit_cast<uint32>(place[1 + i]));
+				const uint32 v = std::bit_cast<uint32>(place[1 + i]);
+				wr32(proc + 0x314 + 4 * i, v);
+				wr32(proc + 0x300 + 4 * i, v);
+				wr32(0x1046CD48u + 4 * i, v);           // l_debug_keep_pos
+				wr32(proc + 0x33C + 4 * i, 0);          // speed
+				wr32(proc + 0x370, 0);                  // speedF
 			}
-		}
 	}
 	// WWHD_DEBUG_POKE=tick:process,offset,size,value[;...] (a test aid; offset and value hex, size 1, 2
 	// or 4): at that game frame, before each process of that name executes, the value is written at

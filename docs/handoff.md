@@ -740,7 +740,12 @@ it in a window; D21 "Step 2"):**
     next stage at +0x5140: name[8], s16 point, s8 room, s8 layer, s8 enabled, u8 wipe; the current
     stage's name is at +0x5134). From the Outset dock `920:M_NewD2,0,0,-1` lands in Dragon Roost
     Cavern's entrance; rooms 1-4 of M_NewD2 with point 0 land in four other places (room 3 outdoors at
-    night: a layer?). `WWHD_DEBUG_PLACE=tick:x,y,z` moves Link within a stage.
+    night: a layer?). `WWHD_DEBUG_PLACE=tick:x,y,z` moves Link within a stage; since session bottom's
+    testaids (2026-10-06) it holds anywhere, mid-fight and after a stage warp: it also writes
+    l_debug_keep_pos (WWHD 0x1046CD48), which Link's execute starts from (before, he went back where he
+    stood by his next execute, as several notes below record). `WWHD_DEBUG_RNDLOG=path` logs cM_rnd's
+    draws and the stream at each whole step's start (30 and 60 side by side: where the random stream parts);
+    `WWHD_60FPS_RNDSYNC=0` turns off the random stream's sync (on by default: the "testaids" entry below).
     `WWHD_DEBUG_SPAWN=tick:process[/subtype],param,x,y,z[,anglex[,angley]][;...]` (subtype: the name table's argument, e.g. the sea's Octorok `Oqw` is 227/1) creates an actor there in
     Link's room (the creation record `f_025D5678`, then fpcM_Create `f_025E14A8` on the layer at
     *0x101F3AE8), its angle's x and y in hex if given (x is more parameters for some, y its heading):
@@ -2974,6 +2979,25 @@ it in a window; D21 "Step 2"):**
   102, dies to one hammer hit on its head): Link stops on his ledge 690 units from its head whatever the
   walk, so not reached. **Light arrows on Ganondorf**: Zelda's, in a fight the decomp has no code for; not
   tried.
+- **Session bottom: the queue's "testaids" (round 7, 2026-10-06; `src/overrides/sixty.cpp`)**: (1)
+  `WWHD_DEBUG_PLACE=tick:x,y,z` now holds after a stage warp and mid-fight (it had put Link back where he
+  stood by his next execute): daPy_lk_c::execute starts with `current.pos = l_debug_keep_pos` (kept at the
+  end of each execute, the retail build's), WWHD's at 0x1046CD48 (f_0240CDD0), and the placement writes it
+  too (and zeroes his speed). Checked in Jalhalla's room (M_DaiB, spawn 1, f1000 to (0, 0, -1150)) and in
+  Kalle Demos' fight (f1300 to (-215.8, 0, 814.8)): he stays at both rates. (2) The random stream:
+  `WWHD_DEBUG_RNDLOG=path` logs every cM_rnd draw (frame, half tick, process, caller, the Wichmann-Hill
+  state) and the stream as each whole step begins (E lines), at 30 too, to find where 60's parts from 30's.
+  A half tick's draws were already put back after its frame (the half-tick path of f_0274C264), so the
+  stream moves only on whole ticks; it parts where a converted process's draw moved to its half step (a
+  state change there drew, and at 30 it draws in the next tick): in the Moblin spawn test from f902 (a
+  seagull, pigs, Outset's 118, Link). The random stream's sync (on by default; `WWHD_60FPS_RNDSYNC=0` turns
+  it off) makes those up: a half-step
+  draw whose caller the process didn't draw from again in its whole step (execute or draw) moves the stream
+  one on at the frame's end, so the next tick starts where 30's does. With it: regress the Chuchu 9.5/91
+  apart (20.2/241.5 off), every other line the same; predeploy the same on all 24 routes but sail (50.9 at
+  the end against 51.2, mean 42.1 against 42.4); Jalhalla's first attack at f1206 (30: 1208; off: 1182) and
+  its return at f1302 as 30's (it parts after). Not a fix for Molgera's or the Moblin's partings (Link's
+  route and their own half-step draws).
 
 - **Session main: sail's launch (predeploy's sail, WARN ~51)**: from session top's look. At 60 the boat sets sail in
   the half step of f1119, a tick-half before 30's f1120; the 19 units gained then are most of the route's lag.
