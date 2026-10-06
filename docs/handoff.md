@@ -2886,7 +2886,16 @@ it in a window; D21 "Step 2"):**
   StepInEvents: wait, move, talk...), so its demo counter's equality tests (m3C20 +0x3E98, already `whole`:
   the heart container at == 0x14, m17E4 at == 0x32/0x6E) didn't double there; eqwhole on them and on its
   tick count's and timers' (22 sites) for when it does, no change in the fight (60 identical with and
-  without). Not driven: the hookshot on her tongue.
+  without). Not driven: the hookshot on her tongue. **Helmaroc King** (BDK 238, M2tower,22,0,3): its demo
+  camera's counts m25A6/m25A4 (+0x26A2/+0x26A0) had no rule, and it steps in an event while Link's action
+  is a listed one (his wait, as its mask's break begins): the mask's break (mAction +0x3DA poked to 9 at
+  f1100) counted once more on its first half step and ended a tick early (f1210 against 1211); `whole` on
+  the two adds and eqwhole on its 15 tests of them, and on its timers' (m2EC[] +0x400, `keep`) and tick
+  count's 15: f1211 now. Its death (mAction 0xA): every state and its heart container at the same ticks
+  at both rates (f1310, 1610, 1640; the item at 1669). Its hits (the hammer on the mask, m8F8; the sword on
+  its crest) wait for m2F8, `keep` and set by each hit: none read twice. Not driven: the hammer.
+  tools/sixty/eqsites.py now follows a loaded count past its first compare: 11 more sites in Gohma's,
+  Kalle Demos', Jalhalla's and Molgera's counts (`t == 1 || t == 0x46`), ruled too.
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,

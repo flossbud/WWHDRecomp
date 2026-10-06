@@ -11,14 +11,15 @@ Usage (on a worker; disasm.py's output is the game's code, so it stays there):
 
 FIELD: the counts' hex offsets in the process (the ones its rules keep to whole ticks: check the rule file;
 a `late` count changes on the half step and must not be listed). Prints each load of a FIELD (lha/lhz/lbz/lwz
-rX,FIELD(rY)) followed within three instructions by a compare of rX, with the compare's next branch, marked
+rX,FIELD(rY)) followed by a compare of rX, with the compare's next branch, marked
 [EQ] when that branch tests the EQ bit alone (beq/bne: eqwhole applies; generate.py checks it again), [other]
 otherwise (blt, bge...: not eligible) and [EQ0] for `== 0`: a countdown that rests at 0 (`if (t) t--`) reads 0
 on every tick after it ran out, a state, not an event, so 30 takes that branch every tick too; eqwhole there
 would send the half step down the running timer's branch. Rule an [EQ0] only for a count that passes 0 (one
-counted down without the guard, or up from below). A compare of the same register further on (`== 1 || ==
-0x46`) isn't found: read the code after each hit. With --rules TAG the [EQ] ones are printed as tick-rule
-lines (TAG starts their description). Session bottom's "bossfights" (2026-10-06).
+counted down without the guard, or up from below). The loaded register is followed for 16 instructions
+until something writes it, so a second compare of it (`== 1 || == 0x46`) is listed too. With --rules TAG
+the [EQ] ones are printed as tick-rule lines (TAG starts their description). Session bottom's "bossfights"
+(2026-10-06).
 """
 import argparse
 import glob
@@ -34,28 +35,34 @@ def sites(d, fields):
     for path in sorted(glob.glob(os.path.join(d, "f_*.s"))):
         fn = os.path.basename(path)[:-2]
         lines = [l.rstrip() for l in open(path) if re.match(r"^[0-9a-f]{8}\s", l)]
+        loaded = {}                                 # register -> (line, field) of its last load of a FIELD
         for n, l in enumerate(lines):
-            m = LOAD.match(l)
-            if not m or int(m.group(4), 16) not in fields:
+            mm = INS.match(l)
+            op, args = mm.group(2), mm.group(3)
+            if op in CMP_OPS:
+                reg = re.sub(r"^cr\d,", "", args).split(",")[0].lstrip("r")
+                if reg in loaded and n - loaded[reg][0] <= 16:
+                    for q in range(n + 1, min(n + 12, len(lines))):
+                        bm = INS.match(lines[q])
+                        bop = bm.group(2)
+                        if bop.startswith("b") and bop not in ("bl", "bla", "blrl", "bctrl"):   # the next branch, not a call
+                            eq = bool(re.match(r"^(beq|bne)(lr|ctr)?[+-]?$", bop))
+                            if eq and re.search(r",(0x0|0)$", args):
+                                eq = "0"
+                            yield fn, mm.group(1), op, args, loaded[reg][1], bm.group(1), bop, bm.group(3), eq
+                            break
                 continue
-            reg = m.group(3)
-            for k in range(1, 4):
-                if n + k >= len(lines):
-                    break
-                mm = INS.match(lines[n + k])
-                op, args = mm.group(2), mm.group(3)
-                if op not in CMP_OPS or not re.search(r"\br%s\b" % reg, args):
-                    continue
-                for q in range(n + k + 1, min(n + k + 12, len(lines))):
-                    bm = INS.match(lines[q])
-                    bop = bm.group(2)
-                    if bop.startswith("b") and bop not in ("bl", "bla", "blrl", "bctrl"):   # the next branch, not a call
-                        eq = bool(re.match(r"^(beq|bne)(lr|ctr)?[+-]?$", bop))
-                        if eq and re.search(r",(0x0|0)$", args):
-                            eq = "0"
-                        yield fn, mm.group(1), op, args, m.group(4), bm.group(1), bop, bm.group(3), eq
-                        break
-                break
+            m = LOAD.match(l)
+            if m:
+                if int(m.group(4), 16) in fields:
+                    loaded[m.group(3)] = (n, m.group(4))
+                else:
+                    loaded.pop(m.group(3), None)
+                continue
+            # anything else that writes a register (its first operand; stores, compares and branches write none)
+            regs = re.findall(r"\br(\d+)\b", args)
+            if regs and not op.startswith(("st", "cmp", "b", "tw")):
+                loaded.pop(regs[0], None)
 
 
 def main():

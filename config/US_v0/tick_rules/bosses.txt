@@ -152,3 +152,56 @@
 021033E8    eqwhole     cmpi            bwd f_02101F30: m3C20 (+0x3E98) == 0x6e
 02103510    eqwhole     cmpl            bwd f_02101F30: m3C20 (+0x3E98) == a value
 0210356C    eqwhole     cmpl            bwd f_02101F30: m3C20 (+0x3E98) == a value
+#
+# ---- Helmaroc King (BDK 238, M2tower,22,0,3 with WWHD_DEBUG_BOSS=1; fortress.txt has its rules). Its demo
+# camera (f_0206FEF0) counts m25A6/m25A4 (+0x26A2/+0x26A0) at its end, unruled: its mask's break (mAction
+# +0x3DA poked to 9 at f1100) counted once more on the half step it began (f1101.5; it steps in an event
+# only while Link's action is a listed one) and ended a tick early at 60 (f1210 against 1211). Its hits (the
+# hammer on its mask, m8F8; the sword on its crest) wait for m2F8 (`keep`, set by each hit): none twice.
+020719E4    whole       sth             bdk demo_camera: m25A6 (+0x26A2) + 1, its demo's count
+020719EC    whole       sth             bdk demo_camera: m25A4 (+0x26A0) + 1
+0207038C    eqwhole     cmpi            bdk demo_camera: m25A6 == 0x51
+02070518    eqwhole     cmpi            bdk demo_camera: m25A6 == 0x1
+0207069C    eqwhole     cmpl            bdk demo_camera: m25A6 == a value
+020706C0    eqwhole     cmpl            bdk demo_camera: m25A6 == a value
+02070904    eqwhole     cmpl            bdk demo_camera: m25A6 == a value
+02070918    eqwhole     cmpi            bdk demo_camera: m25A6 == 0xa3
+02070AB8    eqwhole     cmpl            bdk demo_camera: m25A6 == a value
+02070AF4    eqwhole     cmpl            bdk demo_camera: m25A6 == a value
+02070BB8    eqwhole     cmpl            bdk demo_camera: m25A6 == a value
+02070E34    eqwhole     cmpi            bdk demo_camera: m25A6 == 0xa0
+02071254    eqwhole     cmpi            bdk demo_camera: m25A6 == 0x3c
+02071608    eqwhole     cmpl            bdk demo_camera: m25A6 == a value
+02071624    eqwhole     cmpl            bdk demo_camera: m25A6 == a value
+02071640    eqwhole     cmpl            bdk demo_camera: m25A6 == a value
+02071724    eqwhole     cmpi            bdk demo_camera: m25A6 == 0x28
+# its timers m2EC[] (+0x400, `keep`) and tick count (+0x3D8, `keep`) tested for equality (t_down's m2EC[1] == 1...)
+0206A8DC    eqwhole     cmpi            bdk f_0206A610: m2EC[0] (+0x400) == 0x1
+0206B978    eqwhole     cmpl            bdk f_0206B67C: m2EC[0] (+0x400) == a value
+0206BF2C    eqwhole     cmpi            bdk f_0206BAA8: m2EC[0] (+0x400) == 0xaa
+0206BFB8    eqwhole     cmpi            bdk f_0206BAA8: m2EC[0] (+0x400) == 0x3c
+0206C448    eqwhole     cmpi            bdk f_0206C3AC: its tick count (+0x3D8) == 0x64
+0206D260    eqwhole     cmpi            bdk f_0206D0FC: m2EC[0] (+0x400) == 0x50
+0206D3C4    eqwhole     cmpi            bdk f_0206D0FC: m2EC[1] (+0x402) == 0x1
+0206E06C    eqwhole     cmpi            bdk f_0206D644: m2EC[0] (+0x400) == 0x1
+0206EEF4    eqwhole     cmpi            bdk f_0206D644: m2EC[2] (+0x404) == 0x1
+0206EF18    eqwhole     cmpi            bdk f_0206D644: m2EC[2] (+0x404) == 0x1
+0206EF94    eqwhole     cmpi            bdk f_0206D644: m2EC[2] (+0x404) == 0x1
+0206F1D4    eqwhole     cmpi            bdk f_0206D644: m2EC[2] (+0x404) == 0x1
+0206F208    eqwhole     cmpi            bdk f_0206D644: m2EC[2] (+0x404) == 0x1
+0206F254    eqwhole     cmpi            bdk f_0206D644: m2EC[2] (+0x404) == 0x1
+0206F404    eqwhole     cmpi            bdk f_0206D644: m2EC[2] (+0x404) == 0x1
+#
+# ---- More compares of the counts above (tools/sixty/eqsites.py follows a loaded count past its first
+# compare now: `t == 1 || t == 0x46` and the like)
+020F33CC    eqwhole     cmpi            btd f_020F1494: a sequence count (+0x705C) == 0x2
+020F4BE4    eqwhole     cmpi            btd f_020F4924: a sequence count (+0x705E) == 0xdc
+020B3864    eqwhole     cmpl            bmd move: mB76 == a value
+020B457C    eqwhole     cmpi            bmd demo_camera: mB78 == 0x1e
+020B4A28    eqwhole     cmpl            bmd demo_camera: mB78 == a value
+020B4A48    eqwhole     cmpl            bmd demo_camera: mB78 == a value
+020D7AFC    eqwhole     cmpi            bpw action_damage: timers[1] (+0x56C) == 1
+020D98E0    eqwhole     cmpi            bpw f_020D8564: timers[0] (+0x56A) == 1
+020FCD10    eqwhole     cmpi            bwd f_020FA614: a count (+0x1A48) == 0xff
+02102948    eqwhole     cmpi            bwd f_02101F30: m3C20 (+0x3E98) == 0x53
+02102A60    eqwhole     cmpl            bwd f_02101F30: m3C22 (+0x3E9A) == a value
