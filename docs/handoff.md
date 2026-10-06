@@ -2763,6 +2763,22 @@ it in a window; D21 "Step 2"):**
   four ticks against 30's 37). The pig Link walks into (KB 220) isn't pushed either: it runs from him (its
   sideways drift at 60 is its own).
 
+- **Session bottom: the queue's "hits" (round 6, 2026-10-06)**: a resolution's hits (a collider's At/Tg flags)
+  stay until the next resolution, so a converted process's half step and its next whole step can both read
+  one. Probe: `WWHD_DEBUG_HITS=path` logs each collider whose hit from one resolution reads true on both
+  steps (frame, half, at|tg, the actor's process name), `WWHD_DEBUG_HITS_ALL=1` every true read (overrides of
+  ChkAtHit f_025160DC, ChkTgHit f_025162A4; the resolution count in cCcS::Move). The sword fight route
+  (scratch fight-100.txt) against 16 converted enemies spawned ahead of Link: double reads on Link's sword At
+  (Chuchu, Bubble, ReDead), the Darknut's sword At, the Poe's and the ReDead's Tg; none took damage twice (hit
+  timers on whole ticks guard them). **The bug it found was the opposite: frozen timers.** ganon.txt's
+  `late` on the store inside the shared cLib_calcTimer<u8> (0207A9B4, session bottom's counter-audit batch
+  ff1163a, 2026-10-05) met that function's override (f_0207A9A0: skipped on half steps): the store was never
+  made, so every converted process's u8 timer through it (34 calls: the ReDead's hit cooldown, light
+  bridges and stairs, fireflies, NPCs, Makar...) stayed where it was set. A ReDead at 60 took one hit and was
+  then unhurt (its cooldown m2C4, +0x3E0, at 5 for good); with the rule gone it takes 30's three hits
+  (10 -> 8 -> 6 -> 4), each half a tick before 30's. A rule inside an overridden function that skips its
+  half steps is a trap: no other rule is in one (checked against overrides.txt).
+
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.

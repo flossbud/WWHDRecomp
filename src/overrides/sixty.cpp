@@ -2122,6 +2122,7 @@ namespace
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_PUSHSPLIT"); return !(e && atoi(e) == 0); }();
 		return on;
 	}
+	uint32 s_ccPass = 0;                            // collision resolutions so far
 	struct CoPush { uint32 stts, actor, id; uint16 name; uint32 move[3]; bool halved; };
 	std::vector<CoPush> s_coPushes;                // the last whole tick's Co colliders' Stts
 	uint32 s_coPushesSwap = ~0u;                    // the swap whose resolution noted them
@@ -2175,6 +2176,7 @@ namespace
 // +0x1000, a collider's Stts at +0x44). At 60 the Co colliders are noted for the half tick (above).
 void f_0200E558(PPCInterpreter_t* __restrict ctx)
 {
+	s_ccPass++;                                      // for the hits probe (below)
 	// WWHD_DEBUG_PUSHLOG=path (a test aid, at 30 too): after each resolution, the Co colliders pushed (swap,
 	// process name, Stts, the push)
 	static FILE* dbg = [] { const char* e = getenv("WWHD_DEBUG_PUSHLOG"); return e ? fopen(e, "w") : nullptr; }();
@@ -2218,6 +2220,61 @@ void f_0200E558(PPCInterpreter_t* __restrict ctx)
 			fflush(dbg);
 		}
 	}
+}
+
+// ---- hits read on both steps (session bottom's "hits", a probe) ------------------------------------
+// A resolution's hits (a collider's At and Tg hit flags) stay until the next resolution, as its pushes do, so
+// a converted process's half step and its next whole step both read them. WWHD_DEBUG_HITS=path logs each
+// collider whose hit from one resolution reads true on both steps (game frame, half tick, at|tg, the
+// collider's actor's process name; the Stts at +0x44, its actor at +0xC): a hit acted on twice unless a
+// guard (a hit timer counted on whole ticks, the hit cleared) stops it.
+namespace
+{
+	FILE* HitsLog()
+	{
+		static FILE* f = [] { const char* e = getenv("WWHD_DEBUG_HITS"); return e ? fopen(e, "w") : nullptr; }();
+		return f;
+	}
+	struct HitSeen { uint32 pass; bool half; };
+	std::unordered_map<uint32, HitSeen> s_hitSeen;  // collider (x2, + Tg) -> the last step its hit read true
+	void HitRead(uint32 obj, uint32 tg, bool hit)
+	{
+		static const bool all = getenv("WWHD_DEBUG_HITS_ALL") != nullptr;   // every hit read, "1" if on both steps
+		if (!hit || !g_rtSixty)
+			return;
+		const uint32 key = obj * 2 + tg;
+		const auto it = s_hitSeen.find(key);
+		const bool twice = it != s_hitSeen.end() && it->second.pass == s_ccPass && it->second.half != g_rtHalfTick;
+		if (twice || all)
+		{
+			const uint32 stts = rd32(obj + 0x44), actor = stts ? rd32(stts + 0xC) : 0;
+			const int name = actor >= 0x10000000u && actor < 0x50000000u ? (int)rd16(actor + 8) : -1;
+			fprintf(HitsLog(), "%u %d %s %d %08x %d\n", wwhd::rt::GameFrame(wwhd::os::SwapCount()), g_rtHalfTick ? 1 : 0,
+				tg ? "tg" : "at", name, obj, twice ? 1 : 0);
+			fflush(HitsLog());
+		}
+		s_hitSeen[key] = { s_ccPass, g_rtHalfTick };
+	}
+}
+
+// dCcD_GObjInf::ChkAtHit(collider r3) -> its At hit this resolution (and its actor, or none needed)
+void f_025160DC(PPCInterpreter_t* __restrict ctx)
+{
+	if (!HitsLog())
+		[[clang::musttail]] return orig_f_025160DC(ctx);
+	const uint32 obj = GPR(3);
+	orig_f_025160DC(ctx);
+	HitRead(obj, 0, GPR(3) != 0);
+}
+
+// dCcD_GObjInf::ChkTgHit(collider r3) -> its Tg hit this resolution (and its actor, or none needed)
+void f_025162A4(PPCInterpreter_t* __restrict ctx)
+{
+	if (!HitsLog())
+		[[clang::musttail]] return orig_f_025162A4(ctx);
+	const uint32 obj = GPR(3);
+	orig_f_025162A4(ctx);
+	HitRead(obj, 1, GPR(3) != 0);
 }
 
 // fw_procFrame, sead's procFrame_: one whole frame (the tick, the draw, the present, the vsync wait).

@@ -264,7 +264,8 @@
 020A074C    keep:r11    addi            bl: a count (0x464(r31)) - 1 a call, tested after (f_020A070C)
 020AB1AC    late        sth             bl: a count (0x4(r25)) - 1 a call, tested before (f_020AB020)
 020AB1D0    late        sthx            bl: a count (r25,r7) - 1 a call, tested before (f_020AB020)
-0207A9B4    late        stb             bgn: a count (0x0(r3)) - 1 a call, tested before (f_0207A9A0)
+# (0207A9B4, the store in cLib_calcTimer<u8> f_0207A9A0, isn't ruled: that function's override counts whole ticks
+# only, and a late store there was never made: every converted process's u8 timers froze; session bottom's "hits")
 0207E028    late        sth             bgn: a count (0x284(r25)) - 1 a call, tested before (f_0207DE64)
 0207EB64    late        sth             bgn: a count (0xd4c(r26)) - 1 a call, tested before (f_0207E7B4)
 0207F160    late        sth             bgn: a count (0xd4c(r26)) - 1 a call, tested before (f_0207E7B4)

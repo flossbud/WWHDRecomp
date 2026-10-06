@@ -44,6 +44,8 @@
 025185F8    src/overrides/sixty_step.cpp       dCcS::ChkAtTgHitAfterCross: WWHD_DEBUG_CONHIT logs the lasting contacts skipped (a test aid)
 0200E240    src/overrides/sixty_step.cpp       dCcS::Set: colliders enter the whole tick's resolution once (D21)
 0200E558    src/overrides/sixty.cpp            cCcS::Move: the Co colliders noted for the half tick's push split (D21)
+025160DC    src/overrides/sixty.cpp            dCcD_GObjInf::ChkAtHit: WWHD_DEBUG_HITS logs hits read on both steps (a probe)
+025162A4    src/overrides/sixty.cpp            dCcD_GObjInf::ChkTgHit: WWHD_DEBUG_HITS logs hits read on both steps (a probe)
 02516C14    src/overrides/sixty_step.cpp       a per-tick request list read on whole ticks: once a tick (D21)
 025E3EC8    src/overrides/sixty_step.cpp       mDoExt_MtxCalcOldFrame::decOldFrameMorfCounter: the old pose's blend, with a time step (D21)
 023FCB9C    src/overrides/sixty_step.cpp       daPy_lk_c::posMoveFromFootPos: the feet's move measured over a whole tick (D21)
