@@ -84,6 +84,10 @@ WW-4's actor conversion is split between two sessions working side by side:
 
 ### Session `qa` (from 2026-10-04): the owner's bugs
 
+**Session qa reactivated (2026-10-06, the owner's decision): qa again takes the owner's play bugs and notes, their F9
+recordings and the deploys to ~/wwhd-play; the main session only routes (assigns the owner's bugs and notes, keeps
+the queue). The retirement note below is history.**
+
 **Session qa retired (2026-10-05, the owner's decision; main takes over deploys and bug triage).**
 Its worker checkouts (`/wwhd/WWHDRecomp-qa` on both workers) were removed; don't start a session
 named `qa` again without the owner asking.
