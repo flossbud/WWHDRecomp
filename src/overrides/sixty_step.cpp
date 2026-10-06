@@ -699,9 +699,12 @@ namespace
 // measure ran half a tick ahead of 30's (a walk's start ramped early, Link ~1 unit ahead from there,
 // route tour; session top, walkstart). So a half step measures with the whole step's matrices (put in
 // for the call, its own put back after): both of a tick's steps take 30's measure.
+extern bool g_rtLinkGroundLost;
 void f_023FCB9C(PPCInterpreter_t* __restrict ctx)
 {
 	const uint32 link = GPR(3);
+	if (g_rtLinkGroundLost)
+		return;                                        // the ground lost: he waits for his next whole step (sixty.cpp's GroundHold)
 	if (!Stepped())
 	{
 		s_toes.erase(link);

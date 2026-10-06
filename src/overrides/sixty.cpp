@@ -345,6 +345,36 @@ namespace
 	bool s_linkActionChanged = false;                 // by his action call in the last whole step
 	uint32 s_linkActionAtCall = 0;
 
+	// His half step after a whole step whose move landed him or took the ground from under him (his ground check's
+	// flags, mAcch at +0x80C, m_flags at +0x834: 0x20 the ground hit) leaves his action call out too (session bottom's
+	// "landings", from session top's look; B39, top's knockback rule in link_actions.txt): at 30 the tick after it
+	// reacts (a landing: changeLandProc's land, land damage or roll, the other actions' own landings; the ground lost
+	// under one of the ground's actions: changeAutoJumpProc's auto jump, ledge hang 0x2C or fall, whole in
+	// link_actions.txt), and his half step reacted half a tick early (a drop from 400 units: fall and land a tick
+	// early). For the ground lost the half step doesn't move him either (sixty_step.cpp's posMoveFromFootPos, by
+	// g_rtLinkGroundLost): his walk's foot-driven speed in the air made 17 where 30 had 14.4 and the dock's auto jump
+	// went higher; left still, his next whole step starts where 30's next tick does. WWHD_60FPS_GROUNDHOLD=0 turns it off.
+	bool GroundHold()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_GROUNDHOLD"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	uint32 s_linkGroundAtWhole = 0;                   // his ground hit bit as his whole step began
+	uint64 s_groundStops = 0;
+	// the ground's actions whose lost ground changeAutoJumpProc reacts to: waiting, moving (and targeting), the turns,
+	// the rolls, a landing's
+	bool GroundAction(uint32 a)
+	{
+		switch (a)
+		{
+		case 0x04: case 0x05: case 0x06: case 0x07: case 0x08: case 0x09: case 0x17: case 0x18: case 0x1E: case 0x21:
+		case 0x25:
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	// A process outside the event finishes its tick at an event's edge (D21). The half tick's stops above
 	// (an event that began, was ordered or was asked to end during the whole tick, after the process took
 	// its whole-tick step) cancelled every converted process's half step there, so each moved half a tick
@@ -2856,6 +2886,7 @@ namespace
 // fpcM_Execute: every process's execute goes through it (fpcM_Management's execute pass, f_025DE788):
 // actors, the camera, the environment, the HUD and menus, scenes. Noted for the half ticks' rollback.
 uint32 g_rtActor = 0;                               // the process whose execute runs (rt_step_fall's)
+bool g_rtLinkGroundLost = false;                    // Link's half step after his whole step's move lost the ground
 
 void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 {
@@ -3054,8 +3085,17 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	if (camTick)
 		CamTickBefore(proc);                        // its whole tick's half step is for show (the camera's tick)
 	if (link && !g_rtHalfTick)
+	{
 		s_linkActionChanged = false;                // until his action call changes it (rt_hold_leave)
-	const bool hold = g_rtHalfTick && link && s_linkActionChanged && ActionHold();
+		s_linkGroundAtWhole = rd32(proc + 0x834) & 0x20;
+	}
+	const uint32 groundNow = link ? rd32(proc + 0x834) & 0x20 : 0;
+	const bool groundLost = g_rtHalfTick && link && GroundHold() && s_linkGroundAtWhole && !groundNow &&
+		GroundAction(rd32(proc + 0x65F0));
+	const bool groundHold = (g_rtHalfTick && link && GroundHold() && !s_linkGroundAtWhole && groundNow) || groundLost;
+	s_groundStops += groundHold;
+	g_rtLinkGroundLost = groundLost;
+	const bool hold = (g_rtHalfTick && link && s_linkActionChanged && ActionHold()) || groundHold;
 	s_actionStops += hold;
 	g_rtHold = hold || camTick;                     // his half step leaves his new action's call out; the camera's
 	                                                // half step for show leaves its sound and rumble to its replay
@@ -3086,6 +3126,7 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 		s_lateNotes.swap(outer);
 	}
 	g_rtHold = false;
+	g_rtLinkGroundLost = false;
 	s_converting--;
 	g_rtStep = step;
 	if (resetFlags)

@@ -3081,6 +3081,23 @@ it in a window; D21 "Step 2"):**
   shows every ride twice (its two half steps both take the ground's move: no scene draw between them), so
   trial_filter (tests/common.sh) leaves f_024F5B78 out; itemDek (260) was such a case and is converted.
 
+- **Session bottom: the queue's "landings" (round 8, 2026-10-06; sixty.cpp's GroundHold, link_actions.txt)**: Link's
+  reactions to the ground found or lost in a whole step's move came in the half step after it, half a tick early (at
+  30 the next tick reacts). His ground check's flags are mAcch +0x80C's m_flags at +0x834 (session top: standing
+  0x28E0, in the air 0x2800; 0x20 the ground hit). Now his half step after a whole step whose move landed him leaves
+  his action call out (the `hold` rules' g_rtHold: changeLandProc's land, land damage or roll and the air actions'
+  own landings come in the next whole step; session top's knockback rule, 0241E8F8, is that case for procLargeDamage);
+  and after one whose move lost the ground under a ground action (waiting, moving, turns, rolls, a landing's) the half
+  step neither calls his action nor moves him (posMoveFromFootPos returns: g_rtLinkGroundLost), while the ground lost's
+  reaction, changeAutoJumpProc (an auto jump, the ledge's hang 0x2C, a fall), is `whole` (0240D5A4). A drop from 400
+  units (WWHD_DEBUG_PLACE above the Outset dock) falls and lands at 30's ticks (fall f1001, land f1019, wait f1026:
+  before, each a tick early); from 1200 the fall and the land damage at 30's ticks, its end to waiting still 1.5 ticks
+  early (land damage's own timing). The dock's auto jump (predeploy's warp and sail) now starts in 30's tick with 30's
+  speeds and keeps within 3 units (warp's farthest 134 -> 82, sail's 72 -> 59). Tried and dropped: showing his half
+  step the ground bits of the tick's start (a "ground view") and holding only the action call: on a ground lost, his
+  walk's half step in the air took its foot-driven speed (17 where 30 had 14.4) and jumped off the dock higher, and the
+  routes with it failed; the half step that waits must not move him. WWHD_60FPS_GROUNDHOLD=0 turns it off.
+
 - **Session main: sail's launch (predeploy's sail, WARN ~51)**: from session top's look. At 60 the boat sets sail in
   the half step of f1119, a tick-half before 30's f1120; the 19 units gained then are most of the route's lag.
   The trigger is the ship's own mast animation (daShip's mpBodyAnm, frame >= 7 / checkFrame(7)), played in its

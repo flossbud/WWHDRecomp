@@ -12,3 +12,8 @@
 # the landing: the knockback's get-up (0x69) half a tick early, 12.5 units short of 30's slide, the wait after it
 # (0x04) a tick early. Left to the next whole step it comes in 30's tick, either step it landed in.
 0241E8F8    whole:r3=0  bl 023f6020     link large damage (procLargeDamage f_0241E7D4, 0x68): on the ground, procLargeDamageUp_init (0x69)
+# The ground lost under one of his ground's actions reacts in the next whole step too (session bottom's "landings"):
+# changeAutoJumpProc (f_023F81A4, in his execute before his action call: an auto jump, the ledge's hang 0x2C, a climb
+# down or a fall) whole, and the half step after the move that lost the ground neither calls his action nor moves him
+# (sixty.cpp's GroundHold): his next whole step starts where 30's next tick does (a drop: fall and land at 30's ticks).
+0240D5A4    whole:r3=0  bl 023f81a4     link execute: changeAutoJumpProc (the ground lost: auto jump, ledge, fall)
