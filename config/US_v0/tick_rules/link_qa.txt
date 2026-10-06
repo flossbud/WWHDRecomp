@@ -98,3 +98,20 @@
 # 30's tick: before, a tick early half the time). The clear at 0 is the same check's other branch: whole too.
 0240D640    whole       sth             execute: m3522 (+0x6972) - 1, the sword combo's window
 0240D664    whole       stb             execute: m34C4 (+0x68E0) = 0, the combo's step, when the window is out
+# The sword's last positions, saved before the step takes its new ones (m36D0, Link +0x72E4, from mSwordTopPos
+# +0x72CC; Link +0x72D8 from +0x3E4, the other saved point the sweep capsules start from): once a tick, in the
+# whole step. With the collision resolution after the half step (sixty.cpp, session top's "resolve") the half
+# step's capsules are the ones resolved, now from the last tick's positions: 30's chords for the tick. Two
+# paths, the same six stores.
+0240E31C    whole       stw             execute: +0x72D8 = +0x3E4 (x), the sword's last point
+0240E328    whole       stw             execute: +0x72DC = +0x3E8 (y)
+0240E334    whole       stw             execute: +0x72E0 = +0x3EC (z)
+0240E330    whole       stw             execute: m36D0.x = mSwordTopPos.x, the sword's last tip
+0240E340    whole       stw             execute: m36D0.z = mSwordTopPos.z
+0240E348    whole       stw             execute: m36D0.y = mSwordTopPos.y
+0240E404    whole       stw             execute (the other path): +0x72D8 = +0x3E4 (x)
+0240E410    whole       stw             execute (the other path): +0x72DC = +0x3E8 (y)
+0240E41C    whole       stw             execute (the other path): +0x72E0 = +0x3EC (z)
+0240E418    whole       stw             execute (the other path): m36D0.x = mSwordTopPos.x
+0240E428    whole       stw             execute (the other path): m36D0.z = mSwordTopPos.z
+0240E430    whole       stw             execute (the other path): m36D0.y = mSwordTopPos.y

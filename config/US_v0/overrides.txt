@@ -9,6 +9,8 @@
 025F172C    src/overrides/sixty.cpp            the game's frame body (m_Do_main): at 60 fps, the draw pass only between whole ticks (D21)
 025D475C    src/overrides/sixty.cpp            fopAc_Execute, every actor's execute: noted for the state probe (D21)
 0274C264    src/overrides/sixty.cpp            fw_procFrame, sead's whole frame: watched by the 60 fps store census (D21)
+02518798    src/overrides/sixty.cpp            dCcS::Move, the collision resolution: at 60 after the tick's half step (D21)
+0251879C    src/overrides/sixty.cpp            dCcS::Draw (the lists' clear): at 60 after the waiting resolution (D21)
 0274C874    src/overrides/pacing.cpp           fw_waitForVsync, the end of sead's frame: 60 fps pacing in real time, the frame log (D21)
 025DE58C    src/overrides/sixty.cpp            fpcM_Execute, every process's execute: noted for the 60 fps half ticks' rollback (D21)
 0260C74C    src/overrides/sixty.cpp            a sead tree node (a request queue by the HD UI): whole ticks only at 60 fps (D21, probe)

@@ -2171,6 +2171,110 @@ namespace
 	}
 }
 
+// ---- the collision resolution after the half step (session top's "resolve") ---------------------------
+// The play scene's draw (dScnPly_Draw, f_025AF8A0) first resolves the tick's collisions (dCcS::Move, below:
+// cCcS::Move's CalcArea, ChkAtTg, ChkCo, MoveAfterCheck, its lists emptied; on whole ticks only, 025AF938).
+// At 60 that came after the whole step, where a converted process stands half a tick short of 30's tick
+// end (since animstart Link's pose too: his sword's capsule held a pose 30 never has, and Kalle Demos' core
+// took a cut 30 misses). Now the whole tick's resolution waits for its half tick and runs when that frame
+// ends (its draws undone, the converted processes' globals handed back), before the next whole tick, as
+// 30's tick k resolves before tick k+1: unconverted processes registered their colliders in the whole step,
+// converted ones in both (the lists are deduped first: a collider object holds its half step's values, the
+// tick end's), and both steps of the next tick read its hits and pushes, as 30's next tick does. One still
+// waiting at a whole tick (a half tick's frame that didn't come) runs then. WWHD_60FPS_RESOLVE=0: off.
+namespace
+{
+	bool ResolveLate()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_RESOLVE"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	uint32 s_resolveCcs = 0;                          // the manager whose tick's resolution waits for its half tick
+	uint64 s_resolvesLate = 0;
+	void ResolveStats()
+	{
+		cemuLog_log(LogType::Force, "wwhd sixty: {} collision resolutions after the half step", s_resolvesLate);
+	}
+	// WWHD_DEBUG_RESOLVE=path (a test aid): each resolution waited for and made (swap, half tick, where, the
+	// lists' counts before and after the dedupe)
+	FILE* ResolveLog()
+	{
+		static FILE* f = [] { const char* e = getenv("WWHD_DEBUG_RESOLVE"); return e ? fopen(e, "w") : nullptr; }();
+		return f;
+	}
+	void ResolvePending(PPCInterpreter_t* ctx, const char* where)
+	{
+		const uint32 ccs = s_resolveCcs;
+		s_resolveCcs = 0;
+		if (FILE* f = ResolveLog())
+		{
+			fprintf(f, "%u %d %s %08x at %u tg %u co %u all %u\n", wwhd::os::SwapCount(), g_rtHalfTick ? 1 : 0, where, ccs,
+				rd32(ccs + 0x2800), rd32(ccs + 0x2804), rd32(ccs + 0x2808), rd32(ccs + 0x280C));
+			fflush(f);
+		}
+		Registers regs;
+		regs.Save(ctx);
+		const uint32 sp = (ctx->gpr[1] - 0x100) & ~0xFu;
+		wr32(sp, ctx->gpr[1]);                         // a back chain
+		ctx->gpr[1] = sp;
+		ctx->gpr[3] = ccs;
+		const bool half = g_rtHalfTick;
+		g_rtHalfTick = false;                          // the tick's own resolution
+		orig_f_02518798(ctx);
+		ctx->gpr[1] = sp;
+		ctx->gpr[3] = ccs;
+		orig_f_0251879C(ctx);                          // then the lists' clear, as the scene's draw makes it
+		g_rtHalfTick = half;
+		regs.Restore(ctx);
+		s_resolvesLate++;
+	}
+}
+
+// dCcS::Draw(manager r3): in WWHD only cCcS::DrawClear (f_0200E5BC: the lists emptied), from the scene's draw
+// after the resolution, on both ticks' frames: while a resolution waits for its half tick (above) it waits
+// too, and comes after it
+void f_0251879C(PPCInterpreter_t* __restrict ctx)
+{
+	if (s_resolveCcs)
+		return;
+	[[clang::musttail]] return orig_f_0251879C(ctx);
+}
+
+// dCcS::Move(manager r3): cCcS::Move, the tick's collision resolution (above: at 60 after its half tick)
+void f_02518798(PPCInterpreter_t* __restrict ctx)
+{
+	if (!g_rtSixty || g_rtHalfTick || !ResolveLate())
+	{
+		if (FILE* f = ResolveLog())                    // (the test aid at 30: the lists as they are resolved)
+		{
+			const uint32 ccs = GPR(3), n = std::min(rd32(ccs + 0x280C), 0x500u);
+			std::vector<uint32> seen;
+			uint32 dups = 0;
+			for (uint32 i = 0; i < n; i++)
+			{
+				const uint32 obj = rd32(ccs + 0x1400 + 4 * i);
+				dups += obj && std::find(seen.begin(), seen.end(), obj) != seen.end();
+				seen.push_back(obj);
+			}
+			fprintf(f, "%u %d now %08x at %u tg %u co %u all %u (%u twice)\n", wwhd::os::SwapCount(), g_rtHalfTick ? 1 : 0, ccs,
+				rd32(ccs + 0x2800), rd32(ccs + 0x2804), rd32(ccs + 0x2808), n, dups);
+			fflush(f);
+		}
+		[[clang::musttail]] return orig_f_02518798(ctx);
+	}
+	static bool once = [] { atexit(ResolveStats); at_quick_exit(ResolveStats); return true; }();
+	(void)once;
+	if (s_resolveCcs)
+		ResolvePending(ctx, "again");                  // the last tick's, still waiting
+	s_resolveCcs = GPR(3);
+	if (FILE* f = ResolveLog())
+	{
+		fprintf(f, "%u %d wait %08x at %u tg %u co %u all %u\n", wwhd::os::SwapCount(), g_rtHalfTick ? 1 : 0, GPR(3),
+			rd32(GPR(3) + 0x2800), rd32(GPR(3) + 0x2804), rd32(GPR(3) + 0x2808), rd32(GPR(3) + 0x280C));
+		fflush(f);
+	}
+}
+
 // cCcS::Move(manager r3): the tick's collision resolution (CalcArea, ChkAtTg, ChkCo, MoveAfterCheck),
 // then the lists emptied (their counts, +0x2800 At, +0x2804 Tg, +0x2808 Co, +0x280C all; the Co list at
 // +0x1000, a collider's Stts at +0x44). At 60 the Co colliders are noted for the half tick (above).
@@ -2315,7 +2419,11 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		return;
 	}
 	if (!g_rtHalfTick)
+	{
+		if (s_resolveCcs)
+			ResolvePending(ctx, "whole");              // a whole tick's resolution whose half tick didn't come
 		[[clang::musttail]] return orig_f_0274C264(ctx);
+	}
 	// The game's random stream (cM_rnd, f_02019788: Wichmann-Hill state at 101FF9D4) belongs to its
 	// ticks: actors' draws take numbers from it too (the lighting's flicker, f_025615B8, through
 	// settingTevStruct), so a half tick's frame would move it on. Drawing it gets the numbers the next
@@ -2364,6 +2472,8 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 	wr32(0x101FF9DCu, rng[2]);
 	if (input)
 		wr32(input + kPressed, pressed);
+	if (s_resolveCcs)
+		ResolvePending(ctx, "half");                   // the tick's collisions, its half step done (above)
 }
 
 // Link's reset flags (daPy_py_c::mResetFlg0, WWHD's Link +0x3C0: the GameCube's 0x2A4 + 0x11C; procTactWait
