@@ -746,6 +746,14 @@ it in a window; D21 "Step 2"):**
     stood by his next execute, as several notes below record). `WWHD_DEBUG_RNDLOG=path` logs cM_rnd's
     draws and the stream at each whole step's start (30 and 60 side by side: where the random stream parts);
     `WWHD_60FPS_RNDSYNC=0` turns off the random stream's sync (on by default: the "testaids" entry below).
+    `WWHD_DEBUG_FLAGS=ev:XXYY=V[,...][;sw:N=V,...][;it:XX=V,...][;ac:N|*=V,...]` (session bottom's census-left)
+    makes the story checks read V (0 or 1) at every caller, the save left as it is (reads only, never written):
+    event bits (isEventBit f_025B8B94, hex XXYY as the decomp's dSv_event_flag_c UNK_XXYY), switches (isSwitch
+    f_025BA0C0, decimal), items owned (dComIfGs_checkGetItem f_02520C0C, hex d_item_data.h numbers) and placed
+    actors done (isActor f_025BA6A4, the stage loader's check of a placement's set ID: `ac:*=0` places a
+    room's beaten enemies again). An actor whose create errors on the finished save's story state is made by
+    forcing what it checks: Phantom Ganon in the Forsaken Fortress `sw:42=0`, Makar in Forest Haven
+    `ev:2910=0,2E02=0,1610=0,1820=0;it:3E=0,3A=0`, GanonM's Vfan `ac:*=0;sw:24=0`.
     `WWHD_DEBUG_SPAWN=tick:process[/subtype],param,x,y,z[,anglex[,angley]][;...]` (subtype: the name table's argument, e.g. the sea's Octorok `Oqw` is 227/1) creates an actor there in
     Link's room (the creation record `f_025D5678`, then fpcM_Create `f_025E14A8` on the layer at
     *0x101F3AE8), its angle's x and y in hex if given (x is more parameters for some, y its heading):
@@ -3015,13 +3023,39 @@ it in a window; D21 "Step 2"):**
   stream moves only on whole ticks; it parts where a converted process's draw moved to its half step (a
   state change there drew, and at 30 it draws in the next tick): in the Moblin spawn test from f902 (a
   seagull, pigs, Outset's 118, Link). The random stream's sync (on by default; `WWHD_60FPS_RNDSYNC=0` turns
-  it off) makes those up: a half-step
-  draw whose caller the process didn't draw from again in its whole step (execute or draw) moves the stream
-  one on at the frame's end, so the next tick starts where 30's does. With it: regress the Chuchu 9.5/91
+  it off) makes those up: a draw of a converted process's half-step execute that its whole step's execute
+  doesn't make again (by caller) moves the stream one on right after that whole step, where 30 draws it
+  (census-left, from session top's seagull: made up at the frame's end, as first, the processes after it drew
+  a number early that tick, and a draw in the process's draw pass, through cM_rndF's shared caller, was taken
+  for a repeat and the make-up lost; the log's process column now names the one drawing in a draw pass, not
+  the last to execute). First (at the frame's end): regress the Chuchu 9.5/91
   apart (20.2/241.5 off), every other line the same; predeploy the same on all 24 routes but sail (50.9 at
   the end against 51.2, mean 42.1 against 42.4); Jalhalla's first attack at f1206 (30: 1208; off: 1182) and
   its return at f1302 as 30's (it parts after). Not a fix for Molgera's or the Moblin's partings (Link's
   route and their own half-step draws).
+
+- **Session bottom: the queue's "census-left" (round 7, 2026-10-06; in progress; `tick_rules/census_left.txt`)**:
+  the placed types no test had made, made with WWHD_DEBUG_FLAGS (above), PLACE and SPAWN. **Phantom Ganon**
+  (FGANON 241, Forsaken Fortress sea,0,1,1, `sw:42=0`, Link placed by it at f1000): converted, 46 rules: its
+  timers (m3A4[5], m68A, m3AE, m3B8, m6A6, m6AC, the ball's m40A; mB89 `keep`: decremented and tested on the
+  register), its moves (pos_move, start's mode 5, down's fall, end's rise, the knock-back, the ball's flight)
+  and its opening's camera count mB56 (+0xD8A) with its 13 `== N` cuts: it steps in its own events while Link's
+  action is in the list (the opening's first 16 ticks, Link standing), where the count ran twice a tick and
+  the opening finished 16 ticks early. The throw (`(int)frame == 14` sets m409) is `whole`: frame 14 spans two
+  steps at 60 and the second set waited and threw the next ball as it formed. Now the opening and its first
+  ball match 30's to the tick (within 2 units to f1400); the ball then leaves the hand's last drawn pose, half a
+  frame along a fast swing at 60 (29 units), lands 2 ticks later and the fight's choices part from there.
+  move()'s `pos += cc_move` is the push split's (no rule). Ganon's Tower's (GanonM, type 2) isn't made: its
+  create fails even with the room's placements forced. **Makar** (NPC_CB1 334, Omori,0,0,0, the flags above):
+  converted, no rules (trial clean, 0 apart). **Dk** (167, the opening's Helmaroc King over Outset, sea room 44
+  layer 9): converted as BDK (its tail_control inlined, four tails at +0x3E8 on whole ticks and drawn half a
+  tick on: kChainArrays); trial left with the roots' 1-2 units. **Vfan** (54, GanonM): still, left at 30.
+  **Co1** (370, Comori) isn't made with every placement forced (its create is the decomp's "Nonmatching").
+  eqsites.py now stops at an unconditional branch (it had followed a count's register into a switch's compare
+  after a `b`: fganon's mB54 `case 55`); a reaching-definition check of every eqwhole site in bosses.txt (185)
+  and eqwhole.txt (22 with disassembly) found each compare's register loaded from its field on every path.
+  Session top's fishman (118) parts from 30 on its first stepped tick at Outset (its height snaps by 26 units:
+  the ground check's water fields, `only half` in the trial): sent to top.
 
 - **Session main: sail's launch (predeploy's sail, WARN ~51)**: from session top's look. At 60 the boat sets sail in
   the half step of f1119, a tick-half before 30's f1120; the 19 units gained then are most of the route's lag.

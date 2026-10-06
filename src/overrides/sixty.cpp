@@ -116,7 +116,7 @@ namespace
 	// WWHD_60FPS_CONVERT= (empty) converts none.
 	constexpr const char* kConvertedByDefault =
 		"476,168,165,171,194,189,463,151,154,142,175,296,162,43,292,300,437,438,206,215,188,191,181,224,234,223,216,209,214,316,317,"
-		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,443,221,305,47,48,49,50,52,122,129,148,166,289,159,272,267,275,140,138,139,46,75,469,94,96,478,479,406,358,396,57,195,299,455,85,399,284,286,265,285,"   // session bottom
+		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,443,221,305,47,48,49,50,52,122,129,148,166,289,159,272,267,275,140,138,139,46,75,469,94,96,478,479,406,358,396,57,195,299,455,85,399,284,286,265,285,241,334,167,"   // session bottom
 		// (session main's line, between comment lines so neighbours' edits don't conflict)
 		"51,276,367,301,302,303,113,112,314,361,382,380,321,30,92,104,107,145,157,273,323,451,153,377,124,"   // session main
 		// (session top's line)
@@ -1636,6 +1636,113 @@ namespace
 	}
 }
 
+// WWHD_DEBUG_FLAGS=ev:XXYY=V[,...][;sw:N=V[,...]][;it:XX=V[,...]][;ac:N|*=V] (a test aid, session bottom's census-left): the
+// save's event bits (dSv_event_c::isEventBit f_025B8B94: XXYY hex, its byte XX and mask YY, as the decomp's
+// dSv_event_flag_c names them), switches (dSv_info_c::isSwitch f_025BA0C0: N decimal, in any room) and items got
+// (dComIfGs_checkGetItem f_02520C0C: XX hex, d_item_data.h's numbers) and placed actors done (dSv_info_c::isActor
+// f_025BA6A4, the stage loader's check of a placement's set ID: N decimal, or * for all, so beaten enemies are placed
+// again) read as V (0 or 1) by every caller, the save left as it is: an actor whose create returns cPhs_ERROR_e on
+// the finished save's story state (Phantom Ganon beaten, Makar's types...) is made by forcing what it checks.
+namespace
+{
+	struct ForcedFlags { std::unordered_map<uint32, bool> ev, sw, it, ac; int acAll = -1; bool any = false; };
+	const ForcedFlags& Forced()
+	{
+		static const ForcedFlags f = [] {
+			ForcedFlags r;
+			const char* e = getenv("WWHD_DEBUG_FLAGS");
+			if (!e)
+				return r;
+			std::string all(e);
+			for (size_t at = 0; at < all.size();)
+			{
+				size_t end = all.find(';', at);
+				if (end == std::string::npos)
+					end = all.size();
+				const std::string part = all.substr(at, end - at);
+				at = end + 1;
+				const bool isEv = part.rfind("ev:", 0) == 0, isSw = part.rfind("sw:", 0) == 0, isIt = part.rfind("it:", 0) == 0,
+					isAc = part.rfind("ac:", 0) == 0;
+				if (!isEv && !isSw && !isIt && !isAc)
+					continue;
+				for (size_t p = 3; p < part.size();)
+				{
+					size_t q = part.find(',', p);
+					if (q == std::string::npos)
+						q = part.size();
+					const std::string item = part.substr(p, q - p);
+					p = q + 1;
+					const size_t eq = item.find('=');
+					if (eq == std::string::npos)
+						continue;
+					const bool v = atoi(item.substr(eq + 1).c_str()) != 0;
+					r.any = true;
+					if (isAc && item.substr(0, eq) == "*")
+					{
+						r.acAll = v;
+						continue;
+					}
+					const uint32 key = (uint32)strtoul(item.substr(0, eq).c_str(), nullptr, isSw || isAc ? 10 : 16);
+					(isEv ? r.ev : isSw ? r.sw : isAc ? r.ac : r.it)[key] = v;
+					r.any = true;
+				}
+			}
+			return r;
+		}();
+		return f;
+	}
+}
+
+void orig_f_025B8B94(PPCInterpreter_t* __restrict ctx);
+void orig_f_025BA0C0(PPCInterpreter_t* __restrict ctx);
+// dSv_event_c::isEventBit(event r3, number r4) -> r3: forced under WWHD_DEBUG_FLAGS (above)
+void f_025B8B94(PPCInterpreter_t* __restrict ctx)
+{
+	const ForcedFlags& f = Forced();
+	if (!f.any)
+		[[clang::musttail]] return orig_f_025B8B94(ctx);
+	if (const auto it = f.ev.find(GPR(4) & 0xFFFF); it != f.ev.end())
+	{
+		GPR(3) = it->second ? 1 : 0;
+		return;
+	}
+	[[clang::musttail]] return orig_f_025B8B94(ctx);
+}
+
+void orig_f_025BA6A4(PPCInterpreter_t* __restrict ctx);
+// dSv_info_c::isActor(info r3, set ID r4, room r5) -> r3: forced under WWHD_DEBUG_FLAGS (above)
+void f_025BA6A4(PPCInterpreter_t* __restrict ctx)
+{
+	const ForcedFlags& f = Forced();
+	if (!f.any)
+		[[clang::musttail]] return orig_f_025BA6A4(ctx);
+	if (const auto it = f.ac.find(GPR(4)); it != f.ac.end())
+	{
+		GPR(3) = it->second ? 1 : 0;
+		return;
+	}
+	if (f.acAll >= 0)
+	{
+		GPR(3) = (uint32)f.acAll;
+		return;
+	}
+	[[clang::musttail]] return orig_f_025BA6A4(ctx);
+}
+
+// dSv_info_c::isSwitch(info r3, number r4, room r5) -> r3: forced under WWHD_DEBUG_FLAGS (above)
+void f_025BA0C0(PPCInterpreter_t* __restrict ctx)
+{
+	const ForcedFlags& f = Forced();
+	if (!f.any)
+		[[clang::musttail]] return orig_f_025BA0C0(ctx);
+	if (const auto it = f.sw.find(GPR(4)); it != f.sw.end())
+	{
+		GPR(3) = it->second ? 1 : 0;
+		return;
+	}
+	[[clang::musttail]] return orig_f_025BA0C0(ctx);
+}
+
 // WWHD_DEBUG_EVENT=tick:NAME[;...] (a test aid): from those game frames, once no event runs (EventRunning: a
 // stage's arrival is an event), the stage's event NAME (its event list's name: a JStudio cutscene's event has
 // the staff PACKAGE and CAMERA) is ordered for Link as an actor orders one: its index by
@@ -1773,6 +1880,12 @@ void orig_f_02520C0C(PPCInterpreter_t* __restrict ctx);
 void f_02520C0C(PPCInterpreter_t* __restrict ctx)
 {
 	static const bool companion = [] { const char* e = getenv("WWHD_DEBUG_COMPANION"); return e && *e == '1'; }();
+	if (const ForcedFlags& f = Forced(); f.any)    // WWHD_DEBUG_FLAGS's it: (above)
+		if (const auto it = f.it.find(ctx->gpr[3] & 0xFF); it != f.it.end())
+		{
+			ctx->gpr[3] = it->second ? 1 : 0;
+			return;
+		}
 	const uint32 lr = ctx->spr.LR;
 	if (companion && ctx->gpr[3] == 0x3E && lr >= 0x0221CD78u && lr < 0x022273A8u)
 	{
@@ -2437,16 +2550,19 @@ void f_025162A4(PPCInterpreter_t* __restrict ctx)
 
 // ---- the random stream's draws (session bottom's "testaids") --------------------------------------------
 // WWHD_DEBUG_RNDLOG=path (a probe): every cM_rnd draw (f_02019788; cM_rndF and cM_rndFX call it), at 30 too:
-// game frame, half tick, the executing process's name, the caller, the state before it (Wichmann-Hill's three
-// seeds at 0x101FF9D4); two runs' logs side by side show where 60's stream parts from 30's.
+// game frame, half tick, the process's name (the one drawing in a draw pass, else the last to execute), the
+// caller, the state before it (Wichmann-Hill's three seeds at 0x101FF9D4); two runs' logs side by side show
+// where 60's stream parts from 30's.
 // A half tick's draws are put back after its frame (f_0274C264, below), so a converted process's draw on its
 // half step takes the number the next whole tick will draw again, and the stream moves only on whole ticks.
 // What still parts it from 30's: a draw that moved to the half step (a state changed there and drew; at 30 it
 // draws in the next tick, at 60 not again in the whole step). WWHD_60FPS_RNDSYNC=0 turns off what follows: such a
-// draw is made up for, the stream moved one on when the whole tick's frame is over, once for each half-step
-// draw (its caller) a process didn't make again in its whole step, execute or draw (one it did is a draw
-// each step), so the next tick starts where 30's does (within the tick a process after it still draws a
-// number early).
+// draw is made up for, the stream moved one on right after that process's whole step, where 30 draws it, once
+// for each draw of its half step's execute (by caller) that its whole step's execute didn't make again (one it
+// did is a draw each step), so the processes after it draw 30's numbers (session top found a seagull's (194)
+// trigger firing in its half step: made up at the frame's end, the processes after it drew a number early,
+// a Bokoblin wandered off). Only a converted process's own execute counts: its draw pass's draws (with
+// cM_rndF's, f_02019788's caller is the same for most draws) were taken for repeats and the make-up lost.
 extern uint32 g_rtActor;
 namespace
 {
@@ -2456,6 +2572,7 @@ namespace
 		return on;
 	}
 	std::unordered_map<uint32, std::vector<uint32>> s_rndHalf;   // a stepping process's half-step draws (callers)
+	uint32 s_rndExec = 0;                           // the converted process whose execute runs (f_025DE58C), or 0
 	uint64 s_rndMadeUp = 0;
 	FILE* RndLog()
 	{
@@ -2507,29 +2624,22 @@ void f_02019788(PPCInterpreter_t* __restrict ctx)
 	FILE* const f = RndLog();
 	if (!f && !(RndSync() && g_rtSixty))
 		[[clang::musttail]] return orig_f_02019788(ctx);
-	const uint32 actor = g_rtActor, lr = (uint32)ctx->spr.LR;
+	const uint32 actor = s_drawing ? s_drawing : g_rtActor, lr = (uint32)ctx->spr.LR;
 	const bool live = actor >= 0x10000000u && actor < 0x50000000u;
 	if (f)
 		fprintf(f, "%u %d %d %08x %08x %08x %08x\n", wwhd::rt::GameFrame(wwhd::os::SwapCount()), g_rtHalfTick ? 1 : 0,
 			live ? (int)rd16(actor + 8) : -1, lr, rd32(0x101FF9D4u), rd32(0x101FF9D8u), rd32(0x101FF9DCu));
-	if (RndSync() && g_rtSixty)
+	// a converted process's own execute's draw (a half tick runs only stepping ones)
+	if (const uint32 exec = s_drawing == 0 ? s_rndExec : 0; exec && RndSync() && g_rtSixty)
 	{
 		if (g_rtHalfTick)
+			s_rndHalf[exec].push_back(lr);
+		else if (const auto it = s_rndHalf.find(exec); it != s_rndHalf.end())
 		{
-			const auto st = s_stepping.find(actor);     // (a half step's own draws: not its draw's)
-			if (live && s_drawing == 0 && st != s_stepping.end() && st->second && Converted(rd16(actor + 8)))
-				s_rndHalf[actor].push_back(lr);
-		}
-		else
-		{
-			// drawn on the whole tick too, in its execute or its draw: a draw a step, nothing to make up
-			const uint32 owner = s_drawing ? s_drawing : actor;
-			if (const auto it = s_rndHalf.find(owner); it != s_rndHalf.end())
-			{
-				auto& callers = it->second;
-				if (const auto c = std::find(callers.begin(), callers.end(), lr); c != callers.end())
-					callers.erase(c);
-			}
+			// drawn in its whole step too: a draw a step, nothing to make up
+			auto& callers = it->second;
+			if (const auto c = std::find(callers.begin(), callers.end(), lr); c != callers.end())
+				callers.erase(c);
 		}
 	}
 	orig_f_02019788(ctx);
@@ -2550,7 +2660,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		cemuLog_log(LogType::Force, "wwhd sixty: 60 fps from swap {}", swap);
 	}
 	if (RndSync() && g_rtSixty && !g_rtHalfTick)
-		RndFlushAll();                              // the whole tick's steps and draws are over (the random stream)
+		RndFlushAll();                              // the whole tick is over: a process that didn't step (the random stream)
 	g_rtHalfTick = swap >= from && (swap - from) % 2 != 0;
 	g_rtSixty = swap >= from;
 	if (!g_rtHalfTick)
@@ -2926,7 +3036,12 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 		outer.swap(s_lateNotes);
 		g_rtLateNotes = true;
 	}
+	const uint32 rndOuter = s_rndExec;
+	s_rndExec = proc;                               // its draws are its own (the random stream, f_02019788)
 	orig_f_025DE58C(ctx);
+	s_rndExec = rndOuter;
+	if (!g_rtHalfTick && RndSync())
+		RndFlush(proc);                             // its half step's draws its whole step didn't make again
 	if (camTick)
 		CamTickAfter();
 	if (notes)
@@ -3311,7 +3426,8 @@ namespace
 	// Helmaroc King's tail feathers (BDK 238: four tails at +0x414, 0x17C each; tail_draw reads each one's
 	// places at +0x24 and angles at +0x9C; tail_control on whole ticks but for the roots); a Kargaroc's tail
 	// (BB 181: places at +0xC1C, angles at +0xC94, read by the draw's inlined tail_draw; tail_control on whole
-	// ticks, its root set every step)
+	// ticks, its root set every step); the opening's Helmaroc King (Dk 167: BDK's four tails at +0x3E8, session
+	// bottom's census-left)
 	struct ChainArray { uint16 name; uint32 offset, count; bool angles; };
 	constexpr ChainArray kChainArrays[] = {
 		{ 238, 0x414 + 0x24, 10, false }, { 238, 0x414 + 0x9C, 10, true },
@@ -3319,6 +3435,10 @@ namespace
 		{ 238, 0x70C + 0x24, 10, false }, { 238, 0x70C + 0x9C, 10, true },
 		{ 238, 0x888 + 0x24, 10, false }, { 238, 0x888 + 0x9C, 10, true },
 		{ 181, 0xC1C, 10, false }, { 181, 0xC94, 10, true },
+		{ 167, 0x3E8 + 0x24, 10, false }, { 167, 0x3E8 + 0x9C, 10, true },
+		{ 167, 0x564 + 0x24, 10, false }, { 167, 0x564 + 0x9C, 10, true },
+		{ 167, 0x6E0 + 0x24, 10, false }, { 167, 0x6E0 + 0x9C, 10, true },
+		{ 167, 0x85C + 0x24, 10, false }, { 167, 0x85C + 0x9C, 10, true },
 	};
 
 	void ChainRestore(const std::vector<std::pair<uint32, uint32>>& saved)

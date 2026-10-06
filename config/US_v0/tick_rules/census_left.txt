@@ -1,0 +1,88 @@
+# The work queue's "census-left" (session bottom, 2026-10-06; format: ../tick_rules.txt): the placed types no test
+# had created (census.txt's list), made with WWHD_DEBUG_FLAGS (the story state their creates check, forced),
+# WWHD_DEBUG_PLACE and WWHD_DEBUG_SPAWN, then the step-doubling trial (stage_test.sh) and 30 against 60.
+#
+# ---- Phantom Ganon (FGANON 241, d_a_fganon.cpp; its energy balls are the same class). Made in the Forsaken
+# Fortress (sea room 1 layer 1, params e02a6400) with WWHD_DEBUG_FLAGS=sw:42=0 (its switch: beaten) and Link
+# placed by it (WWHD_DEBUG_PLACE=1000:-299893,713,-303400), so it fights; Ganon's Tower's (GanonM room 0,
+# ff006402, no switch) isn't made even with the room's placements forced (ac:*=0): its create fails there.
+# It steps in its events while Link's action is in the list (the opening's first 16 ticks, Link standing): there
+# demo_camera's count mB56 (+0xD8A, its `== N` cuts) ran twice a tick, the opening 16 ticks ahead at 60 and the fight
+# apart (it's whole below, its cuts eqwhole); end()'s rise (the defeat) has its rules for the same reason.
+# fail() (the Ganon's Tower phantoms', type 1, m694 += m698...) isn't covered: no test makes a type 1.
+02134CAC    whole       sth             fganon execute: its tick count m384 (+0x5B8) + 1
+02134CC0    whole       sthx            fganon execute: its timers m3A4[0..4] (+0x5D8..+0x5E0) - 1
+02134CE0    whole       stb             fganon execute: timer m68A (+0x8BE) - 1
+02134CF4    whole       sth             fganon execute: timer m3AE (+0x5E2) - 1
+02134D04    whole       sth             fganon execute: timer m3B8 (+0x5EC) - 1
+02138CF8    eqwhole     cmpi            fganon: m68A == 1
+0213C294    eqwhole     cmpi            fganon: m68A == 1
+0213D060    eqwhole     cmpi            fganon: m68A == 1
+0213A618    eqwhole     cmpi            fganon: m3A4[1] == 1
+0213A66C    eqwhole     cmpi            fganon: m3A4[0] == 1
+02136214    whole       sth             fganon demo_camera (in the execute): its count mB56 (+0xD8A) + 1
+02135370    eqwhole     cmpi            fganon demo_camera: mB56 == 10
+021354A4    eqwhole     cmpi            fganon demo_camera: mB56 == 2
+021354D4    eqwhole     cmpi            fganon demo_camera: mB56 == 30
+021354E8    eqwhole     cmpi            fganon demo_camera: mB56 == 45
+021355D8    eqwhole     cmpi            fganon demo_camera: mB56 == 47
+02135768    eqwhole     cmpi            fganon demo_camera: mB56 == 110
+0213577C    eqwhole     cmpi            fganon demo_camera: mB56 == 180
+02135790    eqwhole     cmpi            fganon demo_camera: mB56 == 280
+02135A48    eqwhole     cmpi            fganon demo_camera: mB56 == 40
+02135B58    eqwhole     cmpi            fganon demo_camera: mB56 == 100
+02135C30    eqwhole     cmpi            fganon demo_camera: mB56 == 130
+02135C44    eqwhole     cmpi            fganon demo_camera: mB56 == 20
+02135D28    eqwhole     cmpi            fganon demo_camera: mB56 == 130
+0213A0B4    *h@f0       fadds           fganon end: pos.y += speed.y
+0213A0D4    *h@f13      fadds           fganon end: speed.y += 0.2 (+ REG8_F(8))
+02134994    vec@r4      bl 028e8d88     fganon pos_move: pos += speed (fly, shot, spinattack...)
+02139DFC    vec@r4      bl 028e8d88     fganon start: pos += speed (mode 5)
+0213D3C8    vec@r4      bl 028e8d88     fganon move: pos += the knock-back (m3B0 along its angles; cLib_addCalc0 steps it)
+02136600    vec@r4      bl 028e8d88     fganon energy_ball_move (in the execute): the ball's pos (+0x614) += its speed (+0x62C)
+02136B24    vec@r4      bl 028e8d88     fganon energy_ball_move: the same (its second copy)
+021377A4    whole       stb             fganon execute: timer m6AC (+0x8E0) - 1 (tested == 0 only)
+02134B98    keep:r7     addi            fganon execute: mB89 (+0xDBD) - 1, then == 1 acts (keep: a half step tests it as it is)
+021351F4    whole       sth             fganon execute: m6A6 (+0x8DA) - 1, a shake's decay (tested == 0 only)
+02136C40    whole       stb             fganon energy_ball_move: its timer m40A (+0x63E) - 1 (tested == 0 only)
+0213C74C    whole       stb             fganon shot: m409 = 1 (the throw) at (int)frame == 14: the frame is 14 on two steps
+#                                       at 60 (14.0, 14.5), one of them whole; set again after the throw it waited for the
+#                                       next ball and threw it as soon as it formed
+0213971C    *h@f11      fsubs           fganon down: speed.y -= 0.5 (a copy for each mode)
+021397D4    *h@f11      fsubs           fganon down: speed.y -= 0.5 (a copy for each mode)
+0213984C    *h@f11      fsubs           fganon down: speed.y -= 0.5 (a copy for each mode)
+021398E0    *h@f11      fsubs           fganon down: speed.y -= 0.5 (a copy for each mode)
+02139934    *h@f11      fsubs           fganon down: speed.y -= 0.5 (a copy for each mode)
+02139724    *h@f10      fadds           fganon down: pos.y += speed.y
+021397DC    *h@f10      fadds           fganon down: pos.y += speed.y
+02139854    *h@f10      fadds           fganon down: pos.y += speed.y
+021398E8    *h@f10      fadds           fganon down: pos.y += speed.y
+0213993C    *h@f10      fadds           fganon down: pos.y += speed.y
+# move()'s pos += cc_move (0213D350...) is the push: the push split's (src/overrides/sixty.cpp, resolve).
+#
+# ---- Makar (NPC_CB1 334, Forest Haven: Omori room 0 layer 0, params 00000001, his Forest type): made with
+# WWHD_DEBUG_FLAGS=ev:2910=0,2E02=0,1610=0,1820=0;it:3E=0,3A=0 (his create's story checks). He animates every
+# tick; the trial is clean, 30 against 60 0 apart: converted with no rules.
+#
+# ---- Vfan (Obj_Vfan 54, GanonM room 0, params 00000018): made with WWHD_DEBUG_FLAGS=sw:24=0 (and the room's
+# placements forced, ac:*=0); still (its state changed on 1 of 200 ticks), the trial clean: left at 30.
+#
+# ---- Dk (167, d_a_dk.cpp: the Helmaroc King of the opening, over Outset: sea room 44 layers 0, 8 and 9; made on
+# layer 9 by WWHD_DEBUG_STAGE=920:sea,0,44,9). It hovers in place, its tail feathers swaying: the Helmaroc King's
+# (BDK 238, fortress.txt) tail_control, inlined in its execute (f_02124F00), four tails of ten at +0x3E8, 0x17C
+# apart; as there, their state's stores on whole ticks (the 30 Hz step, their roots following the body every
+# step) and their places and angles drawn half a tick on in a half tick's draw (src/overrides/sixty.cpp's
+# kChainArrays). Its tick count and timers (no equality tests):
+02124FD4    whole       sth             dk execute: its tick count (+0x3D8) + 1
+02124FE8    whole       sthx            dk execute: its timers (+0x3DC[5]) - 1
+021254AC    whole       sth             dk tail: a segment's angle y
+021254B8    whole       sth             dk tail: its angle x
+0212550C    whole       stw             dk tail: its last place (x, kept in the velocity's slot)
+02125514    whole       stw             dk tail: (y)
+0212551C    whole       stw             dk tail: (z)
+02125530    whole       stfs            dk tail: its place (x)
+02125540    whole       stfs            dk tail: (y)
+0212554C    whole       stfs            dk tail: (z)
+02125560    whole       stfs            dk tail: its velocity (x)
+02125574    whole       stfs            dk tail: (y)
+02125598    whole       stfs            dk tail: (z)

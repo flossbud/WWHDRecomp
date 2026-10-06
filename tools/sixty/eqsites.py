@@ -17,7 +17,8 @@ otherwise (blt, bge...: not eligible) and [EQ0] for `== 0`: a countdown that res
 on every tick after it ran out, a state, not an event, so 30 takes that branch every tick too; eqwhole there
 would send the half step down the running timer's branch. Rule an [EQ0] only for a count that passes 0 (one
 counted down without the guard, or up from below). The loaded register is followed for 16 instructions
-until something writes it, so a second compare of it (`== 1 || == 0x46`) is listed too. With --rules TAG
+until something writes it or an unconditional branch ends the block (what follows is reached from elsewhere), so a
+second compare of it (`== 1 || == 0x46`) is listed too. With --rules TAG
 the [EQ] ones are printed as tick-rule lines (TAG starts their description). Session bottom's "bossfights"
 (2026-10-06).
 """
@@ -58,6 +59,11 @@ def sites(d, fields):
                     loaded[m.group(3)] = (n, m.group(4))
                 else:
                     loaded.pop(m.group(3), None)
+                continue
+            # an unconditional branch or a return: the next instruction is reached from elsewhere, with other
+            # registers (a switch's compare after a count's `b`; session bottom read one as a count's test)
+            if op in ("b", "blr", "bctr", "rfi"):
+                loaded.clear()
                 continue
             # anything else that writes a register (its first operand; stores, compares and branches write none)
             regs = re.findall(r"\br(\d+)\b", args)

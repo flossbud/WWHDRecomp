@@ -43,6 +43,7 @@ address,name,evidence
 025B8BB0,getEventReg,twwhd-randomizer@f28d289 asm/linker.ld
 025B8AF4,setEventReg,twwhd-randomizer@f28d289 asm/linker.ld
 025BA0C0,dSv_info_c::isSwitch,twwhd-randomizer@f28d289 asm/linker.ld
+025BA6A4,dSv_info_c::isActor,"WW-4 (session bottom, census-left): after isSwitch (025BA0C0) the zone functions follow d_save.cpp's order (onItem, isItem, onActor, isActor: their JUT_ASSERT lines 12/2, 11/2, 3 and 2/2 apart, as the decomp's 10/2, 9/2, 2 and 2/2); forced to 0 (WWHD_DEBUG_FLAGS ac:) the stage loader placed GanonM's Obj_Vfan (54), which the finished save's set ID had left out"
 025B9E38,onSwitch,twwhd-randomizer@f28d289 asm/linker.ld
 025B9F7C,offSwitch,twwhd-randomizer@f28d289 asm/linker.ld
 025B8DC8,dSv_memBit_c::isSwitch,twwhd-randomizer@f28d289 asm/linker.ld
