@@ -183,7 +183,7 @@ a.earlier { color: var(--link); font-weight: 600; }
 .mScroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .mPane { display: none; }
 .mPane.on { display: block; }
-.mTabs { flex: none; background: #fff; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+.mTabs { flex: none; background: #fff; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
   padding-bottom: env(safe-area-inset-bottom); }
 .mTabs button { height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: pointer;
   background: none; border: 0; padding: 0; font: inherit; }
@@ -291,6 +291,52 @@ a.earlier { color: var(--link); font-weight: 600; }
 .mNum:last-child { border-bottom: 0; }
 .mNum span { margin-left: auto; font-family: var(--mono); color: var(--ink); font-weight: 700; font-size: 15px; }
 
+/* testing notes (notes.json, written through server.py): the owner's own, with pasted images */
+#notesDesk, #notesMob { display: flex; flex-direction: column; gap: 12px; }
+.ntCompose { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.ntCompose.drag { border-color: var(--link); background: #f4f8fd; }
+.ntCompose textarea { font: inherit; font-size: 13.5px; line-height: 1.5; border: 0; outline: none; resize: vertical; min-height: 76px;
+  color: var(--ink); background: transparent; padding: 0; }
+.ntPending { display: flex; gap: 8px; flex-wrap: wrap; }
+.ntPending:empty { display: none; }
+.ntThumb { position: relative; width: 104px; aspect-ratio: 16/10; border-radius: 6px; overflow: hidden; background: var(--line); }
+.ntThumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ntThumb.up img { opacity: .45; }
+.ntThumb.up::after { content: "uploading…"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--ink); }
+.ntThumb.err { outline: 2px solid var(--red); }
+.ntThumb button { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(10,26,43,.75);
+  color: #fff; font-size: 14px; line-height: 22px; padding: 0; cursor: pointer; }
+.ntBar { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--line2); padding-top: 10px; flex-wrap: wrap; }
+.ntAdd { font-size: 12.5px; font-weight: 600; padding: 6px 10px; border-radius: 7px; border: 1px solid var(--line); color: var(--link); cursor: pointer; background: #fff; }
+.ntHint { font-size: 11.5px; color: var(--ink3); }
+.ntSave { margin-left: auto; background: var(--navy); color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ntSave:disabled { opacity: .45; cursor: default; }
+.ntErr { font-size: 12px; color: var(--red); }
+.ntList, .ntDoneList { display: flex; flex-direction: column; gap: 12px; }
+.nt { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.nt.isDone { opacity: .72; }
+.ntHead { display: flex; align-items: center; gap: 8px; }
+.ntHead .id { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--link); }
+.ntHead .ago { margin-left: auto; font-size: 11px; color: var(--ink3); }
+.pill.ntDonePill { background: #e1efe4; color: #2f6b3a; }
+.ntText { font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ntImgs { display: flex; gap: 8px; flex-wrap: wrap; }
+.ntImgs img { height: 104px; max-width: 100%; border-radius: 6px; cursor: zoom-in; object-fit: cover; background: var(--line); display: block; }
+.ntReply { font-size: 12.5px; line-height: 1.5; color: var(--ink2); background: var(--bg); border-radius: 8px; padding: 8px 10px; display: flex; gap: 8px; align-items: baseline; }
+.ntReply i { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.ntReply b { color: var(--ink); font-weight: 600; }
+.ntReply span { overflow-wrap: anywhere; }
+.ntActions { display: flex; gap: 16px; flex-wrap: wrap; }
+.ntActions button { background: none; border: 0; padding: 2px 0; font: inherit; font-size: 12px; font-weight: 600; color: var(--link); cursor: pointer; }
+.ntActions button.del { color: var(--ink3); }
+.nt textarea { font: inherit; font-size: 13.5px; line-height: 1.5; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-height: 80px; resize: vertical; width: 100%; }
+.ntDone summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--ink2); margin: 2px 0 10px; }
+.ntEmpty { font-size: 12.5px; color: var(--ink3); }
+.m .ntCompose textarea, .m .nt textarea { font-size: 16px; }
+.m .ntText { font-size: 14px; }
+.m .ntActions button { font-size: 13px; padding: 6px 0; }
+.m .ntAdd, .m .ntSave { font-size: 14px; padding: 9px 14px; }
+
 /* the enlarged screenshot and the bug list: overlays */
 .overlay { position: fixed; inset: 0; z-index: 9; display: none; }
 #zoom { background: rgba(0,0,0,.94); align-items: center; justify-content: center; padding: 16px 64px; }
@@ -367,6 +413,11 @@ a.earlier { color: var(--link); font-weight: 600; }
     </section>
 
     <section>
+      <div class="head"><h2>Testing notes</h2><span class="meta" id="notesMeta"></span></div>
+      <div id="notesDesk"></div>
+    </section>
+
+    <section>
       <div class="head"><h2>Work queue</h2><span class="meta" id="queueMeta"></span></div>
       <div class="kanban">
         <div class="col open"><div class="colHead"><i></i>Open<span id="nOpen">0</span></div><div class="colList" id="qOpen"></div></div>
@@ -429,6 +480,12 @@ a.earlier { color: var(--link); font-weight: 600; }
         <div class="mList" id="mQList"></div>
       </div>
     </div>
+    <div class="mPane" id="mNotes">
+      <div class="mPad">
+        <div class="mH"><h2>Testing notes</h2><span id="mNotesMeta"></span></div>
+        <div id="notesMob"></div>
+      </div>
+    </div>
     <div class="mPane" id="mLogPane">
       <div class="mPad">
         <div class="mSeg" id="mLSeg"></div>
@@ -441,6 +498,7 @@ a.earlier { color: var(--link); font-weight: 600; }
     <button data-tab="shots"><i></i><span>Shots</span></button>
     <button data-tab="queue"><i></i><span>Queue</span></button>
     <button data-tab="log"><i></i><span>Log</span></button>
+    <button data-tab="notes"><i></i><span>Notes</span></button>
   </nav>
 </div>
 
@@ -590,18 +648,20 @@ $("pager").addEventListener("click", e => {
 
 // the enlarged view: buttons, the arrow keys (Esc closes) and a swipe on phones go through every shot
 const zoom = $("zoom");
-let zoomAt = -1;
+let zoomAt = -1, viewList = [];
+// the viewer goes through a list of {file, caption, time}: the screenshots, or a note's images
+function openViewer(list, i) { viewList = list; showShot(i); }
 function showShot(i) {
-  if (!shotList.length) return;
-  zoomAt = (i + shotList.length) % shotList.length;
-  const x = shotList[zoomAt];
+  if (!viewList.length) return;
+  zoomAt = (i + viewList.length) % viewList.length;
+  const x = viewList[zoomAt];
   zoom.querySelector("img").src = x.file;
   zoom.querySelector("img").alt = x.caption;
-  $("zoomCap").textContent = `${zoomAt + 1} / ${shotList.length} · ${x.caption} · ${agoText(x.time)}`;
+  $("zoomCap").textContent = `${zoomAt + 1} / ${viewList.length} · ${x.caption} · ${agoText(x.time)}`;
   zoom.style.display = "flex";
 }
 function closeShot() { zoom.style.display = "none"; zoomAt = -1; }
-$("hero").addEventListener("click", () => showShot(sel));
+$("hero").addEventListener("click", () => openViewer(shotList, sel));
 zoom.addEventListener("click", e => {
   const b = e.target.closest("button");
   if (b && b.classList.contains("prev")) showShot(zoomAt - 1);
@@ -752,7 +812,7 @@ const entryHtml = e => `<div class="entry"><i style="background:${color(e.sess)}
 function renderLog() { $("log").innerHTML = logEntries().map(entryHtml).join(""); }
 
 // --- phones: the mobile layout (tabs Now, Shots, Queue, Log; the tab is kept in the URL's hash) ---
-const TABS = ["now", "shots", "queue", "log"], SHOTS_STEP = 6;
+const TABS = ["now", "shots", "queue", "log", "notes"], SHOTS_STEP = 6;
 let mTab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "now", mQ = "working", mL = "commits", mShown = SHOTS_STEP;
 const isPhone = () => matchMedia("(max-width: 599px)").matches;
 function setTab(t) {
@@ -775,7 +835,7 @@ function renderMobile() {
   if (!data) return;
   const o = overall(), frac = o.n ? o.done / o.n : 0, p = Math.round(100 * frac) + "%";
   for (const b of $("mTabs").children) b.classList.toggle("on", b.dataset.tab === mTab);
-  for (const [t, id] of [["now", "mNow"], ["shots", "mShots"], ["queue", "mQueue"], ["log", "mLogPane"]]) $(id).classList.toggle("on", t === mTab);
+  for (const [t, id] of [["now", "mNow"], ["shots", "mShots"], ["queue", "mQueue"], ["log", "mLogPane"], ["notes", "mNotes"]]) $(id).classList.toggle("on", t === mTab);
   $("mTitle").textContent = data.title || "WWHD Recomp";
   $("mMini").hidden = mTab === "now";
   ringArc("mMiniArc", frac, 113.1); $("mMiniPct").textContent = p;
@@ -843,10 +903,132 @@ $("mBugs").addEventListener("click", e => {
   openBugs[card.dataset.id] = !openBugs[card.dataset.id]; renderMobile(); renderBugs();
 });
 $("mLatest").addEventListener("click", () => setTab("shots"));
-$("mFeed").addEventListener("click", e => { if (e.target.tagName === "IMG") showShot(+e.target.dataset.i); });
+$("mFeed").addEventListener("click", e => { if (e.target.tagName === "IMG") openViewer(shotList, +e.target.dataset.i); });
 $("mMore").addEventListener("click", () => { mShown += SHOTS_STEP; renderMobile(); });
 $("mQSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { mQ = b.dataset.id; renderMobile(); } });
 $("mLSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { mL = b.dataset.id; renderMobile(); } });
+
+// --- testing notes: the owner writes them here (server.py stores them in notes.json; images pasted, dropped or
+// picked go up first, to notes/); the sessions read them and reply with publish.sh notes ---
+let notesList = [];
+async function notesApi(method, path, body, type) {
+  const r = await fetch(path, {method, body, headers: {"X-WWHD": "1", "Content-Type": type || "application/json"}});
+  let j = null; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error((j && j.error) || `the server said ${r.status}`);
+  return j;
+}
+// a big photo or a type the server won't take (HEIC from a phone) goes up as a JPEG of at most 2560 px
+async function uploadable(file) {
+  const ok = ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type);
+  if (ok && file.size <= 8 * 1024 * 1024) return file;
+  const bmp = await createImageBitmap(file), k = Math.min(1, 2560 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas"); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  return await new Promise(res => c.toBlob(res, "image/jpeg", 0.88));
+}
+function NotesUI(root, metaId) {
+  root.innerHTML = `<div class="ntCompose">
+      <textarea placeholder="What did you notice while testing? Paste or drop screenshots here."></textarea>
+      <div class="ntPending"></div>
+      <div class="ntBar"><label class="ntAdd">Add image<input type="file" accept="image/*" multiple hidden></label>
+        <span class="ntHint">${matchMedia("(pointer: fine)").matches ? "Paste or drop images · Ctrl+Enter saves" : ""}</span>
+        <button class="ntSave">Save note</button></div>
+      <div class="ntErr" hidden></div>
+    </div>
+    <div class="ntList"></div>
+    <details class="ntDone" hidden><summary></summary><div class="ntDoneList"></div></details>`;
+  const q = sel => root.querySelector(sel), box = q(".ntCompose"), ta = q("textarea"), save = q(".ntSave"), err = q(".ntErr");
+  let pending = [], editing = null;
+  const showErr = m => { err.hidden = !m; err.textContent = m || ""; };
+  const busy = () => pending.some(p => p.state === "up");
+  function drawPending() {
+    q(".ntPending").innerHTML = pending.map((p, i) => `<div class="ntThumb ${p.state}"><img src="${p.url}" alt=""><button data-i="${i}" aria-label="Remove image">×</button></div>`).join("");
+    save.disabled = busy();
+  }
+  async function addFiles(files) {
+    for (const f of files) {
+      if (!f.type.startsWith("image/")) continue;
+      const p = {url: URL.createObjectURL(f), state: "up", file: null};
+      pending.push(p); drawPending();
+      try {
+        const blob = await uploadable(f);
+        p.file = (await notesApi("POST", "/api/notes/image", blob, blob.type)).file; p.state = "ok";
+      } catch (e) { p.state = "err"; showErr("An image didn't upload: " + e.message); }
+      drawPending();
+    }
+  }
+  async function submit() {
+    const text = ta.value.trim(), images = pending.filter(p => p.state === "ok").map(p => p.file);
+    if (busy() || (!text && !images.length)) return;
+    save.disabled = true; showErr("");
+    try {
+      await notesApi("POST", "/api/notes", JSON.stringify({text, images}));
+      ta.value = ""; pending.forEach(p => URL.revokeObjectURL(p.url)); pending = []; drawPending();
+      await reloadNotes();
+    } catch (e) { showErr("Not saved: " + e.message); }
+    save.disabled = busy();
+  }
+  ta.addEventListener("paste", e => {
+    const files = [...(e.clipboardData ? e.clipboardData.items : [])].filter(i => i.kind === "file").map(i => i.getAsFile()).filter(Boolean);
+    if (!files.length) return;
+    if (!e.clipboardData.getData("text/plain")) e.preventDefault();
+    addFiles(files);
+  });
+  ta.addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); } });
+  box.addEventListener("dragover", e => { e.preventDefault(); box.classList.add("drag"); });
+  box.addEventListener("dragleave", () => box.classList.remove("drag"));
+  box.addEventListener("drop", e => { e.preventDefault(); box.classList.remove("drag"); addFiles([...e.dataTransfer.files]); });
+  q("input[type=file]").addEventListener("change", e => { addFiles([...e.target.files]); e.target.value = ""; });
+  q(".ntPending").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    URL.revokeObjectURL(pending[+b.dataset.i].url); pending.splice(+b.dataset.i, 1); drawPending();
+  });
+  save.addEventListener("click", submit);
+
+  const card = n => {
+    const imgs = (n.images || []).map((f, i) => `<img src="${esc(f)}" alt="Image ${i + 1} of note ${esc(n.id)}" loading="lazy" data-i="${i}">`).join("");
+    const body = editing === n.id ? `<textarea>${esc(n.text)}</textarea>` : n.text ? `<div class="ntText">${esc(n.text)}</div>` : "";
+    return `<div class="nt${n.done ? " isDone" : ""}" data-id="${esc(n.id)}">
+      <div class="ntHead"><span class="id">${esc(n.id)}</span>${n.done ? `<span class="pill ntDonePill">done</span>` : ""}
+        <span class="ago">${agoText(n.time)}${n.edited ? " · edited" : ""}</span></div>
+      ${body}${imgs ? `<div class="ntImgs">${imgs}</div>` : ""}
+      ${(n.replies || []).map(r => `<div class="ntReply"><i style="background:${color(r.session)}"></i><span><b>${esc(r.session)}</b> ${esc(r.text)} · ${agoText(r.time)}</span></div>`).join("")}
+      <div class="ntActions">${editing === n.id ? `<button data-act="save">Save</button><button data-act="cancel">Cancel</button>` :
+        `<button data-act="done">${n.done ? "Reopen" : "Mark done"}</button><button data-act="edit">Edit</button><button data-act="delete" class="del">Delete</button>`}</div></div>`;
+  };
+  function render(force) {
+    if (editing && !force) return;   // the 20 s refresh doesn't throw away an edit in progress
+    const open = notesList.filter(n => !n.done), done = notesList.filter(n => n.done);
+    if (metaId) $(metaId).textContent = notesList.length ? `${open.length} open · ${done.length} done` : "for what you see while testing";
+    q(".ntList").innerHTML = open.map(card).join("") || (notesList.length ? "" : `<div class="ntEmpty">No notes yet. Sessions read them and reply here.</div>`);
+    q(".ntDone").hidden = !done.length;
+    q(".ntDone summary").textContent = `Done (${done.length})`;
+    q(".ntDoneList").innerHTML = done.map(card).join("");
+    if (editing) { const t = root.querySelector(".nt textarea"); if (t) t.focus(); }
+  }
+  root.addEventListener("click", async e => {
+    const img = e.target.closest(".ntImgs img");
+    if (img) {
+      const n = notesList.find(x => x.id === img.closest(".nt").dataset.id);
+      openViewer(n.images.map((f, i) => ({file: f, caption: `${n.id}, image ${i + 1}`, time: n.time})), +img.dataset.i);
+      return;
+    }
+    const b = e.target.closest(".ntActions button"); if (!b) return;
+    const id = b.closest(".nt").dataset.id, n = notesList.find(x => x.id === id);
+    try {
+      if (b.dataset.act === "edit") { editing = id; render(true); return; }
+      if (b.dataset.act === "cancel") { editing = null; render(true); return; }
+      if (b.dataset.act === "save") await notesApi("PATCH", "/api/notes/" + id, JSON.stringify({text: b.closest(".nt").querySelector("textarea").value}));
+      if (b.dataset.act === "done") await notesApi("PATCH", "/api/notes/" + id, JSON.stringify({done: !n.done}));
+      if (b.dataset.act === "delete") { if (!confirm(`Delete note ${id}?`)) return; await notesApi("DELETE", "/api/notes/" + id); }
+      editing = null; await reloadNotes();
+    } catch (e2) { alert("That didn't work: " + e2.message); }
+  });
+  return {render};
+}
+const noteUIs = [NotesUI($("notesDesk"), "notesMeta"), NotesUI($("notesMob"), "mNotesMeta")];
+const renderNotes = force => noteUIs.forEach(u => u.render(force));
+async function reloadNotes() { const n = await get("notes.json"); notesList = n || []; renderNotes(true); }
 
 // --- Claude usage: the account's meters (publish.sh usage, every 5 minutes from the editing machine) ---
 const WRAP_AT = 75;   // the owner's rule (2026-10-06): at 75% of the week, sessions wrap up (finish, commit, hand off), not stop dead
@@ -890,6 +1072,8 @@ async function refresh() {
   const [p, n, s, a, c, b, u] = await Promise.all([get("progress.json"), get("sessions.json"), get("shots.json"), get("shots-archive.json"),
     get("claims.json"), get("bugs.json"), get("usage.json")]);
   if (u) usage = u;
+  const nt = await get("notes.json");
+  if (nt) notesList = nt;
   if (c) claims = c;
   if (b) bugList = b;
   if (n) sessions = n;
@@ -902,7 +1086,7 @@ async function refresh() {
   if (p) data = p;
   if (data) { renderSide(); renderQueue(); renderIssues(); renderLog(); }
   renderAgents(); renderShots(); renderBugs();
-  renderMobile(); renderUsage();
+  renderMobile(); renderUsage(); renderNotes();
   if (sheet.style.display === "flex") renderSheet();
   renderFresh(!!p);
 }

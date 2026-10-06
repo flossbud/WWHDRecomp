@@ -34,7 +34,11 @@
 #                           /api/usage/claude ($WWHD_USAGE_URL, default http://127.0.0.1:7690) to usage.json:
 #                           percentages and reset times only, the login token never leaves the editing machine. A
 #                           crontab entry on the editing machine (tagged wwhd-usage) runs it every 5 minutes
-#   publish.sh serve        start the server if it isn't running (http://TAILNET_IP:8765)
+#   publish.sh notes                         the owner's testing notes (written on the page), newest first
+#   publish.sh notes reply ID TEXT           answer one (shown under it on the page, as this session)
+#   publish.sh notes done|reopen ID [TEXT]   mark it handled (with an optional reply) or open again
+#   publish.sh serve        install server.py and start it if it isn't running, or restart it if server.py
+#                           changed (http://TAILNET_IP:8765; it serves the page and stores the notes)
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
@@ -159,6 +163,34 @@ if len(shots) > 24:
 save(path, shots[:24])
 PY
 		;;
+	notes)
+		ssh $host "python3 - $dir/notes.json $(printf %q "${2:-list}") $(printf %q "${3:-}") $(printf %q "$(json_str "${4:-}")") $(printf %q "$session") $(date +%s)" <<'PY'
+import fcntl, json, os, sys
+path, op, nid, text, session, t = sys.argv[1], sys.argv[2], sys.argv[3], json.loads(sys.argv[4]), sys.argv[5], int(sys.argv[6])
+lock = open(os.path.join(os.path.dirname(path), ".notes.lock"), "a")
+fcntl.flock(lock, fcntl.LOCK_EX)   # the server takes it too
+notes = json.load(open(path)) if os.path.exists(path) else []
+if op == "list":
+    for n in notes:
+        print(f"{n['id']} {'done' if n['done'] else 'open'} {n['time']}: {n['text']}")
+        for f in n.get("images", []):
+            print(f"   image: http://WORKER_ADDR:8765/{f}")
+        for r in n.get("replies", []):
+            print(f"   {r['session']}: {r['text']}")
+    sys.exit(0)
+n = next((x for x in notes if x["id"].lower() == nid.lower()), None)
+if not n:
+    sys.exit(f"no note {nid}")
+if op in ("done", "reopen"):
+    n["done"] = op == "done"
+elif op != "reply" or not text:
+    sys.exit("notes reply ID TEXT | notes done|reopen ID [TEXT]")
+if text:
+    n.setdefault("replies", []).append({"text": text, "session": session, "time": t})
+json.dump(notes, open(path + ".tmp", "w"), indent=1); os.replace(path + ".tmp", path)
+print(f"{n['id']}: {op} ({session})")
+PY
+		;;
 	usage)
 		u=$(curl -sf -m 20 "${WWHD_USAGE_URL:-http://127.0.0.1:7690}/api/usage/claude") || { echo "usage: the editing machine didn't answer" >&2; exit 1; }
 		printf '%s' "$u" | python3 -c 'import json,sys,time; d=json.load(sys.stdin); s=d["snapshot"]
@@ -166,12 +198,16 @@ json.dump({"meters": s["meters"], "fetchedAt": s["fetchedAt"] // 1000, "stale": 
 			ssh $host "cat > $dir/usage.json.tmp && mv $dir/usage.json.tmp $dir/usage.json"
 		;;
 	serve)
+		ssh $host "mkdir -p $dir && cat > $dir/.server.py.new" < "$here/server.py"
 		ssh $host "bash -s" <<EOF
-mkdir -p $dir
-if [ -f $dir/.pid ] && kill -0 \$(cat $dir/.pid) 2>/dev/null; then echo "running (pid \$(cat $dir/.pid))"; exit 0; fi
+cd $dir
+running() { [ -f .pid ] && grep -q server.py /proc/\$(cat .pid)/cmdline 2>/dev/null; }
+if running && cmp -s .server.py .server.py.new; then rm .server.py.new; echo "running (pid \$(cat .pid))"; exit 0; fi
+mv .server.py.new .server.py
+if running; then kill \$(cat .pid); sleep 1; fi
 ip=\$(tailscale ip -4 | head -1)
-cd $dir && setsid -f sh -c 'echo \$\$ > .pid; exec python3 -m http.server $port --bind '\$ip > $dir/.server.log 2>&1 < /dev/null
-sleep 1; echo "serving http://\$ip:$port (pid \$(cat $dir/.pid))"
+setsid -f python3 .server.py $port \$ip >> .server.log 2>&1 < /dev/null
+sleep 1; running && echo "serving http://\$ip:$port (pid \$(cat .pid))" || { echo "didn't start: tail .server.log"; tail -5 .server.log; exit 1; }
 EOF
 		;;
 	"")
@@ -181,5 +217,5 @@ EOF
 		rm -f "$names"
 		ssh $host "cat > $dir/index.html" < "$here/index.html"
 		;;
-	*) echo "usage: publish.sh [now TEXT | retire [SESSION] | claim|done|release ID [NOTE] | step ID DONE TOTAL | bug ... | shot PPM CAPTION [PLACE] | usage | serve]" >&2; exit 2 ;;
+	*) echo "usage: publish.sh [now TEXT | retire [SESSION] | claim|done|release ID [NOTE] | step ID DONE TOTAL | bug ... | shot PPM CAPTION [PLACE] | notes ... | usage | serve]" >&2; exit 2 ;;
 esac
