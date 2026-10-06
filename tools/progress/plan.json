@@ -388,6 +388,10 @@
     {
       "id": "hitcounts",
       "name": "Round 7: counters added to while a hit reads true (the tick's hits persist until the next resolution, so both steps read them: Jalhalla's m47E): audit the converted types and keep them to whole ticks (main's)"
+    },
+    {
+      "id": "bossweapons",
+      "name": "Round 7: Link's items on the bosses at 30 and 60 (the hookshot on Molgera's tongue, arrows at Gohdan's eyes, the hammer on Helmaroc's mask, light arrows on Ganondorf), and Gohdan's demo counter (bottom's)"
     }
   ],
   "later": [
