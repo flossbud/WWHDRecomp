@@ -1317,6 +1317,23 @@ it in a window; D21 "Step 2"):**
     as converted steps inside the draw pass); an already-saved test before the indirect call needs
     s_converting kept out (HalfTickStore notes converted executes' global stores for the draw pass's
     hiding before it looks at the saved bits).
+  - **The HD UI's animations at 60 (session top; the work queue's "ui30"; sixty.cpp's UiAnims)**: the HD UI's
+    layouts (the HUD, the message box, the menus, the sea chart) animate with NintendoWare's AnimTransform, and
+    each screen's update (f_02002C90, from the play scene's execute: whole ticks) puts the frames on the panes,
+    works out the panes' matrices, then steps the frames for the next tick (f_02872DFC). The HD renderer draws
+    the matrices every frame, so all of them moved at 30 Hz: the HUD's bow gems pulse in scale (the corner block
+    every hz30 scan showed), the message box's next icon spins, the sea chart's marker. Not the request ring
+    (sead node 1), the HD UI's per-frame update (020359AC), METER (481) or the HD frame counters: holding or
+    freeing each changed nothing. Now on a half tick each animation that played in the last whole tick is
+    put back to the frame that tick drew, stepped half its rate by its own controller, put on its panes, and
+    given back its state; then each screen updated works out its matrices again (with 1: every pane; with 0 a
+    pane under an unchanged one is passed over). Gems: whole ticks as before, half ticks between; hz30: the
+    HUD's corner 1 -> 0 (Outset), the sea chart 8 -> 0, the next icon now moves every frame (too small for
+    hz30's blocks). Costs ~0.2 ms a half frame (continue route, desktop). `WWHD_60FPS_UIANIM=0`: off. Found
+    with probes kept out of git: WWHD_60FPS_FIND (where a value is), a store watch in rt_journal_store (who
+    writes an address: g_rtJournalOn kept on, the quiet watch's resets too; the memory imports bypass it),
+    GX2SetVertexUniformReg's values (who uploads a matrix), and the back chain (r1, then each frame's +4). Left:
+    the message box's right edge steps at the whole -> half swap while it settles (another mechanism).
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next

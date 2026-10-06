@@ -1932,6 +1932,100 @@ void f_025F172C(PPCInterpreter_t* __restrict ctx)
 	}
 }
 
+// ---- the HD UI's layout animations at 60 (the work queue's "ui30") --------------------------------------
+// The HD UI's layouts (the HUD, the message box, the menus) animate with NintendoWare's AnimTransform. Once a
+// tick (the play scene's execute, whole ticks) each screen's update (f_02002C90, for a screen whose root pane's
+// +0xC is 0) puts its animations' frames on their panes (its vtable's +0x4C: each AnimTransform's Animate,
+// vtable +0x14 slot +0x2C, f_028714D0, hands its frame at +0xC to each bound pane: scale, colours,
+// visibility...), works out the panes' matrices (+0x64: f_0287FBFC, the draw info at the update's +0xC), and
+// then steps the frames for the next tick (+0x54: f_02872DFC, frame += rate +0x24, then wrapped, clamped or
+// turned back by its mode +0x28, its events in +0x2C). The HD renderer draws those matrices every frame, so
+// every layout animation moved at 30 Hz (the HUD's bow gems pulse in scale, P_ArrowFire/Ice/Light_00: the
+// corner block every hz30 scan shows). On a half tick, before its frame, each one that played in the last
+// whole tick (its rate not 0) is put back to the frame that tick drew, stepped half its rate on by its own
+// controller, put on its panes by its own Animate, and given back its frame, rate and events; then each screen
+// that tick updated works out its panes' matrices again (all of them). The half tick's frame draws them half a
+// rate on, and the next whole tick puts and steps them as at 30. An animation or screen gone since (list links,
+// vtable or root changed) is skipped. WWHD_60FPS_UIANIM=0: off.
+namespace
+{
+	bool UiAnims()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_UIANIM"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+
+	struct UiAnim { uint32 anim, vtable, frame; };   // its frame before the whole tick's step
+	std::vector<UiAnim> s_uiAnims;               // the AnimTransforms that played in the last whole tick
+	struct UiScreen { uint32 update, screen, vtable, root; };
+	std::vector<UiScreen> s_uiScreens;           // the screens it updated (f_02002C90)
+
+	void UiAnimsHalfStep(PPCInterpreter_t* ctx)
+	{
+		if (s_uiAnims.empty() || s_uiScreens.empty())
+			return;
+		Registers regs;
+		regs.Save(ctx);
+		const uint32 sp = (regs.gpr[1] - 0x200) & ~0xFu;
+		for (const UiAnim& a : s_uiAnims)
+		{
+			const uint32 t = a.anim, next = rd32(t), prev = rd32(t + 4);
+			if (rd32(t + 0x14) != a.vtable || !next || !prev || rd32(next + 4) != t || rd32(prev) != t)
+				continue;
+			uint8 saved[0x30];
+			memcpy(saved, memory_base + t, sizeof(saved));
+			wr32(t + 0xC, a.frame);                      // from the frame the whole tick drew (its step came after)
+			wr32(t + 0x24, std::bit_cast<uint32>(std::bit_cast<float>(rd32(t + 0x24)) * 0.5f));
+			wr32(sp, regs.gpr[1]);                       // a back chain
+			ctx->gpr[1] = sp;
+			ctx->gpr[3] = t;
+			orig_f_02872DFC(ctx);                        // half its rate on
+			memcpy(memory_base + t + 0x24, saved + 0x24, sizeof(saved) - 0x24);   // its rate, mode and events
+			ctx->gpr[1] = sp;
+			ctx->gpr[3] = t;
+			ctx->spr.CTR = rd32(a.vtable + 0x2C);        // Animate
+			RT_CALL_CTR();
+			memcpy(memory_base + t, saved, sizeof(saved));   // its frame as the whole tick left it
+		}
+		// and the panes' matrices from their new values: each screen the whole tick updated (f_02002C90:
+		// animate, its vtable's +0x4C; calculate, +0x64, f_0287FBFC with the draw info at the update's +0xC;
+		// then +0x54), its calculate again
+		for (const UiScreen& u : s_uiScreens)
+		{
+			const uint32 screen = rd32(u.update + 4);
+			if (screen != u.screen || rd32(screen + 0x30) != u.vtable || rd32(screen + 0xC) != u.root)
+				continue;
+			wr32(sp, regs.gpr[1]);
+			ctx->gpr[1] = sp;
+			ctx->gpr[3] = screen;
+			ctx->gpr[4] = u.update + 0xC;
+			ctx->gpr[5] = 1;                             // every pane (with 0 a pane is redone only under a changed one)
+			ctx->spr.CTR = rd32(u.vtable + 0x64);
+			RT_CALL_CTR();
+		}
+		regs.Restore(ctx);
+	}
+}
+
+void f_02872DFC(PPCInterpreter_t* __restrict ctx)
+{
+	if (g_rtHalfTick || !g_rtSixty || !UiAnims())
+		[[clang::musttail]] return orig_f_02872DFC(ctx);
+	const uint32 t = (uint32)GPR(3), frame = rd32(t + 0xC);
+	orig_f_02872DFC(ctx);
+	if (rd32(t + 0x24) & 0x7FFFFFFFu &&            // playing: its rate isn't 0 (and its first step this tick)
+		std::none_of(s_uiAnims.begin(), s_uiAnims.end(), [t](const UiAnim& a) { return a.anim == t; }))
+		s_uiAnims.push_back({ t, rd32(t + 0x14), frame });
+}
+
+void f_02002C90(PPCInterpreter_t* __restrict ctx)
+{
+	if (!g_rtHalfTick && g_rtSixty && UiAnims())
+		if (const uint32 screen = rd32((uint32)GPR(3) + 4), root = screen ? rd32(screen + 0xC) : 0; root && !rd32(root + 0xC))
+			s_uiScreens.push_back({ (uint32)GPR(3), screen, rd32(screen + 0x30), root });   // one it updates (as it checks)
+	[[clang::musttail]] return orig_f_02002C90(ctx);
+}
+
 // fw_procFrame, sead's procFrame_: one whole frame (the tick, the draw, the present, the vsync wait).
 // At 60 fps it decides whether the frame is a whole or a half tick (see the top); with the store
 // census on, a half tick's frame is watched from end to end.
@@ -1948,6 +2042,11 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 	}
 	g_rtHalfTick = swap >= from && (swap - from) % 2 != 0;
 	g_rtSixty = swap >= from;
+	if (!g_rtHalfTick)
+	{
+		s_uiAnims.clear();                           // the HD UI's animations that play this tick (above)
+		s_uiScreens.clear();
+	}
 	// WWHD_STATE_CENSUS=2 watches whole ticks' frames too (from the switch on), for the trace
 	static const bool censusAll = [] { const char* e = getenv("WWHD_STATE_CENSUS"); return Probe() && e && atoi(e) == 2; }();
 	if (!g_rtHalfTick && censusAll && swap >= from)
@@ -1972,6 +2071,8 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 	const uint32 pressed = input ? rd32(input + kPressed) : 0;
 	if (input)
 		wr32(input + kPressed, 0);
+	if (UiAnims())
+		UiAnimsHalfStep(ctx);                        // the HD UI's animations half a step on, for this frame
 	const bool watch = Census() || Rollback();
 	if (Census())
 	{

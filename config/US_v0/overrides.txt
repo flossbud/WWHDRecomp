@@ -60,3 +60,5 @@
 02839DB4    src/overrides/sixty.cpp            JStudio::TVariableValue::update_time_: at age - 1/2 for a cutscene's whole step at 60 fps (D21, cutscenes)
 02839DF4    src/overrides/sixty.cpp            JStudio::TVariableValue::update_functionValue_: the same (D21, cutscenes)
 025291C8    src/overrides/sixty.cpp            dDemo_manager_c::update, a cutscene's tick: its values at age - 1/2 for the whole step at 60 fps (D21, cutscenes)
+02872DFC    src/overrides/sixty.cpp            the HD UI layouts' AnimTransform frame step: notes those playing, for the half tick's step (D21, ui30)
+02002C90    src/overrides/sixty.cpp            the HD UI's per-screen update: notes the screens, for the half tick's calculate (D21, ui30)
