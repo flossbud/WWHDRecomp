@@ -2895,7 +2895,16 @@ it in a window; D21 "Step 2"):**
   at both rates (f1310, 1610, 1640; the item at 1669). Its hits (the hammer on the mask, m8F8; the sword on
   its crest) wait for m2F8, `keep` and set by each hit: none read twice. Not driven: the hammer.
   tools/sixty/eqsites.py now follows a loaded count past its first compare: 11 more sites in Gohma's,
-  Kalle Demos', Jalhalla's and Molgera's counts (`t == 1 || t == 0x46`), ruled too.
+  Kalle Demos', Jalhalla's and Molgera's counts (`t == 1 || t == 0x46`), ruled too. **Big Octo**
+  (DAIOCTA 225, eyes 226; route sail with WWHD_DEBUG_SPAWN=1450:225,ffff2802,-216800,0,314300, scratch
+  sailtrial.sh): it rises and settles a tick or so after 30 (its mode, +0x688: 1 at f1611/1612, 2 at
+  1827/1828.5); no swallow on the route by f2940 and no damage at either rate. Read: an eye's hit check
+  runs only in its wait mode and a hit sends it to its damage mode (no hit twice; an arrow 2, the
+  boomerang 1, a light arrow 4); its damage mode ends with its brk/btk (stepped), only the scale wobble
+  (dLib_scaleAnime) runs twice as fast. Not driven: arrows at its eyes. **Gyorgs** (GY 228, the spawner
+  230 ahead of the boat: WWHD_DEBUG_SPAWN=1450:230,ffff1441,-214000,0,312500): three at f1551, 1790 and
+  2030 at both rates, chasing the boat until f2623 (30) / 2626.5 (60); none reached Link at either rate.
+  Their code isn't in the decomp (d_a_gy.cpp is stubs). Not driven: the sword from the boat.
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
