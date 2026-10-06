@@ -7,6 +7,8 @@
 # resting there: a state), `== 0xff` (counts saturating at 255: Medli's and P2's head counts, the boat's 0x1096),
 # the trees' `== 1` (ftree's countdowns stop at 1), the volcano's `== 10` (its sounds already wait for whole ticks,
 # leftovers.txt). The number before the colon is the process the audit found the site under (code ranges overlap,
+# and a function reached by a shared call shows under its caller's neighbours: f_02101F30 is Molgera's demo camera,
+# relabelled, session bottom),
 # so it can be a neighbour's); the field and the compared value follow.
 020568A8    eqwhole     cmpi            472: 0xbc8 == 0x23
 0207E004    eqwhole     cmpl            296: 0x4be == r4
@@ -37,19 +39,19 @@
 020C628C    eqwhole     cmpl            294: 0xb48 == r0
 020C764C    eqwhole     cmpl            294: 0xb48 == r0
 020C7D68    eqwhole     cmpl            294: 0xb48 == r0
-02102730    eqwhole     cmpi            61: 0x3e98 == 0x32
-02102750    eqwhole     cmpl            61: 0x3e9a == r0
-02102810    eqwhole     cmpl            61: 0x3e9a == r0
-021028BC    eqwhole     cmpl            61: 0x3e9a == r0
-02102D50    eqwhole     cmpl            61: 0x3e9a == r11
-02103190    eqwhole     cmpi            61: 0x3e98 == 0x32
-021031C4    eqwhole     cmpi            61: 0x3e98 == 0x14
-02103344    eqwhole     cmpl            61: 0x3e98 == r0
-02103360    eqwhole     cmpl            61: 0x3e98 == r8
-021033D0    eqwhole     cmpi            61: 0x3e98 == 0x32
-021033E8    eqwhole     cmpi            61: 0x3e98 == 0x6e
-02103510    eqwhole     cmpl            61: 0x3e98 == r6
-0210356C    eqwhole     cmpl            61: 0x3e98 == r4
+02102730    eqwhole     cmpi            217 (bwd demo_camera): 0x3e98 == 0x32
+02102750    eqwhole     cmpl            217 (bwd demo_camera): 0x3e9a == r0
+02102810    eqwhole     cmpl            217 (bwd demo_camera): 0x3e9a == r0
+021028BC    eqwhole     cmpl            217 (bwd demo_camera): 0x3e9a == r0
+02102D50    eqwhole     cmpl            217 (bwd demo_camera): 0x3e9a == r11
+02103190    eqwhole     cmpi            217 (bwd demo_camera): 0x3e98 == 0x32
+021031C4    eqwhole     cmpi            217 (bwd demo_camera): 0x3e98 == 0x14
+02103344    eqwhole     cmpl            217 (bwd demo_camera): 0x3e98 == r0
+02103360    eqwhole     cmpl            217 (bwd demo_camera): 0x3e98 == r8
+021033D0    eqwhole     cmpi            217 (bwd demo_camera): 0x3e98 == 0x32
+021033E8    eqwhole     cmpi            217 (bwd demo_camera): 0x3e98 == 0x6e
+02103510    eqwhole     cmpl            217 (bwd demo_camera): 0x3e98 == r6
+0210356C    eqwhole     cmpl            217 (bwd demo_camera): 0x3e98 == r4
 0212EDD4    eqwhole     cmpi            185: 0x61a == 0x1
 0214C33C    eqwhole     cmpi            204: 0x3f8 == 0x5a
 0214C63C    eqwhole     cmpi            204: 0x3f8 == 0x22
