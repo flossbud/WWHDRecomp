@@ -2876,7 +2876,17 @@ it in a window; D21 "Step 2"):**
   `== 1` tests. Its waits and attacks (fire or the inhale, by distance) are cM_rndF draws: 60's first
   attack came 26-28 ticks before 30's in every run, the random stream's own (its 65 + rnd(65) wait). Not
   driven: the carry, the throw onto the spikes and the Poes. Link's damage: its fireballs 4, the curse 1
-  every 45 ticks at both.
+  every 45 ticks at both. **Molgera** (BWD 217, kazeB, route kazeb): its waits end on Link's distance
+  (m1BB8) and height, so its phases follow his back-and-forth route; their lengths match (151/150.5,
+  222/222, 178/179 ticks), and its bites and eats take 8 at both rates (which ones land follows the route).
+  Its death, poked (m18AE +0x1B32 = 3, m18B0 +0x1B34 = 2, m1BB1 +0x1E29 = 1, m1BB4 +0x1E2C = 3, m1BB5
+  +0x1E2D = 3 at f3450: the fourth round's third tongue hit): its demo's states at the same ticks at both
+  rates (f3749, 3966, 4010, 4130) and one heart container (ITEM 255). It doesn't step in that event, or in
+  its eat's demo (converted processes step in events only while Link's action is one listed in sixty.cpp's
+  StepInEvents: wait, move, talk...), so its demo counter's equality tests (m3C20 +0x3E98, already `whole`:
+  the heart container at == 0x14, m17E4 at == 0x32/0x6E) didn't double there; eqwhole on them and on its
+  tick count's and timers' (22 sites) for when it does, no change in the fight (60 identical with and
+  without). Not driven: the hookshot on her tongue.
 
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,

@@ -124,3 +124,31 @@
 020DA6C4    eqwhole     cmpi            bpw f_020D8564: a timer (+0x56C) == 1
 020DB068    eqwhole     cmpi            bpw f_020D8564: a timer (+0x57C) == 1
 020DB08C    eqwhole     cmpi            bpw f_020D8564: a timer (+0x56C) == 1
+#
+# ---- Molgera (BWD 217, kazeB with WWHD_DEBUG_BOSS=1; its rules with the wind temple's). Its counts kept to
+# whole ticks and tested for equality: its tick count (+0x1B30: the intro's beats), its timers (+0x1B50...),
+# and its demo camera's counts (m3C20 +0x3E98, added at the end of demo_camera, so a test of it reads a new
+# value on the half step and again on the next whole step; m3C22 +0x3E9A): m3C20 == 0x32 and == 0x6E add to
+# m17E4[0] and m17E4[1] (twice at 60), the others set the camera's cuts, sounds and particles.
+020FF2A4    eqwhole     cmpi            bwd f_020FEA30: a timer (+0x1B50) == 0x14
+020FF9C4    eqwhole     cmpi            bwd f_020FF80C: its tick count (+0x1B30) == 0x3c
+020FFA14    eqwhole     cmpi            bwd f_020FF80C: its tick count (+0x1B30) == 0xc8
+020FFA60    eqwhole     cmpi            bwd f_020FF80C: its tick count (+0x1B30) == 0x28f
+020FFA84    eqwhole     cmpi            bwd f_020FF80C: its tick count (+0x1B30) == 0x294
+020FFE20    eqwhole     cmpi            bwd f_020FF80C: a timer (+0x1B50) == 0x64
+02100F30    eqwhole     cmpi            bwd f_020FF80C: a timer (+0x1B50) == 0x3c
+02101358    eqwhole     cmpi            bwd f_020FF80C: a timer (+0x1B54) == 0x50
+021019C0    eqwhole     cmpi            bwd f_020FF80C: a timer (+0x1B54) == 0x50
+02102730    eqwhole     cmpi            bwd f_02101F30: m3C20 (+0x3E98) == 0x32
+02102750    eqwhole     cmpl            bwd f_02101F30: m3C22 (+0x3E9A) == a value
+02102810    eqwhole     cmpl            bwd f_02101F30: m3C22 (+0x3E9A) == a value
+021028BC    eqwhole     cmpl            bwd f_02101F30: m3C22 (+0x3E9A) == a value
+02102D50    eqwhole     cmpl            bwd f_02101F30: m3C22 (+0x3E9A) == a value
+02103190    eqwhole     cmpi            bwd f_02101F30: m3C20 (+0x3E98) == 0x32
+021031C4    eqwhole     cmpi            bwd f_02101F30: m3C20 (+0x3E98) == 0x14
+02103344    eqwhole     cmpl            bwd f_02101F30: m3C20 (+0x3E98) == a value
+02103360    eqwhole     cmpl            bwd f_02101F30: m3C20 (+0x3E98) == a value
+021033D0    eqwhole     cmpi            bwd f_02101F30: m3C20 (+0x3E98) == 0x32
+021033E8    eqwhole     cmpi            bwd f_02101F30: m3C20 (+0x3E98) == 0x6e
+02103510    eqwhole     cmpl            bwd f_02101F30: m3C20 (+0x3E98) == a value
+0210356C    eqwhole     cmpl            bwd f_02101F30: m3C20 (+0x3E98) == a value
