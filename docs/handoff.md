@@ -2504,6 +2504,12 @@ it in a window; D21 "Step 2"):**
     `keep` on both counts, `*h@` on the 0.5: the count runs a tick a tick (2 behind 30's: the glide starts
     on a half tick), the height -73 against 30's -72, the drop and landing within a tick of 30's.
 
+- **Session main: the queue's "doors" item (round 4; `config/US_v0/tick_rules/doors2.txt`)**: DOOR12 (301, the
+  Earth Temple's 22 doors), MDOOR (303), ATDOOR (302) and SHUTTER2 (113) converted; tests and what isn't
+  tested are in the rules file. Route `dback` is route back 100 frames later (the Earth Temple's warp-in
+  holds Link to ~f1060). SHUTTER (112, Siren's Htobi1: a frame countdown, a cLib_calcTimer wait and a count)
+  and MBDOOR (115, placed in no stage file) are left.
+
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.

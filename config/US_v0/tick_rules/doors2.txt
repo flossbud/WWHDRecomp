@@ -1,0 +1,25 @@
+# The work queue's "doors" item (session main): the dungeons' doors and shutters not converted with the events
+# item (DOOR10 300 and KNOB00 305 are in doors.txt). Format: ../tick_rules.txt and tools/recomp/generate.py.
+#
+# ---- DOOR12 (301, d_a_door12.cpp: the Earth Temple's doors, 22 of them; its code 0212854C-0212F5CC). Its
+# open and close move the leaf with cLib_chaseF (the shared helper) and its rattle is door10's helper
+# (ganon.txt); tested with route dback (WWHD_DEBUG_STAGE=920:M_Dai,1,1,-1: back through the door behind
+# Link): trial clean, Link's path within 3 units of DOOR12 left at 30, the doors' state every frame. The
+# barred door's wait after its room's last enemy dies counts as door10's (m2A1: 65 ticks from 0x41).
+02129000    late        stb             door12: the wait before a cleared room's bars lift (+0x3BD) - 1
+#
+# ---- MDOOR (303, d_a_mdoor.cpp: the wooden cage doors, "Mori1": Forbidden Woods, the Earth Temple, M_Dra09,
+# TF_04, kinMB). Its leaf moves by cLib_chaseF (the helper); m2C4 (+0x3E0) counts down twice: in
+# actionGenocide (tested > 0 before the - 1, acting at 0: once a tick at the tick's end, as door10's wait)
+# and in actionOpen (- 1, then == 0 starts the leaf and its sound: kept on half steps). Trial clean standing
+# (kindan,0,13,-1); its opening (a cleared room, an event) not driven by a test yet.
+021C1550    late        sth             mdoor actionGenocide: m2C4 - 1, the wait after the room's last enemy
+021C1618    keep:r9     addi            mdoor actionOpen: m2C4 - 1, the leaf starts at 0
+#
+# ---- ATDOOR (302, d_a_atdoor.cpp: M2tower's door): its bars' angle unk_2A2 (+0x3BE) +- 0x400 a tick to
+# 0 / 0x4000: half of it a step (the clamps land on 30's ticks). Not tested: M2tower,0,0,3 didn't create it.
+020581E8    spliti      addi            atdoor: unk_2A2 - 0x400 (closing)
+020582A4    spliti      addi            atdoor: unk_2A2 + 0x400 (opening)
+#
+# SHUTTER2 (113, d_a_shutter2.cpp: the Wind Temple's Htobi3): its rise and fall are cLib_addCalc (the helper):
+# converted with no rules (trial clean standing, kaze,4,4,-1).
