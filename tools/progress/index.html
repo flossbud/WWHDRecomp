@@ -144,6 +144,133 @@ a.earlier { color: var(--link); font-weight: 600; }
 .entry .meta b { color: var(--link); font-weight: 400; }
 .entry span:last-child { font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
 
+/* phones (under 600px): the mobile handoff, an app shell with a tab bar; the desktop layout is hidden */
+.m { display: none; }
+@media (max-width: 599px) {
+  .root { display: none; }
+  html, body { overflow: hidden; }
+  body { -webkit-tap-highlight-color: transparent; }
+  .m { display: flex; }
+}
+.m { height: 100vh; height: 100dvh; max-width: 480px; margin: 0 auto; flex-direction: column; background: var(--bg); overflow: hidden; }
+.mHead { flex: none; background: var(--navy); color: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.mBrand { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.mBrand b { font-size: 16px; font-weight: 800; }
+.mBrand > span { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--side2); }
+.mBrand i { width: 6px; height: 6px; border-radius: 50%; background: var(--live); flex: none; }
+.mBrand i.stale { background: var(--retest); }
+.mRing { position: relative; flex: none; }
+.mRing svg { display: block; transform: rotate(-90deg); }
+.mRing div { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; }
+.mMini { width: 44px; height: 44px; cursor: pointer; }
+.mMini div { font-size: 11px; }
+.mScroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.mPane { display: none; }
+.mPane.on { display: block; }
+.mTabs { flex: none; background: #fff; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding-bottom: env(safe-area-inset-bottom); }
+.mTabs button { height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: pointer;
+  background: none; border: 0; padding: 0; font: inherit; }
+.mTabs button > i { width: 28px; height: 3px; border-radius: 2px; background: transparent; }
+.mTabs button > span { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: var(--ink3); }
+.mTabs button.on > i { background: var(--link); }
+.mTabs button.on > span { color: var(--ink); }
+.mBadge { font-style: normal; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--red); color: #fff; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; }
+
+.mHero { background: var(--navy); color: #fff; padding: 8px 0 22px; display: flex; flex-direction: column; gap: 20px; }
+.mRingRow { display: flex; align-items: center; gap: 18px; padding: 0 16px; }
+.mBig { width: 96px; height: 96px; }
+.mBig div { font-size: 24px; }
+.mStats { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--side); min-width: 0; }
+.mStats b { color: #fff; font-weight: 600; font-size: 15px; }
+.mDeck { display: flex; flex-direction: column; gap: 10px; }
+.mDeckHead { display: flex; align-items: baseline; padding: 0 16px; font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--side2); }
+.mDeckHead span { margin-left: auto; letter-spacing: 0; text-transform: none; font-weight: 500; font-size: 11px; }
+.mCarousel { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 16px; padding: 0 16px; scrollbar-width: none; }
+.mCarousel::-webkit-scrollbar { display: none; }
+.mCarousel::after { content: ""; flex: 0 0 6px; }
+.mAgent { flex: 0 0 78%; scroll-snap-align: start; background: var(--navy2); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+.mAgent > i { display: block; height: 4px; }
+.mAgent > div { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 6px; }
+.mAgentHead { display: flex; align-items: baseline; gap: 8px; }
+.mAgentHead b { font-weight: 700; font-size: 15px; }
+.mAgentHead span { margin-left: auto; font-size: 11px; font-weight: 600; white-space: nowrap; color: var(--side2); }
+.mAgentHead span.live { color: var(--live); }
+.mAgent .task { font-family: var(--mono); font-size: 11.5px; color: var(--side); overflow-wrap: anywhere; }
+.mAgent p { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--retest-ink); text-wrap: pretty; overflow-wrap: anywhere; }
+
+.mSec { padding: 22px 16px 8px; display: flex; flex-direction: column; gap: 12px; }
+.mSec.last { padding-bottom: 28px; }
+.mPad { padding: 18px 16px 28px; display: flex; flex-direction: column; gap: 14px; }
+.mH { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.mH h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.mPad .mH h2 { font-size: 20px; }
+.mH span { font-size: 12.5px; color: var(--ink2); }
+.mBug { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; }
+.mBug .bugHead .id { font-size: 12.5px; }
+.mBug .pill { font-size: 11px; padding: 2px 8px; }
+.mBug .bugHead .ago { font-size: 12px; }
+.mBug .title { font-size: 15px; font-weight: 600; line-height: 1.35; text-wrap: pretty; }
+.mBug .body { font-size: 13.5px; color: var(--ink2); line-height: 1.5; text-wrap: pretty; overflow-wrap: anywhere; }
+.mBugFoot { display: flex; align-items: center; gap: 8px; padding-top: 4px; border-top: 1px solid var(--line2); min-height: 32px; }
+.mBugFoot .needs { font-size: 13px; font-weight: 600; color: var(--needs); }
+.mBugFoot .chev { margin-left: auto; font-size: 12.5px; font-weight: 600; color: var(--link); white-space: nowrap; }
+.mRetest { background: var(--navy); color: #fff; border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; min-height: 56px; }
+.mRetest b { font-size: 34px; font-weight: 800; line-height: 1; color: var(--retest); }
+.mRetest span { font-size: 14px; line-height: 1.35; color: var(--retest-ink); flex: 1; }
+.mRetest em { font-style: normal; font-size: 13px; font-weight: 600; color: var(--link-dark); white-space: nowrap; }
+.mLatest { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; display: flex; flex-direction: column; }
+.mLatest img, .mShot img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: var(--line); color: transparent; overflow: hidden; }
+.mLatest > div { padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 5px; }
+.mLatest b { font-size: 15px; font-weight: 700; }
+.mLatest p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink2); text-wrap: pretty; overflow-wrap: anywhere; }
+.mLatest em { font-style: normal; font-size: 13px; font-weight: 600; color: var(--link); padding-top: 6px; }
+
+.mFeed { display: flex; flex-direction: column; gap: 18px; }
+.mShot { display: flex; flex-direction: column; gap: 8px; }
+.mShot img { border-radius: 12px; cursor: zoom-in; }
+.mShot > div { display: flex; flex-direction: column; gap: 4px; padding: 0 2px; }
+.mShot b { font-size: 16px; font-weight: 700; line-height: 1.3; }
+.mShot p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink2); text-wrap: pretty; overflow-wrap: anywhere; }
+.mShot span { font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+.mMore { height: 48px; border-radius: 10px; background: #fff; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 14px; font-weight: 600; color: var(--link); cursor: pointer; width: 100%; }
+.mShowing { text-align: center; font-size: 12px; color: var(--ink3); }
+
+.mSeg { display: flex; gap: 3px; padding: 3px; border-radius: 11px; background: #e6edf2; }
+.mSeg button { flex: 1; height: 40px; border-radius: 8px; background: transparent; border: 0; display: flex; align-items: center; justify-content: center;
+  gap: 6px; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--ink2); cursor: pointer; padding: 0 4px; min-width: 0; }
+.mSeg button.on { background: #fff; color: var(--ink); }
+.mSeg button i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.mSeg button span { font-family: var(--mono); font-weight: 500; color: var(--ink3); }
+.mList { display: flex; flex-direction: column; gap: 14px; }
+.mQ { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 13px 14px; display: flex; flex-direction: column; gap: 8px; }
+.mQHead { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mQHead b { font-family: var(--mono); font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+.mQHead span { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink2); white-space: nowrap; }
+.mQHead span i { width: 8px; height: 8px; border-radius: 2px; }
+.mQBar { display: flex; align-items: center; gap: 10px; }
+.mQBar > div { flex: 1; height: 6px; border-radius: 3px; background: #efe3d2; overflow: hidden; }
+.mQBar > div > div { height: 100%; background: #e0943a; }
+.mQBar span { font-family: var(--mono); font-size: 12px; color: #8a5a22; white-space: nowrap; }
+.mQ p { margin: 0; font-size: 13.5px; color: var(--ink2); line-height: 1.45; text-wrap: pretty; overflow-wrap: anywhere; }
+.mEmpty { font-size: 13.5px; color: var(--ink3); text-align: center; padding: 18px 0; }
+.mCap { font-size: 12.5px; color: var(--ink2); }
+.mLog { position: relative; display: flex; flex-direction: column; padding-left: 22px; }
+.mLog::before { content: ""; position: absolute; left: 6px; top: 8px; bottom: 8px; width: 2px; background: var(--line); }
+.mLog .entry { padding-bottom: 16px; gap: 4px; }
+.mLog .entry > i { left: -21px; }
+.mLog .entry .meta { font-size: 11.5px; }
+.mLog .entry span:last-child { font-size: 14px; }
+.mPanel { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 2px 16px; }
+.mPanel .issue { padding: 13px 0; gap: 4px; }
+.mPanel .issue b { font-size: 14.5px; line-height: 1.35; }
+.mPanel .issue span { font-size: 13.5px; }
+.mNum { display: flex; align-items: baseline; padding: 13px 0; border-bottom: 1px solid var(--line2); font-size: 14px; color: var(--ink2); }
+.mNum:last-child { border-bottom: 0; }
+.mNum span { margin-left: auto; font-family: var(--mono); color: var(--ink); font-weight: 700; font-size: 15px; }
+
 /* the enlarged screenshot and the bug list: overlays */
 .overlay { position: fixed; inset: 0; z-index: 9; display: none; }
 #zoom { background: rgba(0,0,0,.94); align-items: center; justify-content: center; padding: 16px 64px; }
@@ -240,6 +367,61 @@ a.earlier { color: var(--link); font-weight: 600; }
   </main>
 </div>
 
+<div class="m" id="m">
+  <header class="mHead">
+    <div class="mBrand"><b id="mTitle">WWHD Recomp</b><span><i id="mDot"></i><span id="mFresh">Loading…</span></span></div>
+    <div class="mRing mMini" id="mMini" hidden>
+      <svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="none" stroke="#17304a" stroke-width="5"></circle>
+        <circle id="mMiniArc" cx="22" cy="22" r="18" fill="none" stroke="#1fb8a6" stroke-width="5" stroke-linecap="round" stroke-dasharray="0 113"></circle></svg>
+      <div id="mMiniPct"></div>
+    </div>
+  </header>
+  <div class="mScroll" id="mScroll">
+    <div class="mPane" id="mNow">
+      <div class="mHero">
+        <div class="mRingRow">
+          <div class="mRing mBig">
+            <svg width="96" height="96" viewBox="0 0 96 96"><circle cx="48" cy="48" r="41" fill="none" stroke="#17304a" stroke-width="9"></circle>
+              <circle id="mRingArc" cx="48" cy="48" r="41" fill="none" stroke="#1fb8a6" stroke-width="9" stroke-linecap="round" stroke-dasharray="0 258"></circle></svg>
+            <div id="mRingPct"></div>
+          </div>
+          <div class="mStats" id="mStats"></div>
+        </div>
+        <div class="mDeck"><div class="mDeckHead">On deck<span>swipe ›</span></div><div class="mCarousel" id="mAgents"></div></div>
+      </div>
+      <div class="mSec"><div class="mH"><h2>Needs you</h2><span id="mBugMeta"></span></div><div class="mList" id="mBugs" style="gap:12px"></div></div>
+      <div class="mSec last" id="mLatestSec"><div class="mH"><h2>Latest shot</h2><span id="mLatestAgo"></span></div><div id="mLatest"></div></div>
+    </div>
+    <div class="mPane" id="mShots">
+      <div class="mPad" style="gap:18px">
+        <div class="mH"><h2>Screenshots</h2><span id="mShotMeta"></span></div>
+        <div class="mFeed" id="mFeed"></div>
+        <button class="mMore" id="mMore">Load older</button>
+        <div class="mShowing" id="mShowing"></div>
+      </div>
+    </div>
+    <div class="mPane" id="mQueue">
+      <div class="mPad">
+        <div class="mH"><h2>Work queue</h2><span id="mRound"></span></div>
+        <div class="mSeg" id="mQSeg"></div>
+        <div class="mList" id="mQList"></div>
+      </div>
+    </div>
+    <div class="mPane" id="mLogPane">
+      <div class="mPad">
+        <div class="mSeg" id="mLSeg"></div>
+        <div id="mLBody" class="mList"></div>
+      </div>
+    </div>
+  </div>
+  <nav class="mTabs" id="mTabs">
+    <button data-tab="now"><i></i><span>Now<em class="mBadge" id="mBadge" hidden></em></span></button>
+    <button data-tab="shots"><i></i><span>Shots</span></button>
+    <button data-tab="queue"><i></i><span>Queue</span></button>
+    <button data-tab="log"><i></i><span>Log</span></button>
+  </nav>
+</div>
+
 <div id="zoom" class="overlay" role="dialog" aria-modal="true" aria-label="Screenshot">
   <button class="prev" aria-label="Previous screenshot">&#8249;</button>
   <figure><img alt=""><figcaption id="zoomCap"></figcaption></figure>
@@ -293,35 +475,45 @@ function overall() {
   const by = Object.fromEntries(parts.map(x => [x[0], x]));
   return {n, done, weighted, by};
 }
+// the ring's stats: the hours (or units) done, then the milestones and the three kinds counted
+function statsHtml(o) {
+  const ms = data.milestones || [], f = x => x ? `${x[2]}/${x[1]}` : "–";
+  return (o.weighted ? `<b>~${Math.round(o.done)} of ~${Math.round(o.n)} h</b>` : `<b>${Math.round(o.done)} of ${o.n} done</b>`) +
+    `<span>Milestones ${ms.filter(m => m.done).length}/${ms.length}</span><span>Actor types ${f(o.by.actor)}</span>` +
+    `<span>Queue ${f(o.by.queue)} · Bugs ${f(o.by.bug)}</span>`;
+}
+function numList() {
+  const k = data.counts;
+  return [["types converted", k.converted], ["types left at 30", k.types - k.converted - k.with_rules], ["types in progress", k.with_rules],
+    ["tick & step rules", k.tick_rules], ["functions overridden", k.overrides], ["functions named", k.named_functions], ["functions recompiled", k.functions]]
+    .map(([l, v]) => [l, Number(v).toLocaleString()]);
+}
+const ticketText = () => (data.ticket || "").replace(/^(WW-\d+): /, "$1 · ").replace("native 60 fps, then uncapped", "native 60, then uncapped");
 function renderSide() {
   $("title").textContent = data.title || "WWHD Recomp";
-  $("ticket").textContent = (data.ticket || "").replace(/^(WW-\d+): /, "$1 · ").replace("native 60 fps, then uncapped", "native 60, then uncapped");
+  $("ticket").textContent = ticketText();
   const o = overall(), p = o.n ? pct(o.done, o.n) : 0;
   $("ringPct").textContent = p + "%";
   $("ringArc").setAttribute("stroke-dasharray", `${(o.n ? o.done / o.n : 0) * 301.6} 302`);
-  const ms = data.milestones || [], f = x => x ? `${x[2]}/${x[1]}` : "–";
-  $("stats").innerHTML = (o.weighted ? `<b>~${Math.round(o.done)} of ~${Math.round(o.n)} h</b>` : `<b>${Math.round(o.done)} of ${o.n} done</b>`) +
-    `<span>Milestones ${ms.filter(m => m.done).length}/${ms.length}</span><span>Actor types ${f(o.by.actor)}</span>` +
-    `<span>Queue ${f(o.by.queue)} · Bugs ${f(o.by.bug)}</span>`;
-  const k = data.counts;
-  const nums = [["types converted", k.converted], ["types left at 30", k.types - k.converted - k.with_rules], ["types in progress", k.with_rules],
-    ["tick & step rules", k.tick_rules], ["functions overridden", k.overrides], ["functions named", k.named_functions], ["functions recompiled", k.functions]];
-  $("nums").innerHTML = `<div class="eyebrow">Numbers</div>` +
-    nums.map(([l, v]) => `<div class="num">${l}<span>${Number(v).toLocaleString()}</span></div>`).join("");
+  $("stats").innerHTML = statsHtml(o);
+  $("nums").innerHTML = `<div class="eyebrow">Numbers</div>` + numList().map(([l, v]) => `<div class="num">${l}<span>${v}</span></div>`).join("");
+}
+// each session: its latest activity (its status line or its latest commit, "session NAME" in the subject),
+// the queue items it's working on and its status line
+function agentList() {
+  const lastCommit = name => Math.max(0, ...((data && data.commits) || []).filter(m => m.subject.includes("session " + name)).map(m => m.time));
+  return sessions.map(x => {
+    const last = Math.max(x.time, lastCommit(x.session));
+    return {name: x.session, last, live: Date.now() / 1000 - last < LIVE_SECONDS,
+      task: Object.keys(claims).filter(id => claims[id].state === "working" && claims[id].session === x.session).join(" · "),
+      text: x.text && x.text.startsWith(x.session + ": ") ? x.text.slice(x.session.length + 2) : x.text || "idle"};
+  });
 }
 function renderAgents() {
   if (!sessions.length) return;
-  // a session's latest activity: its status line or its latest commit ("session NAME" in the subject)
-  const lastCommit = name => Math.max(0, ...((data && data.commits) || []).filter(m => m.subject.includes("session " + name)).map(m => m.time));
-  $("agents").innerHTML = sessions.map(x => {
-    const last = Math.max(x.time, lastCommit(x.session));
-    const live = Date.now() / 1000 - last < LIVE_SECONDS;
-    const task = Object.keys(claims).filter(id => claims[id].state === "working" && claims[id].session === x.session).join(" · ");
-    const text = x.text && x.text.startsWith(x.session + ": ") ? x.text.slice(x.session.length + 2) : x.text || "idle";
-    return `<div class="agent"><i style="background:${color(x.session)}"></i><div>
-      <div class="agentHead"><b>${esc(x.session)}</b><span class="task">${esc(task)}</span><span class="ago${live ? " live" : ""}">${agoText(last)}</span></div>
-      <p>${esc(text)}</p></div></div>`;
-  }).join("");
+  $("agents").innerHTML = agentList().map(a => `<div class="agent"><i style="background:${color(a.name)}"></i><div>
+      <div class="agentHead"><b>${esc(a.name)}</b><span class="task">${esc(a.task)}</span><span class="ago${a.live ? " live" : ""}">${agoText(a.last)}</span></div>
+      <p>${esc(a.text)}</p></div></div>`).join("");
 }
 
 // --- screenshots: a hero and twelve thumbnails a page, newest first ---
@@ -410,30 +602,39 @@ zoom.addEventListener("touchend", e => {
 
 // --- bugs: the open ones need the owner (a short summary, the full note on a tap); the rest are in the list ---
 const lastNote = x => x.notes && x.notes.length ? x.notes[x.notes.length - 1] : null;
+const openBugList = () => bugList.filter(x => x.state === "open").sort((a, b) => b.time - a.time);
+// an open bug's card: its short summary, or (expanded) its details and latest note; the toggle's label
+function bugView(x) {
+  const note = lastNote(x), ex = !!openBugs[x.id];
+  const short = x.short || x.details || (note ? note.text : "");
+  const full = note ? note.text : x.details || "";
+  return {body: ex ? (x.details && full !== x.details ? x.details + " " : "") + full : short, needs: x.needs || "your input",
+    chev: full && full !== short ? (ex ? "Less" : ((note && note.session) || "the") + "’s note") : ""};
+}
 function renderBugs() {
-  const open = bugList.filter(x => x.state === "open").sort((a, b) => b.time - a.time);
-  const fixed = bugList.filter(x => x.state === "fixed");
+  const open = openBugList(), fixed = bugList.filter(x => x.state === "fixed");
   $("bugMeta").textContent = `${open.length} open bug${open.length === 1 ? "" : "s"} · ${fixed.length} waiting for your retest`;
   $("bugs").innerHTML = open.map(x => {
-    const note = lastNote(x), ex = !!openBugs[x.id];
-    const short = x.short || x.details || (note ? note.text : "");
-    const full = note ? note.text : x.details || "";
+    const v = bugView(x);
     return `<div class="bug" data-id="${esc(x.id)}">
       <div class="bugHead"><span class="id">${esc(x.id)}</span><span class="pill">open</span><span class="ago">${agoText(x.time)}</span></div>
       <div class="title">${esc(x.title)}</div>
-      <div class="body">${esc(ex ? (x.details && full !== x.details ? x.details + " " : "") + full : short)}</div>
-      <div class="bugFoot"><span class="needs">Needs ${esc(x.needs || "your input")}</span>${full && full !== short ? `<span class="chev">${ex ? "Less" : esc((note && note.session) || "the") + "’s note"}</span>` : ""}</div>
+      <div class="body">${esc(v.body)}</div>
+      <div class="bugFoot"><span class="needs">Needs ${esc(v.needs)}</span>${v.chev ? `<span class="chev">${esc(v.chev)}</span>` : ""}</div>
     </div>`;
   }).join("") + `<div class="retestTile"><b>${fixed.length}</b><span>fixed, waiting for your retest</span><a id="openList">Open the list →</a></div>`;
 }
 $("bugs").addEventListener("click", e => {
   if (e.target.closest("#openList")) { openSheet(); return; }
   const card = e.target.closest(".bug"); if (!card) return;
-  openBugs[card.dataset.id] = !openBugs[card.dataset.id]; renderBugs();
+  openBugs[card.dataset.id] = !openBugs[card.dataset.id]; renderBugs(); renderMobile();
 });
 const sheet = $("sheet");
 function openSheet() { renderSheet(); sheet.style.display = "flex"; if (location.hash !== "#retest") history.replaceState(null, "", "#retest"); }
-function closeSheet() { sheet.style.display = "none"; if (location.hash === "#retest") history.replaceState(null, "", location.pathname); }
+function closeSheet() {
+  sheet.style.display = "none";
+  if (location.hash === "#retest") history.replaceState(null, "", isPhone() ? "#" + mTab : location.pathname);
+}
 $("sheetClose").addEventListener("click", closeSheet);
 sheet.addEventListener("click", e => { if (e.target === sheet) closeSheet(); });
 function renderSheet() {
@@ -461,8 +662,8 @@ function renderSheet() {
 }
 
 // --- the work queue as a board: open, working, done ---
-function renderQueue() {
-  const items = (data.queue || []).map(q => {
+function queueItems() {
+  return (data.queue || []).map(q => {
     const c = claims[q.id], state = c ? (c.state === "done" ? "done" : "working") : "open";
     const round = (q.name.match(/^Round (\d+):/) || [])[1];
     const name = q.name.replace(/^Round \d+:\s*/, "");
@@ -473,8 +674,11 @@ function renderQueue() {
     return {id: q.id, state, round, name, note: c && c.note ? c.note.replace(new RegExp("^" + c.session + ": "), "") : "", owner: c ? c.session : "", prog,
       time: c ? c.time : 0};
   });
+}
+const queueRound = items => Math.max(0, ...items.map(x => +x.round).filter(Boolean));
+function renderQueue() {
+  const items = queueItems(), round = queueRound(items);
   const by = s => items.filter(x => x.state === s);
-  const rounds = items.map(x => +x.round).filter(Boolean), round = rounds.length ? Math.max(...rounds) : 0;
   $("queueMeta").textContent = (round ? `round ${round} · ` : "") + `${by("done").length} done · ${by("working").length} working · ${by("open").length} open`;
   $("nOpen").textContent = by("open").length; $("nWorking").textContent = by("working").length; $("nDone").textContent = by("done").length;
   $("qOpen").innerHTML = by("open").map(x => `<div class="q"><span class="name">${esc(x.id)}</span><span class="desc">${esc(x.name)}</span></div>`).join("");
@@ -498,30 +702,136 @@ function renderQueue() {
 $("qDone").addEventListener("click", e => { if (e.target.id === "doneMore") { doneAll = !doneAll; renderQueue(); } });
 
 // --- known issues and the commit log ---
-function renderIssues() {
-  const list = (data.known_issues || []).map(i => {
+function issueList() {
+  return (data.known_issues || []).map(i => {
     if (typeof i === "object") return i;
     const m = i.match(/^([^:]{3,60}): (.+)$/s);   // a plain "Title: detail" string, else the whole line as the title
     return m ? {title: m[1], detail: m[2]} : {title: i, detail: ""};
   });
+}
+function renderIssues() {
+  const list = issueList();
   $("issueMeta").textContent = list.length;
   $("issues").innerHTML = list.map(k => `<div class="issue"><b>${esc(k.title)}</b>${k.detail ? `<span>${esc(k.detail)}</span>` : ""}</div>`).join("");
 }
-function renderLog() {
-  $("log").innerHTML = (data.commits || []).slice(0, LOG_COUNT).map(m => {
+// a commit as the log shows it: who (the "session NAME" tag; WW-10's are web's, the rest main's), what it
+// belongs to (its queue item tag, else the ticket) and its subject without those
+function logEntries() {
+  return (data.commits || []).slice(0, LOG_COUNT).map(m => {
     const t = (m.subject.match(/^(WW-\d+): /) || [])[1] || "";
-    const sess = (m.subject.match(/\bsession (\w+)/) || [])[1] || (t === "WW-10" ? "web" : "main");
-    const scope = (m.subject.match(/\(([\w-]+)[;,] session \w+\)\s*$/) || [])[1] || t;
-    const msg = m.subject.replace(/^WW-\d+: /, "").replace(/\s*\((?:[\w-]+[;,] )?session \w+\)\s*$/, "").replace(/\s*\(([^()]*)[;,] session \w+\)\s*$/, " ($1)");
-    return `<div class="entry"><i style="background:${color(sess)}"></i>
-      <span class="meta"><b>${esc(m.hash)}</b>${esc(sess)} · ${esc(scope)} · ${ago(m.time)}</span><span>${esc(msg)}</span></div>`;
-  }).join("");
+    return {hash: m.hash, time: m.time,
+      sess: (m.subject.match(/\bsession (\w+)/) || [])[1] || (t === "WW-10" ? "web" : "main"),
+      scope: (m.subject.match(/\(([\w-]+)[;,] session \w+\)\s*$/) || [])[1] || t,
+      msg: m.subject.replace(/^WW-\d+: /, "").replace(/\s*\((?:[\w-]+[;,] )?session \w+\)\s*$/, "").replace(/\s*\(([^()]*)[;,] session \w+\)\s*$/, " ($1)")};
+  });
 }
+const entryHtml = e => `<div class="entry"><i style="background:${color(e.sess)}"></i>
+      <span class="meta"><b>${esc(e.hash)}</b>${esc(e.sess)} · ${esc(e.scope)} · ${ago(e.time)}</span><span>${esc(e.msg)}</span></div>`;
+function renderLog() { $("log").innerHTML = logEntries().map(entryHtml).join(""); }
+
+// --- phones: the mobile layout (tabs Now, Shots, Queue, Log; the tab is kept in the URL's hash) ---
+const TABS = ["now", "shots", "queue", "log"], SHOTS_STEP = 6;
+let mTab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "now", mQ = "working", mL = "commits", mShown = SHOTS_STEP;
+const isPhone = () => matchMedia("(max-width: 599px)").matches;
+function setTab(t) {
+  if (t === mTab) return;
+  mTab = t; $("mScroll").scrollTop = 0;
+  history.replaceState(null, "", "#" + t);
+  renderMobile();
+}
+$("mTabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) setTab(b.dataset.tab); });
+$("mMini").addEventListener("click", () => setTab("now"));
+// a link or a typed hash (#shots, #queue...) picks the tab; #retest opens the bug list
+addEventListener("hashchange", () => {
+  const h = location.hash.slice(1);
+  if (TABS.includes(h)) setTab(h); else if (h === "retest") openSheet();
+});
+function ringArc(id, frac, circ) { $(id).setAttribute("stroke-dasharray", `${frac * circ} ${Math.ceil(circ)}`); }
+const segHtml = (list, cur) => list.map(([id, label, dot, n]) =>
+  `<button data-id="${id}" class="${id === cur ? "on" : ""}">${dot ? `<i style="background:${dot}"></i>` : ""}${label}${n !== "" ? `<span>${n}</span>` : ""}</button>`).join("");
+function renderMobile() {
+  if (!data) return;
+  const o = overall(), frac = o.n ? o.done / o.n : 0, p = Math.round(100 * frac) + "%";
+  for (const b of $("mTabs").children) b.classList.toggle("on", b.dataset.tab === mTab);
+  for (const [t, id] of [["now", "mNow"], ["shots", "mShots"], ["queue", "mQueue"], ["log", "mLogPane"]]) $(id).classList.toggle("on", t === mTab);
+  $("mTitle").textContent = data.title || "WWHD Recomp";
+  $("mMini").hidden = mTab === "now";
+  ringArc("mMiniArc", frac, 113.1); $("mMiniPct").textContent = p;
+  const open = openBugList();
+  $("mBadge").hidden = !open.length; $("mBadge").textContent = open.length;
+
+  if (mTab === "now") {
+    ringArc("mRingArc", frac, 257.6); $("mRingPct").textContent = p;
+    $("mStats").innerHTML = statsHtml(o);
+    $("mAgents").innerHTML = agentList().map(a => `<div class="mAgent"><i style="background:${color(a.name)}"></i><div>
+      <div class="mAgentHead"><b>${esc(a.name)}</b><span class="${a.live ? "live" : ""}">${agoText(a.last)}</span></div>
+      ${a.task ? `<span class="task">${esc(a.task)}</span>` : ""}<p>${esc(a.text)}</p></div></div>`).join("") ||
+      `<span class="empty" style="padding:0 16px">No session has reported yet.</span>`;
+    const fixed = bugList.filter(x => x.state === "fixed").length;
+    $("mBugMeta").textContent = `${open.length} open bug${open.length === 1 ? "" : "s"}`;
+    $("mBugs").innerHTML = open.map(x => {
+      const v = bugView(x);
+      return `<div class="mBug" data-id="${esc(x.id)}">
+        <div class="bugHead"><span class="id">${esc(x.id)}</span><span class="pill">open</span><span class="ago">${agoText(x.time)}</span></div>
+        <div class="title">${esc(x.title)}</div><div class="body">${esc(v.body)}</div>
+        <div class="mBugFoot"><span class="needs">Needs ${esc(v.needs)}</span>${v.chev ? `<span class="chev">${esc(v.chev)}</span>` : ""}</div></div>`;
+    }).join("") + `<a class="mRetest" id="mOpenList"><b>${fixed}</b><span>fixed, waiting for your retest</span><em>Open ›</em></a>`;
+    const x = shotList[0];
+    $("mLatestSec").hidden = !x;
+    if (x) {
+      const sc = splitCaption(x);
+      $("mLatestAgo").textContent = agoText(x.time);
+      $("mLatest").innerHTML = `<div class="mLatest"><img src="${esc(x.file)}" alt="${esc(sc.place)}" loading="lazy">
+        <div><b>${esc(sc.place)}</b>${sc.cap ? `<p>${esc(sc.cap)}</p>` : ""}<em>All ${shotList.length} screenshots ›</em></div></div>`;
+    }
+  } else if (mTab === "shots") {
+    const n = shotList.length, shown = Math.min(mShown, n);
+    $("mShotMeta").textContent = n ? `${n} screenshots · newest first` : "none yet";
+    $("mFeed").innerHTML = shotList.slice(0, shown).map((x, i) => {
+      const sc = splitCaption(x);
+      return `<div class="mShot"><img src="${esc(x.file)}" alt="${esc(sc.place)}" loading="lazy" data-i="${i}">
+        <div><b>${esc(sc.place)}</b>${sc.cap ? `<p>${esc(sc.cap)}</p>` : ""}<span>${sc.tag ? esc(sc.tag) + " · " : ""}${agoText(x.time)}</span></div></div>`;
+    }).join("");
+    $("mMore").hidden = shown >= n;
+    $("mShowing").textContent = n ? `Showing ${shown} of ${n}` : "";
+  } else if (mTab === "queue") {
+    const items = queueItems(), round = queueRound(items), by = st => items.filter(x => x.state === st);
+    $("mRound").textContent = round ? `round ${round}` : "";
+    $("mQSeg").innerHTML = segHtml([["working", "Working", "#e0943a", by("working").length], ["open", "Open", "#8494a4", by("open").length],
+      ["done", "Done", "#3da343", by("done").length]], mQ);
+    const list = by(mQ).sort((a, b) => b.time - a.time);
+    $("mQList").innerHTML = list.map(x => {
+      const w = x.prog ? Math.round(100 * x.prog[0] / x.prog[1]) : 0;
+      return `<div class="mQ"><div class="mQHead"><b>${esc(x.id)}</b><span><i style="background:${x.owner ? color(x.owner) : "#c3ced8"}"></i>${esc(x.owner || "unassigned")}</span></div>
+        ${x.state === "working" ? `<div class="mQBar"><div><div style="width:${w}%"></div></div><span>${x.prog ? `${w}%` : "no count"}</span></div>` : ""}
+        <p>${esc(x.state === "open" ? x.name : x.note || x.name)}</p></div>`;
+    }).join("") || `<div class="mEmpty">Nothing ${mQ === "open" ? "open" : mQ === "done" ? "done yet" : "being worked on"}.</div>`;
+    if (mQ === "done" && (data.queue_done || []).length) $("mQList").innerHTML += `<div class="mShowing">+ ${data.queue_done.length} from earlier rounds</div>`;
+  } else {
+    const log = logEntries(), issues = issueList();
+    $("mLSeg").innerHTML = segHtml([["commits", "Commits", "", log.length], ["issues", "Issues", "", issues.length], ["nums", "Numbers", "", ""]], mL);
+    $("mLBody").innerHTML = mL === "commits" ? `<div class="mCap">commits to WW-4</div><div class="mLog">${log.map(entryHtml).join("")}</div>` :
+      mL === "issues" ? `<div class="mPanel">${issues.map(k => `<div class="issue"><b>${esc(k.title)}</b>${k.detail ? `<span>${esc(k.detail)}</span>` : ""}</div>`).join("")}</div>` :
+      `<div class="mPanel">${numList().map(([l, v]) => `<div class="mNum">${l}<span>${v}</span></div>`).join("")}</div>`;
+  }
+}
+$("mBugs").addEventListener("click", e => {
+  if (e.target.closest("#mOpenList")) { openSheet(); return; }
+  const card = e.target.closest(".mBug"); if (!card) return;
+  openBugs[card.dataset.id] = !openBugs[card.dataset.id]; renderMobile(); renderBugs();
+});
+$("mLatest").addEventListener("click", () => setTab("shots"));
+$("mFeed").addEventListener("click", e => { if (e.target.tagName === "IMG") showShot(+e.target.dataset.i); });
+$("mMore").addEventListener("click", () => { mShown += SHOTS_STEP; renderMobile(); });
+$("mQSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { mQ = b.dataset.id; renderMobile(); } });
+$("mLSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { mL = b.dataset.id; renderMobile(); } });
 
 function renderFresh(ok) {
   if (ok) lastOk = Date.now() / 1000;
   $("freshDot").className = ok ? "" : "stale";
   $("fresh").textContent = data ? `Data from ${agoText(data.generated)} · every 20 s` + (ok ? "" : " · can't reach the server") : "Loading…";
+  $("mDot").className = ok ? "" : "stale";
+  $("mFresh").textContent = data ? `${(data.ticket || "").split(":")[0] || "WW-4"} · data ${agoText(data.generated)}` + (ok ? "" : " · offline") : "Loading…";
 }
 
 async function refresh() {
@@ -539,6 +849,7 @@ async function refresh() {
   if (p) data = p;
   if (data) { renderSide(); renderQueue(); renderIssues(); renderLog(); }
   renderAgents(); renderShots(); renderBugs();
+  renderMobile();
   if (sheet.style.display === "flex") renderSheet();
   renderFresh(!!p);
 }
