@@ -51,8 +51,8 @@
       "done": true
     },
     {
-      "name": "Cutscenes (demo frames) at 60 (in progress: JStudio cutscenes step at 60)",
-      "done": false
+      "name": "Cutscenes (demo frames) at 60",
+      "done": true
     },
     {
       "name": "Door and talk events at 60",

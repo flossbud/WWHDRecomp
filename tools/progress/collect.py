@@ -35,7 +35,7 @@ def main():
     # the list is one string literal per session, from its declaration to the `;`
     m = re.search(r'kConvertedByDefault =([^;]*);', read("src/overrides/sixty.cpp"))
     joined = "".join(re.findall(r'"([0-9,]*)"', m.group(1))) if m else ""
-    converted = [int(x) for x in joined.split(",") if x]
+    converted = sorted({int(x) for x in joined.split(",") if x})   # a process listed twice counts once
     rules_text = read("config/US_v0/tick_rules.txt")
     extra = os.path.join(ROOT, "config/US_v0/tick_rules")
     if os.path.isdir(extra):

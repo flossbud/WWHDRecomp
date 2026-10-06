@@ -3,6 +3,8 @@
 #   publish.sh              collect the data (collect.py) and publish it with the page
 #   publish.sh now TEXT     set this session's "working on" line (one small write: cheap to call often);
 #                           the session is the name in .session (gitignored), "main" without one
+#   publish.sh retire [SESSION]
+#                           take a session's line off the page when it ends (this session without a name)
 #   publish.sh claim ID [NOTE] / done ID [NOTE] / release ID
 #                           the work queue (plan.json "queue"): claim an item before starting it, so
 #                           parallel sessions never take the same one; done when it's converted and
@@ -94,6 +96,12 @@ case "${1:-}" in
 		echo "{\"session\":\"$session\",\"text\":$t,\"time\":$(date +%s)}" | ssh $host "mkdir -p $dir/now && cat > $dir/now/$session.json.tmp && mv $dir/now/$session.json.tmp $dir/now/$session.json &&
 			cd $dir/now && python3 -c 'import json,glob; json.dump([json.load(open(f)) for f in sorted(glob.glob(\"*.json\"))], open(\"../sessions.json.tmp\",\"w\"))' && mv ../sessions.json.tmp ../sessions.json"
 		;;
+	retire)
+		who=${2:-$session}
+		ssh $host "rm -f $dir/now/$(printf %q "$who").json &&
+			cd $dir/now && python3 -c 'import json,glob; json.dump([json.load(open(f)) for f in sorted(glob.glob(\"*.json\"))], open(\"../sessions.json.tmp\",\"w\"))' && mv ../sessions.json.tmp ../sessions.json"
+		echo "$who: retired"
+		;;
 	bug)
 		bugs "${2:?bug add|start|ready|fixed|verified|wontfix|reopen|note|list}" "${3:-}" "${4:-}"
 		;;
@@ -137,5 +145,5 @@ EOF
 		rm -f "$names"
 		ssh $host "cat > $dir/index.html" < "$here/index.html"
 		;;
-	*) echo "usage: publish.sh [now TEXT | claim|done|release ID [NOTE] | bug ... | shot PPM CAPTION | serve]" >&2; exit 2 ;;
+	*) echo "usage: publish.sh [now TEXT | retire [SESSION] | claim|done|release ID [NOTE] | bug ... | shot PPM CAPTION | serve]" >&2; exit 2 ;;
 esac

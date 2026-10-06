@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WWHD Recomp Progress</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f7a8c'/%3E%3Ctext x='16' y='22' font-size='15' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'%3E60%3C/text%3E%3C/svg%3E">
 <style>
 :root {
   --bg: #f4f6f8; --card: #ffffff; --ink: #18202a; --muted: #5d6b7a; --line: #dde3ea;
@@ -145,6 +146,7 @@ footer { color: var(--muted); font-size: .8rem; text-align: center; margin: 10px
       <summary><h2>Bugs</h2><span class="sub" id="bugCounts"></span><span class="chev" aria-hidden="true"></span></summary>
       <div class="foldBody">
         <ol class="queue bugs" id="bugs"><li class="empty">None reported yet.</li></ol>
+        <details id="bugsRetestWrap" hidden><summary id="bugsRetestSum"></summary><p class="sub" id="bugsRetestCommon"></p><ol class="queue bugs" id="bugsRetest"></ol></details>
         <details id="bugsClosedWrap" hidden><summary id="bugsClosedSum"></summary><ol class="queue bugs" id="bugsClosed"></ol></details>
       </div>
     </details>
@@ -292,18 +294,29 @@ zoom.addEventListener("touchend", e => {
 });
 function renderBugs(b) {
   const label = {open: "open", working: "working", ready: "ready · awaiting deploy", fixed: "fixed · retest", verified: "verified", wontfix: "won't fix"};
+  // fixed bugs wait for the owner's retest: folded, with a note many of them share shown once above them
+  const fixed = b.filter(x => x.state === "fixed").sort((x, y) => y.time - x.time);
+  const lastNote = x => x.notes && x.notes.length ? x.notes[x.notes.length - 1] : null;
+  const seen = {};
+  for (const x of fixed) { const l = lastNote(x); if (l) seen[l.text] = (seen[l.text] || 0) + 1; }
+  const common = Object.keys(seen).filter(t => seen[t] >= 3);
   const item = x => {
-    const last = x.notes && x.notes.length ? x.notes[x.notes.length - 1] : null;
+    let last = lastNote(x);
+    if (last && x.state === "fixed" && common.includes(last.text)) last = null;
     return `<li><b>${esc(x.id)}</b> ${esc(x.title)}<span class="badge ${x.state}">${label[x.state] || x.state}${x.session ? " · " + esc(x.session) : ""}</span>
       ${x.details ? `<div class="sub">${esc(x.details)}</div>` : ""}${last ? `<div class="sub">${esc(last.text)} · ${ago(last.time)}</div>` : ""}</li>`;
   };
   const order = {working: 0, open: 1, ready: 2, fixed: 3, verified: 4, wontfix: 5};
   const sorted = b.slice().sort((x, y) => order[x.state] - order[y.state] || y.time - x.time);
-  const live = sorted.filter(x => x.state === "open" || x.state === "working" || x.state === "ready" || x.state === "fixed");
+  const live = sorted.filter(x => x.state === "open" || x.state === "working" || x.state === "ready");
   const closed = sorted.filter(x => x.state === "verified" || x.state === "wontfix");
   const count = st => b.filter(x => x.state === st).length;
   $("bugCounts").textContent = `${count("open")} open · ${count("working")} working · ${count("ready")} awaiting deploy · ${count("fixed")} to retest · ${count("verified")} verified`;
   $("bugs").innerHTML = live.length ? live.map(item).join("") : `<li class="empty">Nothing open.</li>`;
+  $("bugsRetestWrap").hidden = !fixed.length;
+  $("bugsRetestSum").textContent = `Fixed, waiting for your retest (${fixed.length})`;
+  $("bugsRetestCommon").textContent = common.join(" · ");
+  $("bugsRetest").innerHTML = fixed.map(item).join("");
   $("bugsClosedWrap").hidden = !closed.length;
   $("bugsClosedSum").textContent = `Closed (${closed.length})`;
   $("bugsClosed").innerHTML = closed.map(item).join("");
@@ -318,7 +331,7 @@ async function refresh() {
   if (n && n.length) $("sessions").innerHTML = n.map(x => {
     const c = lastCommit(x.session), last = Math.max(x.time, c);
     return `<div class="now"><span class="dot${Date.now() / 1000 - last > 3 * 3600 ? " idle" : ""}"></span>
-    <div><b>${esc(x.session)}:</b> <span class="sub">${esc(x.text || "idle")} · ${ago(x.time)}${c > x.time ? ` · last commit ${ago(c)}` : ""}</span></div></div>`;
+    <div><b>${esc(x.session)}:</b> <span class="sub">${esc(x.text && x.text.startsWith(x.session + ": ") ? x.text.slice(x.session.length + 2) : x.text || "idle")} · ${ago(x.time)}${c > x.time ? ` · last commit ${ago(c)}` : ""}</span></div></div>`;
   }).join("");
   if (s && s.length) shotList = s;
   if (s && s.length) $("shots").innerHTML = s.map(x => `<figure><img loading="lazy" src="${esc(x.file)}" alt="${esc(x.caption)}"><figcaption>${esc(x.caption)} · ${ago(x.time)}</figcaption></figure>`).join("");
