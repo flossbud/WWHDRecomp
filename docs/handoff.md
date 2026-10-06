@@ -2670,6 +2670,16 @@ it in a window; D21 "Step 2"):**
   - sidle (53): no action changes, walking only: the camera's yaw (the known k75 approximation in a sustained
     turn) sending the camera-relative walk elsewhere.
 
+- **Session main: the queue's "heavythrow" item (round 6)**: route `heavy` (a boulder, Stone2 455, spawned where
+  carry's pot stands: its header). 30 against 60 (60's whole frame of tick t against 30's tick t + 1) match
+  to f1117. Link's carrying animation (frame at Link +0x589C, 1.1 a tick) reaches its end within a tick: at
+  30 tick 1119's update finds it, at 60 the half step of 1118 does, and procGrabThrow (0x71) then sets the
+  throw's animation half a tick early (frame 1.0 at 60's f1118.5, at 30's f1119). His hands, the boulder
+  (carried, at their midpoint), the release and the flight all follow half a tick ahead: it lands 37 units
+  past. Not a set-up in his action call (WWHD_60FPS_HOLDEXTRA=71/74: no change); an animation's end found by
+  a half step is the general case (a hold to the next whole tick would make it half a tick late instead).
+  Left as is.
+
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.

@@ -41,10 +41,11 @@ route_info() {
         medliglide) route=medliglide-100.txt frames=1500 save=/wwhd/data/saves/wwhd_100 trace= ;;
         dback) route=dback-100.txt     frames=1500  save=/wwhd/data/saves/wwhd_100 trace= ;;
         stolen) route=stolen-100.txt   frames=3400  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        heavy) route=heavy-100.txt     frames=1300  save=/wwhd/data/saves/wwhd_100 trace= ;;
         sail)  route=sail-100.txt      frames=2940  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/sail-det/a.zst ;;
         menus) route=menus-100.txt     frames=1920  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/menus-det/a.zst ;;
         warp)  route=warp-100.txt      frames=3780  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/warp-det/a.zst ;;
         *) return 1 ;;
     esac
 }
-route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage house hyoi medli medliglide dback stolen"
+route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage house hyoi medli medliglide dback stolen heavy"
