@@ -16,7 +16,8 @@
 # main's route); back, talk and house start from their stage warps, the items' routes spawn and poke what they
 # need (their "#env" lines, tools/sixty/run.sh). On 2026-10-05 (ww-4 14a98dd) all
 # passed but warp (262,106 units: B28; 17 with its fix, 29b66d9); the largest others were land 99, swing 70,
-# sail 65, sidle 53, plants 46 (WARN: known small drifts), the rest under 33. Not in it: walk without a stage warp (Link swims off the
+# sail 65, sidle 53, plants 46 (WARN: known small drifts), the rest under 33. On 2026-10-06 (items2, on ww-4
+# b924f3f) all 32 passed but land 82, sidle 62 and sail 51 (WARN, known); the item routes' ends 0-12 units. Not in it: walk without a stage warp (Link swims off the
 # dock for 1900 ticks with camera-relative strokes: 7000 units apart, the runs' headings drift) and mob (a
 # fight: the random stream).
 # The 30-tick runs are kept in $OUT/predeploy/ROUTE/30 and reused (30 is the same with every build: the
