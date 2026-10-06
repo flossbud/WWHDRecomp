@@ -1430,6 +1430,45 @@ it in a window; D21 "Step 2"):**
     after its whole step's update (its frame changed since): predeploy got much worse (ladder 4 -> 287 FAIL,
     crawl 1 -> 98, plants 13 -> 65, pot 7 -> 49, tour 25 -> 43; only sidle better, 48 -> 19): his procedures
     set some frames every step (a walk's frame from the distance), which read as set-ups.
+  - **Link's animation set-ups (session top; the work queue's "animstart" and bug B31; shared: sixty_step.cpp's
+    J3DFrameCtrl update and checkPass overrides and the old pose's blend start; link_qa.txt)**: his action call
+    (after animeUpdate in daPy_lk_c::execute) sets animations up; at 30 the tick's update has run whole by then,
+    so a new animation first advances the next tick, while at 60 the half step advanced one set up in the whole
+    step (a start at once; a carried place, setMoveAnime's share of the length, at the new animation's rate):
+    his animations led 30's by half a tick from every such set-up. Now (f_027F2FC4) the half step finishes the
+    tick's update as 30's does: a control set up since its whole step's update (frame, rate or end changed, or
+    not updated there: the upper body's controls) and standing at its start isn't advanced (its state cleared);
+    one carrying a place over advances at the whole step's update's rate, in the new length's frames (rate x
+    end / the whole step's end). Link's controls (J3DFrameCtrl, HD: rate +0, frame +4, start +8, end +0xA, loop
+    mode +0xE, state +0xF; Under 0-1 and Upper 0-2 at Link +0x5898, 0x10 apart). checkPass (f_027F2BF8) for
+    them looks a step ahead (frame + rate h): at 30 a tick's window starts at the tick's end frame, and with
+    the frame in step the old window put half the passes in the next tick's whole step; a control held at its
+    start has no window in that half step (procHangMove passing frame 0 set itself up again every tick: route
+    crawl 1 -> 98 before that). initOldFrameMorf's count (f_025E3EC8) is h in a whole step: the whole and the
+    half step's calcs together are that tick's one calc at 30 (with a whole 1 the old pose faded half a tick
+    early: tour's first walking tick 2.05 against 30's 1.41, now 1.44). An exit line counts the starts held
+    and the places carried. `WWHD_60FPS_ANIMHOLD=0` turns all three off.
+    B31 (sword combos never chained at 60; session bottom's find: B every 15 frames, Z-targeting in Gohma's
+    room): the window to continue a combo (m3522, +0x6972) was counted down by a `late` rule, in the half
+    step, after a whole step's call that had just set it (the cut ending there): one count too many, the
+    window out before the next press. Now `whole` on that count and on the combo step's clear (0240D664,
+    m34C4 +0x68E0): the tick's check in its first step, before the call, as at 30. It needs the animations in
+    step: before, the cut's end itself came a tick early half the time. Test (Gohma's room, 100% save,
+    WWHD_DEBUG_STAGE=920:M_DragB,0,0,-1, WWHD_DEBUG_BOSS=1): 30's second cuts (0x46) at f1930 and f2005 come in
+    the same ticks at 60 (before: fresh 0x41s); the run parts later where Gohma's hit lands differently.
+    predeploy (on against off, one binary): Link's action changes in 30's tick 194 (180), a tick or more apart
+    23 (33), routes whose actions part 1 (4); ends: tour 25.4 -> 11.1, swing 38.8 -> 11.3, ladder 8.5 -> 1.8,
+    plants 13.3 -> 9.2, land 100.7 -> 82.3 (WARN), talk 11.0 -> 7.3, crawl 1.0 -> 0.5; worse: sidle 3.4 -> 67
+    (WARN: its turn in place at f1324 is nearly 180 degrees, and it starts from an angle 630 units off 30's
+    (since the roll at f1298), so it turns the other way round, a tick longer, and the walk after starts a
+    tick late), leaf 33 -> 72 (the glide; its mean 12.2 -> 13.4), door 2.8 -> 5.4, pot 7.5 -> 9.0, back
+    2.4 -> 4.5. Left: the speed's ramp. 30 moves a tick at the tick's end speed; a whole step moves at the
+    mid-tick one (mNormalSpeed's acceleration and m3598 half done), so Link falls a quarter of each speed change
+    behind while it changes (sidle's walk start: 4.8 units by full speed; the animation's lead hid part of it).
+    Tried and dropped: a tick-exact move (a whole step h of the speed, the half step the rest of the tick's;
+    a `tick@` rule on posMoveFromFootPos's add): the walk start's lag went (sidle 4.8 -> 1.1), but tour
+    11.1 -> 18.3 and sidle 67 -> 113: at a stop the half step moves back onto 30's place, and a whole step's
+    half-done values take branches 30's tick doesn't (m3598 0.99 against 1.00 picks the feet's smoothing).
   - **Link's action timing (session top; shared: generate.py's `hold`, sixty.cpp's ActionHold; link_actions.txt)**:
     at 30 a tick makes one call to his action ((this->*mCurProcFunc)() in daPy_lk_c::execute, the pointer at
     +0x61AC, two bctrl's: 0240D6D8, 0240D6F8; his action number at +0x65F0); an action that ends calls the next

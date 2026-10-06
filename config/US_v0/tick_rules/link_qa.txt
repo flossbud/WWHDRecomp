@@ -91,4 +91,10 @@
 # The window to continue a sword combo (m3522, Link +0x6972: set by each cut from the HIO, counted in the
 # execute f_0240CDD0, whose r26 is Link + 0x448; at 0 the combo's step m34C4 is cleared). Tested then
 # counted. On both frames of a tick the window was half as long: a combo dropped where 30 continued it.
-0240D640    late        sth             execute: m3522 (+0x6972) - 1, the sword combo's window
+# Once a tick, before his action call: in the whole step, as the tick's first. `late` (the half step) counted
+# it after a whole step's call that set it (a cut ending there): the window lost a tick and every combo
+# dropped (B31: B every 15 frames in Gohma's room, 30's second cut 0x46 at f1930, 60's a fresh 0x41;
+# session bottom's find; with Link's animations in step with 30's, sixty_step.cpp, the cut's end comes in
+# 30's tick: before, a tick early half the time). The clear at 0 is the same check's other branch: whole too.
+0240D640    whole       sth             execute: m3522 (+0x6972) - 1, the sword combo's window
+0240D664    whole       stb             execute: m34C4 (+0x68E0) = 0, the combo's step, when the window is out

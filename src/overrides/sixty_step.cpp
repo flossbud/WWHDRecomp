@@ -359,15 +359,73 @@ void f_023121C4(PPCInterpreter_t* __restrict ctx)
 
 // ---- animation (J3DAnimation.cpp) ------------------------------------------------------------------
 
+// Link's animations run in step with 30's (J3DFrameCtrl::update below): a control's frame at his half step
+// is 30's at the tick's end. WWHD_60FPS_ANIMHOLD=0: off (his animations then led by half a tick).
+namespace
+{
+	bool AnimHold()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ANIMHOLD"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	// J3DFrameCtrl (HD): rate +0, frame +4, start +8, end +0xA (s16), loop mode +0xE, state +0xF
+	struct CtrlWhole { float frame, rate; sint16 end; uint32 step, held = 0; };
+	std::unordered_map<uint32, CtrlWhole> s_ctrlWhole;  // Link's controls as their whole step's update left them
+	bool LinkCtrl(uint32 ctrl)
+	{
+		return g_rtActor && rd16(g_rtActor + 0x08) == 168 && ctrl >= g_rtActor && ctrl < g_rtActor + 0x8000;
+	}
+	bool AtStart(uint32 ctrl)
+	{
+		const float frame = rdf(ctrl + 4);
+		if (frame == float(sint16(rd16(ctrl + 8))))
+			return true;
+		return rdf(ctrl) < 0.0f && std::fabs(frame - (float(sint16(rd16(ctrl + 0xA))) - 0.001f)) < 0.0005f;
+	}
+	uint64 s_animStarts = 0, s_animCarries = 0;
+	void AnimHoldStats()
+	{
+		cemuLog_log(LogType::Force, "wwhd sixty: Link's animations set up in a whole step: {} started (not advanced in the half step), {} carried over (advanced at the whole step's pace)",
+			s_animStarts, s_animCarries);
+	}
+}
 // J3DFrameCtrl::checkPass(pass frame f1, ctrl r3): whether the next update (mFrame to mFrame + mRate)
 // passes the frame. With a step h the next update covers mRate h, so the rate is h of itself for the
-// call: the half steps' windows tile the 30 Hz tick's, and a frame is passed once.
+// call: the half steps' windows tile the 30 Hz tick's, and a frame is passed once. Link's controls (in
+// step with 30's) look a step further: at 30 a tick's window starts at its end's frame, which his half step
+// reaches, so the whole step's window starts a step on (frame + rate h), and the half step's after it;
+// with the frame's own window a pass came in the next tick's whole step half the time, and the set-up it
+// makes a tick late. A control his half step held at its start (below) has no window: at 30 that tick
+// checked before its set-up (procHangMove passing frame 0 set itself up again every tick; session top).
 void f_027F2BF8(PPCInterpreter_t* __restrict ctx)
 {
 	if (!Stepped())
 		[[clang::musttail]] return orig_f_027F2BF8(ctx);
 	const uint32 frameCtrl = GPR(3);
 	const uint32 rate = rd32(frameCtrl);
+	if (AnimHold() && LinkCtrl(frameCtrl))
+	{
+		const auto it = s_ctrlWhole.find(frameCtrl);
+		if (g_rtHalfTick && it != s_ctrlWhole.end() && it->second.held == StepId())
+		{
+			GPR(3) = 0;
+			return;
+		}
+		const uint32 frame = rd32(frameCtrl + 4);
+		const float r = std::bit_cast<float>(rate), ahead = std::bit_cast<float>(frame) + r * Step();
+		if (rd8(frameCtrl + 0xE) != 2 && (r >= 0.0f ? ahead >= float(sint16(rd16(frameCtrl + 0xA))) - 0.001f
+			: ahead < float(sint16(rd16(frameCtrl + 8)))))
+		{
+			GPR(3) = 0;                                    // past its end: it stops there
+			return;
+		}
+		wrf(frameCtrl + 4, ahead);
+		wrf(frameCtrl, r * Step());
+		orig_f_027F2BF8(ctx);
+		wr32(frameCtrl + 4, frame);
+		wr32(frameCtrl, rate);
+		return;
+	}
 	wrf(frameCtrl, std::bit_cast<float>(rate) * Step());
 	orig_f_027F2BF8(ctx);
 	wr32(frameCtrl, rate);
@@ -376,16 +434,61 @@ void f_027F2BF8(PPCInterpreter_t* __restrict ctx)
 // J3DFrameCtrl::update(ctrl r3): mFrame (+4) += mRate (+0), then the loop mode (+0xE). With a step h
 // the rate is h of itself for the call; a mode that stops (rate 0) or turns (negates) the
 // animation keeps that, in the rate's own units.
+// Link's animations set up in his whole step after their update (his action call, after animeUpdate):
+// at 30 the tick's update runs whole before the call sets one up, at the old animation's pace, so his half
+// step finishes it as 30's would. A start (setSingleMoveAnime, setActAnimeUpper, setMoveAnime from frame 0:
+// the frame changed since the whole step's update and stands at its start) isn't advanced: that tick
+// doesn't advance the new animation (its state cleared, as update does first). A set-up that carries the
+// old animation's place over (setMoveAnime: the frame's share of the length, onto the new one; every step
+// while he moves, with a new rate) advances at the whole step's update's rate, in the new length's frames
+// (rate x end / the whole step's end). A control the whole step didn't update (no animation of its own
+// then: the upper body's) and now at its start was set up after it too. Before, the half step advanced a
+// start at once and a carried place at the new rate: his animations led 30's by half a tick (a cut's end,
+// a bow's draw, a turn's frame then came a tick early half the time: B31, the sword combo's window ran out
+// before the next press), and the walk from waiting, carrying a waiting animation's place (3.2 frames a tick
+// of the walk's length) on at the walk's 1.2, a frame behind (route tour; session top, animstart).
+// WWHD_60FPS_ANIMHOLD=0: off.
 void f_027F2FC4(PPCInterpreter_t* __restrict ctx)
 {
 	if (!Stepped())
 		[[clang::musttail]] return orig_f_027F2FC4(ctx);
 	const uint32 frameCtrl = GPR(3);
-	const float rate = rdf(frameCtrl), scaled = rate * Step();
+	const bool link = AnimHold() && LinkCtrl(frameCtrl);
+	const float rate = rdf(frameCtrl);
+	float pace = rate;                                 // the rate this step advances at
+	if (link && g_rtHalfTick)
+	{
+		static bool once = [] { atexit(AnimHoldStats); at_quick_exit(AnimHoldStats); return true; }();
+		auto it = s_ctrlWhole.find(frameCtrl);
+		const sint16 end = sint16(rd16(frameCtrl + 0xA));
+		const bool whole = it != s_ctrlWhole.end() && it->second.step == StepId() - 1;
+		// set up since its whole step's update; or not updated there (no animation of its own then: Link's
+		// upper body's controls), so set up after it
+		if (!whole || rdf(frameCtrl + 4) != it->second.frame || rate != it->second.rate || end != it->second.end)
+		{
+			if (AtStart(frameCtrl))
+			{
+				wr8(frameCtrl + 0xF, 0);
+				if (it == s_ctrlWhole.end())
+					it = s_ctrlWhole.emplace(frameCtrl, CtrlWhole{ rdf(frameCtrl + 4), rate, end, 0 }).first;
+				it->second.held = StepId();
+				s_animStarts++;
+				return;                                // started after its whole step's update: from the next tick
+			}
+			if (whole && it->second.end > 0 && end > 0)
+			{
+				pace = it->second.rate * float(end) / float(it->second.end);
+				s_animCarries += pace != rate;
+			}
+		}
+	}
+	const float scaled = pace * Step();
 	wrf(frameCtrl, scaled);
 	orig_f_027F2FC4(ctx);
 	const float after = rdf(frameCtrl);
-	wrf(frameCtrl, after == scaled ? rate : after / Step());
+	wrf(frameCtrl, after == scaled ? rate : after == -scaled ? -rate : after / Step());
+	if (link && !g_rtHalfTick)
+		s_ctrlWhole[frameCtrl] = { rdf(frameCtrl + 4), rdf(frameCtrl), sint16(rd16(frameCtrl + 0xA)), StepId() };
 }
 
 // ---- systems that run on whole ticks --------------------------------------------------------------
@@ -491,11 +594,17 @@ void f_02516C14(PPCInterpreter_t* __restrict ctx)
 // tick (+4), the rate of the old pose recomputed from it (+0xC, +0x10, +0x14). The model's last joint
 // calls it every calc (each step at 60 fps), so with a step h it counts h: the old pose's weight
 // then falls on the 30 Hz line at whole ticks. initOldFrameMorf (f_025E3F3C) calls it once when a
-// blend starts: that one is part of the start, a whole 1.
+// blend starts: that one is part of the start, a whole 1 when the blend starts in a half step (the
+// tick's one calc then comes). Started in a whole step it counts h: at 30 the start and the tick's
+// one calc are (m-1)/m of the old pose; at 60 the whole and the half step's calcs together are that
+// tick's calc (with a whole 1, (m-1.5)/m: the old pose faded half a tick early, and Link's feet, whose
+// move is his speed as he starts walking, with it: route tour's first walking tick 2.05 against 30's
+// 1.41, now 1.44; session top, animstart). WWHD_60FPS_ANIMHOLD=0: off.
 void f_025E3EC8(PPCInterpreter_t* __restrict ctx)
 {
 	const uint32 lr = ctx->spr.LR;
-	if (!Stepped() || (lr >= 0x025E3F3Cu && lr < 0x025E3FB4u))
+	const bool start = lr >= 0x025E3F3Cu && lr < 0x025E3FB4u;
+	if (!Stepped() || (start && (g_rtHalfTick || !AnimHold())))
 		[[clang::musttail]] return orig_f_025E3EC8(ctx);
 	const uint32 counter = GPR(3) + 4;
 	const float c = rdf(counter);
