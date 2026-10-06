@@ -396,6 +396,14 @@
     {
       "id": "testaids",
       "name": "Round 7: test aids every comparison needs: the random stream kept aligned at 60 (converted actors' half-step draws from their own stream or rolled back: WWHD_60FPS_RNDSYNC, maybe the default), and WWHD_DEBUG_PLACE working mid-fight and after a stage warp (bottom's)"
+    },
+    {
+      "id": "ramp",
+      "name": "Round 7: Link's walk-start speed ramp at 60: the whole step moves at the mid-tick speed, a few units off 30 by the walk's end, the root of predeploy's land and sidle; moved at 30's tick-end speed without disturbing the feet's measure (top's)"
+    },
+    {
+      "id": "census-left",
+      "name": "Round 7: the 24 placed types no test created (census.txt's list): created with the placement survey, WWHD_DEBUG_PLACE and WWHD_DEBUG_EVENT, tested and converted where they move (bottom's)"
     }
   ],
   "later": [
