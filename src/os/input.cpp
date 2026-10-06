@@ -75,6 +75,13 @@ namespace wwhd::os::input
 						else if (n == "RDOWN") st.ry = -1.0f;
 						else if (n == "RLEFT") st.rx = -1.0f;
 						else if (n == "RRIGHT") st.rx = 1.0f;
+						// a stick at a position of its own: LS=x,y or RS=x,y (-1 to 1; tools/sixty/tests/movement.py)
+						else if ((n.rfind("LS=", 0) == 0 || n.rfind("RS=", 0) == 0) && n.find(',') != std::string::npos)
+						{
+							float x = std::stof(n.substr(3)), y = std::stof(n.substr(n.find(',') + 1));
+							if (n[0] == 'L') st.lx = x, st.ly = y;
+							else st.rx = x, st.ry = y;
+						}
 						else if (!n.empty()) cemuLog_log(LogType::Force, "wwhd input: unknown button '{}' in the input script", n);
 					}
 					steps.push_back(st);

@@ -61,6 +61,11 @@ route_info() {
         medliharp) route=medliharp-100.txt frames=1650 save=/wwhd/data/saves/wwhd_100 trace= ;;
         gtgrapple) route=gtgrapple-100.txt frames=1300 save=/wwhd/data/saves/wwhd_100 trace= ;;
         fwswitch) route=fwswitch-100.txt frames=1300 save=/wwhd/data/saves/wwhd_100 trace= ;;
+        moveramp) route=moveramp-100.txt frames=2150 save=/wwhd/data/saves/wwhd_100 trace= ;;
+        moveangle) route=moveangle-100.txt frames=1900 save=/wwhd/data/saves/wwhd_100 trace= ;;
+        movecircle) route=movecircle-100.txt frames=1982 save=/wwhd/data/saves/wwhd_100 trace= ;;
+        moveturn) route=moveturn-100.txt frames=1730 save=/wwhd/data/saves/wwhd_100 trace= ;;
+        movejump) route=movejump-100.txt frames=1680 save=/wwhd/data/saves/wwhd_100 trace= ;;
         sail)  route=sail-100.txt      frames=2940  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/sail-det/a.zst ;;
         menus) route=menus-100.txt     frames=1920  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/menus-det/a.zst ;;
         warp)  route=warp-100.txt      frames=3780  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/warp-det/a.zst ;;
@@ -69,4 +74,4 @@ route_info() {
         *) return 1 ;;
     esac
 }
-route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo tgstatue medliharp gtgrapple fwswitch"
+route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo tgstatue medliharp gtgrapple fwswitch moveramp moveangle movecircle moveturn movejump"
