@@ -352,12 +352,35 @@ void f_025D6800(PPCInterpreter_t* __restrict ctx)
 // slope's pull and friction, the extra one), then calls fopAcM_posMove. With a step h each is h of
 // itself for the call (gravity and the extra acceleration put back after), and what gravity adds is
 // noted for posMove's arc correction, as the calcSpeed override does.
+// In a tick-exact scope (s_tickExact: a pot sinking or floating, its water's resistance strong: k1 0.2 and k2 0.02 a
+// tick, which two half steps of explicit Euler compound differently, B-hands-on) the whole step takes the tick's
+// accelerations whole and the half step none: its speed is 30's tick's from the whole step on, and the two steps
+// move half of it each (no arc correction), so the half step ends on 30's tick.
+namespace
+{
+	bool s_tickExact = false;
+	bool TickExactOn()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_TICKEXACT"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	template <void (*Orig)(PPCInterpreter_t*)>
+	void TickExact(PPCInterpreter_t* __restrict ctx)
+	{
+		if (!Stepped() || !TickExactOn())
+			return Orig(ctx);
+		s_tickExact = true;
+		Orig(ctx);
+		s_tickExact = false;
+	}
+}
+
 void f_023121C4(PPCInterpreter_t* __restrict ctx)
 {
 	if (!Stepped())
 		[[clang::musttail]] return orig_f_023121C4(ctx);
 	const uint32 actor = GPR(3), accel = GPR(7);
-	const float h = Step();
+	const float h = s_tickExact ? (g_rtHalfTick ? 0.0f : 1.0f) : Step();
 	const uint32 g = rd32(actor + 0x374);
 	FPR(1).fp0 = Single(FPR(1).fp0 * h);
 	FPR(2).fp0 = Single(FPR(2).fp0 * h);
@@ -370,12 +393,24 @@ void f_023121C4(PPCInterpreter_t* __restrict ctx)
 			wrf(accel + 4 * i, std::bit_cast<float>(a[i]) * h);
 		}
 	wrf(actor + 0x374, std::bit_cast<float>(g) * h);
-	s_fall[actor] = { std::bit_cast<float>(g) * h, StepId() };   // posMove, called inside, corrects the arc
+	s_fall[actor] = { s_tickExact ? 0.0f : std::bit_cast<float>(g) * h, StepId() };   // posMove, called inside, corrects the arc
 	orig_f_023121C4(ctx);
 	wr32(actor + 0x374, g);
 	if (accel)
 		for (int i = 0; i < 3; i++)
 			wr32(accel + 4 * i, a[i]);
+}
+
+// daTsubo::Act_c::mode_sink (f_024CFAB8: a pot sinking in water, daObj::posMoveF_stream) and mode_afl (f_024CFD3C:
+// floating, posMoveF_grade with the water's stream): their moves tick-exact (above)
+void f_024CFAB8(PPCInterpreter_t* __restrict ctx)
+{
+	TickExact<orig_f_024CFAB8>(ctx);
+}
+
+void f_024CFD3C(PPCInterpreter_t* __restrict ctx)
+{
+	TickExact<orig_f_024CFD3C>(ctx);
 }
 
 // ---- animation (J3DAnimation.cpp) ------------------------------------------------------------------

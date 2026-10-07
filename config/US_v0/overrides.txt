@@ -37,6 +37,8 @@
 025D67A8    src/overrides/sixty_step.cpp       fopAcM_calcSpeed: gravity with a time step (D21)
 025D6800    src/overrides/sixty_step.cpp       fopAcM_posMove: movement with a time step, the 30 Hz arc exactly (D21)
 023121C4    src/overrides/sixty_step.cpp       daObj::posMoveF_grade: thrown, rolling, floating objects' accelerations with a time step (D21)
+024CFAB8    src/overrides/sixty_step.cpp       daTsubo::Act_c::mode_sink: its move tick-exact at 60 (water's strong resistance)
+024CFD3C    src/overrides/sixty_step.cpp       daTsubo::Act_c::mode_afl: its move tick-exact at 60 (floating)
 027F2FC4    src/overrides/sixty_step.cpp       J3DFrameCtrl::update: animation with a time step (D21)
 027F2BF8    src/overrides/sixty_step.cpp       J3DFrameCtrl::checkPass: looks one step ahead, with a time step (D21)
 0207A9A0    src/overrides/sixty_step.cpp       cLib_calcTimer<u8>: counts whole ticks only (D21)
