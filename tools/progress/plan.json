@@ -330,19 +330,19 @@
     "460": "ice block",
     "64": "table"
   },
-  "queue_note": "Round 10 (2026-10-07): the actors are converted (top 68 of 69, bottom all 68; the types a bug blocks are on B67 and NPC_PF1 356 waits for an early save). qa's queue is now split across all three: qa the hardest bugs, top Link's timing, bottom the enemies and objects. Known bugs only, no new hunting; all three wrap up at 90% of the week. The main session routes the owner's bugs and notes and deploys in batches. Next: the owner's extensive testing and repair.",
+  "queue_note": "Round 11 (2026-10-07): the actors are converted (397 of 452, 50 need nothing; the rest wait on B67's events and an early save). All three sessions fix known bugs until 90% of the week: qa the event-only actors (B67) with a setup built for each, bottom the Darknut lunge (B66), top predeploy's WARN routes and the hands-on known issues. Known bugs only, no new hunting. The main session routes the owner's bugs and notes and deploys in batches. Next: the owner's extensive testing and repair.",
   "queue": [
     {
-      "id": "qa-bugs",
-      "name": "Round 10, the hardest bugs (qa's): B67, the actors that move only in events that don't step at 60 (SBOX 293, OBJ_FIGURE 404, Obj_HSH 290, Obj_Apzl 281; 54, 76, 77, 108 inside their events), then B66 (Link's lunge at a Darknut bounces 4 ticks early); NPC_PF1 356 waits for an early save"
+      "id": "events",
+      "name": "Round 11, the event-only actors (qa's, B67): a setup for each event, a probe run (WWHD_DEBUG_EVENTACT) and its rules: the shutters (259, on their switch), Windfall's night auction (361, 382), the salvage chest (SBOX 293), the gallery viewer (OBJ_FIGURE 404), Windfall's picture puzzle (Obj_Apzl 281), Obj_HSH 290, the Earth Temple's light, Ganon's Tower; then NPC_PF1 356 on Windfall's layer 0", "ids": [293, 404, 290, 281, 356]
     },
     {
-      "id": "top-bugs",
-      "name": "Round 10, Link's timing (top's): actions that start half a tick early or end a tick early (the turn while moving fixed), the Wind Waker's conducting ending half a tick early, predeploy's sidle and ladder WARNs"
+      "id": "lunge",
+      "name": "Round 11, B66 (bottom's): Link's lunge at a Darknut bounces 4 ticks early at 60: his Z-target stance and head look a half tick early (f_024022D0's writes in the half step)"
     },
     {
-      "id": "bottom-bugs",
-      "name": "Round 10, enemies and objects (bottom's): enemies falling into water (no pause at the surface), hand-made gravity arcs still ruled *h, the Beamos' scorch marks fading late, Windfall's auction and shutters by night, the water jar breaking on an edge at 60"
+      "id": "warns",
+      "name": "Round 11 (top's): predeploy's WARN routes (land2 45, plants 41, sail 52, tour2 51 units from 30's end): each's cause fixed, steered off its threshold or recorded; then pots, sidling and ladders routed at 30 and 60; then what's left of Link's actions starting half a tick early"
     }
   ],
   "later": [
@@ -409,7 +409,10 @@
     "dungeons2",
     "enemies2",
     "actors-top",
-    "actors-bottom"
+    "actors-bottom",
+    "qa-bugs",
+    "top-bugs",
+    "bottom-bugs"
   ],
   "still": {
     "20": "still where placed (Abship,0,5): no state change at 30 over 200 ticks (census, movers.sh)",
