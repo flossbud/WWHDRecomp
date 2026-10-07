@@ -57,6 +57,13 @@
 020F8914    eqwhole     cmpi            btd f_020F6004: its timer (+0x414) == 0x14
 020F89DC    eqwhole     cmpl            btd f_020F6004: its timer (+0x414) == a value
 020F8C58    eqwhole     cmpi            btd f_020F6004: its timer (+0x414) == 0x65
+# the ceiling rock's hit (the owner's N20, route gohmarock; session bottom): the rock rose 2 ticks early at 60, as
+# Gohma let it go 2 ticks early. Two of the pinned sequence's state changes (mGohmaState, +0x40E) ran in the half
+# step after a whole step had set the state: 0x14 (set by the hit in damage_check) started the first sink
+# animation half a tick early, so it ended a tick early in 30's ticks; and 0x1E, entered from 0x17 with the timer
+# at 0, let the rock go (m02F6 = 0) in the same tick's half step, where 30 does it on the next tick
+020F83FC    whole       sth             btd f_020F6004: mGohmaState 0x14 -> 0x15 (the half step starts the sink and waits)
+020F86FC    eqwhole     cmpi            btd f_020F6004: its timer (+0x414) == 0 in state 0x1E (the rock let go; else nothing)
 020F1584    *h@f7       fadds           btd: +0x70C0 += a tick's amount (f7), to its cap
 020F1D74    vec@r4      bl 028e8d88     btd debris (35 from +0x63D8): pos += speed
 020F1D84    spliti      addi            btd debris: angle x + 0x900 a tick

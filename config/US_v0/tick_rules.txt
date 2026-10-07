@@ -955,6 +955,8 @@
 0212BE3C    *h@f9       fadds           dr2 move: the rock's y (unk_4A8.y +0x5C8) += speed.y
 0212BE5C    late        stfs            dr2 move: the rock's speed.y -= 10 (after the move: explicit Euler)
 0212C0F8    *h@f7       fadds           dr2 move: current.pos.y += 100 (the rock's rise back)
+0212BFF4    eqwhole     cmpi            dr2 move: btd->m02F6 (+0x41E) == 0, Gohma let the rock go: its rise (mode 3). Gohma clears it in a
+#                                       whole step, after the rock's; 30 reads it on the next tick, so the half step waits
 0212C8B4    whole       sth             dr2 dr_move: unk_4C6 (+0x5E2) - 1
 #
 # ---- step rules: Forbidden Woods enemies, found with the trial in their rooms (stage kindan).
