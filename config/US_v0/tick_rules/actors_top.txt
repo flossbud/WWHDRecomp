@@ -33,7 +33,8 @@
 # process 117 (NPC_NZ, d_a_npc_nz: the rat (nezumi); a count of its animation's loops)
 022A5AE4    keep:r7     addi            npc_nz: +0xA1E - 1 at its animation's loop, then <= 0
 # process 160 (Obj_Eskban, d_a_obj_eskban: the bombable boulder's smoke and shake, its event "Eskban")
-0233D274    keep:r10    addi            eskban: mRemainingVibration (+0x848) - 1 while > 0, then == 28 a shock
+0233D27C    whole       stw             eskban: mRemainingVibration (+0x848) - 1 while > 0, then == 28 a shock (whole, not keep:
+#   the half step's register then reads 27, so the one-shot shock comes once)
 0233D35C    late        stw             eskban: mRemainingSmokeAnm (+0x844) - 1 while > 0, else on
 # process 158 (Obj_Vgnfd, d_a_obj_vgnfd: Ganon's Tower's final door): its countdowns (+0x6C0) are its event's
 # cuts' (ACT_WAIT0, the burst's): none.
@@ -150,3 +151,64 @@
 02319328    keep:f11    fmuls           ashut fall: (v + g) x the damping
 02319330    *h@f11      fadds           ashut fall: y (+0x3F0) + v
 0231941C    whole       sth             ashut: +0x3FA - 1 while > 0
+# process 25 (THROWSTONE Throck: its execute sets its model's matrix from its place; carried and thrown by Link's
+# code) and process 249 (MOZO moZOU, the Forsaken Fortress's statue: no count or add of its own in its code): nothing.
+# process 134 (Obj_Ajav, d_a_obj_ajav: Jabun's cave's rock gate): its rows' falls (fall_0, fall_1: displacement,
+# rotation, mTimer) run in its event: none; mHintCylHits and M_status are hit and state counts. A bombed row flashes
+# for 30 draws, counted in its draw (draw_flashing_normal: mTimer + 1, then == the trigger); a converted actor's
+# half-tick draw keeps what it changed, so the count once a tick (keep: the half tick's draw compares the count it
+# found, which the whole tick's draw already took to the trigger)
+02313E28    keep:r10    addi            ajav draw_flashing_normal: a part's mTimer (+0x56) + 1, then == mTimerTrigger
+# process 82 (Obj_Nest MtoriSU, d_a_obj_nest: a bird's nest that wobbles when Link runs on it): its ride callback
+# (Link's ground check, every step of his) adds an impulse to the wobble's size, h of it a step; each tick its three
+# angles' phases turn by 0x4650 (split) and the size decays by attr field_0x28 (d, from both branches)
+0237EB84    *h:f9       fmuls           nest vib_set: the impulse (Link's speed share x attr), h of itself for the adds
+0237ED30    spliti      addi            nest vib_proc: phase x + 0x4650
+0237ED38    spliti      addi            nest vib_proc: phase y + 0x4650
+0237ED40    spliti      addi            nest vib_proc: phase z + 0x4650
+0237ED7C    d:f1        lfs             nest vib_proc: the size's decay (attr field_0x28), ^h (still branch)
+0237EE28    d:f1        lfs             nest vib_proc: the size's decay, ^h
+# process 257 and process 258 (unnamed, item-like: an item's m_timer at +0x748, + 1 a tick, as ITEM's timeCount,
+# outset.txt): 257's draw tests m_timer > 30; 258 (held over Link: its place set from his each tick) counts +0x750
+# down from 13 and acts below 0 (read back from memory after the store)
+02123AC0    whole       stw             257 execute: m_timer (+0x748) + 1
+024592A4    whole       stw             258 execute: m_timer (+0x748) + 1
+02459498    whole       stw             258 execute: +0x750 - 1 (from 13), then < 0
+# process 259 (unnamed, item-like; not placed): its execute calls the item base's routine (f_021837B0, which 257's
+# draw calls too) and sets its matrices; the counters the audit put with it (+0x662) are the class before it's
+# process 62 (MGBOARD GBoard, d_a_mgameboard: Sploosh Kaboom's board): its +-1s move the cursor on a D-pad press
+# (the pad's trigger bits: once a press) or walk its slot lists; its matches 30 where placed: nothing to step.
+# process 44 (Obj_Tribox MtryB/MtryBCr, d_a_obj_tribox: Hyrule Castle's triangle-statue blocks and their places; its
+# decomp unmatched, read from WWHD's code). Pushed, a side's count + 1 a step of Link's push (then >= 4 it walks):
+# once a tick (keep). Its walk's and placement's countdowns +0x4E8, +0x5D6 tested after - 1 (keep). Sinking into
+# its place (f_023AABB0): v (+0x56C) + a, times a damping its tick count +0x4E8 picks (5-12, 65-74, else), y + v
+# (at most the floor): v once a tick (keep), y h of it a step, the count at the tick's end (late: both steps pick
+# with the tick's count). Its static counts (-0x3888, -0x3884: blocks placed, made) are events'.
+023AA6A0    keep:r12    addi            tribox: the pushed side's count (+0x51C) + 1, then >= 4 walks
+023AAD3C    keep:r11    addi            tribox: +0x4E8 - 1 while > 0, then == 0
+023AAD74    keep:r12    addi            tribox: +0x5D6 - 1 while > 0, then == 0
+023AB03C    keep:r12    addi            tribox: +0x4E8 - 1 while > 0, then == 0 (another mode)
+023AABF8    keep:f10    fadds           tribox sink: v (+0x56C) + a
+023AAC20    keep:f10    fmuls           tribox sink: v x the damping (count 5-12)
+023AAC78    keep:f10    fmuls           tribox sink: v x the damping (count 65-74)
+023AACA0    keep:f10    fmuls           tribox sink: v x the damping (else)
+023AAC28    *h@f10      fadds           tribox sink: y (+0x318) + v
+023AAC80    *h@f10      fadds           tribox sink: y + v
+023AACA8    *h@f10      fadds           tribox sink: y + v
+023AAC4C    late        sth             tribox sink: its tick count (+0x4E8) + 1
+# process 100 (BITA, d_a_bita: Gohma's room's wooden boards, burnt by fire): burning, its timer (+0x3C2) + 1 a tick,
+# == 20 a sound, == 88 (read back) the break, >= 90 gone. The store once a tick and the one-shot == 88 read back on
+# the half step unequal (eqwhole); == 20 reads the half step's own register (one more), so it can't match twice.
+0209850C    whole       stb             bita mode_dead: mTimer (+0x3C2) + 1
+02098548    eqwhole     cmpi            bita mode_dead: mTimer == 88 (the break)
+# process 149 (Obj_Ohatch, d_a_obj_ohatch: the island hatch a riddle opens): its wait (f_0237F7D8) orders its event,
+# and the tremor, opening and vibration (m2EC, m2D8, m2F0, m2F2 adds: f_0237FA0C and the others) run in it: none.
+# process 196 (unnamed, not placed; its strings: TACT_WINDOW, WINDMAN: the Wind Waker's conducting): +0x3BA counts
+# ticks to 10 (late: at 10 a sound and + 1 once, whole), and later down while > 0 (whole), above 30 rising by
+# +0x3BC a tick (h a step), == 20 (read back) once a call (eqwhole). Its event calls may hold it to whole ticks
+# anyway; these are right either way.
+024DE74C    late        sth             196: +0x3BA + 1 while < 10
+024DE5A0    whole       sth             196: +0x3BA + 1 at 10, with its sound
+024DE7C0    whole       sth             196: +0x3BA - 1 while > 0
+024DE7DC    *h@f0       fadds           196: +0x340 + +0x3BC (while +0x3BA > 30)
+024DE7E8    eqwhole     cmpi            196: +0x3BA == 20 (read back), once
