@@ -1,0 +1,116 @@
+# The rest of the actor types below 260 (session top, 2026-10-07; main's assignment after the owner's "convert
+# the rest": every type still unconverted, a verdict for each; format: ../tick_rules.txt). Each was made where
+# the stages place it (census-places.tsv, bottom's census) where it can be, then the step-doubling trial
+# (stage_test.sh, ticks 1000-1300) and 30 against 60 with it converted; counter_audit.py lists its counters
+# (+-1 stores) on WWHD's code; the decomp (/wwhd/opt/tww) its other per-frame state. The shared helpers step by
+# themselves for a converted type (animations J3DFrameCtrl, cLib_addCalc*/chase*, cLib_calcTimer<u8/s16/int>).
+#
+# ---- Converted, nothing of their own to step (no counter in the audit, no per-frame state in the decomp but
+# the stepped helpers; those made in a test matched 30 exactly over 300 ticks):
+#   process 26 (Evsw, d_a_tag_evsw), process 35 (TagSo/TagMSo, d_a_tag_so), process 59 (Tag_Ret ReTag0),
+#   process 53 (Obj_Usovmc), process 58 (Obj_Tousekiki: its frame set once at create), process 78 (Obj_Msdan),
+#   process 80 (Obj_Msdan2), process 126 (Obj_Rforce), process 130 (Obj_Homensmk), process 132 (Obj_Vds),
+#   process 146 (Obj_Gbed), process 147 (Obj_Vteng: its animation), process 155 (Obj_Vmsms), process 156
+#   (Obj_Vmsdz), process 161 (Obj_Ekskz), process 163 (Obj_Kanat), process 180 (RECTANGLE), process 108
+#   (WARPDEMO20: its animations), process 109 (WARPGANON: animations, a cLib_calcTimer), process 110
+#   (WARPMAJYUU), process 197 (DmKmm, d_a_demo_kmm: its animation), process 256 (Bitem, d_a_boss_item).
+#   Not made in a test (their placements need story state or another actor): 53, 58, 130, 132, 155, 161, 163,
+#   180 (by the audit and the decomp only).
+#
+# ---- Converted with their counters' rules (counter_audit.py's sites, read in the decomp: tested before the - 1
+# with an action at 0 `late`, tested after it `keep`, else `whole`). A converted process doesn't step in an event
+# (it runs once a tick there, as at 30), so a count only an event's cut runs needs nothing.
+# process 20 (ALLdie, d_a_alldie: the room's enemies all gone, a countdown, then its switch on)
+020484B4    late        sth             alldie actionTimer: mTimer (+0x3AE) - 1 while > 0, else wait and the switch
+# process 115 (MBDOOR SMBdor, d_a_mbdoor: the boss door; its opening, mAdjustmentTimer and the swing, are an event's)
+021BFFB4    late        stw             mbdoor: field_0x2bc (+0x3D8) - 1 while > 0 once the room has no enemy, else the switch on
+021C0574    whole       sth             mbdoor: a countdown +0x3D4 - 1 while > 0
+# process 183 (HITOBJ, d_a_hitobj: a hit sphere for mTimer ticks)
+02175180    whole       sth             hitobj execute: mTimer (+0x3B6) - 1 while != 0
+# process 201 (Demo_Dk, d_a_demo_dk: the cutscene's Helmaroc chick; its yawn when its count reaches 0)
+02122B08    whole       sthx            demo_dk execute: unk_2BC[0..1] (+0x3D8) - 1 while != 0
+02122B6C    keep:r10    addi            demo_dk: unk_2C0 (+0x3DC) - 1 while > 0, then == 0 and a random yawn
+# process 117 (NPC_NZ, d_a_npc_nz: the rat (nezumi); a count of its animation's loops)
+022A5AE4    keep:r7     addi            npc_nz: +0xA1E - 1 at its animation's loop, then <= 0
+# process 160 (Obj_Eskban, d_a_obj_eskban: the bombable boulder's smoke and shake, its event "Eskban")
+0233D274    keep:r10    addi            eskban: mRemainingVibration (+0x848) - 1 while > 0, then == 28 a shock
+0233D35C    late        stw             eskban: mRemainingSmokeAnm (+0x844) - 1 while > 0, else on
+# process 158 (Obj_Vgnfd, d_a_obj_vgnfd: Ganon's Tower's final door): its countdowns (+0x6C0) are its event's
+# cuts' (ACT_WAIT0, the burst's): none.
+#
+# ---- Converted with step rules for their per-frame motion (the trial's doubled fields)
+# process 86 (Obj_Smplbg Qtkhd, d_a_obj_smplbg: a simple BG object; one kind spins, shape_angle.y + 0x5B a tick)
+02390480    spliti      addi            smplbg: shape_angle.y (+0x32A) + 0x5B a tick, split over the tick's steps
+# process 133 (Obj_Vyasi, d_a_obj_vyasi: the palms' leaves in the wind; eight s16 angles (+0x3B8..+0x3C6) turn by
+# an amount the wind's sway gives each tick, made an integer, its matrices follow from them)
+023B8598    split:r4    lha             vyasi: a leaf's angle's add this tick (fctiwz of k * w + b), split over the steps
+# process 28 (Obj_Swheavy Hhbot1N, d_a_obj_swheavy: the heavy floor switch). Its push timers count ticks and are
+# tested after the +-1 (keep); its plate's height is a damped spring (v -= (h - target) k, v -= v decay, h += v),
+# its velocity once a tick (keep), the height moving h of it a step
+02394594    keep:r12    addi            swheavy: mMiniPushTimer (+0x42E) - 1, then <= 0
+023945EC    keep:r7     addi            swheavy: mMiniPushTimer + 1, then >= the delay
+02394684    keep:r6     addi            swheavy: mPushTimer (+0x434) - 1, then <= 0
+023946E0    keep:r8     addi            swheavy: mPushTimer + 1, then >= the delay
+02394834    keep:r10    addi            swheavy: m330 (+0x44C) - 1, then == 0
+023947DC    keep:f0     fnmsubs         swheavy spring: v (+0x440) - (h - target) k
+023947E8    keep:f9     fnmsubs         swheavy spring: v - v decay
+023947F4    *h@f9       fadds           swheavy spring: h (+0x43C) + v
+# process 31 (Obj_Swhammer MhmrSW0, d_a_obj_swhammer: the hammer switch): as Swheavy's, its springs' velocities once a
+# tick (keep), what they move h of them a step: the plate's height (calc_top_pos f_02393488), its wobble's two
+# angles (vib_proc f_023934E4), the un-crush's scale (crush_proc f_02393540); its crush countdown tested after - 1
+023934A4    keep:f0     fnmsubs         swhammer calc_top_pos: mVSpeed (+0x6EC) - diff k
+023934AC    keep:f9     fnmsubs         swhammer calc_top_pos: mVSpeed - mVSpeed decay
+023934B4    *h@f9       fadds           swhammer calc_top_pos: mCurHFrac (+0x6E8) + mVSpeed
+0239351C    keep:f11    fadds           swhammer vib_proc: mAngleSpeedZ (+0x6DC) + accel
+02393520    keep:f13    fadds           swhammer vib_proc: mAngleSpeedX (+0x6E0) + accel
+02393524    *h@f8       fadds           swhammer vib_proc: mAngleZ (+0x6D4) + mAngleSpeedZ
+0239352C    *h@f9       fadds           swhammer vib_proc: mAngleX (+0x6D8) + mAngleSpeedX
+02393578    keep:r12    addi            swhammer crush_proc: mCrushTimer (+0x6C8) - 1, then > 0
+023935D0    keep:f13    fadds           swhammer crush_proc: mScaleYSpeed (+0x6CC) + f
+023935D4    *h@f13      fadds           swhammer crush_proc: mScaleY (+0x6D0) + mScaleYSpeed
+# process 79 (Obj_MsdanSub, d_a_obj_msdan_sub: the Earth Temple's falling stair blocks, one a block) and process 81
+# (Obj_MsdanSub2: its sliding ones): when their switch flips a speed changes by 10 (15 back) a tick and the block's
+# offset adds it; the speed once a tick (keep), the offset h of it a step. Their block counts (+1) go on a
+# position's threshold: none.
+0237BDB0    keep:f10    fsubs           msdan_sub: m2E0 (+0x3F8) - 10
+0237BDBC    *h@f10      fadds           msdan_sub: m2DC (+0x3F4) + m2E0
+0237BFB4    keep:f10    fsubs           msdan_sub: m2E0 - 10 (the other kind)
+0237BFC0    *h@f10      fadds           msdan_sub: m2DC + m2E0
+0237C16C    keep:f10    fadds           msdan_sub: m2E0 + 15 (switch off: back up)
+0237C178    *h@f10      fadds           msdan_sub: m2DC + m2E0
+0237CA90    keep:f12    fadds           msdan_sub2: field_0x2DC (+0x3F4) + 10
+0237CA9C    *h@f12      fadds           msdan_sub2: field_0x2D8 (+0x3F0) + field_0x2DC
+# process 72 (Obj_Stair, d_a_obj_stair: Ganon's Tower's breaking stairs): after the break a tick count (tested after
+# + 1: its fall starts past l_HIO.m18, it's deleted 240 on) and the fall, pos.y + speed.y (speed by cLib_addCalc2)
+02390D14    keep:r12    addi            stair: field_0x2E0 (+0x3F8) + 1, then > m18
+02390D48    *h@f9       fadds           stair: current.pos.y + speed.y
+# process 76 (Obj_Mkiek, d_a_obj_mkiek: the Earth Temple's light-dissolved wall): lit for 20 ticks in a row it
+# goes (m460, tested after + 1); its event's own count the same
+02371C54    keep:r12    addi            mkiek check: m460 (+0x5D8) + 1 while lit, then >= 20
+02371D14    keep:r12    addi            mkiek demo_wait: m460 + 1 while < 20 (its event)
+# process 70 (OBJ_PFALL, d_a_obj_pfall: the jail's falling floor) and process 54 (Obj_Vfan, d_a_obj_vfan: Ganon's
+# Tower's breakable fan): their counts (field_0x3B0, its timer, the bars' sway; mBreakTimer) are their events'
+# cuts': none.
+# process 77 (Obj_MknjD, d_a_obj_mknjd: the Wind/Earth Temple's song-stone statue): its break (mBreakTimer) is its
+# event's cut's; two countdowns tested after - 1 (at 1 an action, then 0)
+02374728    keep:r11    addi            mknjd: +0x54A - 1 while > 1, then == 1
+02374770    keep:r12    addi            mknjd: +0x54C - 1 while > 1, then == 1
+# process 69 (OBJ_MJDOOR, d_a_obj_majyuu_door: the Forsaken Fortress's door): its - 1 is its hit count, its
+# timers cLib_calcTimer's: none. process 32 (Obj_Quake, d_a_obj_quake): its counter is its HIO's instance count;
+# it reads the schedule's timer: none.
+# process 34 (VolTag, d_a_tag_volcano: the volcano's timer tag): while its switch is on, field_0x2a0 (+0x3BC) - 1
+# while > 0, at 0 the switch off (a subic.: whole, as Link's glide timer; the half step then finds the switch off)
+024B3318    whole       stw             tag_volcano: field_0x2a0 (+0x3BC) - 1 while > 0, at 0 its switch off
+# process 177 (SYAN, d_a_syan): its timers (an array, - 1 while != 0) count ticks; frameCount (+0x3B8) + 1 a tick
+# makes two phases, count x (REG + 800) and x (REG + 700) (lagw: half a count back on the whole step); two angles
+# (floats in WWHD: +0x3E0, +0x3E4) add their speeds (+0x3E8, +0x3EC) a tick; its parts' timers (three arrays) as
+# the first; +0x3BC + 1 is its state
+024A46DC    whole       sthx            syan execute: timer[i] (+0x3F0) - 1 while != 0
+024A46FC    *h@f9       fadds           syan execute: +0x3E0 + its speed +0x3E8
+024A4720    *h@f0       fadds           syan execute: +0x3E4 + its speed +0x3EC
+024A4724    whole       stw             syan execute: frameCount (+0x3B8) + 1
+024A479C    lagw:r0     mullw           syan execute: frameCount x (REG0_S(8) + 800), a phase
+024A47D4    lagw:r0     mullw           syan execute: frameCount x (REG0_S(9) + 700), a phase
+024A4F88    whole       sthx            syan: a part's timer - 1 while != 0
+024A4F9C    whole       sthx            syan: a part's second timer - 1 while != 0
+024A4FB0    whole       sthx            syan: a part's third timer - 1 while != 0
