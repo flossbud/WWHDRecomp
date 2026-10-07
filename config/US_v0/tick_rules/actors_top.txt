@@ -114,3 +114,39 @@
 024A4F88    whole       sthx            syan: a part's timer - 1 while != 0
 024A4F9C    whole       sthx            syan: a part's second timer - 1 while != 0
 024A4FB0    whole       sthx            syan: a part's third timer - 1 while != 0
+# process 95 (PEDESTAL Hdai1, d_a_pedestal: the Tower of the Gods' statue pedestal): its rise (pos.y + speed.y,
+# actionMoveEvent) is its event's: none (its brk animation steps by itself).
+# process 36 (Obj_Pbco, d_a_obj_pbco), process 248 (Swtdoor, d_a_swtdoor: its - 10 is its create's), process 41
+# (unnamed: no add in its code) and process 37 (unnamed: its execute, draw and delete return 1, its create only
+# sets a flag): nothing to step. None is placed in a stage (made by others).
+# process 229 (GY_CTRL, d_a_gy_ctrl: the Gyorgs' controller at sea): setPathTargetPos turns its circle's phase m34C
+# (+0x468) by an HIO constant a tick (round Link, or round the ship); its timers are cLib_calcTimer's, its
+# approaches stepped. Its 30 against 60 (sea room 17, 300 ticks, 475 units moved) matched before this rule.
+0216BE4C    split:r0    lha             gy_ctrl setPathTargetPos: m34C + l_HIO.m0A (round Link), split over the steps
+0216BE8C    split:r0    lha             gy_ctrl setPathTargetPos: m34C + l_HIO.m0C (round the ship), split over the steps
+# process 184 (KT, d_a_kt; not placed in a stage): its timers (- 1 while != 0) count ticks; each mode moves it by
+# its velocity a tick (current.pos + mSpeedVel, +0x3D4, from its heading and speed), one by a computed offset
+021AB1F8    whole       sthx            kt: mTimer[i] - 1 while != 0
+021AB610    *h@f0       fadds           kt: current.pos.x + mSpeedVel.x
+021AB618    *h@f7       fadds           kt: current.pos.y + mSpeedVel.y
+021AB620    *h@f9       fadds           kt: current.pos.z + mSpeedVel.z
+021AB730    *h@f0       fadds           kt: current.pos.x + mSpeedVel.x
+021AB738    *h@f7       fadds           kt: current.pos.y + mSpeedVel.y
+021AB748    *h@f9       fadds           kt: current.pos.z + mSpeedVel.z
+021AB8A4    *h@f0       fadds           kt: current.pos.x + mSpeedVel.x
+021AB8AC    *h@f7       fadds           kt: current.pos.y + mSpeedVel.y
+021AB8BC    *h@f9       fadds           kt: current.pos.z + mSpeedVel.z
+021AB9CC    *h@f0       fadds           kt: current.pos.x + mSpeedVel.x
+021AB9D4    *h@f7       fadds           kt: current.pos.y + mSpeedVel.y
+021AB9E4    *h@f9       fadds           kt: current.pos.z + mSpeedVel.z
+021ABABC    *h@f12      fadds           kt: current.pos.x + the mode's offset x
+021ABAC4    *h@f0       fadds           kt: current.pos.z + the mode's offset z
+# process 178 (AYUSH, d_a_ghostship: the Ghost Ship): its path (dLib_pathMove's callback), approaches and alpha are
+# stepped helpers: nothing of its own.
+# process 88 (Obj_Ashut, d_a_obj_ashut: a shutter that drops): its fall, v = (v + g) d then y + v a tick (f_02319308),
+# the velocity once a tick (keep on its fadds and fmuls), the height h of it a step; at the floor it bounces back
+# (v and y times a factor, its bounce count - 1: events, none). Its countdown +0x3FA tested before - 1, nothing after.
+02319318    keep:f0     fadds           ashut fall: v (+0x3F4) + g
+02319328    keep:f11    fmuls           ashut fall: (v + g) x the damping
+02319330    *h@f11      fadds           ashut fall: y (+0x3F0) + v
+0231941C    whole       sth             ashut: +0x3FA - 1 while > 0
