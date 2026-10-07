@@ -142,6 +142,12 @@ section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .q.done .name { font-size: 12px; flex: none; }
 .q.done .desc { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
 .q.done .sq { align-self: center; }
+/* a queue item's actor types still to do ("ids" in plan.json), dropping off as they're converted or found still */
+.qleft summary { font-size: 11.5px; font-weight: 600; color: var(--link); cursor: pointer; }
+.lchips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lchip { font-family: var(--mono); font-size: 10.5px; line-height: 1.4; padding: 2px 6px; border-radius: 5px; background: var(--bg); color: var(--ink2); overflow-wrap: anywhere; }
+.m .qleft summary { font-size: 13px; padding: 2px 0; }
+.m .lchip { font-size: 12px; padding: 3px 7px; }
 .earlier { font-size: 11.5px; color: var(--ink3); padding: 2px 4px; }
 a.earlier { color: var(--link); font-weight: 600; }
 
@@ -465,7 +471,7 @@ function overall() {
   const all = data.groups.flatMap(g => g.actors), ef = data.effort || {};
   const queue = (data.queue || []).map(q => claims[q.id] ? claims[q.id].state : "open"), earlier = (data.queue_done || []).length;
   const parts = [
-    ["actor", all.length, all.filter(a => a.status === "converted").length, ef.actor],
+    ["actor", all.length, all.filter(a => a.status === "converted" || a.status === "still").length, ef.actor],
     ["queue", queue.length + earlier, queue.filter(x => x === "done").length + earlier, ef.queue],
     ["bug", bugList.length, bugList.filter(x => ["fixed", "verified", "wontfix"].includes(x.state)).length, ef.bug],
   ].filter(x => x[1]);
@@ -481,11 +487,26 @@ function statsHtml(o) {
     `<span>Milestones ${ms.filter(m => m.done).length}/${ms.length}</span><span>Actor types ${f(o.by.actor)}</span>` +
     `<span>Queue ${f(o.by.queue)} · Bugs ${f(o.by.bug)}</span>`;
 }
+// the types that need nothing at 60 (plan.json "still"), each with the reason: the hover text of their numbers
+const stillTypes = () => data.groups.flatMap(g => g.actors).filter(a => a.status === "still");
+// "Obj_Vfan 54 · fan": the type's code name (GameCube profile, else its stage name), number and our label
+const typeLabel = a => `${a.code || "?"} ${a.id}${a.name && a.name !== a.code ? " · " + a.name : ""}`;
+const LEFT_OPEN = 8;            // a list this short starts open; longer ones fold behind their count
+const leftOpen = {};            // item id -> open, kept across the 20 s refresh
+function leftHtml(x) {
+  if (!x.left || !x.left.length) return "";
+  const open = x.id in leftOpen ? leftOpen[x.id] : x.left.length <= LEFT_OPEN;
+  return `<details class="qleft" data-left="${esc(x.id)}"${open ? " open" : ""}><summary>${x.left.length} type${x.left.length === 1 ? "" : "s"} left</summary>
+    <div class="lchips">${x.left.map(a => `<span class="lchip">${esc(typeLabel(a))}</span>`).join("")}</div></details>`;
+}
+document.addEventListener("toggle", e => { const d = e.target; if (d.dataset && d.dataset.left) leftOpen[d.dataset.left] = d.open; }, true);
+const stillTitle = list => list.map(a => `${a.id}${a.code ? " " + a.code : ""}: ${a.reason}`).join("\n");
 function numList() {
-  const k = data.counts;
-  return [["types converted", k.converted], ["types left at 30", k.types - k.converted - k.with_rules], ["types in progress", k.with_rules],
-    ["tick & step rules", k.tick_rules], ["functions overridden", k.overrides], ["functions named", k.named_functions], ["functions recompiled", k.functions]]
-    .map(([l, v]) => [l, Number(v).toLocaleString()]);
+  const k = data.counts, still = k.still || 0;
+  return [["types converted", k.converted], ["types needing nothing", still, stillTitle(stillTypes())], ["types left at 30", k.types - k.converted - still - k.with_rules],
+    ["types in progress", k.with_rules], ["tick & step rules", k.tick_rules], ["functions overridden", k.overrides], ["functions named", k.named_functions],
+    ["functions recompiled", k.functions]]
+    .map(([l, v, t]) => [l, Number(v).toLocaleString(), t || ""]);
 }
 const ticketText = () => (data.ticket || "").replace(/^(WW-\d+): /, "$1 · ").replace("native 60 fps, then uncapped", "native 60, then uncapped");
 function renderSide() {
@@ -495,7 +516,7 @@ function renderSide() {
   $("ringPct").textContent = p + "%";
   $("ringArc").setAttribute("stroke-dasharray", `${(o.n ? o.done / o.n : 0) * 301.6} 302`);
   $("stats").innerHTML = statsHtml(o);
-  $("nums").innerHTML = `<div class="eyebrow">Numbers</div>` + numList().map(([l, v]) => `<div class="num">${l}<span>${v}</span></div>`).join("");
+  $("nums").innerHTML = `<div class="eyebrow">Numbers</div>` + numList().map(([l, v, t]) => `<div class="num"${t ? ` title="${esc(t)}"` : ""}>${l}<span>${v}</span></div>`).join("");
 }
 // each session: its latest activity (its status line or its latest commit, "session NAME" in the subject),
 // the queue items it's working on and its status line
@@ -635,12 +656,18 @@ function queueItems() {
     const c = claims[q.id], state = c ? (c.state === "done" ? "done" : "working") : "open";
     const round = (q.name.match(/^Round (\d+):/) || [])[1];
     const name = q.name.replace(/^Round \d+:\s*/, "");
-    // its bar: the session's own count (publish.sh step), else its actor types converted
-    let prog = null;
+    // its bar: the session's own count (publish.sh step), else its actor types done (converted or needing nothing)
+    let prog = null, stillNote = "";
     if (c && c.progress) prog = [c.progress[0], c.progress[1], ""];
-    else if (q.ids && q.ids.length) prog = [q.converted || 0, q.ids.length, " types"];
+    else if (q.ids && q.ids.length) {
+      prog = [q.converted || 0, q.ids.length, " types" + (q.still ? ` · ${q.still} need nothing` : "")];
+      const mine = new Set(q.ids);
+      stillNote = stillTitle(stillTypes().filter(a => mine.has(a.id)));
+    }
+    const byId = new Map(data.groups.flatMap(g => g.actors).map(a => [a.id, a]));
+    const left = (q.ids || []).map(i => byId.get(i) || {id: i, code: "", name: ""}).filter(a => a.status !== "converted" && a.status !== "still");
     return {id: q.id, state, round, name, note: c && c.note ? c.note.replace(new RegExp("^" + c.session + ": "), "") : "", owner: c ? c.session : "", prog,
-      time: c ? c.time : 0};
+      stillNote, left, time: c ? c.time : 0};
   });
 }
 const queueRound = items => Math.max(0, ...items.map(x => +x.round).filter(Boolean));
@@ -649,14 +676,14 @@ function renderQueue() {
   const by = s => items.filter(x => x.state === s);
   $("queueMeta").textContent = (round ? `round ${round} · ` : "") + `${by("done").length} done · ${by("working").length} working · ${by("open").length} open`;
   $("nOpen").textContent = by("open").length; $("nWorking").textContent = by("working").length; $("nDone").textContent = by("done").length;
-  $("qOpen").innerHTML = by("open").map(x => `<div class="q"><span class="name">${esc(x.id)}</span><span class="desc">${esc(x.name)}</span></div>`).join("");
+  $("qOpen").innerHTML = by("open").map(x => `<div class="q"><span class="name">${esc(x.id)}</span><span class="desc">${esc(x.name)}</span>${leftHtml(x)}</div>`).join("");
   $("qWorking").innerHTML = by("working").map(x => {
     const w = x.prog ? 100 * x.prog[0] / x.prog[1] : 0;
     return `<div class="q working"><div class="qHead"><span class="name">${esc(x.id)}</span>
       <span class="owner"><span class="sq" style="background:${color(x.owner)}"></span>${esc(x.owner)}</span></div>
       <div class="qbar"><div style="width:${w}%"></div></div>
-      <span class="qcount">${x.prog ? `${x.prog[0]} / ${x.prog[1]}${x.prog[2]}` : "no count yet"}</span>
-      <span class="desc">${esc(x.note || x.name)}</span></div>`;
+      <span class="qcount"${x.stillNote ? ` title="${esc(x.stillNote)}"` : ""}>${x.prog ? `${x.prog[0]} / ${x.prog[1]}${x.prog[2]}` : "no count yet"}</span>
+      <span class="desc">${esc(x.note || x.name)}</span>${leftHtml(x)}</div>`;
   }).join("");
   // the newest done first; past DONE_SHOWN the rest fold behind a "+ N more"
   const done = by("done").sort((a, b) => b.time - a.time), more = done.length - DONE_SHOWN;
@@ -772,7 +799,7 @@ function renderMobile() {
       const w = x.prog ? Math.round(100 * x.prog[0] / x.prog[1]) : 0;
       return `<div class="mQ"><div class="mQHead"><b>${esc(x.id)}</b><span><i style="background:${x.owner ? color(x.owner) : "#c3ced8"}"></i>${esc(x.owner || "unassigned")}</span></div>
         ${x.state === "working" ? `<div class="mQBar"><div><div style="width:${w}%"></div></div><span>${x.prog ? `${w}%` : "no count"}</span></div>` : ""}
-        <p>${esc(x.state === "open" ? x.name : x.note || x.name)}</p></div>`;
+        <p>${esc(x.state === "open" ? x.name : x.note || x.name)}</p>${x.state !== "done" ? leftHtml(x) : ""}</div>`;
     }).join("") || `<div class="mEmpty">Nothing ${mQ === "open" ? "open" : mQ === "done" ? "done yet" : "being worked on"}.</div>`;
     if (mQ === "done" && (data.queue_done || []).length) $("mQList").innerHTML += `<div class="mShowing">+ ${data.queue_done.length} from earlier rounds</div>`;
   } else {
@@ -780,7 +807,7 @@ function renderMobile() {
     $("mLSeg").innerHTML = segHtml([["commits", "Commits", "", log.length], ["issues", "Issues", "", issues.length], ["nums", "Numbers", "", ""]], mL);
     $("mLBody").innerHTML = mL === "commits" ? `<div class="mCap">commits to WW-4</div><div class="mLog">${log.map(entryHtml).join("")}</div>` :
       mL === "issues" ? `<div class="mPanel">${issues.map(k => `<div class="issue"><b>${esc(k.title)}</b>${k.detail ? `<span>${esc(k.detail)}</span>` : ""}</div>`).join("")}</div>` :
-      `<div class="mPanel">${numList().map(([l, v]) => `<div class="mNum">${l}<span>${v}</span></div>`).join("")}</div>`;
+      `<div class="mPanel">${numList().map(([l, v, t]) => `<div class="mNum"${t ? ` title="${esc(t)}"` : ""}>${l}<span>${v}</span></div>`).join("")}</div>`;
   }
 }
 $("mBugs").addEventListener("click", e => {

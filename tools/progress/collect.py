@@ -1,7 +1,9 @@
 """The progress page's data (tools/progress/index.html), as JSON on stdout.
 
-Usage (on the editing machine, from the repo): python3 tools/progress/collect.py NAMES.tsv > progress.json
-NAMES.tsv is the worker's /wwhd/data/ghidra-out/actor_names.tsv (process number, GameCube name):
+Usage (on the editing machine, from the repo): python3 tools/progress/collect.py NAMES.tsv [OBJECT_NAMES.tsv] > progress.json
+NAMES.tsv is the worker's /wwhd/data/ghidra-out/actor_names.tsv (process number, GameCube name);
+OBJECT_NAMES.tsv, the worker's /wwhd/data/ghidra-out/object_names.tsv (process number, the stage names
+l_objectName gives it: tools/stage_actors.py object_names), names the types the decomp's profiles don't:
 tools/progress/publish.sh fetches it. Everything else comes from the repo: the default conversions
 (src/overrides/sixty.cpp), the tick rules and the processes they name, the overrides, the names in
 symbols.csv, the milestones and groups (tools/progress/plan.json) and the branch's commits.
@@ -80,6 +82,13 @@ def main():
             p = line.rstrip("\n").split("\t")
             if p and p[0].isdigit():
                 names[int(p[0])] = p[1] if len(p) > 1 and p[1] != "?" else ""
+    # a type the GameCube profiles leave unnamed takes its stage names (the first, and how many more)
+    if len(sys.argv) > 2 and os.path.exists(sys.argv[2]):
+        for line in open(sys.argv[2]):
+            p = line.rstrip("\n").split("\t")
+            if len(p) == 2 and p[0].isdigit() and int(p[0]) in names and not names[int(p[0])]:   # a known type, unnamed
+                stage = p[1].split(",")
+                names[int(p[0])] = stage[0] + (f" +{len(stage) - 1}" if len(stage) > 1 else "")
     converted = converted_ids(read("src/overrides/sixty.cpp"))
     rules_text = read("config/US_v0/tick_rules.txt")
     extra = os.path.join(ROOT, "config/US_v0/tick_rules")
@@ -93,13 +102,20 @@ def main():
     symbols = sum(1 for r in csv.reader(read("config/US_v0/symbols.csv").splitlines()) if r and re.fullmatch(r"[0-9A-Fa-f]{8}", r[0]))
     functions = sum(1 for l in read("config/US_v0/functions.csv").splitlines() if re.match(r"[0-9A-F]{8},", l))
 
+    # plan.json "still": types checked and found to need nothing at 60 (they never change state), with the reason;
+    # counted as done like a conversion. A type converted later is converted.
+    still = {int(k): v for k, v in plan.get("still", {}).items()}
+
     def status(p):
-        return "converted" if p in converted else "rules" if p in with_rules else "todo"
+        return "converted" if p in converted else "still" if p in still else "rules" if p in with_rules else "todo"
 
     labels = plan.get("labels", {})
 
     def actor(p):
-        return {"id": p, "name": labels.get(str(p), names.get(p, "")), "code": names.get(p, ""), "status": status(p)}
+        a = {"id": p, "name": labels.get(str(p), names.get(p, "")), "code": names.get(p, ""), "status": status(p)}
+        if a["status"] == "still":
+            a["reason"] = still[p]
+        return a
 
     groups = []
     grouped = set()
@@ -119,8 +135,10 @@ def main():
         "title": plan["title"],
         "ticket": plan["ticket"],
         "milestones": plan["milestones"],
-        # an item with "ids" (the actor types it covers) gets their count converted, for its bar
-        "queue": [dict(q, converted=sum(1 for i in q["ids"] if i in converted)) if q.get("ids") else q
+        # an item with "ids" (the actor types it covers) gets their count done (converted, or needing nothing:
+        # "still") for its bar, and the still ones' count
+        "queue": [dict(q, converted=sum(1 for i in q["ids"] if i in converted or i in still),
+                       still=sum(1 for i in q["ids"] if i in still and i not in converted)) if q.get("ids") else q
                   for q in plan.get("queue", [])],
         "queue_done": plan.get("queue_done", []),
         "known_issues": plan["known_issues"],
@@ -128,7 +146,8 @@ def main():
         "counts": {
             "types": len(every),
             "converted": len(converted),
-            "with_rules": len(with_rules - set(converted)),
+            "with_rules": len(with_rules - set(converted) - set(still)),
+            "still": len(set(still) & set(every) - set(converted)),
             "tick_rules": len(rules),
             "overrides": len(overrides),
             "named_functions": symbols,

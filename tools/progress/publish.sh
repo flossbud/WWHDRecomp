@@ -13,6 +13,10 @@
 #                           an item's progress for its bar on the page (e.g. step ui30 3 5: three of five
 #                           parts done); an item with "ids" in plan.json fills its bar from the actor types
 #                           converted without it
+#   publish.sh still ID REASON
+#                           record that actor type ID needs nothing at 60 (it never changes state: say how you
+#                           know), in plan.json's "still" map (sorted by id; commit it): the page counts it as done
+#   publish.sh still ID -   take a type off that list (it does change state after all)
 #   publish.sh bug add TITLE [DETAILS]       record a bug the owner reported (prints its id, B1...)
 #   publish.sh bug start|ready|fixed|verified|wontfix|reopen ID [NOTE]
 #                           its state: open -> working (by this session) -> ready (the fix is in ww-4,
@@ -141,6 +145,32 @@ case "${1:-}" in
 		echo "{\"session\":\"$session\",\"text\":$t,\"time\":$(date +%s)}" | ssh $host "mkdir -p $dir/now && cat > $dir/now/$session.json.tmp && mv $dir/now/$session.json.tmp $dir/now/$session.json &&
 			cd $dir/now && python3 -c 'import json,glob; json.dump([json.load(open(f)) for f in sorted(glob.glob(\"*.json\"))], open(\"../sessions.json.tmp\",\"w\"))' && mv ../sessions.json.tmp ../sessions.json"
 		;;
+	still)
+		python3 - "$here/plan.json" "${2:?type id}" "${3:?reason, or - to remove}" <<'PY'
+import json, re, sys
+path, tid, reason = sys.argv[1], sys.argv[2], sys.argv[3]
+if not tid.isdigit():
+    sys.exit("still: the type's process number")
+s = open(path).read()
+plan = json.loads(s)
+still = plan.get("still", {})
+if reason == "-":
+    if still.pop(tid, None) is None:
+        sys.exit(f"{tid} isn't on the still list")
+else:
+    still[tid] = reason
+# rewrite only the "still" block (one entry a line, by id), keeping the rest of the file as it is
+body = ",\n".join(f"    {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}" for k, v in sorted(still.items(), key=lambda kv: int(kv[0])))
+block = '"still": {\n' + body + '\n  }'
+if '"still"' in s:
+    s = re.sub(r'"still": \{.*?\n  \}', lambda m: block, s, count=1, flags=re.S)
+else:
+    s = s.rstrip()[:-1].rstrip() + ",\n  " + block + "\n}\n"
+assert json.loads(s)["still"] == still
+open(path, "w").write(s)
+print(f"{tid}: {'off the still list' if reason == '-' else 'needs nothing'} ({len(still)} on the list); commit tools/progress/plan.json")
+PY
+		;;
 	retire)
 		who=${2:-$session}
 		ssh $host "rm -f $dir/now/$(printf %q "$who").json &&
@@ -230,12 +260,13 @@ sleep 1; running && echo "serving http://\$ip:$port (pid \$(cat .pid))" || { ech
 EOF
 		;;
 	"")
-		names=$(mktemp)
+		names=$(mktemp); objnames=$(mktemp)
 		ssh $host "docker exec wwhd-worker cat /wwhd/data/ghidra-out/actor_names.tsv" > "$names" || true
-		python3 "$root/tools/progress/collect.py" "$names" | ssh $host "mkdir -p $dir && cat > $dir/progress.json.tmp && mv $dir/progress.json.tmp $dir/progress.json"
-		rm -f "$names"
+		ssh $host "docker exec wwhd-worker cat /wwhd/data/ghidra-out/object_names.tsv" > "$objnames" 2>/dev/null || true
+		python3 "$root/tools/progress/collect.py" "$names" "$objnames" | ssh $host "mkdir -p $dir && cat > $dir/progress.json.tmp && mv $dir/progress.json.tmp $dir/progress.json"
+		rm -f "$names" "$objnames"
 		ssh $host "cat > $dir/index.html" < "$here/index.html"
 		ssh $host "cat > $dir/testing.html" < "$here/testing.html"
 		;;
-	*) echo "usage: publish.sh [now TEXT | retire [SESSION] | claim|done|release ID [NOTE] | step ID DONE TOTAL | bug ... | shot PPM CAPTION [PLACE] | notes ... | usage | serve]" >&2; exit 2 ;;
+	*) echo "usage: publish.sh [now TEXT | retire [SESSION] | still ID REASON|- | claim|done|release ID [NOTE] | step ID DONE TOTAL | bug ... | shot PPM CAPTION [PLACE] | notes ... | usage | serve]" >&2; exit 2 ;;
 esac
