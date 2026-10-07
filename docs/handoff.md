@@ -191,6 +191,12 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   WARPDEMO20 108 inside their events) weren't reached by a route: their events need setups (a chart's salvage, the
   Gallery, Windfall's puzzle, Earth Temple light, Ganon's Tower). Run them with WWHD_DEBUG_EVENTACT to see Link's
   action there, then add it the same way and give those types their rules (bottom's list on the bug).
+  Parked after that part (main's call): the rest are reachable only with dedicated setups, listed on the bug.
+- **predeploy's sidle WARN (111 since CAMTICK; session top's find, confirmed by qa)**: after the sidle, Link's turn in
+  place (0x17, 8000 a tick) is 31991 units at 30 (4 ticks) and 32105 at 60 (the camera ~0.9 degrees off with
+  CAMTICK): a 5th tick, the walk a tick late and the end's wall stop split. A threshold, like tour's corner: predeploy
+  now runs sidle2 (drc-sidle2.txt: f1310's LLEFT steered 6 degrees, LS=-1.0,-0.1), the turn 4 ticks at both, 2.6 units
+  at the end (+0.1: 3.0). ladder is fine (11.0).
 - **B50, Link climbed onto ledges too soon** (found on the way: walking into route crate's crate): changeFrontWallTypeProc's
   count of ticks pushing against a ledge (m3544, +0x6994; over the HIO's 14 he hops up, catches a wall or takes a
   small jump) ran on both steps: keep on its add (`link_qa.txt`). Route `climb`: the hop was 3.5 ticks early.

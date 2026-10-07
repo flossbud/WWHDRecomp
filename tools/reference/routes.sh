@@ -15,6 +15,7 @@ route_info() {
         drc)   route=drc-shield.txt    frames=1240  save=/wwhd/data/saves/owner_drc trace= ;;
         bow)   route=bow-100.txt       frames=1040  save=/wwhd/data/saves/wwhd_100 trace= ;;
         sidle) route=drc-sidle.txt     frames=1400  save=/wwhd/data/saves/owner_drc trace= ;;
+        sidle2) route=drc-sidle2.txt   frames=1400  save=/wwhd/data/saves/owner_drc trace= ;;
         door)  route=drc-door.txt      frames=1700  save=/wwhd/data/saves/owner_drc trace= ;;
         plants) route=plants-100.txt   frames=1520  save=/wwhd/data/saves/wwhd_100 trace= ;;
         bk)    route=drc-bk.txt        frames=1300  save=/wwhd/data/saves/owner_drc trace= ;;
@@ -81,4 +82,4 @@ route_info() {
         *) return 1 ;;
     esac
 }
-route_names="save route tour tour2 land2 sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo tgstatue medliharp gtgrapple fwswitch moveramp moveangle movecircle moveturn movejump crate slope warppot climb drchaze"
+route_names="save route tour tour2 land2 sidle2 sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo tgstatue medliharp gtgrapple fwswitch moveramp moveangle movecircle moveturn movejump crate slope warppot climb drchaze"
