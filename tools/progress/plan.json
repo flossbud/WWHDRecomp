@@ -337,12 +337,12 @@
       "name": "Round 11, the event-only actors (qa's, B67): a setup for each event, a probe run (WWHD_DEBUG_EVENTACT) and its rules: the shutters (259, on their switch), Windfall's night auction (361, 382), the salvage chest (SBOX 293), the gallery viewer (OBJ_FIGURE 404), Windfall's picture puzzle (Obj_Apzl 281), Obj_HSH 290, the Earth Temple's light, Ganon's Tower; then NPC_PF1 356 on Windfall's layer 0", "ids": [293, 404, 290, 281, 356]
     },
     {
-      "id": "lunge",
-      "name": "Round 11, B66 (bottom's): Link's lunge at a Darknut bounces 4 ticks early at 60: his Z-target stance and head look a half tick early (f_024022D0's writes in the half step)"
+      "id": "hands-on",
+      "name": "Round 11 (bottom's): pots, sidling and ladders routed at 30 and 60 (pick up, carry, throw and break a pot; sidle both ways and round a corner; a ladder up and down, on and off), what differs fixed; B66 (the Darknut lunge) parked: its last gap is Link's animation blend"
     },
     {
       "id": "warns",
-      "name": "Round 11 (top's): predeploy's WARN routes (land2 45, plants 41, sail 52, tour2 51 units from 30's end): each's cause fixed, steered off its threshold or recorded; then pots, sidling and ladders routed at 30 and 60; then what's left of Link's actions starting half a tick early"
+      "name": "Round 11 (top's): predeploy's WARN routes (land2 45, plants 41, sail 52, tour2 51 units from 30's end): each's cause fixed, steered off its threshold or recorded; then what's left of Link's actions starting half a tick early"
     }
   ],
   "later": [
@@ -412,7 +412,8 @@
     "actors-bottom",
     "qa-bugs",
     "top-bugs",
-    "bottom-bugs"
+    "bottom-bugs",
+    "lunge"
   ],
   "still": {
     "20": "still where placed (Abship,0,5): no state change at 30 over 200 ticks (census, movers.sh)",
