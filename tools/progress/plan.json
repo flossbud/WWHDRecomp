@@ -338,7 +338,11 @@
     },
     {
       "id": "hands-on",
-      "name": "Round 11 (bottom's): pots, sidling and ladders routed at 30 and 60 (pick up, carry, throw and break a pot; sidle both ways and round a corner; a ladder up and down, on and off), what differs fixed; B66 (the Darknut lunge) parked: its last gap is Link's animation blend"
+      "name": "Round 11 (bottom's): pots, sidling and ladders routed at 30 and 60 and fixed (a thrown pot's sinking, the sidle's speed); B66 (the Darknut lunge) parked: its last gap is Link's animation blend"
+    },
+    {
+      "id": "bottom-next",
+      "name": "Round 11 (bottom's): sidling round a corner stuck at 60 (fixed, landing), B69 (the picture puzzle's B button showed the sword, not Cancel: fixed, landing), then Obj_HSH 290's event (from qa's events)"
     },
     {
       "id": "warns",
