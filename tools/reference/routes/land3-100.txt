@@ -1,0 +1,30 @@
+# land3: route land with its walk at f1350 steered about 3.5 degrees the other way (LS=-1.0,0.06), for predeploy (session top): land2's
+# 2 degrees (LS=-1.0,-0.04) still grazed Outset's corner at f1466-1478 with the exact camera (60's heading 30 units off 30's,
+# 8 units aside: 60's Link stuck where 30's slid along; tour2 50.6, land2 44.9). Steered this way both rates walk
+# into the same wall and stop together (0.00 apart at f1555 on tour's part).
+# land's walk ends at Outset's corner, where a few units at f1473-1477 decide whether Link stops or slides past it,
+# so its end splits either way between runs. land itself stays as it was (for its other uses).
+# Route: the camera's long swings on land, where it meets walls (WW-4: the owner saw it overshoot at 60
+# fps whenever it had far to go, and clip behind a wall), with the 100% save (REF_SAVE=
+# /wwhd/data/saves/wwhd_100): tour-100.txt's walk from the Outset dock to the lookout tower beside
+# Link's house, then the camera swung round with the right stick and lock-on (ZL) swinging it back,
+# and Link running toward the camera before a lock-on. FRAME BUTTONS [FRAMES_HELD]; frames are game
+# frames (at 60 fps, every other swap).
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+960 LDOWN 240  # walk back along the dock toward the village
+1230 RRIGHT 90 # swing the camera
+1350 LS=-1.0,0.06 150 # walk on, to the lookout tower
+1520 RRIGHT 40 # swing the camera round, into the tower's legs
+1580 ZL 30     # lock on: the camera swings back behind him
+1640 RLEFT 60  # swing the camera the other way
+1720 ZL 30     # lock on
+1780 LDOWN 25  # run toward the camera
+1800 ZL 30     # lock on while running
+1860 LRIGHT 30 # run to the side
+1880 ZR 30     # crouch while running
+1940 LUP 10    # turn away
+1960 RRIGHT 45 # swing the camera round
+2020 ZR 30     # crouch after stopping

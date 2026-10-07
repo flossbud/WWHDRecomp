@@ -162,6 +162,21 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   walks them steered 2 degrees (routes tour2, land2: `1350 LS=-1.0,-0.04 150` for `LLEFT`): 51 and 45 with CAMTICK,
   228 and 359 without (the +0.04 side: 57 and 808). tour and land stay as they were (tour's trace reference).
   Whole predeploy: 45 ok, WARN tour2 51, land2 45, sidle 111 (9.7 without), sail 52, plants 41; no FAIL.
+- **Session top: predeploy's WARNs (round 11, "warns", 2026-10-07)**: **tour2/land2**: 2 degrees still grazed
+  Outset's corner (f1466-1478: 60's heading 30 units off 30's with CAMTICK, Link 8 units aside, stuck on the wall
+  where 30's slid along). Steered about 3.5 degrees the other way (routes tour3, land3: `1350 LS=-1.0,0.06 150`)
+  both walk into the same wall and stop together: tour3 0.0 units at the end, land3 17.1; predeploy runs them
+  instead. **plants**: the slash while moving (0x42, f_0243FAFC) drops the speed (mNormalSpeed = |speedF| k + c)
+  once its animation passes a frame (checkPass); stepped, the pass came in whichever half of the tick the frame fell
+  in, so half the time Link kept full speed for the whole step (~5 units a slash). New tick rule kind `tick` (on a
+  call: in a stepping process's whole step it runs with g_rtTickWindow up, and the checkPass override then checks
+  the whole tick's window, as 30's call; the half step leaves it out, r3 = N): on 0243FE6C and the two sibling
+  slashes' checkPass (f_0244061C, f_024408B0; link_actions.txt). plants 41.2 -> 11.1. **sail**: the boat's launch
+  on the mast animation's frame 7 (above, session main's note): plain `getFrame() >= 7` compares in daShip, not a
+  call, so `tick` doesn't reach it; stays as recorded (half a tick, invisible in play).
+  Also: the sidle routes (sidle, sidle2) never sidle (WHIDE 0x13-0x16 never comes: the A at f1292 is a front roll,
+  0x1E/0x1F, into the wall); routes potthrow (lift, carry, throw: ok 23.6) and ladspawn (an Obj_Ladder spawned on
+  the dock: Link takes it, the climb input still to find) went to session bottom with "pots, sidling and ladders".
 - **N28, the test arena (session top's, tested here)**: the debug menu's "Test arena (Gohma's room, no warp)" or
   WWHD_DEBUG_ARENA=1: M_DragB with refights off and no warp flower (WARPFLOWER 104 not created there).
 - **B65, Link slid 75 units after the Floormaster's throw (from session bottom; fixed, `tick_rules/enemies_qa.txt`)**: the

@@ -36,6 +36,8 @@ void rt_journal_store(uint32 ea, uint32 size, uint32 pc);
 // src/overrides/sixty.cpp).
 extern bool g_rtHalfTick;
 extern float g_rtStep;
+// `tick` rules: a call made in a stepping process's whole step checks the whole tick ahead (sixty_step.cpp)
+extern bool g_rtTickWindow;
 extern bool g_rtSixty;
 #define RT_WHOLE_TICK() (!g_rtHalfTick)
 // `late` tick rules: once a tick, at its end: the half tick when the code steps at 60 (g_rtStep

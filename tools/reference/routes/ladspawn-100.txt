@@ -1,0 +1,12 @@
+# Route: a ladder (Obj_Ladder 85, "Mhsg6", switch 0xFF: already fallen) spawned on the Outset dock in front of Link,
+# who walks into it (he takes it), climbs it and climbs back down; facing 0x8000 (the other way he walks past it) (session top, the known issue "Pots, sidling and ladders").
+# So far he takes it (0x38, up to y213) and the LUP climbs no further (no LADDER_MOVE 0x3C); LDOWN takes him off (0x3B):
+# the climb input is still to be found (session top, handed to session bottom). Walking on he falls in the sea (swim).
+#env WWHD_DEBUG_SPAWN=950:85,00ffff00,-201654,173,312560,0,8000
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+960 LDOWN 32   # turn round and walk into the ladder: he takes it (~f988)
+995 LUP 70     # climb up
+1070 LDOWN 80  # and back down, off it

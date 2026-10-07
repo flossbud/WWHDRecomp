@@ -37,3 +37,10 @@
 # issue "actions ending on an animation a tick early"): the call's whole step runs with a step of 1 (sixty_step.cpp's
 # override), and the approach is left out of the half step, whose end test (facing == heading) then reads the tick's
 0241B080    whole       bl 0200f378     link procMoveTurn: cLib_addCalcAngleS(&shape_angle.y, current.angle.y, ...)
+# The slash while moving (0x42, f_0243FAFC; the same pattern in f_0244061C and f_024408B0): once its animation passes a frame (checkPass,
+# attr field_0x28) the speed drops to |speedF| x k + c. Stepped, the pass came in whichever half of the tick the
+# frame fell in, so half the time Link ran on at full speed for the whole step and stayed faster through the slash
+# (route plants: ~5 units a slash, 41 at the end). `tick`: the check over the whole tick, in the whole step (session top)
+0243FE6C    tick:r3=0   bl 027f2bf8     link the slash while moving (0x42): checkPass: its speed drop
+024407DC    tick:r3=0   bl 027f2bf8     link cut (f_0244061C): checkPass: the same drop
+02440A64    tick:r3=0   bl 027f2bf8     link cut (f_024408B0): checkPass: the same drop

@@ -23,7 +23,8 @@
 # 2026-10-06 (dungeons2 part 2, on ww-4 2685c17) all 46 passed but land 82, sidle 62 and sail 51; tgstatue, medliharp
 # and fwswitch 0.0 units, gtgrapple 7.1, the fights (en-*) 9-34. Not in it: walk without a stage warp (Link swims off the
 # dock for 1900 ticks with camera-relative strokes: 7000 units apart, the runs' headings drift) and mob (a
-# fight: the random stream). Enemy fights (session bottom's enemies2: tools/reference/routes/en-*-100.txt, Link on
+# fight: the random stream). tour3 and land3 (session top, 2026-10-07): tour and land steered off Outset's corner (0.0
+# and 17.1 units; tour2/land2 grazed it: 51, 45). Enemy fights (session bottom's enemies2: tools/reference/routes/en-*-100.txt, Link on
 # Outset's grass or in the Savage Labyrinth, ZL and a slash every 15 frames): in it, the ReDead (its freeze and
 # grab), the Peahat, the Miniblins and the Boko Babas, which end within 34 units; not in it, the fights a knockback
 # or a dodge parts within a few ticks (half-tick AI starts and the random stream: Moblin 298, Darknut 790, Bokoblin
@@ -34,7 +35,7 @@
 # Output: game state, it stays on the worker.
 set -e
 source "$(dirname "$0")/common.sh"
-routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land2 sidle2 pot plants slash sail menus tour2 boomerang bombs grapple boots hammer armor mirror heavy drcjar fwbud tgbeam wtspring medli gtrock en-rd en-ph en-pz en-bo tgstatue medliharp gtgrapple fwswitch crate slope warppot climb)
+routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land3 sidle2 pot plants slash sail menus tour3 boomerang bombs grapple boots hammer armor mirror heavy drcjar fwbud tgbeam wtspring medli gtrock en-rd en-ph en-pz en-bo tgstatue medliharp gtgrapple fwswitch crate slope warppot climb)
 P=$OUT/predeploy; mkdir -p "$P"
 jobs=${PREDEPLOY_JOBS:-4}
 run_one() {

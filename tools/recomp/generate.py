@@ -60,6 +60,11 @@ store that a stepping process's whole tick passes over is noted (late_wr32 and o
 made on the half tick if an event's edge holds that process's half step (src/overrides/sixty.cpp). Step
 rules, for the code of processes that run every frame with a time step h
 (g_rtStep, src/overrides/sixty.cpp; nothing changes while it is 1, at 30 fps always):
+  tick         for a call that checks what the coming tick holds (J3DFrameCtrl::checkPass: will the animation pass a
+               frame?): in a stepping process's whole step it's made with g_rtTickWindow up, so the check covers the
+               whole tick as 30's call does (the checkPass override, sixty_step.cpp), and the half step leaves it out
+               (r3 = N with tick:r3=N); outside a stepping process as it is. Something it sets then comes on the tick
+               30's does, not in whichever half the frame falls (Link's slash while moving: its speed drop)
   keep:SRC     on a half tick the instruction's destination gets SRC instead (a counter that
                counts whole ticks: `addi r0, r3, 1` with keep:r3; a damped spring's velocity,
                `v = (v + f) d` once a tick, keep on its fmadds and fmuls, with *h@ on `p += v`)
@@ -307,7 +312,7 @@ class Program:
                 elif kind == "halfadd":
                     assert re.fullmatch(r"-?(0x[0-9a-fA-F]+|[0-9]+)", arg), f"tick_rules.txt:{n}: halfadd:N takes a signed constant"
                     value = int(arg, 0)
-                elif kind in ("whole", "late", "hold"):
+                elif kind in ("whole", "late", "hold", "tick"):
                     value = None
                     if arg:
                         key, _, v = arg.partition("=")
@@ -340,7 +345,7 @@ class Program:
     def check_tick_rule(self, ea, i):
         """The instruction a tick rule expects at ea, or an error message."""
         kind, r3, expect, _ = self.tick_rules[ea]
-        if kind not in ("whole", "late", "hold"):
+        if kind not in ("whole", "late", "hold", "tick"):
             have = i.op
             if i.op == "b" and i.lk:
                 have = f"bl {self.rel24.get(ea, (ea + i.li) & 0xFFFFFFFF):08x}"
@@ -633,6 +638,13 @@ def step_call(op, x):
 def apply_tick_rule(rule, i, lines):
     """An instruction's generated lines with its tick or step rule (see the docstring)."""
     kind, arg, _, what = rule
+    if kind == "tick":
+        assert i.op == "b" and i.lk, f"{what}: tick applies to a call"
+        out = [f"if (RT_STEPPED()) {{   // tick rule: {what}", "\tif (RT_WHOLE_TICK()) {", "\t\tg_rtTickWindow = true;"]
+        out += ["\t\t" + l for l in lines] + ["\t\tg_rtTickWindow = false;", "\t}"]
+        if arg is not None:
+            out += ["\telse", f"\t\tGPR(3) = {reg_expr(arg) if isinstance(arg, str) else emit.hx(arg)};"]
+        return out + ["} else {"] + ["\t" + l for l in lines] + ["}"]
     if kind in ("whole", "late", "hold"):
         test = {"whole": "RT_WHOLE_TICK()", "late": "RT_LATE_TICK()", "hold": "!RT_HOLD()"}[kind]
         if kind == "hold":

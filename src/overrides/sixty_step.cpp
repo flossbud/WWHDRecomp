@@ -418,6 +418,9 @@ namespace
 // with the frame's own window a pass came in the next tick's whole step half the time, and the set-up it
 // makes a tick late. A control his half step held at its start (below) has no window: at 30 that tick
 // checked before its set-up (procHangMove passing frame 0 set itself up again every tick; session top).
+// Under a `tick` rule (g_rtTickWindow, its call made in the whole step only) the window is the whole tick's: from
+// where the whole step's starts, a tick's rate long (Link's slash while moving: its speed drop on 30's tick).
+bool g_rtTickWindow = false;
 void f_027F2BF8(PPCInterpreter_t* __restrict ctx)
 {
 	if (!Stepped())
@@ -441,13 +444,13 @@ void f_027F2BF8(PPCInterpreter_t* __restrict ctx)
 			return;
 		}
 		wrf(frameCtrl + 4, ahead);
-		wrf(frameCtrl, r * Step());
+		wrf(frameCtrl, g_rtTickWindow ? r : r * Step());
 		orig_f_027F2BF8(ctx);
 		wr32(frameCtrl + 4, frame);
 		wr32(frameCtrl, rate);
 		return;
 	}
-	wrf(frameCtrl, std::bit_cast<float>(rate) * Step());
+	wrf(frameCtrl, g_rtTickWindow ? std::bit_cast<float>(rate) : std::bit_cast<float>(rate) * Step());
 	orig_f_027F2BF8(ctx);
 	wr32(frameCtrl, rate);
 }
