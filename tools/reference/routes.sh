@@ -12,6 +12,7 @@ route_info() {
         land3) route=land3-100.txt frames=2080 save=/wwhd/data/saves/wwhd_100 trace= ;;
         potthrow) route=potthrow-100.txt frames=1200 save=/wwhd/data/saves/wwhd_100 trace= ;;
         ladspawn) route=ladspawn-100.txt frames=1220 save=/wwhd/data/saves/wwhd_100 trace= ;;
+        auction) route=auction-100.txt frames=3000 save=/wwhd/data/saves/wwhd_100 trace= ;;
         shield) route=shield-100.txt   frames=1320  save=/wwhd/data/saves/wwhd_100 trace= ;;
         ladder) route=ladder-100.txt   frames=1800  save=/wwhd/data/saves/wwhd_100 trace= ;;
         swing) route=swing-100.txt     frames=1260  save=/wwhd/data/saves/wwhd_100 trace= ;;
@@ -88,4 +89,4 @@ route_info() {
         *) return 1 ;;
     esac
 }
-route_names="save route gohmatail gohmarock tour tour2 land2 tour3 land3 potthrow ladspawn sidle2 sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo tgstatue medliharp gtgrapple fwswitch moveramp moveangle movecircle moveturn movejump crate slope warppot climb drchaze"
+route_names="save route gohmatail gohmarock tour tour2 land2 tour3 land3 potthrow ladspawn auction sidle2 sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo tgstatue medliharp gtgrapple fwswitch moveramp moveangle movecircle moveturn movejump crate slope warppot climb drchaze"

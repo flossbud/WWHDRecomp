@@ -1628,9 +1628,19 @@ it in a window; D21 "Step 2"):**
     walking at speedF 14.5, resting 30 units off 30's): not kept. Regress: Moblin 25.9 -> 19.3, Darknut 17.4 -> 17.3,
     the rest unchanged. The old note's "line check from the last place" was wrong: the hang at the dock is the dock
     itself (30's Moblin is pushed out of its side the tick it crosses and the Acch's line check, f_024F00CC, sets it
-    back to 1.79 for a tick; at 60 it is in by then). Left: a spawned airborne enemy's fall starts a tick early at
-    60 (its first speed.y store, both heights then a tick ahead), and a Bokoblin spawned in the air lunges at
-    twice 30's speed from its first falling tick (+0x33C's 80): both spawn-in-air cases, noted for qa.
+    back to 1.79 for a tick; at 60 it is in by then). Found on the way (B73, session bottom's): a spawned enemy's
+    first fall came a tick early at 60 (enemy common's spawn countdown, now late); a Bokoblin's lunge there happens
+    only with Link unconverted (spawn tests' base list), not as shipped.
+  - **Windfall at night: the auction's bidding (session top, 2026-10-07; main's item)**: route `auction` (23:00,
+    Orichh, WWHD_DEBUG_EVENT=1100:AUCTION_START, A every 20 frames: the welcome, the Joy Pendant at 40 rupees, the
+    bidders' bids; Link doesn't bid). With WWHD_DEBUG_RNDFIX=0.7 the 30 and 60 runs draw the same; scratch lags.py
+    (each tracked actor's s16 fields: the same changes on other ticks) found the bidding twice as fast at 60: the
+    first bid's choice at f2081 against 30's f2129. AUCTION 382's bidding call (f_0205AF48) adds each bidder's
+    interest (+0x8E0..+0x8F4, a random amount a call; at 64 one bids), pauses 60 calls after a bid (+0x91E), a gauge
+    (+0x8DC) and a wave (+0x8F8) a call; the bid's call (+0x91A, 30) and a wait (+0x949) count calls too
+    (trial.py's "only half" lines, which trial_filter hides: read the trial unfiltered for counts). Rules in
+    tick_rules/windfall.txt: the choice on 30's tick, the same six bids; the bid's call a tick early (a bidder's
+    turn), which the route's A spacing makes 20 ticks for the next message. The shutters (259): see below.
   - **60 fps cost (session top; the work queue's "perf"; shared: sixty.cpp's journal, the runtime's
     rt_journal_store)**: real time, headless, on the desktop (`~/wwhd-test`; its `perf-top.sh` runs routes
     at 30 then 60 with `WWHD_FRAME_LOG` and each thread's CPU; `perf-ab.sh` alternates two builds at 60;

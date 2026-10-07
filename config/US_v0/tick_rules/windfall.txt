@@ -175,3 +175,27 @@
 0236B68C    spliti      addi            light: its flicker phase (+0x57C) + 4500
 0236BBA0    keep:r12    addi            light (an event): a countdown (+0x3FA) - 1, then == 1 acts
 0236BEDC    keep:r11    addi            light (an event): a count (+0x3F6) + 1, then == 10 and == 75 act
+# The auction's bidding (session top; route auction: 23:00, Orichh, WWHD_DEBUG_EVENT=1100:AUCTION_START, then A;
+# the trial over the bidding, f2030-2990, WWHD_DEBUG_RNDFIX=0.7): AUCTION 382's bidding call (f_0205AF48) adds each
+# of six bidders' interest (+0x8E0..+0x8F4, min + cM_rndF(max - min) a call; at 64 a bidder bids) and pauses 60
+# calls after a bid (+0x91E, a countdown tested at once); a bid gauge's +0x8DC adds 0.02 a call (and a random amount
+# while pad 0's button is held, f_02007898), and a triangle wave +0x8F8 (its direction +0x8FC) bounces between -1
+# and 1. All ran a call a step: the first bid at f2081 against 30's f2129 (half the 95 ticks), the pauses half as
+# long, and the bidder's call before each bid (+0x91A) and a wait after (+0x949) (both found with trial.py
+# unfiltered: "only half"). Once a tick now (the bidders' NPC_AUCTION 361: nothing stepping twice there): the first
+# bid's choice on 30's tick (f2129), the same bids (43, 46, 50, 53, 60, 64); the bid's call a tick early (f2147
+# against 2148: the bidder's turn to the camera, an approach, crosses its mark half a tick sooner), which the route's
+# A every 20 frames turns into 20 ticks for the next message.
+0205B07C    whole       stfs            auction bidding: the wave (+0x8F8) at its top
+0205B080    whole       stfs            auction bidding: its direction (+0x8FC) turned down
+0205B094    whole       stfs            auction bidding: the wave + its direction
+0205B0A8    whole       stfs            auction bidding: the wave at its bottom
+0205B0AC    whole       stfs            auction bidding: its direction turned up
+0205B0D4    whole       stfs            auction bidding: the gauge (+0x8DC) + 0.02
+0205B12C    whole       stfs            auction bidding: the gauge + a random amount while the button is held
+0205B19C    keep:r6     addi            auction bidding: the pause after a bid (+0x91E) - 1, tested at once
+0205B26C    whole       stfs            auction bidding: each bidder's interest (+0x8E0..+0x8F4) + min + rnd(max - min)
+0205C4D8    late        sth             auction bidding: the bidder's call (f_0205C4B4: +0x91A, 30 at a bid, - 1 a call, at 0 the bid's
+#                                       camera and message), tested before
+0205ADEC    late        stb             auction bidding: a wait (f_0205AD98: +0x949, u8, - 1 a call; at 0 each bidder's interest
+#                                       jumps and it is set again), tested before

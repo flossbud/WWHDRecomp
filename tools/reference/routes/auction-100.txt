@@ -1,0 +1,104 @@
+# Route: Windfall's auction by night (session top): 23:00, the auction house (Orichh, layer 1 by night), the
+# auction's event started (AUCTION_START, the auctioneer's welcome), then A every 20 frames: the text, the Joy Pendant
+# at 40 rupees, and the bidders' bids (Gummy 43 at ~f2148, then 46, 50, 53, 60, 64: AUCTION 382's +0x916; Link
+# doesn't bid). With WWHD_DEBUG_RNDFIX=0.7 the bids are the same at 30 and 60. The A presses' 20-frame spacing turns a
+# tick's difference in when a message can be closed into 20 (see tick_rules/windfall.txt's auction).
+#env WWHD_DEBUG_TIME=905:345
+#env WWHD_DEBUG_STAGE=920:Orichh,0,0,-1
+#env WWHD_DEBUG_EVENT=1100:AUCTION_START
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870, the warp at f920
+1160 A 3
+1180 A 3
+1200 A 3
+1220 A 3
+1240 A 3
+1260 A 3
+1280 A 3
+1300 A 3
+1320 A 3
+1340 A 3
+1360 A 3
+1380 A 3
+1400 A 3
+1420 A 3
+1440 A 3
+1460 A 3
+1480 A 3
+1500 A 3
+1520 A 3
+1540 A 3
+1560 A 3
+1580 A 3
+1600 A 3
+1620 A 3
+1640 A 3
+1660 A 3
+1680 A 3
+1700 A 3
+1720 A 3
+1740 A 3
+1760 A 3
+1780 A 3
+1800 A 3
+1820 A 3
+1840 A 3
+1860 A 3
+1880 A 3
+1900 A 3
+1920 A 3
+1940 A 3
+1960 A 3
+1980 A 3
+2000 A 3
+2020 A 3
+2040 A 3
+2060 A 3
+2080 A 3
+2100 A 3
+2120 A 3
+2140 A 3
+2160 A 3
+2180 A 3
+2200 A 3
+2220 A 3
+2240 A 3
+2260 A 3
+2280 A 3
+2300 A 3
+2320 A 3
+2340 A 3
+2360 A 3
+2380 A 3
+2400 A 3
+2420 A 3
+2440 A 3
+2460 A 3
+2480 A 3
+2500 A 3
+2520 A 3
+2540 A 3
+2560 A 3
+2580 A 3
+2600 A 3
+2620 A 3
+2640 A 3
+2660 A 3
+2680 A 3
+2700 A 3
+2720 A 3
+2740 A 3
+2760 A 3
+2780 A 3
+2800 A 3
+2820 A 3
+2840 A 3
+2860 A 3
+2880 A 3
+2900 A 3
+2920 A 3
+2940 A 3
+2960 A 3
+2980 A 3
