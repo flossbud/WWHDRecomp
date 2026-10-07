@@ -2082,6 +2082,21 @@ void f_025D8A5C(PPCInterpreter_t* __restrict ctx)
 	[[clang::musttail]] return orig_f_025D8A5C(ctx);
 }
 
+// fpcM_Create(layer, process name, create function, ?, append) -> process ID. In the boss rush, Kalle Demos's death
+// makes no Makar (NPC_CB1, 334: d_a_bmd.cpp's death scene creates him, then his rescue event thanks Link; the
+// owner's N21): no request, the ID -1, which the boss doesn't keep. The append (0x40 bytes, made by fopAcM_create
+// before this call) isn't freed: once a rush.
+void f_025E14A8(PPCInterpreter_t* __restrict ctx)
+{
+	if (GPR(4) == 334 && wwhd::debug::RushBoss() == 1)
+	{
+		cemuLog_log(LogType::Force, "wwhd debug: boss rush: no Makar after Kalle Demos");
+		GPR(3) = 0xFFFFFFFFu;
+		return;
+	}
+	[[clang::musttail]] return orig_f_025E14A8(ctx);
+}
+
 // mDoAud_setSceneName(name, room, layer) (session qa's find, symbols.csv): the sound's next scene, which picks its
 // music. In the boss rush the log says which (the warp out's turn, below, comes before it)
 void f_025E17CC(PPCInterpreter_t* __restrict ctx)

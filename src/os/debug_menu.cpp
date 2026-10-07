@@ -189,6 +189,12 @@ namespace wwhd::debug
 		return s_rush >= 0;
 	}
 
+	int RushBoss()
+	{
+		std::lock_guard lock(s_rushLock);
+		return s_rush;
+	}
+
 	bool RushNextStage(const char*& name, int& point, int& room, int& layer)
 	{
 		std::lock_guard lock(s_rushLock);

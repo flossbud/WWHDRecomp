@@ -52,6 +52,8 @@ namespace wwhd::debug
 	void RushBossBeaten();
 	// a rush is on (no heart containers then: the owner's wish, B47)
 	bool RushRunning();
+	// the rush's boss being fought: 0 Gohma, 1 Kalle Demos ... (debug_menu.cpp's kBosses), or -1 when none
+	int RushBoss();
 	// in a rush whose boss is beaten, the next boss for the game's next stage change (and on to it)
 	bool RushNextStage(const char*& name, int& point, int& room, int& layer);
 }

@@ -1902,6 +1902,13 @@ it in a window; D21 "Step 2"):**
     30): "the warp out turned as it's asked for", "on to kinBOSS", then the sound's next scene kinBOSS room 0 (before:
     none until the stage, the music the sea's). session qa's own fix (branch qa-rushmusic ebcc5e4, the sound's call
     overridden) not taken: the same effect one call later.
+    **N21** (the owner: Makar's thanks after Kalle Demos is unneeded in the rush): Kalle Demos's death scene creates
+    Makar (NPC_CB1 334, d_a_bmd.cpp case 102), whose rescue event thanks Link. In the rush while Kalle Demos is the boss
+    (debug_menu's RushBoss() 1) fpcM_Create (f_025E14A8) makes no 334 (ID -1; the boss keeps none). Test (scratch
+    kinrush.sh: the rush from the menu, Gohma "beaten" by RUSHBEATEN at f1150 and an env stage change at 1160 turned to
+    kinBOSS, Kalle Demos's death poked at f1700: 235 +0x3A1 health 0, +0x422 mMode 0xB, +0x428 m306 100, +0x424 m302
+    0, +0xC94 mB74 100; Link placed on the warp at f2600), 30 and 60: "no Makar", the warp flower at f2331 as with him,
+    Link free (action 4) from f2501, and the warp on to SirenB (the sound's scene SirenB).
   - **Counts a call without a rule, in session bottom's types (shared enemy code too; regress.sh rerun)**:
     session qa's `tools/sixty/counter_audit.py` lists every field loaded, +-1 and stored back with no
     rule. For my processes (and the enemies item) each site was classified from its code (a scratch
