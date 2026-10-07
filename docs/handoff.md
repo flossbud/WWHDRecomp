@@ -291,6 +291,14 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   Magtails 13.8/142 and 16.1/163 apart (mean/max) -> 4.0/16.9 and 3.5/20.6, Link 8.2/88.8 -> 1.4/2.5 with his
   actions all on 30's; listed. **ST 190** (+0x3E0/+0x3E2, GC m02C4/mActionState + 0x11C): unchanged by the hold
   (327 apart either way): its blow lands on Link 2.5 ticks late and throws him another way (B72, qa's); not listed.
+  **BK 189** (dr at HD 0x49C, mode 0x4A0, action 0x4A2; session main, en-bk, RNDFIX 0.7, TICKVEC on): unheld, its
+  mode steps come half a tick to 2 ticks early (the set-up 2 -> 4 at 1021/1021.5 against 30's 1023/1024); held,
+  every mode step lands on 30's tick. But the Bokoblin itself goes further from 30's (alive: 7.8-20.8 units against
+  4.6-15.8; its death flight 614 at the end against 151), Link closer (max 27.7 against 66.7). Not listed. Both 60
+  runs take Link's second and third hits on it a tick early (HP 3 -> 1 at 1065, 30's 1066; the kill at 1087, 30's
+  1088; the first hit, 1008, on 30's tick), so it dies a tick early either way and its flight starts from another
+  place; held, the kill's mode -100 is held to 1087.5 while its HP already reads dead. Next for BK: Link's sword
+  hit a tick early (the TN known issue's attack collider set in whole steps, Link's side), before the hold.
   **The hit's vector (TICKVEC)**: dCcD_Cyl::MoveCAtTg/MoveCAt/MoveCTg and dCcD_Sph::MoveCAt (025165A4, 02516618,
   02516680, 025167E4: vector +0x7C At, +0xB4 Tg, center +0x118) set the vector to the move since the last call: at
   60 half a tick's, from mid-tick, and Link's knockback heads from it (en-mo: 12 degrees against 30's 22, ~120 units
