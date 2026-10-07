@@ -476,8 +476,8 @@
 # ---- step rules: Link (daPy_lk_c, d_a_player_main.cpp). Converted with WWHD_60FPS_CONVERT=168.
 # posMoveFromFootPos (f_023FCB9C): the speed taken from the feet's animation (measured over a whole tick
 # by its override, sixty_step.cpp), gravity, the move
-023FCEE8    d@f7        fmuls           posMoveFromFootPos: m359C * 0.7 (the last move, smoothed)
-023FCEF0    k@f0        fmadds          posMoveFromFootPos: move * 0.3 + m359C * 0.7
+# (its smoothing, move * 0.3 + m359C * 0.7, is 30's in both steps: both measure the whole tick, and the half step
+# smooths from the m359C the whole step did, so both take 30's speed for the tick; B59, sixty_step.cpp)
 023FD2D4    note:f11    lfs             posMoveFromFootPos: speed.y before gravity
 023FD310    note:f11    lfs             posMoveFromFootPos: speed.y before gravity
 023FD338    *h@f9       fmadds          posMoveFromFootPos: speed.y += gravity * 2.25 (heavy)

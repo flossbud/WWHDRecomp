@@ -645,7 +645,7 @@ namespace
 	// the model's matrices posMoveFromFootPos reads (m37B4, Link +0x73BC; the waist's, the left and the right foot's,
 	// joints 30, 34, 39 of the matrices at *(*(*(Link +0x448) +0x2C) +0x10), 0x30 bytes each), as the whole step saw them
 	struct FootMatrices { uint32 step = 0; uint8 base[0x30]; uint8 joint[3][0x30]; };
-	struct ToeHistory { Toes last, before; uint32 lastStep = 0; bool haveBefore = false; FootMatrices whole; };
+	struct ToeHistory { Toes last, before; uint32 lastStep = 0; bool haveBefore = false; FootMatrices whole; float smooth = 0, stick = 0; };
 	constexpr uint32 kFootJoint[3] = { 0x5A0u, 0x660u, 0x750u };
 	uint32 FootJoints(uint32 link)
 	{
@@ -698,7 +698,12 @@ namespace
 // the last frame left them, and a half step's last frame is the whole tick's draw, half a tick on: its
 // measure ran half a tick ahead of 30's (a walk's start ramped early, Link ~1 unit ahead from there,
 // route tour; session top, walkstart). So a half step measures with the whole step's matrices (put in
-// for the call, its own put back after): both of a tick's steps take 30's measure.
+// for the call, its own put back after): both of a tick's steps take 30's measure. Its smoothing (move * 0.3 +
+// m359C (+0x69F4) * 0.7 when the feet's share is under 1 and the stick hasn't moved since the last call (+0x6A0C),
+// the result kept in m359C) was an approach per step (k@/d@ rules), so with the same measure in both steps the whole
+// step's speed was half-way there, high while he slows: a room's walk-in moved ~0.4 units a tick too far and stopped
+// early on its distance check (B59), and an L-targeting release slid further (B58). Now 30's smoothing in both
+// steps, the half step's from the m359C and the stick before the whole step: both take 30's speed for the tick.
 extern bool g_rtLinkGroundLost;
 void f_023FCB9C(PPCInterpreter_t* __restrict ctx)
 {
@@ -720,6 +725,18 @@ void f_023FCB9C(PPCInterpreter_t* __restrict ctx)
 		WriteToes(link, history.before);               // the move is measured from a tick ago
 	const uint32 joints = FootJoints(link);
 	const bool wholeMatrices = g_rtHalfTick && continuing && history.whole.step == step - 1 && joints;
+	const bool smoothFromWhole = g_rtHalfTick && continuing;
+	const float stickNow = rdf(link + 0x6A0C);
+	if (!g_rtHalfTick)
+	{
+		history.smooth = rdf(link + 0x69F4);           // the smoothing's last move and stick before the tick, for the half step
+		history.stick = stickNow;
+	}
+	else if (smoothFromWhole)
+	{
+		wrf(link + 0x69F4, history.smooth);            // the half step smooths from them too: the whole step's speed again
+		wrf(link + 0x6A0C, history.stick);
+	}
 	if (!g_rtHalfTick && joints)
 	{
 		history.whole.step = step;                     // the whole step's matrices, for the half step
@@ -732,6 +749,8 @@ void f_023FCB9C(PPCInterpreter_t* __restrict ctx)
 	orig_f_023FCB9C(ctx);
 	if (wholeMatrices)
 		SwapFootMatrices(link, history.whole);         // ... and the half step's own back
+	if (smoothFromWhole)
+		wrf(link + 0x6A0C, stickNow);                  // the stick's own back
 	history.before = now;
 	history.haveBefore = true;
 	history.lastStep = step;
@@ -747,7 +766,7 @@ void f_023FCB9C(PPCInterpreter_t* __restrict ctx)
 // itself: not this.) WWHD_60FPS_SPEEDTICK=0 turns it off.
 namespace
 {
-	bool s_inNormalSpeed = false;                  // in setSpeedAndAngleNormal's call
+	bool s_inNormalSpeed = false;                  // in setSpeedAndAngleNormal's or procAtnMove's call
 	bool SpeedTick()
 	{
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_SPEEDTICK"); return !(e && atoi(e) == 0); }();
@@ -763,6 +782,21 @@ void f_0241650C(PPCInterpreter_t* __restrict ctx)
 	const bool outer = s_inNormalSpeed;
 	s_inNormalSpeed = true;
 	orig_f_0241650C(ctx);
+	s_inNormalSpeed = outer;
+}
+
+// daPy_lk_c::procAtnMove(Link r3): the L-targeting walk (B58, the owner's note N4): WWHD's setSpeedAndAngleAtn
+// (f_02417538) calls setNormalSpeedF itself. Its speed change too once a tick, in the whole step: at 30 releasing
+// L while moving takes the atn walk's whole drop (12 to 6) on the tick it switches to procMove; at 60 the whole
+// step took half of it (12 to 8.5) and procMove's slower rule the rest, so Link slid on a tick longer. Not in
+// f_02417538 itself: the aims call it too, then multiply mNormalSpeed by 1.2 each step (link_items.txt).
+void f_02419BF0(PPCInterpreter_t* __restrict ctx)
+{
+	if (!Stepped() || !SpeedTick())
+		[[clang::musttail]] return orig_f_02419BF0(ctx);
+	const bool outer = s_inNormalSpeed;
+	s_inNormalSpeed = true;
+	orig_f_02419BF0(ctx);
 	s_inNormalSpeed = outer;
 }
 

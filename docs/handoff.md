@@ -3482,6 +3482,19 @@ it in a window; D21 "Step 2"):**
     0.2 apart (3.3 before), 0.1 with CAMTICK; moveangle's end gaps about halved (e.g. 37/54/67 to 18/28/40) and the
     half-stick segments' extra stops gone; movecircle's ccw circle 668 to 174, with CAMTICK its cw circle 72 to 17
     (the camera -7 to +0.8 degrees). Checks, regress (unchanged) and predeploy (50, land/sidle/sail WARN) pass.
+  - **B58, B59, Link's slow-downs** (fixed): B58, L-targeting released while moving: procAtnMove (f_02419BF0;
+    WWHD's setSpeedAndAngleAtn f_02417538 calls setNormalSpeedF itself) takes its speed change once a tick in the
+    whole step as B61's walk does (12 to 6 on the release tick, then procMove's rule), so he stops on 30's tick
+    (he slid a tick longer). B59 (a room's walk-in stopped a tick or two early) and the rest of B58's slide:
+    posMoveFromFootPos's smoothing (move * 0.3 + m359C * 0.7, m359C +0x69F4, the stick check's last stick
+    +0x6A0C; GameCube offsets don't apply) had `k@`/`d@` rules, an approach per step; with the whole-tick measure
+    in both steps the whole step's speed was half-way, high while slowing. The rules are gone: 30's smoothing in
+    both steps, the half step's from the whole step's inputs (sixty_step.cpp f_023FCB9C). The walk-in's speeds
+    equal 30's to 0.01 and stop on its tick; moveangle's 0-degree segment 0.07 apart with CAMTICK (18 with B61
+    alone), movecircle with CAMTICK 1.6/19.5/2.6 apart (16.6/126/9.8), moveturn all within 20 (it split before).
+    Left on those routes: B57's camera without CAMTICK, and a jump off a ledge landing a tick late at 60
+    (moveangle 45 degrees, tick 1172: 30 lands, 60 a tick later, 17 units). Route `drchaze` (the owner's N18
+    spot, the boss-door room's torches): the heat haze's puffs match 30's (N15/N18 answered, no bug).
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.
