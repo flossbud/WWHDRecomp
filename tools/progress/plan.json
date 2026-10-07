@@ -130,11 +130,11 @@
   "known_issues": [
     {
       "title": "Beamos scorch marks last a few ticks longer",
-      "detail": "Hot_Floor 231 under a Beamos beam fades a few ticks later at 60"
+      "detail": "Hot_Floor 231 under a Beamos beam fades a few ticks later at 60: its own heat and fade are stepped as at 30 (the beam sets it each step, cLib_chaseF up 5 a tick while hit, down 0.4 after); the beam's half-step positions sweep a scorch once more than 30's whole-tick jumps do and add heat (finer sampling of the beam's path, like the water jar's edge): left as inherent (session bottom)"
     },
     {
       "title": "A thrown water jar can break on an edge 30 misses",
-      "detail": "Dragon Roost room 8: thrown from about 100 units further back, the jar breaks on the floor's edge at 60 but in the lava at 30; 60's finer sampling catches an edge 30's step jumps over"
+      "detail": "Dragon Roost room 8: thrown from about 100 units further back, the jar breaks on the floor's edge at 60 but in the lava at 30; 60's finer sampling catches an edge 30's step jumps over Decided (session bottom): inherent to the finer sampling (the jar moves on 30's ticks; its arc grazes the edge between two of them, where a 60 step lands), left."
     },
     {
       "title": "Ganon's Tower trial: the magma rocks' bob differs",
