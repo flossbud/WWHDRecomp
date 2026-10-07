@@ -3361,7 +3361,14 @@ it in a window; D21 "Step 2"):**
     LDOWN+LRIGHT to face it, hold A (releasing A leaves the sidle), A+LUP moves along it. procWHideMove (f_0242AFB8,
     0x15) ran up to 2.3 units ahead: its setNormalSpeedF now once a tick (as the walk's), and 0x15 is in HoldsAfter
     (the half step after its set-up read speed 0 and went back to the wait). Now 30's ticks, offset unchanged.
-    Not tested: round a corner.
+    Round a corner (route sidlecorner: A+LDOWN past z 8250): stuck at 60, 95 units off; procWHideMove's push into the
+    wall (0.8 * HIO field_0x50 a call) was whole in each step and slid him back off the angled face: *h@f0 on its six
+    fnmsubs (notes_bottom.txt). Turns on 30's tick, 4.2 units off after.
+  - B69 (qa's, Windfall's 15-puzzle: B showed the sword, not Cancel, at 60): the HUD's status bytes (play info +0x5BB5..
+    +0x5BBA: R/B/A labels and their forces) are set by executes each tick and taken by METER's execute (whole ticks only);
+    Link's half step (0240D2C0, 0240D784) set B's sword again and the HD port draws the HUD every frame. A converted
+    process's half-step writes to them are now put back (sixty.cpp HudStatus, WWHD_60FPS_HUDHOLD=0 off): Cancel shows on
+    both frames (captures at swaps 1780/1781).
   - Ladders: on top's spawned ladder (ladspawn's spawn line), LRIGHT climbs (LUP is in changeLadderMoveProc's 90-degree
     dead zone; LDOWN steps down). Up and down within 0.16 units, transitions on 30's ticks: nothing to fix.
   - Note on reading tracks: a 60 track's key 2t+1 (shown t.5) is the tick's end, i.e. 30's key 2t; a change at 60's

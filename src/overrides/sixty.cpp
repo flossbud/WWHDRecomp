@@ -3286,6 +3286,28 @@ namespace
 uint32 g_rtActor = 0;                               // the process whose execute runs (rt_step_fall's)
 bool g_rtLinkGroundLost = false;                    // Link's half step after his whole step's move lost the ground
 
+// The HUD's button labels (B69): the play info's mRStatus, mAStatus, mDoStatus (+0x5BB5..+0x5BB7, the R, B and A
+// buttons) and their forces (+0x5BB8..+0x5BBA; the GameCube's 0x492D..0x4932) are set by the actors' executes each
+// tick and taken by the HUD's (METER 481, whole ticks only: dMeter_weponMove applies the B force, then clears it).
+// A converted process's half step wrote them again where 30 has no tick (Link's sword on B over the picture puzzle's
+// Cancel: Windfall's 15-puzzle showed the sword at 60), and the HD port draws the HUD every frame. So a half step's
+// writes to them are put back: the HUD shows the whole tick's labels. WWHD_60FPS_HUDHOLD=0 off.
+namespace
+{
+	bool HudHold()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_HUDHOLD"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	struct HudStatus
+	{
+		static constexpr uint32 kAt = 0x1046F0B0u + 0x5BB5u, kBytes = 6;   // kGameInfo (f_025200D4's) + 0x5BB5
+		uint8 b[kBytes] = {};
+		void Save() { for (uint32 i = 0; i < kBytes; i++) b[i] = rd8(kAt + i); }
+		void Restore() { for (uint32 i = 0; i < kBytes; i++) wr8(kAt + i, b[i]); }
+	};
+}
+
 void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 {
 	const uint32 from = wwhd::rt::SixtyFrom();      // ~0 when 60 fps is off
@@ -3519,7 +3541,12 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 			wr32(proc + kLinkNoResetFlg1, f & ~oneShotHidden);
 	}
 	ModeLateBefore(proc);
+	HudStatus hud;
+	if (g_rtHalfTick && HudHold())
+		hud.Save();
 	orig_f_025DE58C(ctx);
+	if (g_rtHalfTick && HudHold())
+		hud.Restore();
 	ModeLateAfter(proc);
 	if (landing && LandSnap())
 		LandSnapAfter(proc, landingBits);
