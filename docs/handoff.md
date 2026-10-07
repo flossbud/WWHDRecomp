@@ -154,6 +154,16 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   at 30 alone the fixed value moves the after-glow 200-1000 pixels. Link's conversion changed it only by changing
   the random numbers' order (his idle 0x05 is random-timed: f1301 at 30, f1392 at 60; f1354 at both when fixed).
   g_env_light (0x10475A68) was equal at both rates over f1470-1515 but for a random flicker word (+0x1224).
+- **B57 (N4, the camera behind 30's in long turns; from session top): WWHD_60FPS_CAMTICK on by default** (sixty.cpp's
+  CamTick: the camera's whole-tick half step for show, its own half step a 30 fps tick; `=0` turns it off). With
+  top's d18f043 (Link's plain-walk turn once a tick) movecircle's first circle is 0.13 units from 30's, moveangle
+  0.07/0.9 at 0/45 degrees. Predeploy with it: tour and land FAIL (271, 306; 20 and 99 without), both a split at
+  Outset's corner (f1473-1477: a few units decide whether Link stops on the wall or slides past). Predeploy now
+  walks them steered 2 degrees (routes tour2, land2: `1350 LS=-1.0,-0.04 150` for `LLEFT`): 51 and 45 with CAMTICK,
+  228 and 359 without (the +0.04 side: 57 and 808). tour and land stay as they were (tour's trace reference).
+  Whole predeploy: 45 ok, WARN tour2 51, land2 45, sidle 111 (9.7 without), sail 52, plants 41; no FAIL.
+- **N28, the test arena (session top's, tested here)**: the debug menu's "Test arena (Gohma's room, no warp)" or
+  WWHD_DEBUG_ARENA=1: M_DragB with refights off and no warp flower (WARPFLOWER 104 not created there).
 - **B50, Link climbed onto ledges too soon** (found on the way: walking into route crate's crate): changeFrontWallTypeProc's
   count of ticks pushing against a ledge (m3544, +0x6994; over the HIO's 14 he hops up, catches a wall or takes a
   small jump) ran on both steps: keep on its add (`link_qa.txt`). Route `climb`: the hop was 3.5 ticks early.

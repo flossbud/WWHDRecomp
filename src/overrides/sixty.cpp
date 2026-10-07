@@ -2428,15 +2428,17 @@ void f_02002C90(PPCInterpreter_t* __restrict ctx)
 // nothing has changed since goes back. Every half step then reads the tick-start camera, and the camera's own
 // half step runs as a 30 fps tick (step 1, the whole-tick rules on), which ends where 30's tick ends for 30's
 // inputs (route tour: its half ticks equal 30's ticks to the bit while the camera settles after the load).
-// WWHD_60FPS_CAMTICK=1: on, a probe. Off by default: it doesn't bring Link's paths nearer 30's (his own steps
-// differ from his first walking ticks, and the camera then follows that), and predeploy got worse (tour 20 ->
-// 271 and land 99 -> 306 units at the end, each a bifurcation: tour's Link 20 units to one side clears a
-// corner that stops him at 30; crawl 1 -> 77, sidle 53 -> 103; pot 8 -> 2).
+// On by default since B57 (the owner's N4: the camera drifting 5-17 degrees behind 30's in long turns; session qa
+// on session top's measures, ww-4 d18f043 with Link's plain-walk turn once a tick): movecircle's first circle 0.13
+// units from 30's (heading 0.02 degrees), moveangle 0.07/0.9 at 0/45 degrees. WWHD_60FPS_CAMTICK=0 turns it off.
+// Predeploy with it: tour and land FAIL (271, 306 units; 20 and 99 without), both a bifurcation at Outset's corner
+// (f1473-1477: Link a few units aside slides past where 30's stops), so predeploy walks them steered 2 degrees
+// (routes tour2, land2: 51 and 45 with it, 228 and 359 without); sidle 9.7 -> 111 (WARN), ladder 11.
 namespace
 {
 	bool CamTick()
 	{
-		static const bool on = [] { const char* e = getenv("WWHD_60FPS_CAMTICK"); return e && atoi(e) == 1; }();
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_CAMTICK"); return !(e && atoi(e) == 0); }();
 		return on;
 	}
 	struct CamSave { uint32 proc = 0, id = 0, size = 0; std::vector<uint8> before, after; bool restored = false; };

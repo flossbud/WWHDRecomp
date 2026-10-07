@@ -6,6 +6,8 @@ route_info() {
         save)  route=continue-100.txt  frames=1800  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/save-det/a.zst ;;
         route) route=title-to-game.txt frames=10800 save=                          trace=/wwhd/data/traces/null-route.zst ;;
         tour)  route=tour-100.txt      frames=2190  save=/wwhd/data/saves/wwhd_100 trace=/wwhd/data/traces/tour-det/a.zst ;;
+        tour2) route=tour2-100.txt frames=2190 save=/wwhd/data/saves/wwhd_100 trace= ;;
+        land2) route=land2-100.txt frames=2080 save=/wwhd/data/saves/wwhd_100 trace= ;;
         shield) route=shield-100.txt   frames=1320  save=/wwhd/data/saves/wwhd_100 trace= ;;
         ladder) route=ladder-100.txt   frames=1800  save=/wwhd/data/saves/wwhd_100 trace= ;;
         swing) route=swing-100.txt     frames=1260  save=/wwhd/data/saves/wwhd_100 trace= ;;
@@ -79,4 +81,4 @@ route_info() {
         *) return 1 ;;
     esac
 }
-route_names="save route tour sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo tgstatue medliharp gtgrapple fwswitch moveramp moveangle movecircle moveturn movejump crate slope warppot climb drchaze"
+route_names="save route tour tour2 land2 sail menus warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo tgstatue medliharp gtgrapple fwswitch moveramp moveangle movecircle moveturn movejump crate slope warppot climb drchaze"
