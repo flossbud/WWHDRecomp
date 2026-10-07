@@ -353,7 +353,8 @@ namespace
 	// And the slash's bounce off a wall or shield (0x5A, procCutReverse, set up in procCutA's call by changeCutReverseProc:
 	// it sets his speed back 12, which its step takes down; at 30 the next tick's): the half step took the first
 	// decrease, his speed 0.56 under 30's on every tick after, ~6.6 units short by the bounce's end (route en-tn, session
-	// qa after B66; now within 0.6).
+	// qa after B66; now within 0.6). Its decrease is once a tick too (sixty_step.cpp, kOnceATick): held, the
+	// half moves went a quarter of a decrease long instead (route en-ph's Peahat, 2 units a bounce).
 	// Tried and not held: 0x24 (procAutoJump: no change) and 0x36 (procSwimWait: swing 70 -> 137).
 	// WWHD_60FPS_HOLDEXTRA=a,b,... (hex action numbers): more of them, to try (the drifts item)
 	bool HoldsAfter(uint32 action)
@@ -3233,72 +3234,88 @@ namespace
 	}
 }
 
-// WWHD_DEBUG_MODELATE=name:off[:off...] (a probe, B62): a converted process's state fields (s16 at those offsets)
-// that its whole step changes are put back after it and made at the tick's end, as `late` stores: its half step runs
-// the old state again (which normally makes the same change), and if that leaves them as they were the whole step's
-// values are written then. A state machine that moves one link a call (set the next mode, act on it next call)
-// takes a tick a link as at 30, not half a tick.
+// The mode hold: a converted process's state fields (s16s) that its whole step changes are put back after it and
+// made at the tick's end, as `late` stores: its half step runs the old state again (which normally makes the same
+// change), and if that leaves them as they were the whole step's values are written then. A state machine that moves
+// one link a call (set the next mode, act on it the next call: a one-call set-up mode) takes a tick a link as at 30,
+// not half a tick. Per type, opt-in like the tick rules, each measured on its fight route (the handoff lists the
+// types measured, held or not):
+//   TN 191, the Darknut (damagereaction mMode +0x594, mAction +0x596): its set-up mode 2 (an animation, a timer, the
+//   next mode) put its backstep half a tick early and it ran 4-5 units ahead of 30's (route en-tn); held, within 0.9
+//   and its first blow a tick from 30's, not two (session qa, after B66).
+// WWHD_60FPS_MODEHOLD=0 turns it off; WWHD_DEBUG_MODELATE=name:off[:off...] (a probe) holds another type's fields too.
 namespace
 {
 	struct ModeLatePending { std::vector<uint16> before, after; };
 	std::unordered_map<uint32, ModeLatePending> s_modeLate;
 	std::vector<uint16> s_modeLateIn;
-	const std::pair<uint16, std::vector<uint32>>& ModeLateSpec()
+	const std::vector<uint32>* ModeLateFields(uint16 name)
 	{
-		static const std::pair<uint16, std::vector<uint32>> spec = [] {
-			std::pair<uint16, std::vector<uint32>> s{ 0, {} };
+		static const std::unordered_map<uint16, std::vector<uint32>> types = [] {
+			std::unordered_map<uint16, std::vector<uint32>> m;
+			const char* off = getenv("WWHD_60FPS_MODEHOLD");
+			if (!(off && atoi(off) == 0))
+			{
+				m[191] = { 0x594u, 0x596u };          // TN, the Darknut
+			}
 			if (const char* e = getenv("WWHD_DEBUG_MODELATE"))
 			{
 				char* p;
-				s.first = (uint16)strtoul(e, &p, 10);
+				const uint16 n = (uint16)strtoul(e, &p, 10);
+				std::vector<uint32> v;
 				while (*p == ':')
-					s.second.push_back((uint32)strtoul(p + 1, &p, 16));
+					v.push_back((uint32)strtoul(p + 1, &p, 16));
+				if (!v.empty())
+					m[n] = v;
 			}
-			return s;
+			return m;
 		}();
-		return spec;
+		const auto it = types.find(name);
+		return it == types.end() ? nullptr : &it->second;
 	}
-	std::vector<uint16> ModeLateRead(uint32 proc)
+	std::vector<uint16> ModeLateRead(uint32 proc, const std::vector<uint32>& fields)
 	{
 		std::vector<uint16> v;
-		for (uint32 off : ModeLateSpec().second)
+		for (uint32 off : fields)
 			v.push_back(rd16(proc + off));
 		return v;
 	}
-	void ModeLateWrite(uint32 proc, const std::vector<uint16>& v)
+	void ModeLateWrite(uint32 proc, const std::vector<uint32>& fields, const std::vector<uint16>& v)
 	{
 		for (size_t i = 0; i < v.size(); i++)
-			wr16(proc + ModeLateSpec().second[i], v[i]);
+			wr16(proc + fields[i], v[i]);
 	}
 	void ModeLateBefore(uint32 proc)
 	{
-		if (ModeLateSpec().second.empty() || rd16(proc + 0x08) != ModeLateSpec().first)
+		const std::vector<uint32>* fields = ModeLateFields(rd16(proc + 0x08));
+		if (!fields)
 			return;
 		if (!g_rtHalfTick)
 			if (const auto it = s_modeLate.find(proc); it != s_modeLate.end())
 			{
-				ModeLateWrite(proc, it->second.after);  // a half step that didn't come: the tick's change made
+				ModeLateWrite(proc, *fields, it->second.after);  // a half step that didn't come: the tick's change made
 				s_modeLate.erase(it);
 			}
-		s_modeLateIn = ModeLateRead(proc);
+		s_modeLateIn = ModeLateRead(proc, *fields);
 	}
 	void ModeLateAfter(uint32 proc)
 	{
-		if (ModeLateSpec().second.empty() || rd16(proc + 0x08) != ModeLateSpec().first)
+		const std::vector<uint32>* fields = ModeLateFields(rd16(proc + 0x08));
+		if (!fields)
 			return;
-		const std::vector<uint16> now = ModeLateRead(proc);
+		const std::vector<uint16> now = ModeLateRead(proc, *fields);
 		if (!g_rtHalfTick)
 		{
 			if (now != s_modeLateIn)
 			{
 				s_modeLate[proc] = { s_modeLateIn, now };
-				ModeLateWrite(proc, s_modeLateIn);
+				ModeLateWrite(proc, *fields, s_modeLateIn);
 			}
 		}
 		else if (const auto it = s_modeLate.find(proc); it != s_modeLate.end())
 		{
 			if (now == it->second.before)
-				ModeLateWrite(proc, it->second.after);
+				ModeLateWrite(proc, *fields, it->second.after);
 			s_modeLate.erase(it);
 		}
 	}

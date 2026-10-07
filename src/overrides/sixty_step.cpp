@@ -158,18 +158,6 @@ double rt_step_surface(double y)
 
 // ---- c_lib (c_lib.cpp): exponential approaches ------------------------------------------------------
 
-// cLib_addCalc(f32* v r3, target f1, scale f2, maxStep f3, minStep f4) -> |target - v| f1
-void f_0200ECD4(PPCInterpreter_t* __restrict ctx)
-{
-	if (Stepped())
-	{
-		FPR(2).fp0 = Single(Approach(FPR(2).fp0));
-		FPR(3).fp0 = Single(FPR(3).fp0 * Step());
-		FPR(4).fp0 = Single(FPR(4).fp0 * Step());
-	}
-	[[clang::musttail]] return orig_f_0200ECD4(ctx);
-}
-
 // Approach call sites run once a tick (by their return address): in the whole step unscaled, a tick's approach, and
 // left out of the half step, so what reads the value reads 30's for the tick (WWHD_60FPS_ONCEATICK=0 off):
 // - 0247E8F0, cLib_addCalcAngleS: the boat's tiller (daShip procSteerMove, below at f_0200F378)
@@ -177,14 +165,43 @@ void f_0200ECD4(PPCInterpreter_t* __restrict ctx)
 //   new_himo2_move); the coil count starts once it passes -145. At 60 the whole step stopped at -145 and the half
 //   step's -144 found the count's add (whole) left out: the coil started a tick late, and the catch, the tug and
 //   the swing with it (route gohmatail: Link's swing 0x78 a tick late, 105 units at the end)
+// - 024428BC and 0243FAC8, cLib_addCalc: Link's speed (mNormalSpeed) a move then adds, down from his slash's bounce
+//   (procCutReverse f_02442878: from 12 toward 0, 1.125 a tick) and its lunge (procCutA f_0243F790, the speed its
+//   checkPass sets, a tick rule in link_qa.txt). At 30 the tick moves by the speed after the tick's decrease; stepped,
+//   the two half moves took the speeds after each half decrease, a quarter of the tick's decrease further (0.28 units
+//   a tick; short by as much before his action hold took the bounce's first step to the next tick): route en-ph's
+//   Peahat bounces ~2 units each, 85 at the end, en-tn's lunge 2.4 long (session qa). Once a tick, both halves move
+//   by 30's speed.
 namespace
 {
-	constexpr uint32 kOnceATick[] = { 0x0247E8F0u, 0x02171158u };
+	constexpr uint32 kOnceATick[] = { 0x0247E8F0u, 0x02171158u, 0x024428BCu, 0x0243FAC8u };
 	bool OnceATick(uint32 lr)
 	{
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ONCEATICK"); return !(e && atoi(e) == 0); }();
 		return on && std::find(std::begin(kOnceATick), std::end(kOnceATick), lr) != std::end(kOnceATick);
 	}
+}
+
+// cLib_addCalc(f32* v r3, target f1, scale f2, maxStep f3, minStep f4) -> |target - v| f1
+void f_0200ECD4(PPCInterpreter_t* __restrict ctx)
+{
+	if (Stepped() && OnceATick(ctx->spr.LR))
+	{
+		if (g_rtHalfTick)
+		{
+			FPR(1).fp0 = Single(std::fabs(FPR(1).fp0 - (double)rdf(GPR(3))));   // its return: |target - value|
+			FPR(1).fp1 = FPR(1).fp0;
+			return;
+		}
+		[[clang::musttail]] return orig_f_0200ECD4(ctx);
+	}
+	if (Stepped())
+	{
+		FPR(2).fp0 = Single(Approach(FPR(2).fp0));
+		FPR(3).fp0 = Single(FPR(3).fp0 * Step());
+		FPR(4).fp0 = Single(FPR(4).fp0 * Step());
+	}
+	[[clang::musttail]] return orig_f_0200ECD4(ctx);
 }
 
 // cLib_addCalc2(f32* v r3, target f1, scale f2, maxStep f3)
@@ -264,7 +281,7 @@ void f_0200F268(PPCInterpreter_t* __restrict ctx)
 // approach, and left out of the half step; what reads the value then reads 30's for the tick. The boat's tiller
 // (daShip procSteerMove 0247E8EC: m0366 toward the stick's, scale 4): its scaled half steps turned the tiller, and the
 // heading it drives (setMoveAngle: shape_angle.y -= m0366 >> 6, split), ~80 units behind 30's through a turn: route
-// sail 2 -> 30 units in the turn at f1290-1340. WWHD_60FPS_ONCEATICK=0 off. (kOnceATick: above, with cLib_addCalc2.)
+// sail 2 -> 30 units in the turn at f1290-1340. WWHD_60FPS_ONCEATICK=0 off. (kOnceATick: above cLib_addCalc.)
 void f_0200F378(PPCInterpreter_t* __restrict ctx)
 {
 	if (Stepped() && OnceATick(ctx->spr.LR))

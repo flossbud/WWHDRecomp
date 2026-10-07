@@ -257,6 +257,22 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   Link's knockback after it. Probe: `WWHD_STATE_CENSUS=2` now works at 30 too, and
   `WWHD_STATE_CENSUS_TRACE_LOG=path` lists each store to `WWHD_STATE_CENSUS_TRACE`'s word in order, with the
   value before it.
+- **The Darknut's first blow and Link's slash (session qa, after B66; route en-tn, RNDFIX 0.7).** It was timing,
+  not the drift crossing a threshold. Fixed: procCutA's lunge on the tick's checkPass (link_qa.txt; it started half
+  a tick late, ~3 units short), the bounce 0x5A held a tick as at 30 (HoldsAfter), and the two speed decreases
+  (procCutA's and procCutReverse's cLib_addCalc of mNormalSpeed) once a tick (sixty_step.cpp kOnceATick: the
+  half moves went a quarter of a decrease long or short a tick; route en-ph's Peahat 85 units at the end, now 0.6).
+  Link through the lunge and bounce now within 0.2 units of 30's. **The mode hold** (sixty.cpp, was the
+  WWHD_DEBUG_MODELATE probe) is now a per-type list, opt-in like the tick rules: held types' s16 state fields
+  changed by the whole step are made at the tick's end. TN 191 (damagereaction +0x594/+0x596) is on it: its
+  backstep half a tick early, 4-5 units ahead; now within 0.9, its mode steps on 30's ticks; regress's TN line
+  17.4 -> 13.0. WWHD_60FPS_MODEHOLD=0 off. **Known issue**: the Darknut's blow registers on Link one tick early (60
+  f1028, 30 f1029) though its sword is where 30's is: its attack collider is set in whole steps (+0x12c6 etc.),
+  a resolution ahead. **Next** (found by predeploy, en-pz WARN 41 units, was 32): Link's play-once animations end
+  half a tick late at 60. His animation update runs before his action call; at 30 a tick's update that passes
+  the end stops the control (rate 0) and the call leaves (procCutL f_024402B0's rate < 0.01: to 0x04, no move),
+  at 60 the whole step's half update falls short (17.8 of 18) and the cut moves 4.4 units more, once a slash.
+  Fix in J3DFrameCtrl::update's Link path (f_027F2FC4): a whole step whose tick would end the animation ends it.
   Converted (356, 281, 404, 293; session qa's line). Filed B69 (bottom has it): the puzzle's B button shows the sword,
   not Cancel, at 60 (unconverted too). Left: SBOX 293 (a chart save), Obj_HSH 290 (placed as "Hsh"/"Hsh2", stage
   not found yet), and the converted Vfan/Mkiek/MknjD/WARPDEMO20 in their events.
