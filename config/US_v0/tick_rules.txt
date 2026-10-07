@@ -688,6 +688,13 @@
 #                                       speed; with gravity h a step, a falling enemy dropped K g/4 a tick too far
 #                                       (session top, 2026-10-04: spawn tests' Moblin and Darknut walking off the dock)
 #
+02044CF4    whole       sth             enemy move: a countdown (+0x752, 2 or 10 when set) - 1 a call while it runs (its ground
+#                                       check waits for 0): once a tick (session bottom; not the water hang below)
+# An enemy falling into water (a Moblin walking off the Outset dock): the move snaps it to the water's height when it
+# reaches it (02044E04) and turns it to its in-water state (+0x6 = 0x16) once a line check from its last place passes
+# (f_024EEE30, 02044E34); at 30 the first check, from a whole tick higher, fails, so it hangs at the surface 2 ticks
+# (f984-985), at 60 the half step's last place is near enough and it sinks from the first contact (f983). Sampling,
+# not a count: left (a fix would check from the tick's start).
 # the enemies' shared code, five more counts a call (session top's list from counter_audit.py, which
 # files them under the next profile, VigaH 297): keep where the count is tested after it changes (or its
 # value used right after), late on the store where it is tested before
