@@ -170,9 +170,32 @@ void f_0200ECD4(PPCInterpreter_t* __restrict ctx)
 	[[clang::musttail]] return orig_f_0200ECD4(ctx);
 }
 
+// Approach call sites run once a tick (by their return address): in the whole step unscaled, a tick's approach, and
+// left out of the half step, so what reads the value reads 30's for the tick (WWHD_60FPS_ONCEATICK=0 off):
+// - 0247E8F0, cLib_addCalcAngleS: the boat's tiller (daShip procSteerMove, below at f_0200F378)
+// - 02171158, cLib_addCalc2: the grappling hook's catch, m24B4 (+0x2AE4) toward -144 by 10 a tick (HIMO2 446,
+//   new_himo2_move); the coil count starts once it passes -145. At 60 the whole step stopped at -145 and the half
+//   step's -144 found the count's add (whole) left out: the coil started a tick late, and the catch, the tug and
+//   the swing with it (route gohmatail: Link's swing 0x78 a tick late, 105 units at the end)
+namespace
+{
+	constexpr uint32 kOnceATick[] = { 0x0247E8F0u, 0x02171158u };
+	bool OnceATick(uint32 lr)
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ONCEATICK"); return !(e && atoi(e) == 0); }();
+		return on && std::find(std::begin(kOnceATick), std::end(kOnceATick), lr) != std::end(kOnceATick);
+	}
+}
+
 // cLib_addCalc2(f32* v r3, target f1, scale f2, maxStep f3)
 void f_0200ED84(PPCInterpreter_t* __restrict ctx)
 {
+	if (Stepped() && OnceATick(ctx->spr.LR))
+	{
+		if (g_rtHalfTick)
+			return;
+		[[clang::musttail]] return orig_f_0200ED84(ctx);
+	}
 	if (Stepped())
 	{
 		FPR(2).fp0 = Single(Approach(FPR(2).fp0));
@@ -241,16 +264,7 @@ void f_0200F268(PPCInterpreter_t* __restrict ctx)
 // approach, and left out of the half step; what reads the value then reads 30's for the tick. The boat's tiller
 // (daShip procSteerMove 0247E8EC: m0366 toward the stick's, scale 4): its scaled half steps turned the tiller, and the
 // heading it drives (setMoveAngle: shape_angle.y -= m0366 >> 6, split), ~80 units behind 30's through a turn: route
-// sail 2 -> 30 units in the turn at f1290-1340. WWHD_60FPS_ONCEATICK=0 off.
-namespace
-{
-	constexpr uint32 kOnceATick[] = { 0x0247E8F0u };
-	bool OnceATick(uint32 lr)
-	{
-		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ONCEATICK"); return !(e && atoi(e) == 0); }();
-		return on && std::find(std::begin(kOnceATick), std::end(kOnceATick), lr) != std::end(kOnceATick);
-	}
-}
+// sail 2 -> 30 units in the turn at f1290-1340. WWHD_60FPS_ONCEATICK=0 off. (kOnceATick: above, with cLib_addCalc2.)
 void f_0200F378(PPCInterpreter_t* __restrict ctx)
 {
 	if (Stepped() && OnceATick(ctx->spr.LR))
