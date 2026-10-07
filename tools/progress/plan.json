@@ -158,7 +158,7 @@
     },
     {
       "title": "Windfall at night",
-      "detail": "The lights converted (night via WWHD_DEBUG_TIME=905:345). The auction's bidders and the auction (361, 382) and the shutters (259) are converted; by night (Orichh room 0, layer 1) the bidders and the auction are 30's at every tick but for IDs given at their creation (session bottom). What moves them is their events (the bidding, the shutters' open and close at dusk and dawn), which hold to whole ticks until B67 lets events step"
+      "detail": "The lights converted (night via WWHD_DEBUG_TIME=905:345). The auction's bidders and the auction (361, 382) and the shutters (259) are converted; by night (Orichh room 0, layer 1) the bidders and the auction are 30's at every tick but for IDs given at their creation (session bottom). Not tested: the bidding (after talking to the auctioneer) and the shutters' open and close, which by the notes and decomp run in events (B67)"
     },
     {
       "title": "Enemies falling into water",
