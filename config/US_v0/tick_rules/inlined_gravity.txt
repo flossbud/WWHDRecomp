@@ -11,4 +11,4 @@
 020BF188    fall@f9     fadds           bo (Boko Babas 214): speed.y += gravity
 020BF22C    fall@f9     fadds           bo: speed.y += gravity
 020BF300    fall@f9     fadds           bo: speed.y += gravity
-021DB8CC    fall@f10    fadds           mt (Magtails 216): speed.y += gravity
+# (021DB8CC, the Magtail's: its height moves by hand before it, explicit Euler: ruled late in tick_rules.txt's mt section)

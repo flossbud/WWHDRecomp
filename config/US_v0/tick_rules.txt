@@ -821,6 +821,11 @@
 021DB418    *h@f10      fadds           mt move (4): current.pos.x += speed.x
 021DB43C    *h@f0       fadds           mt move (4): current.pos.y += speed.y
 021DB444    *h@f7       fadds           mt move (4): current.pos.z += speed.z
+021DB468    late        stfs            mt move (1-4): speed.y = the speed + gravity (+0x374), stored once a tick at its end: the
+#                                       height moved by the speed before it (explicit Euler), so both half steps take the tick's speed
+#                                       (unruled, gravity came twice a tick: session bottom)
+021DB8C8    *h@f8       fadds           mt (another state): current.pos.y += speed.y (unruled before: a tick's move a step)
+021DB8D8    late        stfs            mt (that state): speed.y + gravity, once a tick at its end (was fall@ on the add: explicit Euler)
 #
 # ---- step rules: Moblins (MO2, process 188, d_a_mo2.cpp; execute f_021C9B1C). Found with the trial on
 # one spawned on the dock: its path already matched (its moves go through converted helpers).
@@ -978,21 +983,22 @@
 0214EF68    whole       sth             fm: a counter (+0x43E) + 1
 0214F048    keep:r5     addi            fm: a counter (+0x3F6) + 1, then compared (keep: rule_audit.py)
 0214F0A4    keep:r5     addi            fm: a counter (+0x3F6) + 1, then compared (keep: rule_audit.py)
-0214DA10    *h@f0       fadds           fm: speed.y += gravity (+0x374)
-0214E298    *h@f0       fadds           fm: speed.y += gravity (+0x374)
-0214E554    *h@f0       fadds           fm: speed.y += gravity (+0x374)
-0214E5F0    *h@f0       fadds           fm: speed.y += gravity (+0x374)
-0214E90C    *h@f0       fadds           fm: speed.y += gravity (+0x374)
-0214EA64    *h@f0       fadds           fm: speed.y += gravity (+0x374)
-0214ED84    *h@f0       fadds           fm: speed.y += gravity (+0x374)
-0214F358    *h@f0       fadds           fm: speed.y += gravity (+0x374)
-0214F498    *h@f0       fadds           fm: speed.y += gravity (+0x374)
-0214F5E0    *h@f0       fadds           fm: speed.y += gravity (+0x374)
-0214F848    *h@f0       fadds           fm: speed.y += gravity (+0x374)
-0214F8BC    *h@f0       fadds           fm: speed.y += gravity (+0x374)
-0214F930    *h@f0       fadds           fm: speed.y += gravity (+0x374)
-0214F9A4    *h@f0       fadds           fm: speed.y += gravity (+0x374)
-0214FA18    *h@f0       fadds           fm: speed.y += gravity (+0x374)
+0214DA10    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+0214E298    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+0214E554    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+0214E5F0    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+0214E90C    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+0214EA64    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+0214ED84    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+0214F358    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+0214F498    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+0214F5E0    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+0214F848    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+0214F8BC    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+0214F930    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+0214F9A4    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+0214FA18    fall@f0     fadds           fm: speed.y += gravity (+0x374)
+# (fall@, session bottom: an inlined calcSpeed, posMove at the execute's end f_0214D128+0x2E18: *h left its arcs g/4 off 30's)
 0214E0E4    spliti      addi            fm: a spin speed (+0x40C) ramps a constant a tick
 0214E7B0    spliti      addi            fm: a spin speed (+0x40C) ramps a constant a tick
 0214E7C4    spliti      addi            fm: a spin speed (+0x40E) ramps a constant a tick

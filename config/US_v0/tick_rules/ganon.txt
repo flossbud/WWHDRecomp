@@ -194,7 +194,8 @@
 024465B0    *h@f11      fadds           pt: pos.y += its push
 024465C0    *h@f13      fadds           pt: pos.z += its push
 02448B48    *h@f6       fadds           pt: pos.y += speed.y
-02448B50    *h@f10      fsubs           pt: speed.y -= gravity
+02448B58    late        stfs            pt: speed.y -= gravity, stored once a tick at its end (explicit Euler after its height's move;
+#                                       *h on the subtract left the arc g/4 off 30's: session bottom)
 02449A04    *h@f8       fadds           pt: +0x430 += its speed (+0x434)
 02449A08    *h@f31      fsubs           pt: +0x434 -= a step a tick
 02449A30    keep:r9     addi            pt: a countdown (+0x8D8) - 1 (keep: extsb. then a branch on it)

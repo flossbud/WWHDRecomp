@@ -61,7 +61,8 @@
 020F1D74    vec@r4      bl 028e8d88     btd debris (35 from +0x63D8): pos += speed
 020F1D84    spliti      addi            btd debris: angle x + 0x900 a tick
 020F1D8C    spliti      addi            btd debris: angle y + 0x600 a tick
-020F1D98    *h@f28      fsubs           btd debris: speed.y - gravity (f28) a tick
+020F1DA8    late        stfs            btd debris: speed.y - gravity (f28), stored once a tick at its end: its place moved by the
+#                                       speed before it (explicit Euler; *h on the subtract left the arc g/4 off 30's: session bottom)
 #
 # ---- Kalle Demos (BMD 235, the core; BMDHAND 236, the vines; BMDFOOT 237, the floor tentacles; kinBOSS with
 # WWHD_DEBUG_BOSS=1; forest.txt has their rules). Its fall driven by poking the vines' count m331 (+0x451) to 0
