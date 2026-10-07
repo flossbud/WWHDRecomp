@@ -285,6 +285,12 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   thrust; held, the steps and the spear on 30's ticks and Link's knockback starts on 30's tick, but at its walk's
   stop (mode 0/5) the held half step walks the old mode once more, 1.3 units: it stands 3.9 off against 1.7. Not
   listed yet (with TICKVEC below the knockback lands the same held or not: 33.6 / 34.0).
+  **MT 216** (session bottom; route en-mt, its mode and sub-state bytes HD +0x570/+0x571 held as one s16; the
+  Magtail isn't in the decomp: found by its bytes' changes): its curl's one-call set-up sub-state stepped half a tick
+  early, so its curls and rolls drifted off 30's (a roll 15 ticks early by the route's end). Held: the two engaged
+  Magtails 13.8/142 and 16.1/163 apart (mean/max) -> 4.0/16.9 and 3.5/20.6, Link 8.2/88.8 -> 1.4/2.5 with his
+  actions all on 30's; listed. **ST 190** (+0x3E0/+0x3E2, GC m02C4/mActionState + 0x11C): unchanged by the hold
+  (327 apart either way): its blow lands on Link 2.5 ticks late and throws him another way (B72, qa's); not listed.
   **The hit's vector (TICKVEC)**: dCcD_Cyl::MoveCAtTg/MoveCAt/MoveCTg and dCcD_Sph::MoveCAt (025165A4, 02516618,
   02516680, 025167E4: vector +0x7C At, +0xB4 Tg, center +0x118) set the vector to the move since the last call: at
   60 half a tick's, from mid-tick, and Link's knockback heads from it (en-mo: 12 degrees against 30's 22, ~120 units
