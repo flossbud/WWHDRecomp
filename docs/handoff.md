@@ -3282,6 +3282,13 @@ it in a window; D21 "Step 2"):**
   Handed to session qa as blocked: SBOX 293 (the salvage's chest: B67, the salvage event's Link actions aren't in
   StepInEvents, so the scene holds to 30) and NPC_PF1 356 (only in Windfall's layer-0 list, sea room 11 ACT0 at
   -100,200,-199200: no run with the finished save makes it, even warped with layer 0).
+  Then (main's ask: do the census's seeded verdicts hold?): most of my range's are invisible tags, switches and weather
+  tags; these move only when triggered, which a 200-tick idle run can't see, so they're off the still list: Wall 429
+  (its break: converted, its count `keep`; tested by poking the break) and Branch 425 (a cutscene's animations:
+  converted, no counts), and OBJ_FIGURE 404 (the Gallery's viewer), Obj_HSH 290 and Obj_Apzl 281 (Windfall's puzzle),
+  which move only inside events, where converted processes hold whole ticks: to session qa on B67 with what each will
+  need. From top's half: SITEM 253 (GanonD room 0's rope items; the solver inlined in its execute, which also builds its
+  models' matrices: whole rules would only keep 30's sway) to session qa as B68, a matrix-lerp draw mechanism.
 - **Session bottom: the owner's notes from play (2026-10-06; `tick_rules/notes_bottom.txt`)**: B47 (the boss rush:
   see the debug menu's "Boss rush" above), N3, N8, N12, N13.
   - **N3, Dragon Roost Cavern's falling rocks "still 30fps"**: FallRock (422, d_a_fallrock.cpp; WWHD's process numbers

@@ -23,3 +23,11 @@
 024B869C    whole       stw             title: the countdown (+0x58) - 1, stored once a tick
 024B86A8    whole       bl 025e1988     title: its sound 0x90B at the count's 0 (the half step sees the 0 a step early: once)
 024B8270    *h@f0       fadds           title: a pane's slide (+0x48) + its step a call
+#
+# Wall (process 429, d_a_wall.cpp: a bombable wall, Siren room 0; mode_break f_024D4618): once bombed it hides and
+# its smoke fades (cLib_chaseF, stepped) after its break count (+0x6F4, u8) passes 10. The census's "still" was its
+# wait (a 200-tick idle run). Tested (scratch walltest.sh: Siren room 0's three walls made again with
+# WWHD_DEBUG_FLAGS=sw:56=0,57=0,58=0;ac:*=0, put into their break at f1100 by WWHD_DEBUG_POKE): the count + 1 a tick
+# and the fade on 30's ticks, each wall deleted in 30's tick (f1110), at both rates.
+024D463C    keep:r12    addi            wall: the break count (+0x6F4) + 1, tested after
+# Branch (process 425, d_a_branch.cpp): in a cutscene it plays its two animations (stepped helpers); no counts.
