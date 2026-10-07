@@ -942,6 +942,18 @@
 0212B450    whole       sthx            dr2: its timers (+0x51C) count down
 0212B7DC    *h@f10      fadds           dr2: a sway (+0x510) += its step a tick
 0212B820    *h@f0       fadds           dr2: a sway (+0x514) += its step a tick
+# its ceiling rock and the tail's tug (session bottom, the owner's N20, route gohmatail): the rock's counts once a tick,
+# their tests in the whole step only (the rock's shake every 3 ticks while the tail is pulled ran twice a tick at 60: its
+# reset and random draws too; the fall's start, unk_4CA == 1, would have taken two of the rock's modes in a tick). Not
+# ruled yet: the rock's fall (0212BE3C unk_4A8.y += speed.y, 0212BE5C speed.y -= 10: explicit Euler, *h@f9 and late
+# by the usual pattern) and its rise (0212C0F8 current.pos.y += 100: *h@f7), which route gohmatail doesn't reach (the
+# rock falls only with Gohma under it)
+0212BA6C    whole       sth             dr2 move: unk_4CA (+0x5E6) - 1 (the rock's fall at 1)
+0212BB84    whole       sth             dr2 move: unk_4C8 (+0x5E4) - 1 (the wait before the tail settles)
+0212BBCC    eqwhole     cmpi            dr2 move: unk_4CC == 0: the shake's reset (3 + its random draws)
+0212BCCC    whole       sth             dr2 move: unk_4CC (+0x5E8) - 1 (the shake's count)
+0212BCBC    eqwhole     cmpi            dr2 move: unk_4CA == 1: the rock's fall begins (mode + 1, smoke, sound)
+0212C8B4    whole       sth             dr2 dr_move: unk_4C6 (+0x5E2) - 1
 #
 # ---- step rules: Forbidden Woods enemies, found with the trial in their rooms (stage kindan).
 # Process 205 (27 in room 11; execute f_021A7F94) and 204 (room 9; f_02151B98): Morths (KS, d_a_ks.cpp,
