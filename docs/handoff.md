@@ -290,7 +290,15 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   60 half a tick's, from mid-tick, and Link's knockback heads from it (en-mo: 12 degrees against 30's 22, ~120 units
   apart at its end). WWHD_60FPS_TICKVEC=1 (off by default): the half step's vector from the center its whole step's
   call found; en-mo's knockback within 2 units of 30's to f1046, then 30's meets something at f1047 (34 units of x
-  lost) and 60's half moves don't: 34 apart at the end.
+  lost) and 60's half moves don't: 34 apart at the end. Gates with it on: checks all MATCH, regress unchanged
+  (8e209bd7), predeploy's 50 routes byte-identical, gohmatail 54.0 both (gohmarock not on ww-4 yet). The fights not in
+  predeploy (live random): en-mo 1037 FAIL -> 138, en-st 681 FAIL -> 82, en-bk 368 -> 343, eight the same, en-tn
+  0.4 -> 83.5 (both part at the Darknut's blow, 2 ticks early there; farthest 164 -> 138). With RNDFIX 0.7 its
+  first knockback lands 145 units off against 115: speed 25 at both, but 30 moves ~10.7 a tick and hits the wall at
+  f1031 (0x6A), 60 moves 15 (off) or 19 (on) and doesn't; the heading's turn moves which side of that wall contact
+  it falls. Kept off (main's rule: a worse route not fully explained). Next for it: the Darknut's blow on 30's tick
+  (its sword's vector then from 30's phase of the swing) and the knockback's wall contact at speed (one move against
+  two half moves).
   Converted (356, 281, 404, 293; session qa's line). Filed B69 (bottom has it): the puzzle's B button shows the sword,
   not Cancel, at 60 (unconverted too). Left: SBOX 293 (a chart save), Obj_HSH 290 (placed as "Hsh"/"Hsh2", stage
   not found yet), and the converted Vfan/Mkiek/MknjD/WARPDEMO20 in their events.
