@@ -1640,7 +1640,11 @@ it in a window; D21 "Step 2"):**
     (+0x8DC) and a wave (+0x8F8) a call; the bid's call (+0x91A, 30) and a wait (+0x949) count calls too
     (trial.py's "only half" lines, which trial_filter hides: read the trial unfiltered for counts). Rules in
     tick_rules/windfall.txt: the choice on 30's tick, the same six bids; the bid's call a tick early (a bidder's
-    turn), which the route's A spacing makes 20 ticks for the next message. The shutters (259): see below.
+    turn), which the route's A spacing makes 20 ticks for the next message. The "shutters" (259, HD-only, unmatched,
+    placed by no stage file: something creates them): eleven on Windfall (sea,0,11,-1) by day, none at night (23:00)
+    or at 5:58; from 17:58 across 18:00 (500 ticks) they never moved, at either rate; idle they equal 30's at every
+    tick and the trial (WWHD_60FPS_TRIAL=259) finds nothing. Their open and close weren't seen (made on loading
+    the island by day, it seems): converted as they are.
   - **60 fps cost (session top; the work queue's "perf"; shared: sixty.cpp's journal, the runtime's
     rt_journal_store)**: real time, headless, on the desktop (`~/wwhd-test`; its `perf-top.sh` runs routes
     at 30 then 60 with `WWHD_FRAME_LOG` and each thread's CPU; `perf-ab.sh` alternates two builds at 60;
