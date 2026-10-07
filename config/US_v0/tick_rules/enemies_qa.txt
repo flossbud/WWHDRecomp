@@ -18,3 +18,11 @@
 # draw fixed with WWHD_DEBUG_RNDFIX): Link's hits at 0.3 were 6 at 30 and 12 at 60 (7 and 7 with the Moblin on whole
 # ticks only); with both rules 6 and 8 (at 0.7, 8 and 7), and the Moblin's thrusts hit Link at 60 again.
 021D2D24    *h@f8       fadds           mo2 move: m2068 (+0x2470), its attack's frame, += its animation's speed a call
+#
+# ---- the Floormaster's throw (FM 119, d_a_fm.cpp modePlayerStartDemo f_02149208; session qa, bug B65 from session
+# bottom). Its grab's event cut "PL_OUT" calls Link's setThrowDamage(NULL, angle, 10, 50, 0) (f_02443CE0: his
+# mNormalSpeed 10, speed.y 50 and his NoResetFlg0 0x1000000; Link takes it as procLargeDamage, 0x68, whose init
+# sets his forward speed 0 again) and ends the cut. At 60 the Floormaster's half step ran the cut again after Link's
+# whole step had started 0x68: mNormalSpeed 10 stayed and he slid 75 units (10 a tick, M_Dai room 6) where 30's
+# rises and falls in place. Once a tick, in the whole step.
+021494E4    whole       bctrl           fm modePlayerStartDemo PL_OUT: Link's setThrowDamage (his throw out of the hole)

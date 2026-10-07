@@ -164,6 +164,22 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   Whole predeploy: 45 ok, WARN tour2 51, land2 45, sidle 111 (9.7 without), sail 52, plants 41; no FAIL.
 - **N28, the test arena (session top's, tested here)**: the debug menu's "Test arena (Gohma's room, no warp)" or
   WWHD_DEBUG_ARENA=1: M_DragB with refights off and no warp flower (WARPFLOWER 104 not created there).
+- **B65, Link slid 75 units after the Floormaster's throw (from session bottom; fixed, `tick_rules/enemies_qa.txt`)**: the
+  Floormaster's grab event (modePlayerStartDemo f_02149208), cut PL_OUT, calls Link's setThrowDamage (f_02443CE0:
+  mNormalSpeed 10, speed.y 50, NoResetFlg0 0x1000000) and ends the cut; Link's procLargeDamage (0x68) init then sets his
+  forward speed 0. At 60 the Floormaster's half step ran the cut again after that, so 10 stayed. The call `whole`
+  (021494E4): route en-fm with WWHD_DEBUG_PLACE=1100:4471,400,-3036 and WWHD_DEBUG_RNDFIX=0.5, Link now rises 37, 61,
+  72, 70, 55, 27, 0 in place and gets up (0x69) at f1351, as bottom's 30 run. Seen there: with the draws fixed the
+  30 run isn't grabbed at all, because Link's landing (0x5C, after the placing drop) ends at f1135 at 30 and f1132 at 60.
+- **The Darknut's first blow** (bottom's question): with WWHD_DEBUG_RNDFIX (0.3, 0.7) it lands on f1029 at 30 and
+  f1028/1027 at 60; the 61 ticks bottom saw were the random stream. Filed instead: **B66**, Link's lunge (0x41) at it
+  bounces (0x5A) 6 ticks in at 30, after 1.5-2 at 60, with no collider hit (WWHD_DEBUG_HITS): at 60 the reversal is
+  changeCutReverseProc's (f_0243829C) other path, a line from Link to his sword's tip (+0x3E4) crossing BG.
+  Traced (B66 open, findings on the bug): the tip sits ~45 units to his right because his stance differs from
+  f985 (Z-targeting starts): setNeckAngle (f_02400C4C, GameCube m3564 at +0x69B4) chases a different target at 60
+  (-3600 against 30's -2488 by f990; the approach is stepped right), joint 15's quaternion (+0x6BA0, built in the
+  joint callback f_023D6B30) twists the other way, and the lunge's sword line crosses BG 4 ticks early. Next: log
+  setNeckAngle's target and the head joint's position each step (the target comes from the head joint: a feedback).
 - **B50, Link climbed onto ledges too soon** (found on the way: walking into route crate's crate): changeFrontWallTypeProc's
   count of ticks pushing against a ledge (m3544, +0x6994; over the HIO's 14 he hops up, catches a wall or takes a
   small jump) ran on both steps: keep on its add (`link_qa.txt`). Route `climb`: the hop was 3.5 ticks early.
