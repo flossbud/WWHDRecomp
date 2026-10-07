@@ -129,10 +129,6 @@
   ],
   "known_issues": [
     {
-      "title": "Tower of the Gods: the rising water a tick ahead",
-      "detail": "Obj_Tide 39 / Tag_Waterlevel 471: the reader updates before the writer in process order, so at 60 the water reads a tick on (route tgbeam's notes)"
-    },
-    {
       "title": "Beamos scorch marks last a few ticks longer",
       "detail": "Hot_Floor 231 under a Beamos beam fades a few ticks later at 60"
     },
@@ -141,16 +137,37 @@
       "detail": "Dragon Roost room 8: thrown from about 100 units further back, the jar breaks on the floor's edge at 60 but in the lava at 30; 60's finer sampling catches an edge 30's step jumps over"
     },
     {
-      "title": "Ganon's Tower trial: Link's walk-in 1.5 ticks early",
-      "detail": "GanonB: half steps stop for f1030-1037 and the magma rocks' bob drifts; the route ends 5.7 units off"
+      "title": "Ganon's Tower trial: the magma rocks' bob differs",
+      "detail": "The walk-in now ends on 30's tick. The rocks follow the lava under them, whose bubbles come from the random stream: at 60 the stream reaches them in another state, so the lava (and its rock) sits up to 20 units off, the rock right relative to its lava (as Fire Mountain's rocks); matching it needs the bubbles' draws synced"
     },
-    {"title": "Link: actions can start half a tick early", "detail": "An action set up in a whole step can start half a tick early (fixed for the turn in place and waiting, so a turn and walk now keeps 30's ticks); actions ending on an animation may end a tick early"},
-    {"title": "Wind Waker conducting ends half a tick early", "detail": "The Wind Waker song's conducting and playback end half a tick early (a beat is crossed on a half tick); its wind change and end are on 30's ticks"},
-    {"title": "Random-driven enemies drift from the 30 fps run", "detail": "Random-driven enemies (Magtail waits, Peahat flights) drift from the 30 fps run, as expected"},
-    {"title": "Pots, sidling and ladders", "detail": "Still need a hands-on check"},
-    {"title": "Windfall at night", "detail": "The lights converted (night via WWHD_DEBUG_TIME); the shutters (259) not seen running, the auction's bidders and the auction (361, 382) run by night but wait for a test of the auction's event (pots, barrels, door knobs, item stands: converted)"},
-    {"title": "Enemies falling into water", "detail": "At 30 they hang at the surface about 2 ticks before sinking, at 60 they don't (the shared enemy move's ground check)"},
-    {"title": "Hand-made gravity arcs", "detail": "Hand-made gravity still ruled *h arcs about g/4 a tick off 30's; the exact rules: late on the speed.y store where the position moves first, keep on the add where gravity comes first, fall@ before fopAcM_posMove (done: Ganondorf, Puppet Ganon, Molgera's larvae, Chuchus)"}
+    {
+      "title": "Link: actions can start half a tick early",
+      "detail": "An action set up in a whole step can start half a tick early (fixed for the turn in place and waiting, so a turn and walk now keeps 30's ticks); actions ending on an animation may end a tick early"
+    },
+    {
+      "title": "Wind Waker conducting ends half a tick early",
+      "detail": "The Wind Waker song's conducting and playback end half a tick early (a beat is crossed on a half tick); its wind change and end are on 30's ticks"
+    },
+    {
+      "title": "Random-driven enemies drift from the 30 fps run",
+      "detail": "Random-driven enemies (Magtail waits, Peahat flights) drift from the 30 fps run, as expected"
+    },
+    {
+      "title": "Pots, sidling and ladders",
+      "detail": "Still need a hands-on check"
+    },
+    {
+      "title": "Windfall at night",
+      "detail": "The lights converted (night via WWHD_DEBUG_TIME); the shutters (259) not seen running, the auction's bidders and the auction (361, 382) run by night but wait for a test of the auction's event (pots, barrels, door knobs, item stands: converted)"
+    },
+    {
+      "title": "Enemies falling into water",
+      "detail": "At 30 they hang at the surface about 2 ticks before sinking, at 60 they don't (the shared enemy move's ground check)"
+    },
+    {
+      "title": "Hand-made gravity arcs",
+      "detail": "Hand-made gravity still ruled *h arcs about g/4 a tick off 30's; the exact rules: late on the speed.y store where the position moves first, keep on the add where gravity comes first, fall@ before fopAcM_posMove (done: Ganondorf, Puppet Ganon, Molgera's larvae, Chuchus)"
+    }
   ],
   "labels": {
     "242": "spawned by code; its profile sits between Phantom Ganon's (241) and Puppet Ganon's (243)",
@@ -321,19 +338,19 @@
     "460": "ice block",
     "64": "table"
   },
-  "queue_note": "Round 9 (2026-10-07, the owner's plan): no new bug or physics hunting. Top converts the types still at 30 with ids below 260, bottom those from 260 up; a type that never changes state gets a verdict (needs nothing) instead. qa fixes every known bug, and converts any type a bug blocked (top and bottom file the bug, send it and the type to qa, and move on). The main session routes the owner's bugs and notes and deploys in batches. After the actors: the owner's extensive testing and repair, with the whole queue redistributed.",
+  "queue_note": "Round 10 (2026-10-07): the actors are converted (top 68 of 69, bottom all 68; the types a bug blocks are on B67 and NPC_PF1 356 waits for an early save). qa's queue is now split across all three: qa the hardest bugs, top Link's timing, bottom the enemies and objects. Known bugs only, no new hunting; all three wrap up at 90% of the week. The main session routes the owner's bugs and notes and deploys in batches. Next: the owner's extensive testing and repair.",
   "queue": [
     {
-      "id": "actors-top",
-      "name": "Round 9: convert the types still at 30 with ids below 260, or record each that never changes state as needing nothing (top's)", "ids": [20, 25, 26, 28, 31, 32, 34, 35, 36, 37, 41, 44, 53, 54, 58, 59, 62, 66, 69, 70, 72, 76, 77, 78, 79, 80, 81, 82, 86, 88, 95, 100, 108, 109, 110, 115, 117, 126, 130, 132, 133, 134, 146, 147, 149, 155, 156, 158, 160, 161, 163, 177, 178, 180, 183, 184, 196, 197, 201, 229, 239, 242, 248, 249, 253, 256, 257, 258, 259]
-    },
-    {
-      "id": "actors-bottom",
-      "name": "Round 9: convert the types still at 30 with ids from 260 up, or record each that never changes state as needing nothing (bottom's)", "ids": [261, 263, 264, 266, 270, 278, 279, 281, 282, 283, 288, 290, 293, 298, 306, 308, 310, 311, 312, 315, 333, 349, 350, 354, 356, 378, 384, 385, 386, 387, 388, 389, 390, 392, 393, 395, 400, 403, 404, 405, 408, 409, 411, 412, 413, 414, 415, 416, 417, 418, 419, 420, 421, 425, 429, 433, 434, 435, 440, 441, 442, 444, 448, 452, 464, 466, 467, 475]
-    },
-    {
       "id": "qa-bugs",
-      "name": "Round 9: every known bug (qa's): B62's extra sword hits (landing), B57 the camera in long turns (the exact camera on by default, tour and land moved off Outset's corner), N28 the owner's test arena (Gohma's room with no warp), then each bug and blocked type top and bottom send"
+      "name": "Round 10, the hardest bugs (qa's): B67, the actors that move only in events that don't step at 60 (SBOX 293, OBJ_FIGURE 404, Obj_HSH 290, Obj_Apzl 281; 54, 76, 77, 108 inside their events), then B66 (Link's lunge at a Darknut bounces 4 ticks early); NPC_PF1 356 waits for an early save"
+    },
+    {
+      "id": "top-bugs",
+      "name": "Round 10, Link's timing (top's): actions that start half a tick early or end a tick early (the turn while moving fixed), the Wind Waker's conducting ending half a tick early, predeploy's sidle and ladder WARNs"
+    },
+    {
+      "id": "bottom-bugs",
+      "name": "Round 10, enemies and objects (bottom's): enemies falling into water (no pause at the surface), hand-made gravity arcs still ruled *h, the Beamos' scorch marks fading late, Windfall's auction and shutters by night, the water jar breaking on an edge at 60"
     }
   ],
   "later": [
@@ -398,7 +415,9 @@
     "rides",
     "landings",
     "dungeons2",
-    "enemies2"
+    "enemies2",
+    "actors-top",
+    "actors-bottom"
   ],
   "still": {
     "20": "still where placed (Abship,0,5): no state change at 30 over 200 ticks (census, movers.sh)",
