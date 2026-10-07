@@ -130,6 +130,9 @@ rules, for the code of processes that run every frame with a time step h
   OP@REG       the same, for this instruction only: REG has its value back afterwards (unless the
                instruction writes it), as in `x += (t - x) * k` with k@f2 on its fmadds
   note:REG     after the instruction, the float REG is noted (g_rtNote) for an arc@ later in the step
+  vnote:fREG   a speed.y noted for an arc@, as note, but the executing actor's first in the step is kept
+               (rt_vnote, sixty_step.cpp): speed.y as the step began, before every acceleration the arc
+               spreads (Link's swim lift, added in his procedure before posMoveFromFootPos's gravity)
   vec@rN       for a call, the vector (three floats) rN points to is h of itself (a per-tick move
                handed to a vector add)
   arc@rN       the same for a velocity: x and z times h, y as h y + (1 - h)/2 (y - noted), noted
@@ -319,7 +322,7 @@ class Program:
                         assert key == "r3", f"tick_rules.txt:{n}: unknown rule argument {arg}"
                         value = v if re.fullmatch(r"r([12]?[0-9]|3[01])", v) else int(v, 0)
                 else:
-                    assert kind.rstrip("@") in ("keep", "split", "splitd", "drawsplit", "note", "vec", "arc", "fall", "ssplit", "lagw", "exact", "eqwhole") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert kind.rstrip("@") in ("keep", "split", "splitd", "drawsplit", "note", "vec", "arc", "fall", "ssplit", "lagw", "exact", "eqwhole", "vnote") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
                     assert kind != "drawsplit", f"tick_rules.txt:{n}: drawsplit takes @: drawsplit@rN"
                     assert kind != "exact@" and (kind != "exact" or arg[0] == "f" or arg == "note"), f"tick_rules.txt:{n}: exact:fS takes a float register or note"
                     if kind == "exact" and arg == "note":
@@ -331,6 +334,7 @@ class Program:
                     assert kind not in ("ssplit", "splitd"), f"tick_rules.txt:{n}: {kind} takes @: {kind}@rN"
                     assert kind != "fall", f"tick_rules.txt:{n}: fall takes @: fall@fREG"
                     assert kind != "note" or arg[0] == "f", f"tick_rules.txt:{n}: note takes a float register"
+                    assert kind != "vnote" or arg[0] == "f", f"tick_rules.txt:{n}: vnote takes a float register"
                     assert re.fullmatch(r"[rf]([12]?[0-9]|3[01])", arg), f"tick_rules.txt:{n}: {rule}: a register expected"
                     assert kind.rstrip("@") not in ("split", "splitd", "drawsplit") or arg[0] == "r", f"tick_rules.txt:{n}: split takes an integer register"
                     assert kind != "lagw" or arg[0] == "r", f"tick_rules.txt:{n}: lagw takes the multiplier's integer register"
@@ -700,6 +704,8 @@ def apply_tick_rule(rule, i, lines):
     op = kind.rstrip("@")
     if op == "note":
         return lines + [f"if (RT_STEPPED()) g_rtNote = (float){reg}.fp0;   // step rule: {what}"]
+    if op == "vnote":
+        return lines + [f"if (RT_STEPPED()) {{ float rt_vnote(float); g_rtNote = rt_vnote((float){reg}.fp0); }}   // step rule: {what}"]
     if op == "fall":
         # the gravity h of itself for the instruction (back afterwards unless written); what it adds is
         # noted for the posMove override's arc correction (rt_step_fall, src/overrides/sixty_step.cpp)

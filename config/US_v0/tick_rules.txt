@@ -478,8 +478,8 @@
 # by its override, sixty_step.cpp), gravity, the move
 # (its smoothing, move * 0.3 + m359C * 0.7, is 30's in both steps: both measure the whole tick, and the half step
 # smooths from the m359C the whole step did, so both take 30's speed for the tick; B59, sixty_step.cpp)
-023FD2D4    note:f11    lfs             posMoveFromFootPos: speed.y before gravity
-023FD310    note:f11    lfs             posMoveFromFootPos: speed.y before gravity
+023FD2D4    vnote:f11   lfs             posMoveFromFootPos: speed.y before gravity
+023FD310    vnote:f11   lfs             posMoveFromFootPos: speed.y before gravity
 023FD338    *h@f9       fmadds          posMoveFromFootPos: speed.y += gravity * 2.25 (heavy)
 023FD35C    *h@f9       fadds           posMoveFromFootPos: speed.y += gravity
 023FD39C    arc@r4      bl 028e8d88     posMoveFromFootPos: current.pos += speed (the 30 Hz arc)

@@ -46,7 +46,14 @@
 # speed.y += the water's lift a tick, up to a cap. At 60 he came up twice as fast after a drop into deep
 # water (session top's kindan room 11 test: back at the surface 8 ticks early, then everything after
 # apart, the Morths' paths too).
+02421FE0    vnote:f11   lfs             link swim: speed.y before the lift, for posMoveFromFootPos's arc (vnote: the first
+# in the step is kept: the lift stepped but not in the arc, two half steps moved v + 3/4 of it against 30's v + all
+# of it, so he sank 1.5 units a tick deeper (8.7 by the bottom after a drop) and came up a tick late: 36 -> 35 a
+# tick after 30's in warp, sail, bombs, boots, carry, swing; session top)
 02422000    *h@f12      fadds           link swim: speed.y += the water's lift (0x100355C4) a tick
+024220BC    whole:r3=0  bl 023f8d60     link swim: up at the surface (procSwimUp_init) once he's within reach of it: in the
+# whole step only, which tests the height 30's tick does (the half step's, half a tick's rise on, came up half a
+# tick early once the sink matched; session top)
 # Link gliding with the Deku Leaf (procFanGlide f_02438E78, proc 0x93): the wind's push m3730 (approached
 # by cLib_addCalc, time-stepped) is added to his position by the glide itself (not posMove's adds): at 60
 # he drifted sideways twice as far (the leaf route: 861 against 349 units in 46 ticks) and landed

@@ -120,6 +120,22 @@ void rt_step_fall(double dv)
 		s_fall[g_rtActor] = { (float)dv, StepId() };
 }
 
+// vnote step rules: speed.y noted for an arc@, the executing actor's first in the step kept: speed.y as the step
+// began, before every acceleration the arc spreads. Link's swim lift (changeSwimUpProc, in his procedure) came
+// before posMoveFromFootPos's note before gravity, so two half steps moved v + 3/4 of it against 30's v + all of
+// it: he sank 1.5 units a tick deeper and came up a tick late (session top)
+namespace
+{
+	std::unordered_map<uint32, Fall> s_vnote;               // dv: the noted speed.y
+}
+float rt_vnote(float v)
+{
+	Fall& f = s_vnote[g_rtActor];
+	if (f.step != StepId())
+		f = { v, StepId() };
+	return f.dv;
+}
+
 // surf step rules (tools/recomp/generate.py): a height put back on a surface (the water's) that the actor's
 // posMove then moves off by speed.y (+0x340). At 30 the tick puts it back and moves it a tick: speed.y + gravity
 // (+0x374), at least maxFallSpeed (+0x378). Sinking (speed.y <= 0: each step ends under the surface again and is
