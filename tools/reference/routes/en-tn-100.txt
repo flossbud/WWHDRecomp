@@ -1,8 +1,12 @@
 # Route: a Darknut (TN 191) spawned 150 units ahead of Link on Outset's grass by the lookout tower (Link placed there), facing him (session bottom, the work queue's "enemies2"), with the 100% save: targeted (ZL) and
 # slashed (B) every 15 frames, then left to it. FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by
-# tools/sixty/run.sh.
-#env WWHD_DEBUG_PLACE=940:-202850,375,317518
-#env WWHD_DEBUG_SPAWN=950:191,0,-202850,375,317368,0,0
+# tools/sixty/run.sh. Steered (session qa, B66): the setup had Link on the edge of a wall's collision (at 30 an
+# idle foot step of one float unit at f967 put him into it and the wall pushed him 0.6 units; at 60 it rounded to
+# nothing) and the Darknut exactly in line with him, so the side his Z-target stance takes (procAtnActorWait_init:
+# the angle to the target less his facing, >= 0 left) read 0x8000 (right) at 60 and 32735 (left) at 30, and his
+# sword hung to the other side. Now 2 units off the wall and the Darknut 20 to the side.
+#env WWHD_DEBUG_PLACE=940:-202852,375,317520
+#env WWHD_DEBUG_SPAWN=950:191,0,-202832,375,317370,0,0
 420 A 5        # title screen
 540 A 5        # Controller Selection
 660 A 5        # File Selection: Quest Log 1

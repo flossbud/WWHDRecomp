@@ -244,6 +244,19 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   salvage's trigger tick follows the camera (f1173 at 60 with CAMTICK, f1198 without, f1186 at 30): B71, closed as random:
   checkArea's depth is l_salvage_depth[mRndDepthIdx] (1000/1500/2000), and the ticks seen (1173-1174, 1186, 1198) are
   those three at either rate (WWHD_DEBUG_RNDSEED=950: 30 1174, 60 1198; 1100: 30 1186, 60 1173).
+- **B66 (session qa): Link's lunge bounced off the Darknut 4 ticks early at 60, from the test setup.** Route en-tn
+  had two knife-edges. Link stood on the edge of a wall's collision: at 30 an idle foot step of one float unit
+  (f967) put him into it and his wall correction pushed him 0.6 units; at 60 it rounded to nothing. The Darknut
+  stood exactly on his x, so procAtnActorWait_init's side for the Z-target stance (the angle to the target less
+  his facing, an int from two s16s, >= 0 left; mDirection +0x68D4) read 0x8000 (right) at 60 against 32735 (left)
+  at 30. The left and right stance animations hang the sword ~45 units apart, and the lunge's sword-to-body line
+  crossed the wall early. The fields chased before (+0x6946..+0x697A, f_024022D0) are the hat's physics
+  (setHatAngle), and the head look plays no part. Steered (Link 2 off the wall, the Darknut 20 aside): stance,
+  feet and first bounce (f1009) are 30's. Fixed on the way: footBgCheck's foot-planting count once a tick
+  (link_qa.txt). Left: the Darknut's first blow (60 f1027, 30 f1029; it is ~4 units off 30's by the lunge) and
+  Link's knockback after it. Probe: `WWHD_STATE_CENSUS=2` now works at 30 too, and
+  `WWHD_STATE_CENSUS_TRACE_LOG=path` lists each store to `WWHD_STATE_CENSUS_TRACE`'s word in order, with the
+  value before it.
   Converted (356, 281, 404, 293; session qa's line). Filed B69 (bottom has it): the puzzle's B button shows the sword,
   not Cancel, at 60 (unconverted too). Left: SBOX 293 (a chart save), Obj_HSH 290 (placed as "Hsh"/"Hsh2", stage
   not found yet), and the converted Vfan/Mkiek/MknjD/WARPDEMO20 in their events.

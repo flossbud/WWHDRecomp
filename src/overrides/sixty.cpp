@@ -619,6 +619,12 @@ namespace
 		char at[16];
 		snprintf(at, sizeof(at), " at %08x:", pc);
 		s_traces[at + GuestChain(8)]++;
+		// WWHD_STATE_CENSUS_TRACE_LOG=path: each store in order (game frame, half tick, the instruction, the word
+		// before it, 4 callers): the one that changed it is the line before a new value
+		static FILE* const log = [] { const char* e = getenv("WWHD_STATE_CENSUS_TRACE_LOG"); return e ? fopen(e, "w") : nullptr; }();
+		if (log)
+			fprintf(log, "%u %d %08x %08x%s\n", wwhd::rt::GameFrame(wwhd::os::SwapCount()), g_rtHalfTick ? 1 : 0, pc, rd32(ea),
+				GuestChain(4).c_str()), fflush(log);
 	}
 
 	uint32 s_drawing = 0;                            // the process whose draw is running (fpcM_Draw), or 0
@@ -3022,7 +3028,18 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 	if (from == ~0u)
 	{
 		RndSeedProbe(false);
-		[[clang::musttail]] return orig_f_0274C264(ctx);
+		// WWHD_STATE_CENSUS=2 at 30 fps: every frame watched (the census trace of a store the 30 Hz game makes)
+		static const bool census30 = [] { const char* e = getenv("WWHD_STATE_CENSUS"); return Probe() && e && atoi(e) == 2; }();
+		if (!census30)
+			[[clang::musttail]] return orig_f_0274C264(ctx);
+		static bool once = [] { atexit(CensusWrite); at_quick_exit(CensusWrite); return true; }();
+		(void)once;
+		g_rtStoreCensus = CensusStore;
+		g_rtJournalOn = true;
+		orig_f_0274C264(ctx);
+		g_rtJournalOn = wwhd::rt::QuietWatching();
+		g_rtStoreCensus = nullptr;
+		return;
 	}
 	const uint32 swap = wwhd::os::SwapCount();
 	if (swap == from && from != 0)
