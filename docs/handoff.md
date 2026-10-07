@@ -3471,6 +3471,12 @@ it in a window; D21 "Step 2"):**
     dead zone; LDOWN steps down). Up and down within 0.16 units, transitions on 30's ticks: nothing to fix.
   - Note on reading tracks: a 60 track's key 2t+1 (shown t.5) is the tick's end, i.e. 30's key 2t; a change at 60's
     t.5 is on time, at t half a tick early.
+  - N20, Gohma's ceiling rock (routes gohmatail, gohmarock; DR2 223, BTD 234 whose fields are GC + 0x128): its fall
+    (explicit Euler), Gohma's pinned sequence (two state changes run by the half step after the whole step set them)
+    and the rise now on 30's ticks. New step rule `gtwhole` (generate.py): a threshold on a value that moves on both
+    steps (`if (y > top)`) is only taken on whole steps, so what hangs on it (here the rock's rest and the tail's
+    130-tick wait) starts on 30's tick. Left: the tail rests 50 units below 30's (the rise's last tick stops after its
+    whole step's half), and Gohma's behaviour before the hit follows its random draws.
 - **Session bottom: the owner's notes from play (2026-10-06; `tick_rules/notes_bottom.txt`)**: B47 (the boss rush:
   see the debug menu's "Boss rush" above), N3, N8, N12, N13.
   - **N3, Dragon Roost Cavern's falling rocks "still 30fps"**: FallRock (422, d_a_fallrock.cpp; WWHD's process numbers

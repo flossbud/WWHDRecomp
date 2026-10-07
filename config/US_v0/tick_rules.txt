@@ -957,6 +957,8 @@
 0212C0F8    *h@f7       fadds           dr2 move: current.pos.y += 100 (the rock's rise back)
 0212BFF4    eqwhole     cmpi            dr2 move: btd->m02F6 (+0x41E) == 0, Gohma let the rock go: its rise (mode 3). Gohma clears it in a
 #                                       whole step, after the rock's; 30 reads it on the next tick, so the half step waits
+0212C110    gtwhole     fcmpu           dr2 move: the rising rock's y > home - 50: at rest (mode -1, the tail's 130-tick wait
+#                                       from it). Its y follows Gohma's joint, which moves on both steps: crossed on a whole step
 0212C8B4    whole       sth             dr2 dr_move: unk_4C6 (+0x5E2) - 1
 #
 # ---- step rules: Forbidden Woods enemies, found with the trial in their rooms (stage kindan).
