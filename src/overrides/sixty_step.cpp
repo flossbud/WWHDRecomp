@@ -678,6 +678,57 @@ void f_02516094(PPCInterpreter_t* __restrict ctx)
 	wr8(collider + 0x64, count);
 }
 
+// dCcD_Cyl::MoveCAtTg, MoveCAt, MoveCTg and dCcD_Sph::MoveCAt (collider r3, pos r4): the collider's At and/or Tg
+// vector (+0x7C, +0xB4) = pos - its center (+0x118), then the center = pos: the move since the last call, which at 30
+// is a tick's. A stepping process calls it in both steps, so the tick's resolution (after the half step) read half a
+// tick's move from the middle of the tick: an attack's direction along a swing's arc, which the one hit sets where
+// it sends its target (route en-mo: the Moblin's thrust sent Link off ~10 degrees from 30's, 80 a tick, ~120 units
+// apart by its end; session qa). The half step's vector runs from the center its whole step's call found, the tick's
+// move. WWHD_60FPS_TICKVEC=1 on (off by default, a trial).
+namespace
+{
+	bool TickVec()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_TICKVEC"); return e && atoi(e) == 1; }();
+		return on;
+	}
+	struct TickStart { uint32 c[3]; uint32 step; };
+	std::unordered_map<uint32, TickStart> s_tickStart;   // a collider's center as its whole step's call found it
+	template <void (*Orig)(PPCInterpreter_t*)>
+	void MoveC(PPCInterpreter_t* __restrict ctx)
+	{
+		if (!Stepped() || !TickVec())
+			return Orig(ctx);
+		const uint32 collider = GPR(3);
+		if (!g_rtHalfTick)
+			s_tickStart[collider] = { { rd32(collider + 0x118), rd32(collider + 0x11C), rd32(collider + 0x120) }, StepId() };
+		else if (const auto it = s_tickStart.find(collider); it != s_tickStart.end())
+		{
+			if (it->second.step == StepId() - 1)
+				for (int i = 0; i < 3; i++)
+					wr32(collider + 0x118 + 4 * i, it->second.c[i]);
+			s_tickStart.erase(it);
+		}
+		Orig(ctx);
+	}
+}
+void f_025165A4(PPCInterpreter_t* __restrict ctx)
+{
+	MoveC<orig_f_025165A4>(ctx);
+}
+void f_02516618(PPCInterpreter_t* __restrict ctx)
+{
+	MoveC<orig_f_02516618>(ctx);
+}
+void f_02516680(PPCInterpreter_t* __restrict ctx)
+{
+	MoveC<orig_f_02516680>(ctx);
+}
+void f_025167E4(PPCInterpreter_t* __restrict ctx)
+{
+	MoveC<orig_f_025167E4>(ctx);
+}
+
 // dCcD_GObjInf::ClrTgHit(collider r3): clears its last Tg hit and counts its hit mark's effect counter
 // (+0xA8, SubtractTgEffCounter) down to 0. On a half step the count stays.
 void f_0251621C(PPCInterpreter_t* __restrict ctx)

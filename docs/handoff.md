@@ -276,6 +276,21 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   at 60 the whole step's half update falls short (17.8 of 18) and the cut moves 4.4 units more, once a slash.
   Now J3DFrameCtrl::update's Link path (f_027F2FC4): a whole step whose tick would end the animation ends it
   (WWHD_60FPS_ANIMEND=0 off); predeploy all 50 ok, en-pz 5.0, slash 4.2 -> 0.2, land3 16.9 -> 12.2.
+- **The mode hold's survey (session qa: MO2, BK; session top: MT, ST).** Measure: route en-XX at both rates with
+  WWHD_DEBUG_RNDFIX=0.7 WWHD_STATE_TRACK=168,TYPE, again at 60 with WWHD_DEBUG_MODELATE=TYPE:OFF:OFF; the state
+  timelines (a 60 change on a whole key k is half a tick early, on k.5 30's tick k) and the apart. A damagereaction's
+  HD offset isn't GC + 0x11C for every type: search the actor's bytes for its own address (dr+0, mpEnemy), mode and
+  action at +4/+6 (both start at -9). **MO2 188** (dr at HD 0x8BC, mode 0x8C0, action 0x8C2): its steps half a tick
+  early as TN's, and its spear (m28D4 HD 0x2CDC, the sphere's center 0x2A64) a whole tick ahead of 30's through the
+  thrust; held, the steps and the spear on 30's ticks and Link's knockback starts on 30's tick, but at its walk's
+  stop (mode 0/5) the held half step walks the old mode once more, 1.3 units: it stands 3.9 off against 1.7. Not
+  listed yet (with TICKVEC below the knockback lands the same held or not: 33.6 / 34.0).
+  **The hit's vector (TICKVEC)**: dCcD_Cyl::MoveCAtTg/MoveCAt/MoveCTg and dCcD_Sph::MoveCAt (025165A4, 02516618,
+  02516680, 025167E4: vector +0x7C At, +0xB4 Tg, center +0x118) set the vector to the move since the last call: at
+  60 half a tick's, from mid-tick, and Link's knockback heads from it (en-mo: 12 degrees against 30's 22, ~120 units
+  apart at its end). WWHD_60FPS_TICKVEC=1 (off by default): the half step's vector from the center its whole step's
+  call found; en-mo's knockback within 2 units of 30's to f1046, then 30's meets something at f1047 (34 units of x
+  lost) and 60's half moves don't: 34 apart at the end.
   Converted (356, 281, 404, 293; session qa's line). Filed B69 (bottom has it): the puzzle's B button shows the sword,
   not Cancel, at 60 (unconverted too). Left: SBOX 293 (a chart save), Obj_HSH 290 (placed as "Hsh"/"Hsh2", stage
   not found yet), and the converted Vfan/Mkiek/MknjD/WARPDEMO20 in their events.
