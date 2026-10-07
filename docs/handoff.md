@@ -268,11 +268,14 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   backstep half a tick early, 4-5 units ahead; now within 0.9, its mode steps on 30's ticks; regress's TN line
   17.4 -> 13.0. WWHD_60FPS_MODEHOLD=0 off. **Known issue**: the Darknut's blow registers on Link one tick early (60
   f1028, 30 f1029) though its sword is where 30's is: its attack collider is set in whole steps (+0x12c6 etc.),
-  a resolution ahead. **Next** (found by predeploy, en-pz WARN 41 units, was 32): Link's play-once animations end
-  half a tick late at 60. His animation update runs before his action call; at 30 a tick's update that passes
+  a resolution ahead (collision resolution runs after the whole step, on mid-tick places: the Moblin's thrust on
+  route en-mo lands half a tick early too, and Link's knockback, speed 80 at both, heads 10 degrees off, ~120 units
+  apart; a general fix would resolve at the tick's end). **Fixed after** (predeploy's en-pz WARN 41 units, was 32):
+  Link's play-once animations ended half a tick late at 60. His animation update runs before his action call; at 30 a tick's update that passes
   the end stops the control (rate 0) and the call leaves (procCutL f_024402B0's rate < 0.01: to 0x04, no move),
   at 60 the whole step's half update falls short (17.8 of 18) and the cut moves 4.4 units more, once a slash.
-  Fix in J3DFrameCtrl::update's Link path (f_027F2FC4): a whole step whose tick would end the animation ends it.
+  Now J3DFrameCtrl::update's Link path (f_027F2FC4): a whole step whose tick would end the animation ends it
+  (WWHD_60FPS_ANIMEND=0 off); predeploy all 50 ok, en-pz 5.0, slash 4.2 -> 0.2, land3 16.9 -> 12.2.
   Converted (356, 281, 404, 293; session qa's line). Filed B69 (bottom has it): the puzzle's B button shows the sword,
   not Cancel, at 60 (unconverted too). Left: SBOX 293 (a chart save), Obj_HSH 290 (placed as "Hsh"/"Hsh2", stage
   not found yet), and the converted Vfan/Mkiek/MknjD/WARPDEMO20 in their events.

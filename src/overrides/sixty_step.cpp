@@ -577,6 +577,31 @@ void f_027F2BF8(PPCInterpreter_t* __restrict ctx)
 // before the next press), and the walk from waiting, carrying a waiting animation's place (3.2 frames a tick
 // of the walk's length) on at the walk's 1.2, a frame behind (route tour; session top, animstart).
 // WWHD_60FPS_ANIMHOLD=0: off.
+// And the end of a play-once animation (loop modes 0 and 1: past its end, or its start reversed, it stops, rate 0):
+// his update runs before his action call, which reads the stop (a cut's rate < 0.01: checkNextMode, to the next
+// action). At 30 the tick whose update passes the end stops it before that tick's call; at 60 the whole step's half
+// update fell short and the call ran the old action a step more, the half step's then ended it: half a tick late,
+// and the action's step moved him (procCutL f_024402B0: 17.2 + 0.6 of its end 18, 4.4 units a cut; route en-pz,
+// slashed every 15 ticks, 41 units at the end; session qa). A whole step whose tick's update would stop it makes that
+// update (a whole tick's), so the call reads the stop where 30's does; its half step finds it stopped.
+// WWHD_60FPS_ANIMEND=0: off.
+namespace
+{
+	bool AnimEnd()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ANIMEND"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	// whether a whole tick's update (frame + rate) stops a play-once control
+	bool TickStops(uint32 ctrl, float rate)
+	{
+		const uint8 mode = rd8(ctrl + 0xE);
+		if (mode > 1 || rate == 0.0f)
+			return false;
+		const float next = rdf(ctrl + 4) + rate;
+		return next < float(sint16(rd16(ctrl + 8))) || next >= float(sint16(rd16(ctrl + 0xA)));
+	}
+}
 void f_027F2FC4(PPCInterpreter_t* __restrict ctx)
 {
 	if (!Stepped())
@@ -611,7 +636,7 @@ void f_027F2FC4(PPCInterpreter_t* __restrict ctx)
 			}
 		}
 	}
-	const float scaled = pace * Step();
+	const float scaled = pace * (link && !g_rtHalfTick && AnimEnd() && TickStops(frameCtrl, pace) ? 1.0f : Step());
 	wrf(frameCtrl, scaled);
 	orig_f_027F2FC4(ctx);
 	const float after = rdf(frameCtrl);
