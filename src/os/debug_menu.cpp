@@ -90,6 +90,7 @@ namespace
 			s_rush = 0;
 			s_rushBeaten = false;
 		}
+		wwhd::debug::SetArena(false);
 		wwhd::debug::SetBossRefight(true);
 		const Dest& d = kBosses[0];
 		wwhd::debug::RequestStage(d.stage, d.point, d.room, d.layer);
@@ -100,11 +101,23 @@ namespace
 		s_rush = -1;
 	}
 
+	// the test arena (the owner's idea N28): Gohma's room, the boss beaten (refights off) and no warp in the
+	// middle (wwhd::debug::SetArena, sixty.cpp), a big open floor for movement, physics and enemies (spawn them
+	// there); any other warp from the menu turns it off
+	void StartArena()
+	{
+		StopRush();
+		wwhd::debug::SetBossRefight(false);
+		wwhd::debug::SetArena(true);
+		wwhd::debug::RequestStage("M_DragB", 0, 0, -1);
+	}
+
 	std::vector<std::string> Items()
 	{
 		if (s_page == kTop)
 			return { "Islands", "Dungeons", "Bosses (refights on)", "Boss rush (all, in order)", "Spawn an enemy",
-				std::string("Boss refights: ") + (wwhd::debug::BossRefight() ? "ON" : "OFF"), "Close" };
+				"Test arena (Gohma's room, no warp)", std::string("Boss refights: ") + (wwhd::debug::BossRefight() ? "ON" : "OFF"),
+				"Close" };
 		std::vector<std::string> items;
 		if (s_page == kFoePage)
 		{
@@ -147,7 +160,8 @@ namespace
 			case 2: s_page = kBossPage; s_cursor = 0; break;
 			case 3: StartRush(); s_open = false; break;
 			case 4: s_page = kFoePage; s_cursor = 0; break;
-			case 5: wwhd::debug::SetBossRefight(!wwhd::debug::BossRefight()); break;
+			case 5: StartArena(); s_open = false; break;
+			case 6: wwhd::debug::SetBossRefight(!wwhd::debug::BossRefight()); break;
 			default: s_open = false; break;
 			}
 			return;
@@ -169,6 +183,7 @@ namespace
 		if (d.boss)
 			wwhd::debug::SetBossRefight(true);
 		StopRush();                                     // a warp of its own ends a rush
+		wwhd::debug::SetArena(false);                   // and the test arena
 		wwhd::debug::RequestStage(d.stage, d.point, d.room, d.layer);
 		s_open = false;
 	}

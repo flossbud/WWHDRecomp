@@ -1,6 +1,6 @@
 // The debug menu (the owner's idea: the test aids from a controller): a panel over the game that
-// warps to islands, dungeons and boss rooms (the bosses' refights on), runs a boss rush and spawns
-// enemies ahead of Link. Clicking both sticks at once, or F1, opens and closes it; while it is open the D-pad (or the left
+// warps to islands, dungeons and boss rooms (the bosses' refights on), runs a boss rush, spawns
+// enemies ahead of Link and warps to a test arena (Gohma's room with no warp in the middle). Clicking both sticks at once, or F1, opens and closes it; while it is open the D-pad (or the left
 // stick) moves, A chooses, B goes back, and the game sees no input. debug_menu.cpp; the overlay
 // (src/frontend/overlay.cpp) draws it.
 #pragma once
@@ -44,6 +44,9 @@ namespace wwhd::debug
 	void RequestSpawn(int process, uint32 param, uint32 anglex);
 	void SetBossRefight(bool on);
 	bool BossRefight();
+	// the test arena (N28): Gohma's room with no warp in the middle (WWHD_DEBUG_ARENA=1, or the menu)
+	void SetArena(bool on);
+	bool Arena();
 	// a boss beaten: the game set its "beaten" bit (its dungeon item 3, f_025B9098; Puppet Ganon's event bit
 	// 3F10, f_025B8B68); the refights answer the truth from then until the game's next stage change is in
 	void BossBeaten();

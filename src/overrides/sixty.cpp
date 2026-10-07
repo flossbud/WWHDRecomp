@@ -1942,6 +1942,28 @@ namespace wwhd::debug
 	}
 }
 
+// The test arena (the owner's idea N28): Gohma's room (M_DragB) on a finished save with no warp in the middle, a
+// big open floor for movement, physics and enemy tests (spawn them there). WWHD_DEBUG_ARENA=1, or the debug menu's
+// "Test arena" (a warp there, refights off): while it is on, in M_DragB the boss's warp out (the warp flower,
+// WARPFLOWER 104, d_a_warpf.cpp) isn't created; any other stage, or the arena off, the game's own. Off unless set.
+namespace
+{
+	std::atomic<int> s_arena{ -1 };                  // -1: as WWHD_DEBUG_ARENA says
+}
+namespace wwhd::debug
+{
+	bool Arena()
+	{
+		static const bool env = [] { const char* e = getenv("WWHD_DEBUG_ARENA"); return e && *e == '1'; }();
+		const int v = s_arena.load();
+		return v < 0 ? env : v != 0;
+	}
+	void SetArena(bool on)
+	{
+		s_arena.store(on ? 1 : 0);
+	}
+}
+
 // dSv_memBit_c::isDungeonItem(mem, item): item 3 is the stage's "boss beaten" (isStageBossEnemy and 44
 // call sites test it). A test aid: WWHD_DEBUG_BOSS=1 answers "no" for it, so a boss appears again in
 // its room on a finished save (with WWHD_DEBUG_STAGE to get there); nothing is written to the save.
@@ -2124,6 +2146,18 @@ void f_025E14A8(PPCInterpreter_t* __restrict ctx)
 		cemuLog_log(LogType::Force, "wwhd debug: boss rush: no Makar after Kalle Demos");
 		GPR(3) = 0xFFFFFFFFu;
 		return;
+	}
+	// the test arena (N28, above): no warp flower (WARPFLOWER 104) in Gohma's room
+	if ((GPR(4) & 0xFFFF) == 104 && wwhd::debug::Arena())
+	{
+		char stage[9] = {};
+		for (int i = 0; i < 8; i++)
+			stage[i] = (char)rd8(0x1046F0B0u + 0x5134u + i);   // the current stage's name
+		if (strcmp(stage, "M_DragB") == 0)
+		{
+			GPR(3) = 0xFFFFFFFFu;
+			return;
+		}
 	}
 	[[clang::musttail]] return orig_f_025E14A8(ctx);
 }
