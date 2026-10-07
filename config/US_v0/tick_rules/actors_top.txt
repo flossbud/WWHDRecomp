@@ -212,3 +212,23 @@
 024DE7C0    whole       sth             196: +0x3BA - 1 while > 0
 024DE7DC    *h@f0       fadds           196: +0x340 + +0x3BC (while +0x3BA > 30)
 024DE7E8    eqwhole     cmpi            196: +0x3BA == 20 (read back), once
+# process 242 (FGMAHOU, d_a_fgmahou: Phantom Ganon's energy ball, the one hit back; WWHD's 242 is the GameCube's
+# 0xF4, FGANON's 241 + 1): its age, timers and hit countdown count ticks; once hit (+0x89C - 1, == 0 deleted:
+# keep, the half step must not delete it half a tick early); its flash's 0-8 cycle (+0x3FC) whole; its wobble's
+# phases + 0xDAC and + 0xCE4 a tick (split); pos + speed (PSVECAdd, a substep loop too) h of it a step
+0213D5F8    whole       sth             fgmahou execute: mAge (+0x3E0) + 1
+0213D60C    whole       sthx            fgmahou execute: mTimers[i] (+0x3F6) - 1 while != 0
+0213D630    whole       sth             fgmahou execute: field_0x2DE (+0x3FA) - 1 while != 0
+0213E154    keep:r5     addi            fgmahou execute: field_0x780 (+0x89C) - 1, then == 0 deleted
+0213E144    whole       sth             fgmahou move: field_0x2E0 (+0x3FC) + 1 while != 0 and <= 8
+0213E14C    whole       sth             fgmahou move: field_0x2E0 = 0 past 8
+0213DE44    split:r8    addi            fgmahou move: field_0x2D4 + (REG0_S(6) + 0xDAC), split over the steps
+0213DE64    split:r11   addi            fgmahou move: field_0x2D6 + (REG0_S(7) + 0xCE4), split over the steps
+0213DF20    vec@r4      bl 028e8d88     fgmahou move: current.pos + speed (+0x33C)
+0213DF64    vec@r4      bl 028e8d88     fgmahou move: current.pos + speed (the substep loop)
+# process 66 (OBJ_SEARCH Search, d_a_obj_search: the Forsaken Fortress's searchlights; decomp unmatched, read from
+# WWHD's code): its beam is recomputed each step (its ray's segments), its turns and brightness stepped helpers
+# (cLib_addCalcAngleS2, cLib_chaseS); a 0-3 cycle a tick spreads its work (whole); Link in the beam counts ticks,
+# over 14 the alarm and back to 0 (keep: the half step then reads 0)
+0238A980    whole       stw             search execute: +0x8C4 + 1, 0 at 4 (a cycle)
+0238C4F8    keep:r10    addi            search: +0x8C0 + 1 while Link is in the beam, then > 14 the alarm
