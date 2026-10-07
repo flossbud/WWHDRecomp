@@ -743,14 +743,18 @@
 #
 # ---- step rules: Link conducting the Wind Waker (procTactPlay, f_0243A094; his action 0x9A, stepping
 # in its event). Its beat phase (+0x69F8) and three timers count 1.0 a tick (f31), a countdown (+0x6918)
-# whole ticks; the notes come from the stick, read on whole ticks.
-0243A148    whole       sth             procTactPlay: the countdown (+0x6918) - 1
+# whole ticks; the notes come from the stick, read on whole ticks. The phase and timers once a tick too (keep;
+# session top, the known issue "conducting ends half a tick early"): stepped by h, a beat's or a timer's
+# threshold crossed in a tick's first half was taken in its whole step, half a tick early; only procTactPlay
+# reads them (the baton's beat frame drawn is another count's, drawlag).
+0243A13C    keep:r11    addi            procTactPlay: the countdown (+0x6918) - 1, then == 0 the playback (keep, not whole on
+#   the store: its test reads the register, so the half step after it reached 1 started the playback a tick early)
 0243A1FC    whole       sth             procTactPlay: the countdown (+0x6918) + 1 (from below -1)
-0243A154    *h@f31      fadds           procTactPlay: the beat phase (+0x69F8) + 1
-0243A42C    *h@f31      fadds           procTactPlay: the beat phase (+0x69F8) + 1
-0243A22C    *h@f31      fsubs           procTactPlay: a timer (+0x6A04) - 1
-0243A564    *h@f31      fsubs           procTactPlay: a timer (+0x69FC) - 1
-0243A658    *h@f31      fsubs           procTactPlay: a timer (+0x6A00) - 1
+0243A154    keep:f10    fadds           procTactPlay: the beat phase (+0x69F8) + 1
+0243A42C    keep:f9     fadds           procTactPlay: the beat phase (+0x69F8) + 1
+0243A22C    keep:f7     fsubs           procTactPlay: a timer (+0x6A04) - 1
+0243A564    keep:f12    fsubs           procTactPlay: a timer (+0x69FC) - 1
+0243A658    keep:f0     fsubs           procTactPlay: a timer (+0x6A00) - 1
 #
 # ---- step rules: a cloth's wave (f_0251C968, from f_0251CEC8 and f_0251D4EC: Dragon Roost's flags):
 # two phases advanced a tick, everything else computed from them
