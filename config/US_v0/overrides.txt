@@ -82,6 +82,7 @@
 02002C90    src/overrides/sixty.cpp            the HD UI's per-screen update: notes the screens, for the half tick's calculate (D21, ui30)
 02019788    src/overrides/sixty.cpp            cM_rnd: a stepping process's half-step draws its whole step doesn't make again, made up after it (RNDSYNC); each draw logged under WWHD_DEBUG_RNDLOG=path (a test aid)
 025B8B94    src/overrides/sixty.cpp            dSv_event_c::isEventBit: forced under WWHD_DEBUG_FLAGS (a test aid)
+025B8BB0    src/overrides/sixty.cpp            dSv_event_c::getEventReg: WWHD_DEBUG_FLAGS's er: forces an event register (a test aid)
 025BA0C0    src/overrides/sixty.cpp            dSv_info_c::isSwitch: forced under WWHD_DEBUG_FLAGS (a test aid)
 025BA6A4    src/overrides/sixty.cpp            dSv_info_c::isActor: forced under WWHD_DEBUG_FLAGS (a test aid)
 025B7D90    src/overrides/sixty.cpp            dSv_player_collect_c::isSymbol: forced under WWHD_DEBUG_FLAGS (a test aid)

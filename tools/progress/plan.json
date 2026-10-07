@@ -445,6 +445,8 @@
     "384": "still where placed (A_nami,0,0): no state change at 30 over 200 ticks (census, movers.sh)",
     "385": "still where placed (A_mori,0,0): no state change at 30 over 200 ticks (census, movers.sh)",
     "387": "still where placed (Abship,0,6): no state change at 30 over 200 ticks (census, movers.sh)",
+    "388": "kytag05 (d_a_kytag05.cpp): draws nothing; it only sets the event wind's direction and timers in the environment, which reads them once a tick",
+    "389": "kytag06 (d_a_kytag06.cpp): draws nothing; only in the ARRIVAL_BRK event it moves the clock and sets rain, thunder and colours in the environment, which reads them once a tick",
     "390": "still where placed (GTower,0,0): no state change at 30 over 200 ticks (census, movers.sh)",
     "395": "never created in WWHD: no stage places it (every stage's rooms and stage file, all layers, scanned by its object name) and no code creates it by process",
     "400": "draws nothing; its execute only counts its timer down to the drop (d_a_disappear.cpp), which runs on 30's ticks unconverted (the death puff is the creator's particle)",
