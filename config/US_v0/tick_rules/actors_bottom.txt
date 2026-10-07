@@ -2,7 +2,9 @@
 # types_test.sh at their places (the census; every actor converted but Link, ranked by the ticks equal to 30's
 # over 1000-1400) and read in the decomp. Converted with no rules (equal to 30's at every tick): Obj_Table 278
 # (Opub), Obj_Auzu 283 (sea 44 layer 7), SW_TACT 312 (Cave06), 386 (M_DaiMB room 12), 392 (sea 41), 413 (sea
-# 13, 23, 41, 44), 417 (sea 44).
+# 13, 23, 41, 44), 417 (sea 44); NPC_BTSW2 350 (sea 13, made with WWHD_DEBUG_FLAGS=er:C203=0: the finished save's
+# C203 is 3; two fields differ from 30's run, IDs given at its creation, constant in each run); Komore 393 (by its
+# code: its execute only plays its texture animation, which the converted helper steps).
 #
 # Obj_Tenmado (process 279, d_a_obj_tenmado.cpp: the shutter window; Execute f_023A0060, m2CC +0x3E4, m2C8
 # +0x3E0): once its switch is on it opens by m2C8 + 1 a call to 100 (at 80 its second switch). Still in M_DaiMB
