@@ -1,4 +1,5 @@
 address,name,evidence
+021412BC,daFm_c::modeProc,"WW-4 decompile (enemies2): the decomp's daFm_c::modeProc (d_a_fm.cpp; inside FM's code 0214023C-02149EE0): r4 0 stores r5 to +0x3C8 (mMode), clears or sets attention bit 4 at +0x39C for the same mode list as the decomp's switch (0-4, 6, 0xB, 0xC, 0xE-0x12 cleared), then tail-calls the init member pointer of the 0x14-byte entry r5; r4 1 tail-calls the run member pointer (entry +8) of entry mMode"
 025B9938,dSv_save_c_init,twwhd-randomizer@f28d289 asm/linker.ld
 0254DA38,execItemGet,twwhd-randomizer@f28d289 asm/linker.ld
 0254EE14,item_func_sword,twwhd-randomizer@f28d289 asm/linker.ld

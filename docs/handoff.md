@@ -3289,6 +3289,14 @@ it in a window; D21 "Step 2"):**
     after a hit is alike (~30 units) but at 60 it walks back in, at 30 away. Next: d_a_bk.cpp's damage_check
     (l.3518: the Tg hit, cc_at_check, the knockback) at 60. The Floormaster's grab (M_Dai room 6, Link placed by it):
     as at 30 (186 ticks held, the same exit), 2 ticks early (it notices Link on a half step, f1100.5 against 1101).
+    Fixed since: its modes (daFm_c::modeProc f_021412BC, mMode +0x3C8: proc 0 sets a mode and runs its init, proc 1
+    runs its run) changed a step early in a chain: a mode set in the whole step ran in the same tick's half step
+    (30: the next tick), and one set in a half step (30 sets it in the next tick) ran in the next whole step. Now
+    (sixty.cpp, WWHD_60FPS_MODEHOLD=0 off) a mode set in the whole step holds that half step's run, and one set in
+    the half step holds the next tick's two. Route en-fm with Link placed by it (scratch doortrial.sh, `M_Dai,7,6,-1`,
+    PLACE 1100:4471,400,-3036): modes 5, 8, 13, 14 at f1100.5, 1102, 1122, 1132 against 30's 1101, 1102, 1122, 1132
+    (before: 1100.5, 1101, 1121, 1131), the grab (Link 0xBD) at f1134 at both (1133). Not from it: at f1344 (in the
+    room it drops Link in) Link's knockback (0x68) moves him 75 units at 60 and none at 30, as before the fix.
     Later (handed to session qa): the "lead" was wrong. bk956 wasn't pushed back at 30: it was walking at Link
     (action 4 mode 3, speedF 20) when hit, at 60 it was swinging (action 5), so the two fights had parted before.
     The 30 and 60 fights draw from different random streams: the save route's stream parts at f909, before every

@@ -2082,6 +2082,37 @@ void f_025D8A5C(PPCInterpreter_t* __restrict ctx)
 	[[clang::musttail]] return orig_f_025D8A5C(ctx);
 }
 
+// daFm_c::modeProc(proc, newMode) (Floormasters, FM 119; d_a_fm.cpp; mMode at +0x3C8): proc 0 sets mMode and calls the
+// new mode's init, proc 1 calls its run (each a member function pointer, tail-called). At 30 a mode set in a tick
+// runs from the next tick; at 60 its run came in the same tick's half step, so each "set, then run next call" in its
+// chain took half a tick where 30 takes a tick: its grab came 1.5 ticks early (notice, rise, grab: f1100.5, 1101.5,
+// 1121.5 against 30's 1101, 1103, 1123). As Link's action call (ActionHold): a mode set in its whole step holds the
+// half step's run; a mode set in its half step (a change 30 makes in the next tick) holds both steps of the next
+// tick. Then its modes change on 30's ticks or half a tick before. WWHD_60FPS_MODEHOLD=0 turns it off.
+namespace
+{
+	bool ModeHold()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_MODEHOLD"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	// a process, the steps (2 a tick: whole 2t, half 2t + 1) its last mode was set in and held until
+	struct ModeSet { uint32 at, until; };
+	std::unordered_map<uint32, ModeSet> s_modeSet;
+}
+void f_021412BC(PPCInterpreter_t* __restrict ctx)
+{
+	if (!g_rtSixty || !ModeHold())
+		[[clang::musttail]] return orig_f_021412BC(ctx);
+	const uint32 actor = GPR(3), step = 2 * wwhd::rt::GameFrame(wwhd::os::SwapCount()) + (g_rtHalfTick ? 1 : 0);
+	if (GPR(4) == 0)
+		s_modeSet[actor] = { step, g_rtHalfTick ? step + 2 : step + 1 };
+	else if (GPR(4) == 1)
+		if (const auto it = s_modeSet.find(actor); it != s_modeSet.end() && step > it->second.at && step <= it->second.until)
+			return;
+	[[clang::musttail]] return orig_f_021412BC(ctx);
+}
+
 // fpcM_Create(layer, process name, create function, ?, append) -> process ID. In the boss rush, Kalle Demos's death
 // makes no Makar (NPC_CB1, 334: d_a_bmd.cpp's death scene creates him, then his rescue event thanks Link; the
 // owner's N21): no request, the ID -1, which the boss doesn't keep. The append (0x40 bytes, made by fopAcM_create
