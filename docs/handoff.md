@@ -3604,6 +3604,26 @@ it in a window; D21 "Step 2"):**
     land a tick later from there, the heading follows, and 9 units aside 60's Link clears the corner where 30's
     stops. A chaotic split in the test, not a wrong game (main): the routes move off the corner next. Without
     CAMTICK the same corner splits route ladder the other way (WARN 58.6: 60's Link stops there, 30's slides by).
+- **Session top: actors-top (2026-10-07; round 9, the owner's "convert the rest"): the 69 types below 260 that had
+  nothing**, 68 converted (SITEM 253 went to qa as B68: a matrix-lerp draw). Verdicts and rules, each type with its
+  evidence: `config/US_v0/tick_rules/actors_top.txt`; the list: session top's line in sixty.cpp's
+  kConvertedByDefault. Method: where the stages place a type (bottom's census-places.tsv), `stage_test.sh` (trial
+  and 30 against 60, batch.sh in top's data dir runs 6 at once), `counter_audit.py -v --up` for its +-1 sites on
+  WWHD's code, the decomp for its other per-frame state; unnamed types named from their strings (fstrings.py)
+  and the GameCube's process order (WWHD's number = the GC's - 2 there, checked at 239 BDKOBJ, 241 FGANON, 242 FGMAHOU, 253
+  SITEM). What decided most of them:
+  - A converted process doesn't step in an event: counts only an event's cuts run need nothing (Vgnfd, PFALL, Vfan,
+    Ohatch, Pedestal, MknjD's break, Ajav's falls).
+  - `keep` on a count tested after its +-1 only when the test is a state (<=, >=) or a mode change follows; a
+    one-shot `==` (Eskban's shock at 28, BITA's break at 88) wants `whole` on the store (the half step's register
+    then reads one further) or `eqwhole` on a read-back compare.
+  - Springs and falls: the velocity once a tick (keep on its adds and multiplies) or its store at the tick's end
+    (`late`, when the move reads the old velocity first, as BDKOBJ's fragments), the position h of it a step.
+  - A count kept in a draw (Ajav's flash) counts twice at 60 for a converted actor (its half-tick draw stays):
+    keep on its add.
+  - The census's 200-tick "still" can miss state that a touch or trigger starts (Nest, Ashut: taken off the list).
+  Untested beyond the build (not made by a warp, or never triggered in their trial): most of the rules' sites;
+  FGMAHOU 242 isn't Forsaken Fortress's ball (that's FGANON's own) and wasn't seen.
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.
