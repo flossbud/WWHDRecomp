@@ -96,6 +96,9 @@ rules, for the code of processes that run every frame with a time step h
                threshold crossed by a value that moves on both steps (`if (y > top) { stop; start a wait }`)
                is crossed on the half step a tick sooner than at 30's ticks: on a stepping process's half
                step the compare reads less, so what hangs on it happens on a whole step, as at 30
+  ltwhole      gtwhole's mirror, on a compare whose next reader is a branch on its LT bit (blt, bge): on a
+               stepping process's half step a less compare reads greater (a random start, `cM_rnd() < p`, taken
+               on whole steps at 30's p: the half step's draw is put back, so the starts come on 30's ticks)
   drawsplit@REG a per-tick add in a converted actor's draw (a joint callback: a fan's spin): in a draw at 60
                (step 1) REG - REG/2 in the whole tick's draw, REG/2 in the half tick's, so its two draws add
                a tick's amount (an unconverted actor's half-tick draw is put back after the frame: only for
@@ -316,7 +319,7 @@ class Program:
                     assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
                     rules[ea] = (kind, value, expect, what)
                     continue
-                if kind in ("spliti", "lagi", "drawlagi", "eqwhole", "gtwhole"):
+                if kind in ("spliti", "lagi", "drawlagi", "eqwhole", "gtwhole", "ltwhole"):
                     assert not arg, f"tick_rules.txt:{n}: {kind} takes no argument"
                     value = None
                 elif kind == "halfadd":
@@ -329,7 +332,7 @@ class Program:
                         assert key == "r3", f"tick_rules.txt:{n}: unknown rule argument {arg}"
                         value = v if re.fullmatch(r"r([12]?[0-9]|3[01])", v) else int(v, 0)
                 else:
-                    assert kind.rstrip("@") in ("keep", "split", "splitd", "drawsplit", "note", "vec", "arc", "fall", "ssplit", "lagw", "exact", "eqwhole", "gtwhole", "vnote") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
+                    assert kind.rstrip("@") in ("keep", "split", "splitd", "drawsplit", "note", "vec", "arc", "fall", "ssplit", "lagw", "exact", "eqwhole", "gtwhole", "ltwhole", "vnote") or kind.rstrip("@") in self.STEP_OPS, f"tick_rules.txt:{n}: unknown rule {rule}"
                     assert kind != "drawsplit", f"tick_rules.txt:{n}: drawsplit takes @: drawsplit@rN"
                     assert kind != "exact@" and (kind != "exact" or arg[0] == "f" or arg == "note"), f"tick_rules.txt:{n}: exact:fS takes a float register or note"
                     if kind == "exact" and arg == "note":
@@ -370,11 +373,11 @@ class Program:
                 return f"{ea:08X}: lagi applies to mulli rD, rA, IMM, not {i.op}"
             if kind == "drawlagi" and i.op != "mulli":
                 return f"{ea:08X}: drawlagi applies to mulli rD, rA, IMM, not {i.op}"
-            if kind in ("eqwhole", "gtwhole"):
+            if kind in ("eqwhole", "gtwhole", "ltwhole"):
                 # the field's next reader must be a branch on that bit alone (EQ: beq/bne; GT: bgt/ble): a half
                 # step's "not equal" made "greater" would change an ordering test (blt, bge...)
                 ops, bit, name = (("cmp", "cmpl", "cmpi", "cmpli"), 2, "EQ") if kind == "eqwhole" else \
-                    (("cmp", "cmpl", "cmpi", "cmpli", "fcmpu", "fcmpo"), 1, "GT")
+                    (("cmp", "cmpl", "cmpi", "cmpli", "fcmpu", "fcmpo"), 1 if kind == "gtwhole" else 0, kind[:2].upper())
                 if i.op not in ops:
                     return f"{ea:08X}: {kind} applies to a compare ({', '.join(ops)}), not {i.op}"
                 for k in range(1, 13):
@@ -697,6 +700,10 @@ def apply_tick_rule(rule, i, lines):
         # on a stepping process's half step a greater compare reads less: its bgt/ble act on whole steps
         return lines + [f"if (RT_STEPPED() && !RT_WHOLE_TICK()) {{ uint8* c_ = ctx->cr + {i.crfD} * 4; if (c_[CR_BIT_GT]) {{ c_[CR_BIT_GT] = 0; "
                         f"c_[CR_BIT_LT] = 1; }} }}   // step rule: {what}"]
+    if kind == "ltwhole":
+        # on a stepping process's half step a less compare reads greater: its blt/bge act on whole steps
+        return lines + [f"if (RT_STEPPED() && !RT_WHOLE_TICK()) {{ uint8* c_ = ctx->cr + {i.crfD} * 4; if (c_[CR_BIT_LT]) {{ c_[CR_BIT_LT] = 0; "
+                        f"c_[CR_BIT_GT] = 1; }} }}   // step rule: {what}"]
     if kind == "spliti":
         imm = emit.hx(i.simm & 0xFFFFFFFF)
         return lines + [f"if (RT_STEPPED()) GPR({i.rD}) = GPR({i.rD}) - {imm} + rt_step_split({imm});   // step rule: {what}"]

@@ -3509,6 +3509,23 @@ it in a window; D21 "Step 2"):**
     steps (`if (y > top)`) is only taken on whole steps, so what hangs on it (here the rock's rest and the tail's
     130-tick wait) starts on 30's tick. Left: the tail rests 50 units below 30's (the rise's last tick stops after its
     whole step's half), and Gohma's behaviour before the hit follows its random draws.
+  - The Ganon's Tower trial's magma rocks (known issue: their bob differs; route gtrock, WWHD_DEBUG_RNDLOG at both
+    rates and tools like rndcmp/rndseq: the first frame whose stream differs, and each frame's draws by process and
+    caller). The rocks follow the lava, whose bubbles draw from the random stream, and 60's stream parts from 30's
+    before the warp, on Outset's dock, and never comes back:
+    (1) Link's Mirror Shield glint (setItemModel's three random starts, `cM_rnd() < 0.02`) was `*h@f30`, 1% on both
+    steps: it started on other ticks, and while it runs Link draws nothing, so every process after him drew other
+    numbers (gtrock from f927). Now `ltwhole` (generate.py, gtwhole's mirror: on a half step a less compare reads
+    greater): tested on whole steps at 30's 2%, the half step's draw put back, so it starts on 30's tick with 30's
+    number (every start now right after a whole step's draw).
+    (2) Earlier still (f907.5), the fishman (NPC_SO 118): his swim animation's random choice is taken in a one-frame
+    window (`frame >= end - 1`, f_022DE6D4: the morf at +0x964, frame +0x9C, end +0xA2), which 30's 2.6 frames a
+    tick often steps over and 60's half steps land in; and his swim's path is 0.7-1.6 units off 30's from the first
+    60 step (f900), so his animation's phase drifts anyway (wraps at 907/919 against 908/919.5). RNDSYNC's make-up
+    then counts his extra half-step draw as one 30 makes later, and the stream is one ahead from f909.
+    Not synced: the stream can only stay with 30's while every process that draws runs exactly as at 30, and a
+    slightly different path (the fishman's) is enough; the rocks bob right relative to their own lava. Possible
+    next step: the window tests (`frame >= end - 1` then a draw) taken on whole steps only (30's sampling).
 - **Session bottom: the owner's notes from play (2026-10-06; `tick_rules/notes_bottom.txt`)**: B47 (the boss rush:
   see the debug menu's "Boss rush" above), N3, N8, N12, N13.
   - **N3, Dragon Roost Cavern's falling rocks "still 30fps"**: FallRock (422, d_a_fallrock.cpp; WWHD's process numbers

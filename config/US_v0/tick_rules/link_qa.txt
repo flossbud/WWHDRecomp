@@ -30,9 +30,13 @@
 # speed: a flash on the shield on Link's back, most visible gliding. f_0240B7F4 runs two more frames up
 # and down by 1 a call (+0x5618, +0x5708). The random start is tested on both frames of a tick too (other
 # processes draw from the stream in between, so the two tests are independent): its 2% a call is 1% a step.
-02403E34    *h@f30      fcmpu           setItemModel: the glint's start, cM_rnd() < 0.02 a tick
-02404E2C    *h@f30      fcmpu           setItemModel: the second copy's start
-024050CC    *h@f30      fcmpu           setItemModel: the third copy's start
+# Now tested on whole steps only, at 30's 2% (`ltwhole`; was `*h@f30`, 1% on both steps): the half step's draw is
+# put back, so the whole step draws 30's number and the glint starts on 30's tick. At 1% a step it started on
+# other ticks, and while it runs Link draws nothing there: the random stream parted from 30's for every process
+# after him (route gtrock: from f927, the lava's bubbles and so the magma rocks' bob; session bottom).
+02403E34    ltwhole     fcmpu           setItemModel: the glint's start, cM_rnd() < 0.02 a tick
+02404E2C    ltwhole     fcmpu           setItemModel: the second copy's start
+024050CC    ltwhole     fcmpu           setItemModel: the third copy's start
 02403E60    *h@f29      fadds           setItemModel: the Mirror Shield's glint frame (+0x4814) + 1
 02404E58    *h@f29      fadds           setItemModel: the glint's second copy (+0xE0C) + 1
 024050F8    *h@f29      fadds           setItemModel: the glint's third copy (+0xF1C) + 1
