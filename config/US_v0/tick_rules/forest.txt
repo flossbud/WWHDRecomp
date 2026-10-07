@@ -36,6 +36,10 @@
 # ---- trees (Lwood, process 407, d_a_lwood.cpp: "Object - Normal tree"): mTimer + 1 a tick; WWHD sways
 # the tree by it (mTimer x 300, f_021B6C34; both set at random at creation).
 021B7250    whole       sth             lwood _execute: mTimer (+0x3EC) + 1
+# Its sway is a joint callback (f_021B6C34, set up at creation) run while the model is calculated in the draw:
+# mTimer x 300 drew the same in both of a tick's frames (hz30: Hyrule's courtyard trees over the hearts, 15 blocks).
+# drawlagi: the whole tick's frame draws half a count back (session top)
+021B6C94    drawlagi    mulli           lwood sway (joint callback): mTimer x 300
 #
 # ---- the Forbidden Woods (stage kindan): found with the trial in rooms 5 and 12 (area_test.sh).
 # Hanging vines (SK, process 101, "Turu", d_a_sk.cpp): m2BE + 1 a tick, the joints' sway (sines of it,

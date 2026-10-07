@@ -104,6 +104,9 @@ rules, for the code of processes that run every frame with a time step h
   lagi         for a `mulli rD, rA, IMM` of a tick count (a phase as count x IMM, the count kept to whole
                ticks): on the whole tick's step rD lags by IMM/2, (count - 1/2) x IMM, so the phase
                moves every frame and is 30's at half ticks
+  drawlagi     lagi in a draw too (step 1 there, so lagi's step rule doesn't act): at 60 fps, in the whole tick's
+               frame, rD lags by IMM/2, so the half tick's frame draws 30's phase and the whole tick's half way to
+               it (a joint callback swaying a tree by its tick count: Lwood's)
   lagw:rM      the same for a `mullw rD, rA, rB` of a tick count by a register rM (rA or rB: the phase a tick, as
                count x (REG0_S(n) + IMM), a debug register plus a constant): on the whole tick's step rD lags by
                rM/2 (rM read before the instruction, which may write it)
@@ -309,7 +312,7 @@ class Program:
                     assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
                     rules[ea] = (kind, value, expect, what)
                     continue
-                if kind in ("spliti", "lagi", "eqwhole"):
+                if kind in ("spliti", "lagi", "drawlagi", "eqwhole"):
                     assert not arg, f"tick_rules.txt:{n}: {kind} takes no argument"
                     value = None
                 elif kind == "halfadd":
@@ -361,6 +364,8 @@ class Program:
                 return f"{ea:08X}: spliti applies to addi rD, rA, IMM, not {i.op}"
             if kind == "lagi" and i.op != "mulli":
                 return f"{ea:08X}: lagi applies to mulli rD, rA, IMM, not {i.op}"
+            if kind == "drawlagi" and i.op != "mulli":
+                return f"{ea:08X}: drawlagi applies to mulli rD, rA, IMM, not {i.op}"
             if kind == "eqwhole":
                 if i.op not in ("cmp", "cmpl", "cmpi", "cmpli"):
                     return f"{ea:08X}: eqwhole applies to a compare (cmp, cmpl, cmpi, cmpli), not {i.op}"
@@ -686,6 +691,9 @@ def apply_tick_rule(rule, i, lines):
     if kind == "halfadd":
         dest = i.rA if i.op in HALFADD_RA_OPS else i.rT if i.op in HALFADD_LOADS else i.rD
         return lines + [f"if (g_rtHalfTick) GPR({dest}) = GPR({dest}) + {emit.hx(arg & 0xFFFFFFFF)};   // step rule: {what}"]
+    if kind == "drawlagi":
+        half = emit.hx((int(i.simm / 2)) & 0xFFFFFFFF)
+        return lines + [f"if (RT_SIXTY() && RT_WHOLE_TICK()) GPR({i.rD}) = GPR({i.rD}) - {half};   // step rule: {what}"]
     if kind == "lagi":
         half = emit.hx((int(i.simm / 2)) & 0xFFFFFFFF)
         return lines + [f"if (RT_STEPPED() && RT_WHOLE_TICK()) GPR({i.rD}) = GPR({i.rD}) - {half};   // step rule: {what}"]
