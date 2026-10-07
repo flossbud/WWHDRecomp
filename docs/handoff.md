@@ -1508,7 +1508,11 @@ it in a window; D21 "Step 2"):**
     the KANKYO execute advances 0.02 degrees once a tick: both of a tick's frames drew the same sun, and the ground's
     shadows (and an island tree's lighting) stepped at the half -> whole swap. Now the whole tick's frame draws the
     sun at the time half way from the last tick's: sea15 46 -> 1 (the HUD), sea29 16 -> 0, sea43, sea19, sea34, sea14
-    -> 0. Left: sea6's far sea band at the horizon (18), distant specks (sea30 a far ship's flag, sea20 a bird: 2 each).
+    -> 0. Left, recorded rather than fixed: sea6's far sea band at the horizon (18 blocks) changes on both parities
+    (9 at the half -> whole swap, 9 at the whole -> half), so it is the thin far foam lines aliasing as the camera
+    moves, not a once-a-tick step; sea20 (2) is a distant splash's particles at the horizon and a bird (particles are
+    converted; the splash is started far out, by something not identified, once a tick); sea30 (2, in 13 of 30 pairs)
+    is a few edge pixels of the boat's horn and a far ship's flag.
   - **60 fps cost (session top; the work queue's "perf"; shared: sixty.cpp's journal, the runtime's
     rt_journal_store)**: real time, headless, on the desktop (`~/wwhd-test`; its `perf-top.sh` runs routes
     at 30 then 60 with `WWHD_FRAME_LOG` and each thread's CPU; `perf-ab.sh` alternates two builds at 60;
