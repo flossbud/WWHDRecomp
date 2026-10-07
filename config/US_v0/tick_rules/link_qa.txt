@@ -129,3 +129,12 @@
 # (route en-tn's Z-target stance: the right foot 5, 4 / 3, 2 / 1, 0 from f988, 30's 5 ... 0 to f993). Once a tick;
 # its zero test reads the whole step's count, so a foot plants at most half a tick early.
 02400244    whole       stb             footBgCheck: a foot's planting count (mFootData[i] +1) - 1 (tested before)
+#
+# ---- the plain slash's lunge (procCutA 0x41, f_0243F790; session qa, after B66). Once its animation passes a frame
+# (checkPass(m_HIO cut A +0x28)) it sets his speed (mNormalSpeed +0x6A14 = |speedF| x a + b), which cLib_addCalc
+# then takes down. At 60 the pass fell in the half step: the lunge started half a tick late and went ~3 units
+# shorter (route en-tn, a Darknut targeted: 12.6 units in its first tick at 30, 9.5 at 60). As the slash while
+# moving's (link_actions.txt, 0x42): the whole step checks the tick's pass. The compiler made the call twice, for the
+# locked-on and free branches.
+0243F9E8    tick:r3=0   bl 027f2bf8     link procCutA: checkPass: the lunge's speed (locked on)
+0243FA24    tick:r3=0   bl 027f2bf8     link procCutA: checkPass: the lunge's speed (free)

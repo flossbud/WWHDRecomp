@@ -350,6 +350,10 @@ namespace
 	// And the sidle's move (0x15, procWHideMove, set up from its wait 0x14 by the stick): its speed's change once a tick
 	// in the whole step (sixty_step.cpp), at 30 the next tick's; the half step's call after the set-up read the speed
 	// 0 and went back to the wait (the hands-on check).
+	// And the slash's bounce off a wall or shield (0x5A, procCutReverse, set up in procCutA's call by changeCutReverseProc:
+	// it sets his speed back 12, which its step takes down; at 30 the next tick's): the half step took the first
+	// decrease, his speed 0.56 under 30's on every tick after, ~6.6 units short by the bounce's end (route en-tn, session
+	// qa after B66; now within 0.6).
 	// Tried and not held: 0x24 (procAutoJump: no change) and 0x36 (procSwimWait: swing 70 -> 137).
 	// WWHD_60FPS_HOLDEXTRA=a,b,... (hex action numbers): more of them, to try (the drifts item)
 	bool HoldsAfter(uint32 action)
@@ -366,7 +370,7 @@ namespace
 				}
 			return v;
 		}();
-		return action == 0x17 || action == 4 || action == 0x42 || action == 0x93 || action == 0x33 || action == 0x34 || action == 0x15 ||
+		return action == 0x17 || action == 4 || action == 0x42 || action == 0x93 || action == 0x33 || action == 0x34 || action == 0x15 || action == 0x5A ||
 			std::find(extra.begin(), extra.end(), action) != extra.end();
 	}
 	bool s_linkActionChanged = false;                 // by his action call in the last whole step
