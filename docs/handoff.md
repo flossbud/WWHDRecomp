@@ -3289,6 +3289,14 @@ it in a window; D21 "Step 2"):**
   which move only inside events, where converted processes hold whole ticks: to session qa on B67 with what each will
   need. From top's half: SITEM 253 (GanonD room 0's rope items; the solver inlined in its execute, which also builds its
   models' matrices: whole rules would only keep 30's sway) to session qa as B68, a matrix-lerp draw mechanism.
+  **B68** (then given back to me): SITEM stays unconverted (its execute on whole ticks) and its draw is smoothed: sixty.cpp's
+  DrawSmoothed types have their 3D lines moved half a tick on in a half tick's draw as the chains are (ChainLines, now
+  also through the line class's other update, f_025EAF58, which SITEM's ropes use) and their listed models' base
+  matrices too (kDrawModels: WWHD's J3DModel keeps it at +0xC8, not the GameCube's +0x24: Obj_Monument's set_mtx
+  f_02375E1C stores it there; the 12 floats moved as ChainDraw's points, then put back). Tested with the chains log
+  (WWHD_60FPS_CHAINS_LOG, now also each listed model's place): in GanonD room 0 the ropes' tips and the items move on
+  every frame, the half frames between the whole ticks'. Any actor that builds its models' matrices in its execute and
+  has no other per-frame state can be listed the same way.
 - **Session bottom: the owner's notes from play (2026-10-06; `tick_rules/notes_bottom.txt`)**: B47 (the boss rush:
   see the debug menu's "Boss rush" above), N3, N8, N12, N13.
   - **N3, Dragon Roost Cavern's falling rocks "still 30fps"**: FallRock (422, d_a_fallrock.cpp; WWHD's process numbers

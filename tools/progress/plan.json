@@ -420,6 +420,7 @@
     "160": "still (Eskban, Adanmae): its state unchanged over 200 ticks (census-left)",
     "163": "still (Kanat, kindan room 5): its state unchanged over 200 ticks (census-left)",
     "201": "still where placed (MajyuE,0,0): no state change at 30 over 200 ticks (census, movers.sh)",
+    "253": "kept on whole ticks (its rope solver is built into its execute) and drawn half a tick on at 60 (B68: its rope lines and its item's model matrix, sixty.cpp DrawSmoothed; tested in GanonD room 0: the tips and the item move every frame)",
     "256": "never a process: spawns the beaten boss's heart container and returns (Bitem; census-left)",
     "261": "still where placed (Ojhous,0,0,7): no state change at 30 over 200 ticks (census, movers.sh)",
     "263": "still where placed (MajyuE,0,0): no state change at 30 over 200 ticks (census, movers.sh)",

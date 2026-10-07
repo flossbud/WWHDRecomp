@@ -3914,7 +3914,20 @@ namespace
 	// ticks; session bottom's N13)
 	bool ChainLines(uint16 name)
 	{
-		return name == 190 || name == 198 || name == 246;
+		return name == 190 || name == 198 || name == 246 || name == 253;
+	}
+
+	// Actors left on whole ticks (not converted: a solver built into their execute, which also builds their
+	// models' matrices) whose draws are smoothed all the same: on a half tick's frame their 3D lines (ChainLines)
+	// and their models' base matrices (WWHD's J3DModel +0xC8, 3x4 floats: Obj_Monument's set_mtx f_02375E1C stores them there, at the model pointers listed) are moved half a
+	// tick on along their last tick, as the chains are, and put back after the draw (session bottom's B68).
+	// SITEM (253, d_a_sitem.cpp: the rope items in Ganon's Tower's forest trial, GanonD room 0): its two rope lines
+	// (+0x428, +0x688) and the item on the rope (its model at +0x3D0).
+	struct DrawModel { uint16 name; uint32 offset; };
+	constexpr DrawModel kDrawModels[] = { { 253, 0x3D0 } };
+	bool DrawSmoothed(uint16 name)
+	{
+		return name == 253;
 	}
 
 	// a process about to draw: its chain arrays noted (a whole tick) or moved on (a half tick it stepped)
@@ -3923,6 +3936,20 @@ namespace
 		if (!ChainsOn() || !proc)
 			return;
 		const uint16 name = rd16(proc + 0x08);
+		if (DrawSmoothed(name))
+			for (const DrawModel& m : kDrawModels)
+				if (m.name == name)
+					if (const uint32 model = rd32(proc + m.offset); model >= 0x10000000u && model < 0x50000000u)
+					{
+						ChainDraw(model + 0xC8, 4, saved);   // its base matrix's 12 floats, as 4 points
+						if (FILE* log = ChainLog())
+						{
+							fprintf(log, "%u %c %08x m %.3f %.3f %.3f\n", wwhd::os::SwapCount(), g_rtHalfTick ? 'h' : 'w', proc,
+								std::bit_cast<float>(rd32(model + 0xC8 + 12)), std::bit_cast<float>(rd32(model + 0xC8 + 28)),
+								std::bit_cast<float>(rd32(model + 0xC8 + 44)));
+							fflush(log);
+						}
+					}
 		if (std::none_of(std::begin(kChainArrays), std::end(kChainArrays), [&](const ChainArray& a) { return a.name == name; }))
 			return;
 		if (g_rtHalfTick)
@@ -3949,7 +3976,7 @@ namespace
 	{
 		if (!ChainsOn() || !proc || !ChainLines(rd16(proc + 0x08)))
 			return false;
-		if (!g_rtHalfTick)
+		if (!g_rtHalfTick || DrawSmoothed(rd16(proc + 0x08)))
 			return true;
 		const auto it = s_stepping.find(proc);
 		return it != s_stepping.end() && it->second;
@@ -4001,6 +4028,15 @@ void f_025EC62C(PPCInterpreter_t* __restrict ctx)
 	if (!ChainOwner(s_drawing))
 		[[clang::musttail]] return orig_f_025EC62C(ctx);
 	ChainLineUpdate(ctx, orig_f_025EC62C, 0x17C, 0x17E, 0x184);
+}
+
+// mDoExt_3DlineMat1_c::update's other form (segments, color, tevStr: no size or spacing; SITEM's ropes): the same
+void orig_f_025EAF58(PPCInterpreter_t* __restrict ctx);
+void f_025EAF58(PPCInterpreter_t* __restrict ctx)
+{
+	if (!ChainOwner(s_drawing))
+		[[clang::musttail]] return orig_f_025EAF58(ctx);
+	ChainLineUpdate(ctx, orig_f_025EAF58, 0x13C, 0x13E, 0x144);
 }
 
 // fopAc_Execute: every actor's execute goes through it (from fpcM_Management's execute pass)

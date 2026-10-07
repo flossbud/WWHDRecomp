@@ -63,6 +63,7 @@
 025250A0    src/overrides/sixty.cpp            executeFlower: dFlower_packet_c's calc, the same (D21)
 02524CA0    src/overrides/sixty.cpp            executeMagma: dMagma_packet_c's calc (the lava), the same (D21)
 025EA548    src/overrides/sixty.cpp            mDoExt_3DlineMat1_c::update, a 3D line's vertices: a chain's moved half a tick on at 60 fps (D21, the chains)
+025EAF58    src/overrides/sixty.cpp            mDoExt_3DlineMat1_c::update (its other form), a 3D line's vertices: the same (B68: SITEM's ropes)
 025EC62C    src/overrides/sixty.cpp            the other 3D line class's update: the same (D21, the chains)
 025447C8    src/overrides/sixty.cpp            dEvent_manager_c::getIsAddvance: no new cut on a half tick, so a converted actor's cut init runs once (D21)
 025B9100    src/overrides/sixty.cpp            dSv_memBit_c::isDungeonItem: item 3 (the boss beaten) is "no" under WWHD_DEBUG_BOSS=1, so a boss can be fought again from a finished save, until it is beaten there (a test aid)
