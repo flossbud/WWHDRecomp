@@ -330,23 +330,19 @@
     "460": "ice block",
     "64": "table"
   },
-  "queue_note": "Round 11 (2026-10-07): the actors are converted (397 of 452, 50 need nothing; the rest wait on B67's events and an early save). All three sessions fix known bugs until 90% of the week: qa the event-only actors (B67) with a setup built for each, bottom the Darknut lunge (B66), top predeploy's WARN routes and the hands-on known issues. Known bugs only, no new hunting. The main session routes the owner's bugs and notes and deploys in batches. Next: the owner's extensive testing and repair.",
+  "queue_note": "Round 12 (2026-10-07): the actors are converted. All three sessions fix known bugs and known issues until 90% of the week: qa the Darknut's early blow and a per-type mode hold for enemies, bottom Gohma's tail scene (N20), top enemies falling into water and Windfall at night. Known bugs only, no new hunting. The main session routes the owner's bugs and notes and deploys in batches. Next: the owner's extensive testing and repair.",
   "queue": [
     {
-      "id": "events",
-      "name": "Round 11, the event-only actors (qa's, B67): a setup for each event, a probe run (WWHD_DEBUG_EVENTACT) and its rules: the shutters (259, on their switch), Windfall's night auction (361, 382), the salvage chest (SBOX 293), the gallery viewer (OBJ_FIGURE 404), Windfall's picture puzzle (Obj_Apzl 281), Obj_HSH 290, the Earth Temple's light, Ganon's Tower; then NPC_PF1 356 on Windfall's layer 0", "ids": [293, 404, 290, 281, 356]
+      "id": "modehold",
+      "name": "Round 12 (qa's): the Darknut's blow 2 ticks early (B66's follow-up): Link's lunge and the bounce on 30's ticks, then a per-type mode hold (an enemy's mode change in a whole step held to the tick's end), the Darknut first, then other enemies measured"
     },
     {
-      "id": "hands-on",
-      "name": "Round 11 (bottom's): pots, sidling and ladders routed at 30 and 60 and fixed (a thrown pot's sinking, the sidle's speed); B66 (the Darknut lunge) parked: its last gap is Link's animation blend"
+      "id": "water-night",
+      "name": "Round 12 (top's): the sun's shadow creep (fixed); enemies falling into water (at 30 they hang ~2 ticks at the surface); Windfall at night: the auction's bidding and the shutters opening and closing; then a share of the mode hold's enemies"
     },
     {
-      "id": "bottom-next",
-      "name": "Round 11 (bottom's): sidling round a corner stuck at 60 (fixed, landing), B69 (the picture puzzle's B button showed the sword, not Cancel: fixed, landing), Obj_HSH 290 (needs nothing: the reading stones), then B70 (a new talk accepted sooner after one ends at 60)"
-    },
-    {
-      "id": "warns",
-      "name": "Round 11 (top's): predeploy's WARN routes (land2 45, plants 41, sail 52, tour2 51 units from 30's end): each's cause fixed, steered off its threshold or recorded; then what's left of Link's actions starting half a tick early"
+      "id": "gohma-rock",
+      "name": "Round 12 (bottom's): N20, Gohma's tail scene: the rock shake and the grappling hook's catch on 30's ticks (fixed); the rock's fall and rise after the swing (fell twice as fast at 60)"
     }
   ],
   "later": [
@@ -417,7 +413,11 @@
     "qa-bugs",
     "top-bugs",
     "bottom-bugs",
-    "lunge"
+    "lunge",
+    "events",
+    "hands-on",
+    "bottom-next",
+    "warns"
   ],
   "still": {
     "20": "still where placed (Abship,0,5): no state change at 30 over 200 ticks (census, movers.sh)",
