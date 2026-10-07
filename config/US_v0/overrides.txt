@@ -57,6 +57,7 @@
 02416230    src/overrides/sixty_step.cpp       daPy_lk_c::setNormalSpeedF: the plain walk's speed change once a tick, in the whole step (D21, B61)
 02419BF0    src/overrides/sixty_step.cpp       daPy_lk_c::procAtnMove: its setNormalSpeedF calls once a tick, as the plain walk's (D21, B58)
 0242AFB8    src/overrides/sixty_step.cpp       daPy_lk_c::procWHideMove: its setNormalSpeedF calls once a tick, as the plain walk's (D21, the hands-on check)
+02477A24    src/overrides/sixty_step.cpp       daShip_c::execute: a mode request Link made since the boat's whole step waits for its next whole step (sail)
 0241B050    src/overrides/sixty_step.cpp       daPy_lk_c::procMoveTurn: its facing's approach once a tick, in the whole step (D21, Link's actions)
 024F9A48    src/overrides/sixty_step.cpp       dCamera_c::updateMonitor: the player's move measured over a whole tick (D21)
 0281F878    src/overrides/sixty_step.cpp       JPABaseEmitter::calcCreatePtcls: strips (the wake, bow waves) emit every frame when converted (D21)

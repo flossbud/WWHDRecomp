@@ -528,6 +528,12 @@
 02475978    *h@f10      fadds           ship setYPos: m0372 += fVar2 115 sin(m03AC) + 35
 # setMoveAngle (f_0247D4B0): the heading turns by -turnRate (tiller >> 6) a tick
 0247D59C    split@r8    add             ship setMoveAngle: shape_angle.y += -turnRate (tiller >> 6)
+# procSteerMove (f_0247E854, WWHD's: its swift-sail path reads play info +0x5D2C): the launch's push, speedF = 2 x
+# the wind's power, when the mast animation passes frame 7 (mpBodyAnm->checkFrame(7), J3DFrameCtrl::checkPass) after
+# the execute played it: stepped, the pass fell in whichever half of the tick held frame 7, and the boat set sail half
+# a tick early (route sail: 52 units at the end, predeploy's last WARN). The tick's window in the whole step (session
+# bottom; session top's `tick`)
+0247EBCC    tick:r3=0   bl 027f2bf8     ship procSteerMove: checkFrame(7): the launch's push
 0247D624    split@r8    add             ship setMoveAngle: shape_angle.y += -turnRate (tiller >> 6)
 # setControllAngle (f_024751E0): the tiller's spring (m036C, m036E)
 02475258    keep:r10    addi            ship setControllAngle: m036E += 1 (the nudge when the force rounds to 0)

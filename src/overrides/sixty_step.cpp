@@ -237,8 +237,31 @@ void f_0200F268(PPCInterpreter_t* __restrict ctx)
 }
 
 // cLib_addCalcAngleS(s16* v r3, target r4, scale r5 (a divisor), maxStep r6, minStep r7)
+// Call sites whose approach runs once a tick (kOnceATick, by the return address): in the whole step unscaled, a tick's
+// approach, and left out of the half step; what reads the value then reads 30's for the tick. The boat's tiller
+// (daShip procSteerMove 0247E8EC: m0366 toward the stick's, scale 4): its scaled half steps turned the tiller, and the
+// heading it drives (setMoveAngle: shape_angle.y -= m0366 >> 6, split), ~80 units behind 30's through a turn: route
+// sail 2 -> 30 units in the turn at f1290-1340. WWHD_60FPS_ONCEATICK=0 off.
+namespace
+{
+	constexpr uint32 kOnceATick[] = { 0x0247E8F0u };
+	bool OnceATick(uint32 lr)
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ONCEATICK"); return !(e && atoi(e) == 0); }();
+		return on && std::find(std::begin(kOnceATick), std::end(kOnceATick), lr) != std::end(kOnceATick);
+	}
+}
 void f_0200F378(PPCInterpreter_t* __restrict ctx)
 {
+	if (Stepped() && OnceATick(ctx->spr.LR))
+	{
+		if (g_rtHalfTick)
+		{
+			GPR(3) = (uint32)(sint32)(sint16)((sint16)GPR(4) - (sint16)rd16(GPR(3)));   // its return: target - value
+			return;
+		}
+		[[clang::musttail]] return orig_f_0200F378(ctx);
+	}
 	if (Stepped())
 	{
 		GPR(5) = ScaledInt(GPR(5), true);
@@ -926,6 +949,44 @@ void f_0242AFB8(PPCInterpreter_t* __restrict ctx)
 	s_inNormalSpeed = true;
 	orig_f_0242AFB8(ctx);
 	s_inNormalSpeed = outer;
+}
+
+// daShip_c::execute (ship r3): the boat takes a new mode in checkNextMode when its mNextMode (+0x636, u8) differs from
+// its mode, a request Link's ship actions make in his execute (procShipSteer_init: ship->setSteerMove()), and its
+// execute ends with mNextMode = mCurMode (+0x635). At 30 the boat runs before him and takes a tick's request in the
+// next tick; at 60 its half step took the request his whole step had just made, a tick early: route sail's mast
+// animation (procSteerMove_init) started in the half step of f1110 where 30 starts it in f1111, and the launch (its
+// frame 7) came a tick early, 52 units at the end (predeploy's last WARN). A request made since the boat's whole step
+// is kept from its half step (mNextMode as that step left it) and put back after, for its next whole step.
+// WWHD_60FPS_SHIPHOLD=0 off.
+namespace
+{
+	struct ShipNext { uint32 tick; uint8 mode; };
+	std::unordered_map<uint32, ShipNext> s_shipNext;    // mNextMode as the boat's whole step left it
+	bool ShipHold()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_SHIPHOLD"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+}
+void f_02477A24(PPCInterpreter_t* __restrict ctx)
+{
+	if (!Stepped() || !ShipHold())
+		[[clang::musttail]] return orig_f_02477A24(ctx);
+	const uint32 ship = GPR(3), tick = wwhd::rt::GameFrame(wwhd::os::SwapCount());
+	if (!g_rtHalfTick)
+	{
+		orig_f_02477A24(ctx);
+		s_shipNext[ship] = { tick, rd8(ship + 0x636) };
+		return;
+	}
+	const uint8 request = rd8(ship + 0x636);
+	const auto it = s_shipNext.find(ship);
+	if (it == s_shipNext.end() || it->second.tick != tick || it->second.mode == request)
+		[[clang::musttail]] return orig_f_02477A24(ctx);
+	wr8(ship + 0x636, it->second.mode);
+	orig_f_02477A24(ctx);
+	wr8(ship + 0x636, request);                        // for its next whole step, as 30's next tick
 }
 
 // daPy_lk_c::setNormalSpeedF(Link r3, target f1, ...): mNormalSpeed toward the stick's speed
