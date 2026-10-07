@@ -3329,6 +3329,24 @@ it in a window; D21 "Step 2"):**
   (WWHD_60FPS_CHAINS_LOG, now also each listed model's place): in GanonD room 0 the ropes' tips and the items move on
   every frame, the half frames between the whole ticks'. Any actor that builds its models' matrices in its execute and
   has no other per-frame state can be listed the same way.
+- **Session bottom: round 11's hands-on check of pots, sidling and ladders (2026-10-07; the known issue)**: each at 30
+  and 60, tick by tick (scratch routes on the worker; top's potthrow and ladspawn routes match them).
+  - Pots: lift, carry, throw as 30's. A carried turn in place (0x17) can end half a tick off: its 8000-a-tick facing
+    steps cross the end a step sooner after a 40-unit facing difference from the lift (a 0.4-unit walk drift before) - a
+    threshold, not stepping. The thrown pot's sink was 12-14 units deep at 60: its water's resistance (k1 0.2, k2 0.02)
+    compounds differently over half steps of explicit Euler. daTsubo mode_sink/mode_afl (f_024CFAB8/f_024CFD3C) now run
+    posMoveF_grade tick-exact (sixty_step.cpp s_tickExact: the whole step takes the tick's accelerations, the half step
+    none, both move half the tick's speed): within 0.23 units; its delete at depth comes half a tick early (unseen).
+    WWHD_60FPS_TICKEXACT=0 off. The same mode could serve other strong-drag Euler moves.
+  - Sidling: the predeploy sidle routes never sidle (the A comes walking: a roll). To sidle in drc: stop at the wall,
+    LDOWN+LRIGHT to face it, hold A (releasing A leaves the sidle), A+LUP moves along it. procWHideMove (f_0242AFB8,
+    0x15) ran up to 2.3 units ahead: its setNormalSpeedF now once a tick (as the walk's), and 0x15 is in HoldsAfter
+    (the half step after its set-up read speed 0 and went back to the wait). Now 30's ticks, offset unchanged.
+    Not tested: round a corner.
+  - Ladders: on top's spawned ladder (ladspawn's spawn line), LRIGHT climbs (LUP is in changeLadderMoveProc's 90-degree
+    dead zone; LDOWN steps down). Up and down within 0.16 units, transitions on 30's ticks: nothing to fix.
+  - Note on reading tracks: a 60 track's key 2t+1 (shown t.5) is the tick's end, i.e. 30's key 2t; a change at 60's
+    t.5 is on time, at t half a tick early.
 - **Session bottom: the owner's notes from play (2026-10-06; `tick_rules/notes_bottom.txt`)**: B47 (the boss rush:
   see the debug menu's "Boss rush" above), N3, N8, N12, N13.
   - **N3, Dragon Roost Cavern's falling rocks "still 30fps"**: FallRock (422, d_a_fallrock.cpp; WWHD's process numbers

@@ -149,8 +149,8 @@
       "detail": "Random-driven enemies (Magtail waits, Peahat flights) drift from the 30 fps run, as expected"
     },
     {
-      "title": "Pots, sidling and ladders",
-      "detail": "Still need a hands-on check"
+      "title": "Pots, sidling and ladders: two small leftovers",
+      "detail": "Checked tick by tick at 30 and 60. Fixed: a thrown pot sank too fast in water (now within 0.2 units), and sidling ran up to 2.3 units ahead (now on 30's ticks). Lifting, carrying and throwing a pot, and a ladder up and down, already matched (the ladder within 0.2 units). Left: a turn while carrying can end half a tick off after a tiny earlier drift, and sidling round a corner isn't tested yet"
     },
     {
       "title": "Windfall at night",
