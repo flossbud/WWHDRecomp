@@ -141,12 +141,8 @@
       "detail": "The walk-in now ends on 30's tick. The rocks follow the lava under them, whose bubbles come from the random stream: at 60 the stream reaches them in another state, so the lava (and its rock) sits up to 20 units off, the rock right relative to its lava (as Fire Mountain's rocks); matching it needs the bubbles' draws synced"
     },
     {
-      "title": "Link: actions can start half a tick early",
-      "detail": "An action set up in a whole step can start half a tick early (fixed for the turn in place and waiting, so a turn and walk now keeps 30's ticks); actions ending on an animation may end a tick early"
-    },
-    {
-      "title": "Wind Waker conducting ends half a tick early",
-      "detail": "The Wind Waker song's conducting and playback end half a tick early (a beat is crossed on a half tick); its wind change and end are on 30's ticks"
+      "title": "Link: an action can change a tick off after his path drifts",
+      "detail": "Fixed: the turn in place and waiting start on 30's ticks, and the turn while moving ends on 30's tick (it ended a tick early). Left: an action that starts at a threshold (a ledge reached, a turn's last 8000-unit step, a wall) can come a tick apart once his path is a few units or a degree off 30's, as in routes sidle and tour's corner"
     },
     {
       "title": "Random-driven enemies drift from the 30 fps run",
