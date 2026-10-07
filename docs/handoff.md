@@ -3557,11 +3557,12 @@ it in a window; D21 "Step 2"):**
     rates and tools like rndcmp/rndseq: the first frame whose stream differs, and each frame's draws by process and
     caller). The rocks follow the lava, whose bubbles draw from the random stream, and 60's stream parts from 30's
     before the warp, on Outset's dock, and never comes back:
-    (1) Link's Mirror Shield glint (setItemModel's three random starts, `cM_rnd() < 0.02`) was `*h@f30`, 1% on both
-    steps: it started on other ticks, and while it runs Link draws nothing, so every process after him drew other
-    numbers (gtrock from f927). Now `ltwhole` (generate.py, gtwhole's mirror: on a half step a less compare reads
-    greater): tested on whole steps at 30's 2%, the half step's draw put back, so it starts on 30's tick with 30's
-    number (every start now right after a whole step's draw).
+    (1) Link's Mirror Shield glint (setItemModel's three random starts, `cM_rnd() < 0.02`) is `*h@f30`, 1% on both
+    steps: it starts on other ticks, and while it runs Link draws nothing, so every process after him draws other
+    numbers (gtrock from f927). Tried `ltwhole` (generate.py, gtwhole's mirror: on a half step a less compare reads
+    greater; whole steps only at 30's 2%, so it starts on 30's tick with 30's number when the stream is synced) and
+    reverted: with the stream parted earlier (2) it bought nothing and moved route gohmarock (the swing on Valoo's
+    tail, whose shake draws) from 4.8 to 190.7 units. ltwhole stays in generate.py, unused.
     (2) Earlier still (f907.5), the fishman (NPC_SO 118): his swim animation's random choice is taken in a one-frame
     window (`frame >= end - 1`, f_022DE6D4: the morf at +0x964, frame +0x9C, end +0xA2), which 30's 2.6 frames a
     tick often steps over and 60's half steps land in; and his swim's path is 0.7-1.6 units off 30's from the first
