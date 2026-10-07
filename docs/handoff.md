@@ -180,6 +180,17 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   (-3600 against 30's -2488 by f990; the approach is stepped right), joint 15's quaternion (+0x6BA0, built in the
   joint callback f_023D6B30) twists the other way, and the lunge's sword line crosses BG 4 ticks early. Next: log
   setNeckAngle's target and the head joint's position each step (the target comes from the head joint: a feedback).
+- **B67, actors in events that don't step at 60 (from session bottom; partly fixed)**: converted processes step in an
+  event only while Link's action is in StepInEvents (sixty.cpp). New probe **WWHD_DEBUG_EVENTACT=FILE** (DebugStage):
+  each whole tick an event runs unstepped, the tick and Link's action. Over 22 event routes (talk, door(2), house, back,
+  warp, gtower, medli(harp), tgstatue, gtrock, wtspring, tgbeam, fwbud, drcjar, hyoi, salvage, mob, stolen, dback,
+  cuts, cuta) only three held: 0x71 (drcjar: the magma rock's camera event after the jar's throw, 103 ticks), 0x28
+  (medli, wtspring: the room's drop-in arrival, 32 ticks) and 0x03 (one tick). 0x28 and 0x71 now step; predeploy's
+  routes there end where they did, the rock steps through its event (its bob within 2 units of 30's). The bug's own
+  types (SBOX 293, OBJ_FIGURE 404, Obj_HSH 290, Obj_Apzl 281; and the converted Vfan 54, Mkiek 76, MknjD 77,
+  WARPDEMO20 108 inside their events) weren't reached by a route: their events need setups (a chart's salvage, the
+  Gallery, Windfall's puzzle, Earth Temple light, Ganon's Tower). Run them with WWHD_DEBUG_EVENTACT to see Link's
+  action there, then add it the same way and give those types their rules (bottom's list on the bug).
 - **B50, Link climbed onto ledges too soon** (found on the way: walking into route crate's crate): changeFrontWallTypeProc's
   count of ticks pushing against a ledge (m3544, +0x6994; over the HIO's 14 he hops up, catches a wall or takes a
   small jump) ran on both steps: keep on its add (`link_qa.txt`). Route `climb`: the hop was 3.5 ticks early.

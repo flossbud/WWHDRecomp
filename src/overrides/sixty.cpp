@@ -285,7 +285,10 @@ namespace
 	// 0x25 and 0x27 a jump off a rope, its landing and a fall, 0x76-0x7F the rope's (the grappling hook's catch
 	// is an event: its coil count once a tick, tick_rules/notes_bottom.txt, without which predeploy's grapple
 	// ended 29.7 units from 30's against 7.2, gtgrapple 86.8 against 7.1), 0xB9 turning back (a boss door's
-	// event). Others hold the event to
+	// event); 0x28 dropping into a room (its arrival event: routes medli, wtspring) and 0x71 after a throw
+	// (Dragon Roost Cavern's jar: the magma rock's camera event, route drcjar) (B67, session qa: the actions
+	// WWHD_DEBUG_EVENTACT found holding events on 22 routes; the rock now steps through it, its bob within
+	// 2 units of 30's). Others hold the event to
 	// whole ticks as before; so does the half tick after an event starts, is ordered or is asked to end.
 	// WWHD_60FPS_EVENTS=0: no stepping in events at all; WWHD_60FPS_EVENTS=1: not for N8's actions.
 	uint32 s_link = 0;                              // Link (168) as he last executed
@@ -304,7 +307,7 @@ namespace
 			return false;
 		const uint32 action = rd32(s_link + 0x65F0);
 		if (level >= 2 && ((action >= 7 && action <= 9) || action == 0x24 || action == 0x25 || action == 0x27 ||
-			(action >= 0x76 && action <= 0x7F) || action == 0xB9))
+			action == 0x28 || action == 0x71 || (action >= 0x76 && action <= 0x7F) || action == 0xB9))
 			return true;
 		return action == 4 || action == 6 || action == 0x88 || action == 0x89 || action == 0x9A || action == 0x9B ||
 			action == 0x9C || action == 0xAA || action == 0xAD || action == 0xAE || action == 0xB8 || action == 0xC1 || action == 0xC4 ||
@@ -1551,6 +1554,14 @@ namespace
 	}
 	void DebugStage()
 	{
+		// WWHD_DEBUG_EVENTACT=FILE (a probe, B67): each whole tick an event runs and doesn't step at 60 (Link's
+		// action not in StepInEvents), the tick and his action
+		static FILE* const evlog = [] { const char* e = getenv("WWHD_DEBUG_EVENTACT"); return e ? fopen(e, "w") : nullptr; }();
+		if (evlog && !g_rtHalfTick && EventRunning() && s_link && !StepInEvents())
+		{
+			fprintf(evlog, "%u %02x\n", wwhd::rt::GameFrame(wwhd::os::SwapCount()), rd32(s_link + 0x65F0));
+			fflush(evlog);
+		}
 		wwhd::debug::BossBeatenHere();                  // the refights' boss beaten here sees a stage change's request
 		if (!g_rtHalfTick)
 		{
