@@ -1498,6 +1498,13 @@ it in a window; D21 "Step 2"):**
     Triangle, Eastern Fairy Island and Three-Eye Reef (not read). The wind's power (env +0xA18, which the
     grass sways by) is steady in these scenes (0.6). Weather's, so passed to session bottom; contact
     sheets of all of them on the progress page.
+  - **hz30 sweep again, closing the conversion (session top, 2026-10-07, on ww-4 b3d0056)**: 60 swaps from 1300 at
+    the 49 sea sectors, Windfall by night and dusk, 15 dungeon places, 8 boss rooms and 4 minibosses (rooms 12/23/6/10;
+    scratch hzsweep.sh: capture.sh then hz30.py, four lanes, captures kept only over 1 block). 64 places 0 or the HUD
+    corner. Fixed: the trees Lwood (407), whose sway is a joint callback in the draw by mTimer (whole) x 300: new step
+    rule kind `drawlagi` (lagi in a draw: the whole tick's frame draws half a count back): Hyrule's courtyard 15 -> 0.
+    Left: ground shadows' edges and an island tree's lighting (the day clock, above: sea15 46, sea6, sea29 16, sea43
+    5 ...), distant specks (sea30 a far ship's flag, sea20 a bird), sea6's far sea band at the horizon.
   - **60 fps cost (session top; the work queue's "perf"; shared: sixty.cpp's journal, the runtime's
     rt_journal_store)**: real time, headless, on the desktop (`~/wwhd-test`; its `perf-top.sh` runs routes
     at 30 then 60 with `WWHD_FRAME_LOG` and each thread's CPU; `perf-ab.sh` alternates two builds at 60;
