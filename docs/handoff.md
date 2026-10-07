@@ -1503,8 +1503,12 @@ it in a window; D21 "Step 2"):**
     scratch hzsweep.sh: capture.sh then hz30.py, four lanes, captures kept only over 1 block). 64 places 0 or the HUD
     corner. Fixed: the trees Lwood (407), whose sway is a joint callback in the draw by mTimer (whole) x 300: new step
     rule kind `drawlagi` (lagi in a draw: the whole tick's frame draws half a count back): Hyrule's courtyard 15 -> 0.
-    Left: ground shadows' edges and an island tree's lighting (the day clock, above: sea15 46, sea6, sea29 16, sea43
-    5 ...), distant specks (sea30 a far ship's flag, sea20 a bird), sea6's far sea band at the horizon.
+    Then the sun (sixty.cpp, "the sun drawn between ticks"): drawKankyo's setSunpos (f_02557228, and WWHD's second
+    sun f_02557834) put the sun at the camera's eye plus an offset from the day's time (g_env_light +0x1020), which
+    the KANKYO execute advances 0.02 degrees once a tick: both of a tick's frames drew the same sun, and the ground's
+    shadows (and an island tree's lighting) stepped at the half -> whole swap. Now the whole tick's frame draws the
+    sun at the time half way from the last tick's: sea15 46 -> 1 (the HUD), sea29 16 -> 0, sea43, sea19, sea34, sea14
+    -> 0. Left: sea6's far sea band at the horizon (18), distant specks (sea30 a far ship's flag, sea20 a bird: 2 each).
   - **60 fps cost (session top; the work queue's "perf"; shared: sixty.cpp's journal, the runtime's
     rt_journal_store)**: real time, headless, on the desktop (`~/wwhd-test`; its `perf-top.sh` runs routes
     at 30 then 60 with `WWHD_FRAME_LOG` and each thread's CPU; `perf-ab.sh` alternates two builds at 60;

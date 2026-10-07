@@ -4139,3 +4139,49 @@ void rt_hold_leave()
 			s_linkActionChanged = true;
 	}
 }
+
+// ---- the sun drawn between ticks (session top, after the closing hz30 sweep) ------------------------------------
+// dScnKy_env_light_c::setSunpos (and WWHD's second sun, f_02557834), from drawKankyo: the sun (and the moon) at the
+// camera's eye plus an offset from the day's time (mCurTime, g_env_light +0x1020), which setDaytime advances once a
+// tick in the KANKYO execute (0.02 degrees). Both of a tick's frames drew the same sun, so the ground's shadows crept
+// a pixel at the half -> whole swap (hz30: sea15 46 blocks). At 60, in the whole tick's frame the sun is drawn at the
+// time half way from the last tick's (30's sun in the half tick's frame); a stopped or wrapped clock draws as it is.
+namespace
+{
+	constexpr uint32 kEnvTime = 0x10475A68 + 0x1020;
+	uint32 s_sunTimeLast = 0;                           // the time the last whole tick's frame drew (its bits)
+	uint32 s_sunTimeHeld = 0;                           // the time put back after the call
+	bool SunHalfWay()
+	{
+		if (!g_rtSixty || g_rtHalfTick)
+			return false;
+		const uint32 now = rd32(kEnvTime);
+		const float t = std::bit_cast<float>(now), last = std::bit_cast<float>(s_sunTimeLast);
+		s_sunTimeHeld = now;
+		if (t == last || !(std::fabs(t - last) < 1.0f))
+			return false;
+		wr32(kEnvTime, std::bit_cast<uint32>(last + (t - last) * 0.5f));
+		return true;
+	}
+	void SunBack(bool halfway)
+	{
+		if (halfway)
+			wr32(kEnvTime, s_sunTimeHeld);
+	}
+}
+void orig_f_02557228(PPCInterpreter_t* __restrict ctx);
+void orig_f_02557834(PPCInterpreter_t* __restrict ctx);
+void f_02557228(PPCInterpreter_t* __restrict ctx)
+{
+	const bool halfway = SunHalfWay();
+	orig_f_02557228(ctx);
+	SunBack(halfway);
+}
+void f_02557834(PPCInterpreter_t* __restrict ctx)
+{
+	const bool halfway = SunHalfWay();
+	orig_f_02557834(ctx);
+	SunBack(halfway);
+	if (g_rtSixty && !g_rtHalfTick)
+		s_sunTimeLast = s_sunTimeHeld;                 // after both suns of the whole tick's frame
+}

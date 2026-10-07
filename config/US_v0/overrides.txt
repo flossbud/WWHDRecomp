@@ -93,3 +93,5 @@
 025BA6A4    src/overrides/sixty.cpp            dSv_info_c::isActor: forced under WWHD_DEBUG_FLAGS (a test aid)
 025B7D90    src/overrides/sixty.cpp            dSv_player_collect_c::isSymbol: forced under WWHD_DEBUG_FLAGS (a test aid)
 025BA494    src/overrides/sixty.cpp            dSv_info_c::isItem: forced under WWHD_DEBUG_FLAGS (a test aid)
+02557228    src/overrides/sixty.cpp            dScnKy_env_light_c::setSunpos (drawKankyo): the whole tick's frame draws the sun half way from the last tick's time
+02557834    src/overrides/sixty.cpp            WWHD's second sun position (drawKankyo): the same
