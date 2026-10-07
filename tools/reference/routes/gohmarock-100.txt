@@ -1,0 +1,16 @@
+# Route: Gohma's ceiling rock (the owner's N20; session bottom): route gohmatail's catch of Valoo's tail, then A at f1360
+# to let go of the swing: the hook's rope (HIMO2 446, mode 6) holds the tail's fall timer (DR2 223 unk_4CA = 90) until
+# Link lands (f1413), then the rock falls (DR2 mode 1, f1493) onto Gohma (mode 2, f1516), stays while she's pinned and
+# rises back (mode 3, f1779; at rest, -1, f1841). FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by
+# tools/sixty/run.sh.
+#env WWHD_DEBUG_BOSS=1
+#env WWHD_DEBUG_STAGE=920:M_DragB,0,0,-1
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; Gohma's room from the warp at f920
+1100 Y 3       # the grappling hook out (first person)
+1115 RUP 18    # the view up onto the tail's post
+1140 RLEFT 2   # and a little left
+1160 Y 3       # thrown: it wraps the tail
+1360 A 3       # let go of the swing
