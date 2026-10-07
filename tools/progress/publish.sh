@@ -2,7 +2,8 @@
 # The progress page (tools/progress/README.md), served from the worker host on the tailnet.
 #   publish.sh              collect the data (collect.py) and publish it with the page
 #   publish.sh now TEXT     set this session's "working on" line (one small write: cheap to call often);
-#                           the session is the name in .session (gitignored), "main" without one
+#                           the session is the name in .session (gitignored), "main" without one;
+#                           WWHD_SESSION=NAME sets it (the web session writes the others' lines on its sweeps)
 #   publish.sh retire [SESSION]
 #                           take a session's line off the page when it ends (this session without a name)
 #   publish.sh claim ID [NOTE] / done ID [NOTE] / release ID
@@ -53,7 +54,7 @@ dir=/wwhd/data/progress
 port=8765
 
 json_str() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
-session=$(cat "$root/.session" 2>/dev/null || echo main)
+session=${WWHD_SESSION:-$(cat "$root/.session" 2>/dev/null || echo main)}
 
 # claims.json on the host, changed under a lock: {id: {session, state, note, time}}
 claims() {
