@@ -138,7 +138,7 @@
     },
     {
       "title": "Ganon's Tower trial: the magma rocks' bob differs",
-      "detail": "The walk-in now ends on 30's tick. The rocks follow the lava under them, whose bubbles come from the random stream: at 60 the stream reaches them in another state, so the lava (and its rock) sits up to 20 units off, the rock right relative to its lava (as Fire Mountain's rocks); matching it needs the bubbles' draws synced"
+      "detail": "The walk-in ends on 30's tick, and the rocks bob correctly on their own lava. The lava's bubbles come from the random stream, which parts from 30's before the warp: Outset's fishman picks his swim animation in a one-frame window that 30's ticks step over and 60's half steps land in, and his path is 0.7-1.6 units off from the start. After that every draw differs, so the bubbles do too. Not syncable: recorded (session bottom). Link's Mirror Shield glint, which also parted the stream, now starts on 30's ticks."
     },
     {
       "title": "Link: an action can change a tick off after his path drifts",
