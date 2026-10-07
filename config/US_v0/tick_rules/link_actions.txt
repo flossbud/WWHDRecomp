@@ -44,13 +44,11 @@
 0243FE6C    tick:r3=0   bl 027f2bf8     link the slash while moving (0x42): checkPass: its speed drop
 024407DC    tick:r3=0   bl 027f2bf8     link cut (f_0244061C): checkPass: the same drop
 02440A64    tick:r3=0   bl 027f2bf8     link cut (f_024408B0): checkPass: the same drop
-# The slashes' next action (procCutA/F/R/L f_0243F790/f_0243FAFC/f_0243FF44/f_024402B0: once the animation's frame is
-# past an attribute's, field_0xC, checkNextMode(1) may start the next: a combo's slash, the spin's charge with B
-# held). The half step read a frame half way through the tick, so a threshold 30 saw at the next tick's start
-# was taken half a tick early (route cuts and spin: 44 -> 58, the charge, at 60's key 2k-1). In the whole step
-# only (it reads the frame 30's tick does); its speed and direction, zeroed for the call, are put back as when
-# it starts nothing (session top)
-0243F8C8    whole:r3=0  bl 023f14e0     link procCutA: checkNextMode(1) past the frame
-0243FD14    whole:r3=0  bl 023f14e0     link procCutF: checkNextMode(1) past the frame
-0244007C    whole:r3=0  bl 023f14e0     link procCutR: checkNextMode(1) past the frame
+# The slash's next action (procCutL f_024402B0, 0x44: once the animation's frame is past an attribute's, field_0xC,
+# checkNextMode(1) may start the next: a combo's slash, the spin's charge with B held). The half step read a frame
+# half way through the tick, so a threshold 30 saw at the next tick's start was taken half a tick early (route
+# cuts and spin: 44 -> 58, the charge, at 60's key 2k-1). In the whole step only (it reads the frame 30's tick
+# does); its speed and direction, zeroed for the call, are put back as when it starts nothing. Not on the same
+# call in procCutF (0243FD14): there the slash while moving's end (42 -> 04, route plants) then came a tick late
+# (its half step's call was on time); procCutA/R (0243F8C8, 0244007C) are untested, left as they were (session top)
 024403E8    whole:r3=0  bl 023f14e0     link procCutL: checkNextMode(1) past the frame

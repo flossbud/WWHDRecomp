@@ -142,7 +142,7 @@
     },
     {
       "title": "Link: an action can change a tick off after his path drifts",
-      "detail": "Fixed: the turn in place and waiting start on 30's ticks; the turn while moving (a tick early), the swim's surfacing (a tick late) and a slash's next action (the spin's charge, half a tick early) come on 30's ticks. Left: an action that starts at a threshold (a ledge reached, a turn's last 8000-unit step, a wall) can come a tick apart once his path is a few units or a degree off 30's, as in routes sidle and tour's corner"
+      "detail": "Fixed: the turn in place and waiting start on 30's ticks; the turn while moving (a tick early), the swim's surfacing (a tick late) and a slash's next action (the spin's charge after a left slash, half a tick early) come on 30's ticks. Left: an action that starts at a threshold (a ledge reached, a turn's last 8000-unit step, a wall) can come a tick apart once his path is a few units or a degree off 30's, as in routes sidle and tour's corner"
     },
     {
       "title": "Random-driven enemies drift from the 30 fps run",
