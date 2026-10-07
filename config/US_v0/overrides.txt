@@ -68,6 +68,8 @@
 025B9098    src/overrides/sixty.cpp            dSv_memBit_c::onDungeonItem: item 3 (a boss beaten) noted for the debug menu's boss rush and the refights (a test aid)
 025B8B68    src/overrides/sixty.cpp            dSv_event_c::onEventBit: 3F10 (Puppet Ganon beaten) noted as onDungeonItem's item 3 is (a test aid)
 025D8A5C    src/overrides/sixty.cpp            fopAcM_createItemForBoss: no heart container in the debug menu's boss rush (a test aid)
+0252012C    src/overrides/sixty.cpp            dComIfGp_setNextStage: the boss rush's warp out goes to the next boss as it's asked for (its music then the next boss's: B63, B64)
+025E17CC    src/overrides/sixty.cpp            mDoAud_setSceneName: the boss rush's log names the sound's next scene (a test aid)
 025B7A2C    src/overrides/sixty.cpp            dSv_player_collect_c::isCollect: field 0 is "no" to Medli's code under WWHD_DEBUG_COMPANION=1, so she is created as the Earth Temple's companion on a finished save (a test aid)
 02520C0C    src/overrides/sixty.cpp            dComIfGs_checkGetItem: the full-power Master Sword (0x3E) is "no" to Makar's code under WWHD_DEBUG_COMPANION=1, so he is created as the Wind Temple's companion on a finished save (a test aid); items forced under WWHD_DEBUG_FLAGS (a test aid)
 02839DB4    src/overrides/sixty.cpp            JStudio::TVariableValue::update_time_: at age - 1/2 for a cutscene's whole step at 60 fps (D21, cutscenes)

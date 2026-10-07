@@ -2082,6 +2082,43 @@ void f_025D8A5C(PPCInterpreter_t* __restrict ctx)
 	[[clang::musttail]] return orig_f_025D8A5C(ctx);
 }
 
+// mDoAud_setSceneName(name, room, layer) (session qa's find, symbols.csv): the sound's next scene, which picks its
+// music. In the boss rush the log says which (the warp out's turn, below, comes before it)
+void f_025E17CC(PPCInterpreter_t* __restrict ctx)
+{
+	if (wwhd::debug::RushRunning() && GPR(3) != 0)
+	{
+		char name[9] = {};
+		for (uint32 i = 0; i < 8; i++)
+			name[i] = (char)rd8(GPR(3) + i);
+		static char last[9] = {};                     // called each frame of the wipe: logged when it changes
+		if (strcmp(name, last) != 0)
+			cemuLog_log(LogType::Force, "wwhd debug: boss rush: the sound's next scene {} room {}", name, (int)(sint32)GPR(4));
+		memcpy(last, name, sizeof(last));
+	}
+	[[clang::musttail]] return orig_f_025E17CC(ctx);
+}
+
+// dComIfGp_setNextStage(name, point, room, layer, lastSpeed, lastMode, setPoint, wipe): the next stage. In the boss
+// rush the warp out of a beaten boss goes to the next boss here, as it's asked for: the play scene's draw hands the
+// next stage's name to the audio (mDoAud_setSceneName, d_s_play.cpp) the frame the change starts, so the redirect
+// at the next whole tick (DebugStage) came after the music was picked: the warp's own destination's (the Great
+// Sea's after Gohma, the Forest Haven's after Kalle Demos: B63, B64)
+void f_0252012C(PPCInterpreter_t* __restrict ctx)
+{
+	if (!wwhd::debug::RushRunning())
+		[[clang::musttail]] return orig_f_0252012C(ctx);
+	orig_f_0252012C(ctx);
+	const char* name;
+	StageWarp w{ 0, 0, 0, -1, {} };
+	if (wwhd::debug::RushNextStage(name, w.point, w.room, w.layer))
+	{
+		strncpy(w.name, name, 8);
+		cemuLog_log(LogType::Force, "wwhd debug: boss rush: the warp out turned as it's asked for");
+		RedirectStage(w);
+	}
+}
+
 // ---- cutscenes at 60 (D21) ------------------------------------------------------------------------
 // A cutscene (dDemo_manager_c: its update, f_025291C8, calls JStudio's stb::TControl::forward(1),
 // f_0283D514, on whole ticks) moves its cast and camera by values JStudio evaluates once a tick: each

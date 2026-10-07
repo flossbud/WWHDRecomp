@@ -1893,6 +1893,15 @@ it in a window; D21 "Step 2"):**
     Z and B from 1975, Link put on the room's middle (`WWHD_DEBUG_PLACE=3150:0,100,0`): at 30 and at 60 "no
     heart container", "a boss beaten", the warp flower (104) from f3403 (30) and f3239 (60), its WARP_WIND event,
     and "boss rush: on to kinBOSS": Kalle Demos (235) there from f3638 and f3474.
+    **B63, B64** (the owner: the Great Sea's music in Kalle Demos's fight after Gohma, the Forest Haven's in Gohdan's
+    room after Kalle Demos; session qa found the cause): the play scene hands the next stage to the sound
+    (mDoAud_setSceneName, WWHD f_025E17CC, symbols.csv: qa's evidence) the frame the stage change starts, and WWHD's
+    takes it once (its load state 0x101F4707); DebugStage turned the warp a whole tick later, so the music was the
+    warp's own destination's. Now dComIfGp_setNextStage (f_0252012C) turns it as it's asked for (DebugStage's turn
+    stays as a fallback); in a rush the log names the sound's scene ("the sound's next scene"). Test (the route above,
+    30): "the warp out turned as it's asked for", "on to kinBOSS", then the sound's next scene kinBOSS room 0 (before:
+    none until the stage, the music the sea's). session qa's own fix (branch qa-rushmusic ebcc5e4, the sound's call
+    overridden) not taken: the same effect one call later.
   - **Counts a call without a rule, in session bottom's types (shared enemy code too; regress.sh rerun)**:
     session qa's `tools/sixty/counter_audit.py` lists every field loaded, +-1 and stored back with no
     rule. For my processes (and the enemies item) each site was classified from its code (a scratch

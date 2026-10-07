@@ -77,6 +77,7 @@ address,name,evidence
 0251677C,dCcD_Sph_Set,twwhd-randomizer@f28d289 asm/linker.ld
 025D54C4,fopAcM_SearchByID,twwhd-randomizer@f28d289 asm/linker.ld
 0252012C,dComIfGp_setNextStage,twwhd-randomizer@f28d289 asm/linker.ld
+025E17CC,mDoAud_setSceneName,"WW-4 qa: called with the next stage (gameInfo +0x5140 name, +0x514A room, +0x514B layer as s8) right after dComIfGp_setNextStage(""sea_T"", 0, 44, 0) in f_02520230 (dComIfG_changeOpeningScene, d_com_inf_game.cpp) and the same way from the other scenes; its body calls f_02027814 (JAIZelBasic::setSceneName) on the audio interface *0x101FFC78 when 0x101F4707 is 0, as m_Do_audio.cpp"
 025E1928,subBgmStop_load_data,twwhd-randomizer@f28d289 asm/linker.ld
 02516300,GetTgHitObj,twwhd-randomizer@f28d289 asm/linker.ld
 025DC86C,fopScnM_ChangeReq,twwhd-randomizer@f28d289 asm/linker.ld
