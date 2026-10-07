@@ -3388,6 +3388,13 @@ it in a window; D21 "Step 2"):**
     (0240CE6C): `whole` (notes_bottom.txt). Found by WWHD_STATE_DUMP_GLOBALS at consecutive ticks (the state dump has
     every actor's full bytes, past the 0x8000 the track keeps) and a scan for counters running twice as fast at 60.
     Route hshcut (Siren room 13): a second talk refused at 1094-1116 and taken at 1124 at both rates.
+  - The HD-only fields' sweep (main's follow-up to B70): WWHD's daPy_lk_c is 0x8284 bytes; its tail past the GameCube's
+    (+0x8260.., reached as +0x448 +0x7E18.. or as addis 1 / -0x7DA0..) is accessed in Link's code (all 1079 functions
+    in 023D0000-02446000 disassembled) only at: +0x8260 (B70's wait: set to 30 at 023D559C, 023E0170, 023F207C, counted
+    in the execute, read at 023E9B30, 023EAB44, 023EFC4C/78), +0x8264/5 (flags from the event order f_0253EC0C, read in
+    setDemoData), +0x8278 (a float, read only, 02445xxx), +0x8282 (the last value of play info +0x5CDC bit 20, for its
+    falling edge). No other counter. Empirically (any int/short/byte, globals and every actor's full bytes, changing
+    by 1 a tick at 30 and 2 at 60 over five ticks; WWHD_STATE_DUMP_GLOBALS) on tour, items, warp and swing: none.
   - Ladders: on top's spawned ladder (ladspawn's spawn line), LRIGHT climbs (LUP is in changeLadderMoveProc's 90-degree
     dead zone; LDOWN steps down). Up and down within 0.16 units, transitions on 30's ticks: nothing to fix.
   - Note on reading tracks: a 60 track's key 2t+1 (shown t.5) is the tick's end, i.e. 30's key 2t; a change at 60's
