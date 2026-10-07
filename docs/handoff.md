@@ -212,6 +212,25 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   CAMTICK): a 5th tick, the walk a tick late and the end's wall stop split. A threshold, like tour's corner: predeploy
   now runs sidle2 (drc-sidle2.txt: f1310's LLEFT steered 6 degrees, LS=-1.0,-0.1), the turn 4 ticks at both, 2.6 units
   at the end (+0.1: 3.0). ladder is fine (11.0).
+- **B67 resumed (main: build the setups; session qa, `events` on the page)**: test aid **WWHD_DEBUG_FLAGS sw:N=V@T**
+  (a switch forced from game frame T; `sw:7=0,7=1@1050` flips it there). Findings: SHUTTER is 112, not 259 (259 is an
+  HD-only object, unmatched): the Tower of the Gods' bars (Siren room 1, switch 7) open in HYSDOOROPEN with Link in
+  0x04, already stepping, 1.5 a frame at 60 and 30's at every half frame. The auction (Orichh layer 1 by night,
+  WWHD_DEBUG_EVENT=1100:AUCTION_START) steps (Link 0x04) at 30's pace; its bidders' head turn gets half its first step
+  at the event's start (the half step dropped as an event starts). **NPC_PF1 356** appears with `ev:2D01=0` (Windfall
+  then takes layer 0, d_com_inf_game's getLayerNo; forcing the stage layer is ignored there): converted, it walks
+  30's path within 0.75 units with the random draws fixed (its pause countdown's start is random). **Obj_Apzl 281**
+  (Windfall's picture puzzle, stage Abesso; scratch route: WWHD_DEBUG_PLACE=1000:560,0,30, the stick (-0.95,-0.30)
+  12 frames to the right-hand board, A, A..., 'I do, indeed', LDOWN + A 'No, thank you', then the stick moves the
+  panels): its game runs with Link in 0x04 (steps); the move cooldown (+0xB8F) counted a call (`whole` + `eqwhole` on
+  its zero test, enemies_qa.txt): with WWHD_DEBUG_RNDSEED=905 the moves and cooldown equal 30's tick for tick.
+  **OBJ_FIGURE 404** (the Nintendo Gallery's figurines: stages figureA-G, 14-27 a room; viewing one is its event,
+  Link 0x04, steps; scratch route: figureA, WWHD_DEBUG_PLACE=1000:-7,0,-540, A, then the sticks): its view proc's
+  turn (`split@r9`), tilt (`*h` after its int truncation), zoom (`*h`) and input wait (`late`) ran twice a tick
+  (the trial: the turn 1024 against 512 a tick); now the trial finds only the event edges' one-off messages.
+  Converted (356, 281, 404; session qa's line). Filed B69 (bottom has it): the puzzle's B button shows the sword,
+  not Cancel, at 60 (unconverted too). Left: SBOX 293 (a chart save), Obj_HSH 290 (placed as "Hsh"/"Hsh2", stage
+  not found yet), and the converted Vfan/Mkiek/MknjD/WARPDEMO20 in their events.
 - **B50, Link climbed onto ledges too soon** (found on the way: walking into route crate's crate): changeFrontWallTypeProc's
   count of ticks pushing against a ledge (m3544, +0x6994; over the HIO's 14 he hops up, catches a wall or takes a
   small jump) ran on both steps: keep on its add (`link_qa.txt`). Route `climb`: the hop was 3.5 ticks early.

@@ -26,3 +26,23 @@
 # whole step had started 0x68: mNormalSpeed 10 stayed and he slid 75 units (10 a tick, M_Dai room 6) where 30's
 # rises and falls in place. Once a tick, in the whole step.
 021494E4    whole       bctrl           fm modePlayerStartDemo PL_OUT: Link's setThrowDamage (his throw out of the hole)
+#
+# ---- Windfall's picture puzzle (Obj_Apzl 281, d_a_obj_apzl.cpp; Abesso; session qa, B67). Its game runs in the
+# PUZZLE_GAME event, Link in 0x04 (it steps). The input proc (f_023183CC) counts the panel move's cooldown m_b8f
+# (+0xB8F, set to 5 by a move) down a call and returns while it isn't 0: at 60 twice a tick, so panels could be moved
+# again in half the time, and the stick was read on half steps, a move starting half a tick early. The count once a
+# tick (whole) and its zero test on whole steps only (eqwhole: a half step reads it as still counting and returns):
+# the tick after a move counts it, the stick is read on ticks, as at 30.
+023183EC    eqwhole     cmpi            apzl input: the move cooldown (+0xB8F) == 0: read the stick
+023183FC    whole       stb             apzl input: the move cooldown (+0xB8F) - 1
+#
+# ---- the Nintendo Gallery's figurines (OBJ_FIGURE 404, d_a_obj_figure.cpp; stages figureA-G; session qa, B67).
+# Viewing one (A in front of it: its event, Link in 0x04, steps) runs its view proc f_0234025C a call: the stick
+# turns the view (+0xA28 += (int)(stick x * C)) and tilts it (+0xA1C += (int)(stick y * C), clamped), the trigger
+# zooms (+0xA18 -= 2 * trigger, clamped), and a count +0xA2E (tested before its - 1) holds input off after a change.
+# At 60 each ran twice a tick (the trial: the turn 1024 against 512 a tick, the zoom 4 against 2).
+023402A4    late        sth             fig view: the input wait +0xA2E - 1 (tested before)
+02340310    split@r9    add             fig view: +0xA28 += the turn's step (int)(stick x * C), split s - s/2, s/2
+0234035C    *h:f13      frsp            fig view: the tilt's step (float)(int)(stick y * C), halved after the truncation
+023403A4    *h:f12      fadds           fig view: the zoom's step, 2 * the trigger (from +0xA18)
+023403DC    *h:f12      fadds           fig view: the zoom's step, 2 * the trigger (from +0xA18; the tilt clamped)

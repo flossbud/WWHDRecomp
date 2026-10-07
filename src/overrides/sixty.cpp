@@ -121,6 +121,8 @@ namespace
 		"174,192,193,243,244,245,246,247,207,114,135,208,254,252,202,203,217,219,190,212,119,211,431,456,447,426,233,232,40,111,458,29,39,136,137,250,150,240,198,238,453,454,472,473,474,432,169,446,443,221,305,47,48,49,50,52,122,129,148,166,289,159,272,267,275,140,138,139,46,75,469,94,96,478,479,406,358,396,57,195,299,455,85,399,284,286,265,285,241,334,167,379,370,141,251,260,422,279,278,283,312,386,392,413,417,448,444,393,350,429,425,"   // session bottom
 		// (session main's line, between comment lines so neighbours' edits don't conflict)
 		"51,276,367,301,302,303,113,112,314,361,382,380,321,30,92,104,107,145,157,273,323,451,153,377,124,"   // session main
+		// (session qa's line)
+		"356,281,404,"   // session qa
 		// (session top's line)
 		"123,220,353,170,368,374,364,373,352,121,445,309,118,68,73,200,255,71,67,335,319,320,331,461,45,63,179,230,269,164,391,176,294,187,313,120,213,407,83,105,116,383,410,439,470,101,102,398,297,65,304,144,74,307,430,99,103,204,235,236,237,185,186,227,97,98,182,225,226,228,205,457,397,27,424,106,427,428,231,450,67,462,295,423,91,90,84,326,327,328,329,330,348,371,222,369,42,33,199,143,274,262,332,287,87,460,64,89,172,173,318,218,210,342,394,355,357,359,362,375,366,322,347,372,365,341,344,340,360,376,325,363,381,346,345,351,324,336,337,338,339,343,280,277,291,271,93,56,55,459,152,128,131,38,401,125,127,60,61,465,268,402,471,26,35,53,58,59,78,80,108,109,110,126,130,132,146,147,155,156,161,163,180,197,256,20,115,183,201,117,160,158,86,133,28,31,79,81,72,76,70,54,77,69,32,34,177,95,36,37,41,248,229,184,178,88,25,249,134,82,257,258,259,62,44,100,149,196,242,66,239";   // session top
 	const char* ConvertList()
@@ -1742,10 +1744,13 @@ namespace
 // taken (dSv_info_c::isItem f_025BA494: N decimal, in any room) read as V (0 or 1), and event registers
 // (dSv_event_c::getEventReg f_025B8BB0: XXYY hex as the decomp's names, e.g. C203) read as N (decimal)
 // by every caller, the save left as it is: an actor whose create returns cPhs_ERROR_e on the finished save's story
-// state (Phantom Ganon beaten, Makar's types, Co1 before symbol 1...) is made by forcing what it checks.
+// state (Phantom Ganon beaten, Makar's types, Co1 before symbol 1...) is made by forcing what it checks. A switch's
+// value may end in @T (sw:N=V@T): forced from game frame T on, before it the switch's other entry or the save's own
+// (sw:7=0,7=1@1050: off, then on at f1050), so the switch flips there and what watches it plays its event (B67: a
+// shutter's open event).
 namespace
 {
-	struct ForcedFlags { std::unordered_map<uint32, bool> ev, sw, it, ac, sy, im; std::unordered_map<uint32, uint32> er; int acAll = -1; bool any = false; };
+	struct ForcedFlags { std::unordered_map<uint32, bool> ev, sw, it, ac, sy, im; std::unordered_map<uint32, uint32> er; std::unordered_map<uint32, std::pair<uint32, bool>> swAt; int acAll = -1; bool any = false; };
 	const ForcedFlags& Forced()
 	{
 		static const ForcedFlags f = [] {
@@ -1789,7 +1794,10 @@ namespace
 						continue;
 					}
 					const uint32 key = (uint32)strtoul(item.substr(0, eq).c_str(), nullptr, isSw || isAc || isSy || isIm ? 10 : 16);
-					(isEv ? r.ev : isSw ? r.sw : isAc ? r.ac : isSy ? r.sy : isIm ? r.im : r.it)[key] = v;
+					if (const size_t from = item.find('@', eq); isSw && from != std::string::npos)
+						r.swAt[key] = { (uint32)atoi(item.substr(from + 1).c_str()), v };
+					else
+						(isEv ? r.ev : isSw ? r.sw : isAc ? r.ac : isSy ? r.sy : isIm ? r.im : r.it)[key] = v;
 					r.any = true;
 				}
 			}
@@ -1888,6 +1896,11 @@ void f_025BA0C0(PPCInterpreter_t* __restrict ctx)
 	const ForcedFlags& f = Forced();
 	if (!f.any)
 		[[clang::musttail]] return orig_f_025BA0C0(ctx);
+	if (const auto at = f.swAt.find(GPR(4)); at != f.swAt.end() && wwhd::rt::GameFrame(wwhd::os::SwapCount()) >= at->second.first)
+	{
+		GPR(3) = at->second.second ? 1 : 0;
+		return;
+	}
 	if (const auto it = f.sw.find(GPR(4)); it != f.sw.end())
 	{
 		GPR(3) = it->second ? 1 : 0;
