@@ -3247,6 +3247,22 @@ it in a window; D21 "Step 2"):**
   The Floormaster: M_Dai room 4's are switched off on the finished save; room 6's (spawn point 7, route en-fm) rises at
   f1214 (60: 1212.5) and doesn't reach Link in the route's window (its grab untested).
 
+- **Session bottom: round 9's actors-bottom (2026-10-07; `tick_rules/actors_bottom.txt`)**: the types still at 30 with
+  ids from 260 up (68; 33 seeded "needs nothing" by the web session from the census). Places from the census's placement
+  list, `types_test.sh` at each (scratch `ttall.sh`: three lanes, each its own binary copy: sharing one folder lost the
+  60 runs), and a scan of every stage's rooms by object name (scratch `findtypes.py`) for the rest. Converted with no
+  rules (equal to 30's at every tick): Obj_Table 278, Obj_Auzu 283, SW_TACT 312, 386, 392, 413, 417. With rules:
+  Obj_Tenmado 279 (the shutter's opening count), ATT 448 (Puppet Ganon's string targets: their lock-on point and hit
+  shapes follow the converted boss; the hit cooldown `keep`), the title screen's actor 444 (d_a_title.cpp: a countdown
+  and its sound once a tick, a pane's slide; 60 from swap 60 reaches the dock as 30 does). Needs nothing (publish.sh
+  still): never created in WWHD (no stage places them and no code makes them by process: 282, 306, 333, 349, 354, 378,
+  395, 403, 405, 414, 415, 416, 420, 464, 467), Obj_Monument 288 (its execute only sets its matrix; the one moving
+  field is its draw's lighting), GRASS 435 (its create hands the grass to the manager and fails), DISAPPEAR 400 (draws
+  nothing, a countdown to the drop), Coming2 270 (draws nothing: when the sea's objects come). Left: SBOX 293 (the
+  salvage's chest: runs only in the salvage event, where converted processes hold whole ticks unless Link's action
+  is listed in StepInEvents), and 350, 356, 388, 389, 393, which are placed but never ran in the tests: NPC_BTSW2 350
+  needs event register C203 != 3 (the save has 3; WWHD_DEBUG_FLAGS has no event registers), NPC_PF1 356 is in
+  Windfall's layer 0.
 - **Session bottom: the owner's notes from play (2026-10-06; `tick_rules/notes_bottom.txt`)**: B47 (the boss rush:
   see the debug menu's "Boss rush" above), N3, N8, N12, N13.
   - **N3, Dragon Roost Cavern's falling rocks "still 30fps"**: FallRock (422, d_a_fallrock.cpp; WWHD's process numbers

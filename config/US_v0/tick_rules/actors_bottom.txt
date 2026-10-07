@@ -1,0 +1,23 @@
+# ---- round 9's actors-bottom (session bottom): the types still at 30 with ids from 260 up. Found with
+# types_test.sh at their places (the census; every actor converted but Link, ranked by the ticks equal to 30's
+# over 1000-1400) and read in the decomp. Converted with no rules (equal to 30's at every tick): Obj_Table 278
+# (Opub), Obj_Auzu 283 (sea 44 layer 7), SW_TACT 312 (Cave06), 386 (M_DaiMB room 12), 392 (sea 41), 413 (sea
+# 13, 23, 41, 44), 417 (sea 44).
+#
+# Obj_Tenmado (process 279, d_a_obj_tenmado.cpp: the shutter window; Execute f_023A0060, m2CC +0x3E4, m2C8
+# +0x3E0): once its switch is on it opens by m2C8 + 1 a call to 100 (at 80 its second switch). Still in M_DaiMB
+# room 12 (99.8%: one tick of its lighting from its draw).
+023A0160    *h@f12      fadds           tenmado: m2C8 (+0x3E0) + 1 a tick, the shutter's opening
+#
+# ATT (process 448, d_a_att.cpp; execute f_020587B4): Puppet Ganon's string targets (BGN 243 makes them; Gohdan and
+# Molgera too): each call puts its lock-on point and hit shapes on its string's place (boss mC33C[i], stepped with the
+# boss), so unconverted they lagged it on half frames; a hit's cooldown m550 (+0x66C, u8) counts 10 down a call.
+02058890    keep:r11    addi            att: m550 (+0x66C) - 1, tested after: the hit cooldown once a tick
+#
+# The title screen's actor (process 444, d_a_title.cpp: the logo; its state in a daTitle_proc_c it allocates, so the
+# trial's lines are by function: WWHD_60FPS_TRIAL=444 over the title, ticks 60-419, with its draw): a countdown
+# (+0x58, f_024B8670) to the title's sound 0x90B at 0, and a pane's slide (+0x48: + a set distance / the frames
+# left, f_024B7CFC) ran twice a tick. The rest of its changing stores came only in the half steps' draws (the HD UI).
+024B869C    whole       stw             title: the countdown (+0x58) - 1, stored once a tick
+024B86A8    whole       bl 025e1988     title: its sound 0x90B at the count's 0 (the half step sees the 0 a step early: once)
+024B8270    *h@f0       fadds           title: a pane's slide (+0x48) + its step a call
