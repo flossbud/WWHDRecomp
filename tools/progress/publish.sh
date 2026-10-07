@@ -10,6 +10,9 @@
 #                           the work queue (plan.json "queue"): claim an item before starting it, so
 #                           parallel sessions never take the same one; done when it's converted and
 #                           committed; release to hand it back
+#   publish.sh item ID NAME [NOTE]
+#                           a work item outside plan.json's queue (the web session's sweeps add what the sessions
+#                           are on between rounds): shown as working; done/release/step as for the others
 #   publish.sh step ID DONE TOTAL
 #                           an item's progress for its bar on the page (e.g. step ui30 3 5: three of five
 #                           parts done); an item with "ids" in plan.json fills its bar from the actor types
@@ -68,7 +71,10 @@ if op == "claim":
         sys.exit(f"{item} is claimed by {cur['session']} ({cur.get('note', '')})")
     c[item] = {"session": session, "state": "working", "note": note, "time": t}
 elif op == "done":
-    c[item] = {"session": session, "state": "done", "note": note, "time": t}
+    c[item] = dict({"name": cur["name"]} if cur and cur.get("name") else {}, session=session, state="done", note=note, time=t)
+elif op == "item":
+    name, _, note = note.partition("\n")
+    c[item] = dict(cur or {}, session=session, state="working", name=name, note=note, time=t)
 elif op == "release":
     c.pop(item, None)
 elif op == "step":
@@ -184,6 +190,9 @@ PY
 	claim|done|release)
 		claims "$1" "${2:?item id}" "${3:-}"
 		;;
+	item)
+		claims item "${2:?item id}" "${3:?name}"$'\n'"${4:-}"
+		;;
 	step)
 		claims step "${2:?item id}" "${3:?done}/${4:?total}"
 		;;
@@ -269,5 +278,5 @@ EOF
 		ssh $host "cat > $dir/index.html" < "$here/index.html"
 		ssh $host "cat > $dir/testing.html" < "$here/testing.html"
 		;;
-	*) echo "usage: publish.sh [now TEXT | retire [SESSION] | still ID REASON|- | claim|done|release ID [NOTE] | step ID DONE TOTAL | bug ... | shot PPM CAPTION [PLACE] | notes ... | usage | serve]" >&2; exit 2 ;;
+	*) echo "usage: publish.sh [now TEXT | retire [SESSION] | still ID REASON|- | claim|done|release ID [NOTE] | item ID NAME [NOTE] | step ID DONE TOTAL | bug ... | shot PPM CAPTION [PLACE] | notes ... | usage | serve]" >&2; exit 2 ;;
 esac

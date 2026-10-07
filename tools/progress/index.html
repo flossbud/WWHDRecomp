@@ -652,7 +652,10 @@ $("bugs").addEventListener("click", e => {
 });
 // --- the work queue as a board: open, working, done ---
 function queueItems() {
-  return (data.queue || []).map(q => {
+  // work the sweeps add between rounds (publish.sh item ID NAME): claims with a name, not in plan.json's queue
+  const planned = new Set((data.queue || []).map(q => q.id));
+  const extra = Object.entries(claims).filter(([id, c]) => c.name && !planned.has(id)).map(([id, c]) => ({id, name: c.name}));
+  return (data.queue || []).concat(extra).map(q => {
     const c = claims[q.id], state = c ? (c.state === "done" ? "done" : "working") : "open";
     const round = (q.name.match(/^Round (\d+):/) || [])[1];
     const name = q.name.replace(/^Round \d+:\s*/, "");
