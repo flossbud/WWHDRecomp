@@ -313,6 +313,12 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   z ~12 a half step on past 30's stop), ~20 units off by f1000 and steady after. Likely its place approaches
   (cLib_addCalc2 on +0x314/+0x318/+0x31c in f_0205EA58) toward a moving target; once a tick would move it at 30 Hz
   on screen, so not tried. No Co pushes (WWHD_DEBUG_PUSHLOG empty). Recorded, not fixed.
+  **BL 207 (en-bl, a Bubble)**: Link's slash at 60 starts 15 ticks before 30's (f1003.5 against 1018): the Bubble's
+  hit on him (its At on his Tg, WWHD_DEBUG_HITS) lands a tick early (984 against 985), so his reaction 0x66 (15 ticks)
+  ends a tick early and the B pressed at 1000-1002 finds him in 0x08 (at 30 still 0x66: not taken). The hit is early
+  because its dive starts in the half step of 976 (its state +0x422 11 -> 13, +0x426 18 -> 16, speedF 10), at 30 in
+  tick 977. Its six timers (f_020AB020's loop, `late`) read as 30's in both steps, so not them; the dive's trigger
+  isn't found yet (session main). Open.
   **The hit's vector (TICKVEC)**: dCcD_Cyl::MoveCAtTg/MoveCAt/MoveCTg and dCcD_Sph::MoveCAt (025165A4, 02516618,
   02516680, 025167E4: vector +0x7C At, +0xB4 Tg, center +0x118) set the vector to the move since the last call: at
   60 half a tick's, from mid-tick, and Link's knockback heads from it (en-mo: 12 degrees against 30's 22, ~120 units
