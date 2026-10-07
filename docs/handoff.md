@@ -3258,11 +3258,14 @@ it in a window; D21 "Step 2"):**
   still): never created in WWHD (no stage places them and no code makes them by process: 282, 306, 333, 349, 354, 378,
   395, 403, 405, 414, 415, 416, 420, 464, 467), Obj_Monument 288 (its execute only sets its matrix; the one moving
   field is its draw's lighting), GRASS 435 (its create hands the grass to the manager and fails), DISAPPEAR 400 (draws
-  nothing, a countdown to the drop), Coming2 270 (draws nothing: when the sea's objects come). Left: SBOX 293 (the
-  salvage's chest: runs only in the salvage event, where converted processes hold whole ticks unless Link's action
-  is listed in StepInEvents), and 350, 356, 388, 389, 393, which are placed but never ran in the tests: NPC_BTSW2 350
-  needs event register C203 != 3 (the save has 3; WWHD_DEBUG_FLAGS has no event registers), NPC_PF1 356 is in
-  Windfall's layer 0.
+  nothing, a countdown to the drop), Coming2 270 (draws nothing: when the sea's objects come), kytag05 388 and kytag06
+  389 (environment tags: they set the event wind, or the clock, rain and thunder in ARRIVAL_BRK, which the environment
+  reads once a tick). Later: Komore 393 (by its code: only its texture animation, which the helper steps) and
+  NPC_BTSW2 350 (made at sea room 13 with the new `WWHD_DEBUG_FLAGS=er:C203=0`, an event register forced through
+  getEventReg f_025B8BB0: the finished save has 3; equal to 30's but for two IDs given at its creation) converted.
+  Handed to session qa as blocked: SBOX 293 (the salvage's chest: B67, the salvage event's Link actions aren't in
+  StepInEvents, so the scene holds to 30) and NPC_PF1 356 (only in Windfall's layer-0 list, sea room 11 ACT0 at
+  -100,200,-199200: no run with the finished save makes it, even warped with layer 0).
 - **Session bottom: the owner's notes from play (2026-10-06; `tick_rules/notes_bottom.txt`)**: B47 (the boss rush:
   see the debug menu's "Boss rush" above), N3, N8, N12, N13.
   - **N3, Dragon Roost Cavern's falling rocks "still 30fps"**: FallRock (422, d_a_fallrock.cpp; WWHD's process numbers
