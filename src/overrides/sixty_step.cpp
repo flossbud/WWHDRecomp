@@ -1096,6 +1096,50 @@ void f_02477A24(PPCInterpreter_t* __restrict ctx)
 	wr8(ship + 0x636, request);                        // for its next whole step, as 30's next tick
 }
 
+// The enemies' shared move (f_02043F34, r3 its mover: +0 the actor, +6 its state): the tick whose move reaches water
+// ends at the surface at 30 (the move snaps it there and turns it to its in-water state, 0x16, or 0x15). At 60 the
+// whole step that entered snapped it and the half step went on sinking, a Moblin 13.5 units deeper than 30's from
+// then on (a Bokoblin 0.5). The half step after an entry keeps the height the whole step left (x and z go on).
+// WWHD_60FPS_WATERHOLD=0 off.
+namespace
+{
+	struct WaterIn { uint32 tick; uint32 y; };
+	std::unordered_map<uint32, WaterIn> s_waterIn;       // actors whose whole step entered water: the tick, pos.y
+	bool WaterHold()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_WATERHOLD"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	bool InWater(uint32 mover)
+	{
+		const sint16 state = (sint16)rd16(mover + 0x6);
+		return state == 0x15 || state == 0x16;
+	}
+}
+void f_02043F34(PPCInterpreter_t* __restrict ctx)
+{
+	if (!Stepped() || !WaterHold())
+		[[clang::musttail]] return orig_f_02043F34(ctx);
+	const uint32 mover = GPR(3), actor = rd32(mover), tick = wwhd::rt::GameFrame(wwhd::os::SwapCount());
+	if (!g_rtHalfTick)
+	{
+		const bool was = InWater(mover);
+		orig_f_02043F34(ctx);
+		if (!was && InWater(mover))
+			s_waterIn[actor] = { tick, rd32(actor + 0x318) };
+		return;
+	}
+	const auto it = s_waterIn.find(actor);
+	if (it == s_waterIn.end())
+		[[clang::musttail]] return orig_f_02043F34(ctx);
+	const WaterIn in = it->second;
+	s_waterIn.erase(it);
+	if (in.tick != tick)
+		[[clang::musttail]] return orig_f_02043F34(ctx);
+	orig_f_02043F34(ctx);
+	wr32(actor + 0x318, in.y);                          // current.pos.y: the tick ends at the surface, as 30's
+}
+
 // daPy_lk_c::setNormalSpeedF(Link r3, target f1, ...): mNormalSpeed toward the stick's speed
 void f_02416230(PPCInterpreter_t* __restrict ctx)
 {

@@ -1555,6 +1555,21 @@ it in a window; D21 "Step 2"):**
     moves, not a once-a-tick step; sea20 (2) is a distant splash's particles at the horizon and a bird (particles are
     converted; the splash is started far out, by something not identified, once a tick); sea30 (2, in 13 of 30 pairs)
     is a few edge pixels of the boat's horn and a far ship's flag.
+  - **Enemies falling into water (session top, 2026-10-07; main's item; shared: the enemies' move)**: the move
+    (f_02043F34) snaps an enemy to the water's height when it reaches it and turns it to its in-water state (+0x6 of
+    its mover = 0x16, or 0x15); at 30 the tick whose move crosses the surface ends there, at 60 the whole step that
+    crossed snapped and the half step went on sinking (a Moblin 13.5 units deeper than 30's from then on, a Bokoblin
+    0.5). The move's override (sixty_step.cpp, `WWHD_60FPS_WATERHOLD=0` off) keeps the half step after an entry at
+    the snapped height: dropped into open water (scratch wat.sh: a spawn over the sea off the Outset dock, each
+    tick's height) the Moblin and Bokoblin sink on 30's heights exactly; the Chuchu has its own water code (within
+    1-2 units). Tried first: the state change `late` (at the tick's end): the heights matched too, but the half
+    step then reran the enemy's own action standing on the surface in its old state (the dock's Moblin set off
+    walking at speedF 14.5, resting 30 units off 30's): not kept. Regress: Moblin 25.9 -> 19.3, Darknut 17.4 -> 17.3,
+    the rest unchanged. The old note's "line check from the last place" was wrong: the hang at the dock is the dock
+    itself (30's Moblin is pushed out of its side the tick it crosses and the Acch's line check, f_024F00CC, sets it
+    back to 1.79 for a tick; at 60 it is in by then). Left: a spawned airborne enemy's fall starts a tick early at
+    60 (its first speed.y store, both heights then a tick ahead), and a Bokoblin spawned in the air lunges at
+    twice 30's speed from its first falling tick (+0x33C's 80): both spawn-in-air cases, noted for qa.
   - **60 fps cost (session top; the work queue's "perf"; shared: sixty.cpp's journal, the runtime's
     rt_journal_store)**: real time, headless, on the desktop (`~/wwhd-test`; its `perf-top.sh` runs routes
     at 30 then 60 with `WWHD_FRAME_LOG` and each thread's CPU; `perf-ab.sh` alternates two builds at 60;

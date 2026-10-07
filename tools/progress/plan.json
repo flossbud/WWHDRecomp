@@ -158,7 +158,7 @@
     },
     {
       "title": "Enemies falling into water",
-      "detail": "At 30 they hang at the surface about 2 ticks before sinking, at 60 they sink from the first contact: the in-water check runs a line from the last step's place, a whole tick back at 30 and half a tick at 60 (sampling, not a count; recorded in tick_rules.txt)"
+      "detail": "Fixed for open water: at 60 the half step after an enemy reached the water went on sinking, so a Moblin ran 13.5 units deeper than 30's; now the tick ends at the surface as at 30, and Moblins and Bokoblins sink on 30's heights. The hang at the Outset dock's edge is the dock itself (30's Moblin is pushed out of its side for a tick), not the water check"
     }
   ],
   "labels": {
