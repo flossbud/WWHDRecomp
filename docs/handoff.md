@@ -303,6 +303,15 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   42.8, the second hit on 30's tick; the kill still a tick early. Gates: checks all MATCH, regress unchanged
   (b8c3ae41: its Bokoblin line doesn't reach those sites), predeploy 50 ok. Other enemies' speed approaches likely
   drift the same way at sharp turns (a candidate: each type's speedF sites once a tick, measured per type).
+  **The fight survey (session main, 2026-10-07, every en-* route at RNDFIX 0.7, Link's max apart):** en-st 762
+  (before B72), en-am 271, en-fm 109, en-bb 89, en-pw 70, en-bl 54, en-rd 51, the rest ~23. **MO2's speedF sites
+  once a tick**: no gain (en-mo 257 either way; it parts at the knockback's wall contact). **BB 181 (en-bb)**: its
+  speed (cLib_addCalc2 on +0x370 in its move, 0205E7E0/0205E950) and heading match 30's at 60's key 2k+1 exactly;
+  once a tick changes nothing. What parts it is its swoops: sideways and forward bursts (x -28, -25, -17 a tick at
+  30 from f962; z 24, 21, 1.6 from f985) that 60 spreads differently over its half steps (-20 then -16, -12, ...;
+  z ~12 a half step on past 30's stop), ~20 units off by f1000 and steady after. Likely its place approaches
+  (cLib_addCalc2 on +0x314/+0x318/+0x31c in f_0205EA58) toward a moving target; once a tick would move it at 30 Hz
+  on screen, so not tried. No Co pushes (WWHD_DEBUG_PUSHLOG empty). Recorded, not fixed.
   **The hit's vector (TICKVEC)**: dCcD_Cyl::MoveCAtTg/MoveCAt/MoveCTg and dCcD_Sph::MoveCAt (025165A4, 02516618,
   02516680, 025167E4: vector +0x7C At, +0xB4 Tg, center +0x118) set the vector to the move since the last call: at
   60 half a tick's, from mid-tick, and Link's knockback heads from it (en-mo: 12 degrees against 30's 22, ~120 units
