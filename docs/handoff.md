@@ -177,6 +177,15 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   Also: the sidle routes (sidle, sidle2) never sidle (WHIDE 0x13-0x16 never comes: the A at f1292 is a front roll,
   0x1E/0x1F, into the wall); routes potthrow (lift, carry, throw: ok 23.6) and ladspawn (an Obj_Ladder spawned on
   the dock: Link takes it, the climb input still to find) went to session bottom with "pots, sidling and ladders".
+  **Link's actions off 30's tick** (a survey of every predeploy route's action changes, 30's tick k against 60's keys
+  2k/2k+1): most left are thresholds after a drift (a ledge, a wall, a pot's facing). Two were systematic and are
+  fixed. **The swim's surfacing** (36 -> 35 a tick late in warp, sail, bombs, boots, carry, swing): the water's lift
+  (changeSwimUpProc) is added in his procedure, before posMoveFromFootPos notes speed.y for its 30 Hz arc, so two half
+  steps moved v + 3/4 of it (1.5 units a tick deeper, 8.7 by the bottom). New step rule kind `vnote` (a speed.y noted
+  for arc@, the actor's first in the step kept: rt_vnote) on the lift's load and posMoveFromFootPos's two notes,
+  and the surfacing call whole:r3=0 (the half step tested a height 30 never does). The swim routes' farthest on the
+  way ~51 -> 2-14 units. **The slashes' next action** (procCutA/F/R/L: checkNextMode(1) once the frame is past
+  field_0xC, e.g. the spin's charge with B held, 44 -> 58 at 60's key 2k-1): whole:r3=0 on the four calls.
 - **N28, the test arena (session top's, tested here)**: the debug menu's "Test arena (Gohma's room, no warp)" or
   WWHD_DEBUG_ARENA=1: M_DragB with refights off and no warp flower (WARPFLOWER 104 not created there).
 - **B65, Link slid 75 units after the Floormaster's throw (from session bottom; fixed, `tick_rules/enemies_qa.txt`)**: the
