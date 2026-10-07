@@ -232,3 +232,27 @@
 # over 14 the alarm and back to 0 (keep: the half step then reads 0)
 0238A980    whole       stw             search execute: +0x8C4 + 1, 0 at 4 (a cycle)
 0238C4F8    keep:r10    addi            search: +0x8C0 + 1 while Link is in the beam, then > 14 the alarm
+# process 239 (BDKOBJ Bdkobj, d_a_bdkobj: the Helmaroc fight's tower top: blocks and poles a hammer breaks, the
+# stairs that collapse; its execute f_020729A8, unmatched, read against the decomp). Countdowns (the stairs' health,
+# m299) and the collapse smoke's alpha - 2 once a tick. Up to three fragments (r30, +0x1BC each): a tick count
+# (+0x1B4: whole, its two sine phases count x a factor lagw); a top fragment's kick (pos + (0,0,m1A4) rotated,
+# PSVECAdd: h a step; its spin +0x3A + m1AA split) and its flight (pos + (0, vy, vf) rotated, h a step; vy +0x2C
+# - 5: the new speed at the tick's end, late, as 30's move takes the tick's starting speed); a stair fragment's
+# fall (y, x, z + vy, vx, vz: h a step; vy - 3 and vx, vz damped: late) and spin (csXyz +=: whole)
+02072B00    whole       stb             bdkobj tower_kaidan_move: health (+0x3A1) - 1 while != 0
+02072E74    whole       stb             bdkobj execute: m299 (+0x3B5) - 1 while != 0
+02072E30    whole       stb             bdkobj tower_kaidan_move: the smoke's alpha m938 (+0xA6C) - 2
+02073658    whole       sth             bdkobj hahen_move: a fragment's tick count m1AC (+0x1B4) + 1
+02074098    lagw:r5     mullw           bdkobj kaidan: m1AC x (REG0_S(7) + 1800), a phase
+020740E8    lagw:r19    mullw           bdkobj kaidan: m1AC x (REG0_S(6) + 2000), a phase
+02073788    vec@r4      bl 028e8d88     bdkobj top: pos + the kick's push (m1A4 forward)
+0207378C    split:r0    lha             bdkobj top: m030.y (+0x3A) + m1AA (the kick's spin), split
+020737F0    vec@r4      bl 028e8d88     bdkobj top: pos + (0, vy, vf) rotated
+02073800    late        stfs            bdkobj top: vy (+0x2C) - 5
+02073E0C    whole       bl 0201a554     bdkobj kaidan: m030 (+0x38) += m036 (+0x3E) (csXyz +=)
+02073E20    *h@f7       fadds           bdkobj kaidan: y + vy
+02073E34    *h@f7       fadds           bdkobj kaidan: x + vx (+0x24)
+02073E44    *h@f9       fadds           bdkobj kaidan: z + vz (+0x28)
+02073E40    late        stfs            bdkobj kaidan: vy - 3
+02073E6C    late        stfs            bdkobj kaidan: vx x its damping
+02073E88    late        stfs            bdkobj kaidan: vz x its damping
