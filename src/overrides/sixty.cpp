@@ -2879,8 +2879,11 @@ namespace
 }
 void f_02019788(PPCInterpreter_t* __restrict ctx)
 {
+	// WWHD_DEBUG_RNDFIX=v (a probe, B62): every draw returns v, at 30 and 60 alike, so a fight's choices are
+	// the same at both rates and the two can be compared tick by tick (the stream still moves as before)
+	static const double fix = [] { const char* e = getenv("WWHD_DEBUG_RNDFIX"); return e ? atof(e) : -1.0; }();
 	FILE* const f = RndLog();
-	if (!f && !(RndSync() && g_rtSixty))
+	if (!f && !(RndSync() && g_rtSixty) && fix < 0.0)
 		[[clang::musttail]] return orig_f_02019788(ctx);
 	const uint32 actor = s_drawing ? s_drawing : g_rtActor, lr = (uint32)ctx->spr.LR;
 	const bool live = actor >= 0x10000000u && actor < 0x50000000u;
@@ -2901,6 +2904,8 @@ void f_02019788(PPCInterpreter_t* __restrict ctx)
 		}
 	}
 	orig_f_02019788(ctx);
+	if (fix >= 0.0)
+		FPR(1).fp0 = FPR(1).fp1 = fix;
 }
 
 // WWHD_DEBUG_RNDSEED=tick (a probe, session bottom's B62): from that game tick on, the random stream is set as each
@@ -3120,6 +3125,77 @@ namespace
 	{
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ONESHOT"); return !(e && atoi(e) == 0); }();
 		return on;
+	}
+}
+
+// WWHD_DEBUG_MODELATE=name:off[:off...] (a probe, B62): a converted process's state fields (s16 at those offsets)
+// that its whole step changes are put back after it and made at the tick's end, as `late` stores: its half step runs
+// the old state again (which normally makes the same change), and if that leaves them as they were the whole step's
+// values are written then. A state machine that moves one link a call (set the next mode, act on it next call)
+// takes a tick a link as at 30, not half a tick.
+namespace
+{
+	struct ModeLatePending { std::vector<uint16> before, after; };
+	std::unordered_map<uint32, ModeLatePending> s_modeLate;
+	std::vector<uint16> s_modeLateIn;
+	const std::pair<uint16, std::vector<uint32>>& ModeLateSpec()
+	{
+		static const std::pair<uint16, std::vector<uint32>> spec = [] {
+			std::pair<uint16, std::vector<uint32>> s{ 0, {} };
+			if (const char* e = getenv("WWHD_DEBUG_MODELATE"))
+			{
+				char* p;
+				s.first = (uint16)strtoul(e, &p, 10);
+				while (*p == ':')
+					s.second.push_back((uint32)strtoul(p + 1, &p, 16));
+			}
+			return s;
+		}();
+		return spec;
+	}
+	std::vector<uint16> ModeLateRead(uint32 proc)
+	{
+		std::vector<uint16> v;
+		for (uint32 off : ModeLateSpec().second)
+			v.push_back(rd16(proc + off));
+		return v;
+	}
+	void ModeLateWrite(uint32 proc, const std::vector<uint16>& v)
+	{
+		for (size_t i = 0; i < v.size(); i++)
+			wr16(proc + ModeLateSpec().second[i], v[i]);
+	}
+	void ModeLateBefore(uint32 proc)
+	{
+		if (ModeLateSpec().second.empty() || rd16(proc + 0x08) != ModeLateSpec().first)
+			return;
+		if (!g_rtHalfTick)
+			if (const auto it = s_modeLate.find(proc); it != s_modeLate.end())
+			{
+				ModeLateWrite(proc, it->second.after);  // a half step that didn't come: the tick's change made
+				s_modeLate.erase(it);
+			}
+		s_modeLateIn = ModeLateRead(proc);
+	}
+	void ModeLateAfter(uint32 proc)
+	{
+		if (ModeLateSpec().second.empty() || rd16(proc + 0x08) != ModeLateSpec().first)
+			return;
+		const std::vector<uint16> now = ModeLateRead(proc);
+		if (!g_rtHalfTick)
+		{
+			if (now != s_modeLateIn)
+			{
+				s_modeLate[proc] = { s_modeLateIn, now };
+				ModeLateWrite(proc, s_modeLateIn);
+			}
+		}
+		else if (const auto it = s_modeLate.find(proc); it != s_modeLate.end())
+		{
+			if (now == it->second.before)
+				ModeLateWrite(proc, it->second.after);
+			s_modeLate.erase(it);
+		}
 	}
 }
 
@@ -3360,7 +3436,9 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 		if (oneShotHidden)
 			wr32(proc + kLinkNoResetFlg1, f & ~oneShotHidden);
 	}
+	ModeLateBefore(proc);
 	orig_f_025DE58C(ctx);
+	ModeLateAfter(proc);
 	if (landing && LandSnap())
 		LandSnapAfter(proc, landingBits);
 	if (oneShotHidden)

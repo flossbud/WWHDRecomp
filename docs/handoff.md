@@ -123,6 +123,37 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   jerk doubled). dCamera +0x620/+0x640 are HD-only view set-up values written in the camera's draw (0274CDFC),
   derived. Split with session bottom (B57, the follow camera behind in turns): qa takes the camera's own steps
   and the HD follow engine (f_0250FDC8), bottom how Link reads the camera.
+  **Closed (wontfix, 2026-10-07)**: per tick the camera is 30's; what's sharper is the original camera at more
+  frames. A probe on bumpCheck (its inputs, result, prev_hit_type 0x101D554C and the hit point read back from its
+  frame +0x5C; dropped after) showed (1) when Link starts falling the follow camera's centre catches up with him, an
+  exponential approach: 30 moves it 44 units in one tick, 60 29 then 15 (peak speed ~20% higher for a frame); (2)
+  near the wall bumpCheck puts the eye on it each step and compWallMargin's sphere check pushes it out of nearby
+  polygons: under a ledge the push went 6 units down on one frame and back on the next. The route's 30/60 camera
+  gaps before the landing come from B59 (the walk-in 2 ticks early leaves the camera 2 ticks ahead).
+- **B62, enemies took more sword hits at 60 (from session bottom; fixed, `tick_rules/enemies_qa.txt`)**. New probe
+  **WWHD_DEBUG_RNDFIX=v** (sixty.cpp, cM_rnd f_02019788): every random draw returns v at both rates, so a fight's
+  choices can't part by chance and 30 and 60 compare tick by tick (bottom's RNDSEED still parted on draw order).
+  Route: bottom's enfight (Z-target, B every 15 frames, the Moblin 188 spawned 150 ahead at f950-956). At v=0.3
+  Link hit the Moblin 6 times at 30 and 12 at 60; with the Moblin on whole ticks only 7 and 7: the Moblin's side.
+  Causes: (1) its spear: Mo2_move counts its attack's frame m2068 (+0x2470) by the attack animation's speed a call
+  (021D2D24) and yari_hit_check moves the spear's attack spheres (+0x294C, +0x2A78) only while it's in [17, 27]: at
+  60 that window came 8 ticks early and lasted 5, the spheres then frozen while the thrust went on, so the thrust
+  never hit Link and his cut landed instead (the Bokoblin's same count, +0xCC4, already had its rule); (2) the
+  shared knockback (c_damagereaction's move f_02043F34: pos += m4D4, then cLib_addCalc0(m4D4, 1, 10)): the half step
+  moved by the value its whole step had already decayed, 1/8 short a hit (all damage-reaction enemies); now the decay
+  is late by a whole tick's step, 25/15/5 a tick at both rates. With both: 6 and 8 (v=0.7: 8 and 7), and the
+  Moblin's thrusts hit Link at 60 again. Seen, not fixed: an enemy's state machine that sets the next mode and acts
+  on it next call takes half a tick a link at 60 (its half step is the next call), so chains like the Moblin's
+  mode 0 -> 2 -> 4 run ahead of 30's; probe **WWHD_DEBUG_MODELATE=name:off[:off...]** (sixty.cpp) holds such fields
+  to the tick's end (`late`), which made the Moblin's state equal 30's through its fight but didn't move the hit
+  counts. Scripts (scratch, desktop /wwhd/data/m6/WWHDRecomp-qa/b62): fix.sh (fights), mo.py (its state), states.py.
+- **B60 (N5, DRC's lava glow after the fire jet; from session top; closed, wontfix)**: random, not the rate. Room 3's jet
+  (Obj_Flame 267, its mode +0x55A: bursts end at f1478, 1958, 2918, 3398 at 30) measured with capture.sh and top's
+  flamepix.py (box x 380-640, y 560-720) over four bursts: the after-glow's bright pixels summed 30 17334/30611/
+  16012/10312, 60 8419/16959/20880/15386. With WWHD_DEBUG_RNDFIX the two rates match through and after the burst;
+  at 30 alone the fixed value moves the after-glow 200-1000 pixels. Link's conversion changed it only by changing
+  the random numbers' order (his idle 0x05 is random-timed: f1301 at 30, f1392 at 60; f1354 at both when fixed).
+  g_env_light (0x10475A68) was equal at both rates over f1470-1515 but for a random flicker word (+0x1224).
 - **B50, Link climbed onto ledges too soon** (found on the way: walking into route crate's crate): changeFrontWallTypeProc's
   count of ticks pushing against a ledge (m3544, +0x6994; over the HIO's 14 he hops up, catches a wall or takes a
   small jump) ran on both steps: keep on its add (`link_qa.txt`). Route `climb`: the hop was 3.5 ticks early.

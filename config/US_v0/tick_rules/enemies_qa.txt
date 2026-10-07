@@ -1,0 +1,20 @@
+# ---- the enemies' knockback (c_damagereaction.cpp's dr_damage_set, the shared move f_02043F34; session qa, bug B62:
+# "enemies take more sword hits at 60"). A hit sets the reaction's m4D4 (+0x508; Moblin -30, Bokoblin -20: its
+# damage_check), the move adds it along the hit's direction (02044A60/02044A90's forward, *h) and then decays it with
+# cLib_addCalc0(&m4D4, 1, 10): explicit Euler, the move takes the tick's value before its decay. Both stepped, the
+# half step moved by the value its whole step had already decayed: 30 moves 30, 20, 10 (60 units), 60 15 + 12.5,
+# 10 + 7.5, 5 + 2.5 (52.5): each hit pushed the enemy 1/8 less far from Link. As the move's gravity (02044B08 late):
+# the decay once a tick at its end, by a whole tick's step; now 25, 15, 5 a tick at both rates (Moblin, spawn f956).
+02044B28    /h:f2       fmr             enemy move: cLib_addCalc0's maxStep for m4D4 (10), a tick's (the helper halves it)
+02044B34    late        bl 0200edc8     enemy move: cLib_addCalc0(&m4D4 +0x508, 1, 10), the knockback's decay once a tick
+#
+# ---- the Moblin's spear (MO2 188, d_a_mo2.cpp; session qa, B62). The cause of most of its extra hits: Mo2_move
+# (f_021D0A14) counts its attack's frame m2068 (+0x2470) by attack_info[m2060][m2064].speed (+0x4: the attack
+# animation's play speed, 1) a call, and yari_hit_check puts the spear's attack spheres (mWeaponSph, mWeapon2Sph) on
+# the spear only while m2068 is in [m206C, m2070] (17-27 for its thrust). At 60 it counted twice a tick: the spear
+# could hit for 5 ticks starting 8 early, its spheres then left where the window closed while the thrust went on
+# (fixed-random fight, spawn f956: at 30 the thrust hit Link at f1063, at 60 it never could, and Link's cut landed).
+# The fights (route enfight: Z-target and B every 15 frames, the Moblin spawned 150 ahead at f950-956, every random
+# draw fixed with WWHD_DEBUG_RNDFIX): Link's hits at 0.3 were 6 at 30 and 12 at 60 (7 and 7 with the Moblin on whole
+# ticks only); with both rules 6 and 8 (at 0.7, 8 and 7), and the Moblin's thrusts hit Link at 60 again.
+021D2D24    *h@f8       fadds           mo2 move: m2068 (+0x2470), its attack's frame, += its animation's speed a call
