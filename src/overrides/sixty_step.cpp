@@ -774,15 +774,44 @@ namespace
 	}
 }
 
-// daPy_lk_c::setSpeedAndAngleNormal(Link r3, ...): the plain walk's speed and heading
+// daPy_lk_c::setSpeedAndAngleNormal(Link r3, ...): the plain walk's heading (current.angle.y +0x322, toward the
+// stick's angle m34E8 by cLib_addCalcAngleS), the speed it reads from it (cos(m34E8 - heading)) and the facing drawn
+// (shape_angle.y +0x32A, its own approach). B57: the half steps' turns rounded to whole angle units apart, and
+// the whole step's speed read a half-turned heading, so his heading ended a few units off 30's after a turn, the
+// camera following him took it up (it follows his facing) and his path drifted: route tour, with the exact camera,
+// 30 units of heading off and 9 units aside by f1470, where 30's Link stops on a wall and 60's slides past. So the
+// whole call once a tick, in the whole step with a step of 1: heading, speed and facing 30's for the tick. The
+// facing drawn is put half way for the whole step's frame and at the tick's in the half step (a turn still
+// animated at 60), unless something else turned him between.
+namespace
+{
+	struct TurnHalf { uint32 step = 0; uint16 mid = 0, end = 0; };
+	std::unordered_map<uint32, TurnHalf> s_turnHalf;
+}
 void f_0241650C(PPCInterpreter_t* __restrict ctx)
 {
 	if (!Stepped() || !SpeedTick())
 		[[clang::musttail]] return orig_f_0241650C(ctx);
+	const uint32 link = GPR(3);
+	if (g_rtHalfTick)
+	{
+		const auto it = s_turnHalf.find(link);
+		if (it != s_turnHalf.end() && it->second.step == StepId() - 1 && rd16(link + 0x32A) == it->second.mid)
+			wr16(link + 0x32A, it->second.end);
+		return;                                        // the whole step took the tick's turn and speed
+	}
+	const uint16 before = rd16(link + 0x32A);
+	const float step = g_rtStep;
 	const bool outer = s_inNormalSpeed;
+	g_rtStep = 1.0f;
 	s_inNormalSpeed = true;
 	orig_f_0241650C(ctx);
 	s_inNormalSpeed = outer;
+	g_rtStep = step;
+	const uint16 end = rd16(link + 0x32A);
+	const uint16 mid = (uint16)(before + (sint16)(end - before) / 2);
+	wr16(link + 0x32A, mid);
+	s_turnHalf[link] = TurnHalf{ StepId(), mid, end };
 }
 
 // daPy_lk_c::procAtnMove(Link r3): the L-targeting walk (B58, the owner's note N4): WWHD's setSpeedAndAngleAtn

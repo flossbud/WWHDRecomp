@@ -3495,6 +3495,16 @@ it in a window; D21 "Step 2"):**
     Left on those routes: B57's camera without CAMTICK, and a jump off a ledge landing a tick late at 60
     (moveangle 45 degrees, tick 1172: 30 lands, 60 a tick later, 17 units). Route `drchaze` (the owner's N18
     spot, the boss-door room's torches): the heat haze's puffs match 30's (N15/N18 answered, no bug).
+  - **B57, Link's turn once a tick** (the camera's drift in long turns; bottom's exact camera `WWHD_60FPS_CAMTICK=1`):
+    setSpeedAndAngleNormal (heading, speed from cos(stick angle - heading), the facing drawn) whole in the whole
+    step with a step of 1 and left out of the half step; the facing drawn half way for the whole frame, the tick's
+    in the half step. The half steps' turns rounded apart and the speed read a half-turned heading. With CAMTICK:
+    movecircle's first circle 0.13 units apart (heading 0.02 degrees; 16.6 before), moveangle 0.07/0.9/4.7 at
+    0/45/90 degrees. Left: CAMTICK's tour (271) and land (306) still split at Outset's corner (f1473-1477): at
+    f966 the camera's measure of Link's move is 1.403 against 30's 1.400 (Link 0.02 apart), its 10-unit turn steps
+    land a tick later from there, the heading follows, and 9 units aside 60's Link clears the corner where 30's
+    stops. A chaotic split in the test, not a wrong game (main): the routes move off the corner next. Without
+    CAMTICK the same corner splits route ladder the other way (WARN 58.6: 60's Link stops there, 30's slides by).
 **Keep in mind:** behind the switch (`WWHD_60FPS`) every check is unchanged (checked: both
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.
