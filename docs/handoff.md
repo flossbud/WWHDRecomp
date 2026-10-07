@@ -297,8 +297,12 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   4.6-15.8; its death flight 614 at the end against 151), Link closer (max 27.7 against 66.7). Not listed. Both 60
   runs take Link's second and third hits on it a tick early (HP 3 -> 1 at 1065, 30's 1066; the kill at 1087, 30's
   1088; the first hit, 1008, on 30's tick), so it dies a tick early either way and its flight starts from another
-  place; held, the kill's mode -100 is held to 1087.5 while its HP already reads dead. Next for BK: Link's sword
-  hit a tick early (the TN known issue's attack collider set in whole steps, Link's side), before the hold.
+  place; held, the kill's mode -100 is held to 1087.5 while its HP already reads dead. **Fixed instead**: its
+  speedF approaches (17 cLib_addCalc2 sites) once a tick (sixty_step.cpp kOnceATick): its backstep's reversals had
+  moved 5 units off 30's each. Unheld, with them: the Bokoblin 151 -> 30 at most (mean 37.7 -> 13.5), Link 66.7 ->
+  42.8, the second hit on 30's tick; the kill still a tick early. Gates: checks all MATCH, regress unchanged
+  (b8c3ae41: its Bokoblin line doesn't reach those sites), predeploy 50 ok. Other enemies' speed approaches likely
+  drift the same way at sharp turns (a candidate: each type's speedF sites once a tick, measured per type).
   **The hit's vector (TICKVEC)**: dCcD_Cyl::MoveCAtTg/MoveCAt/MoveCTg and dCcD_Sph::MoveCAt (025165A4, 02516618,
   02516680, 025167E4: vector +0x7C At, +0xB4 Tg, center +0x118) set the vector to the move since the last call: at
   60 half a tick's, from mid-tick, and Link's knockback heads from it (en-mo: 12 degrees against 30's 22, ~120 units

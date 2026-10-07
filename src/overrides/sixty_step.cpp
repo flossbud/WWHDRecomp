@@ -23,6 +23,7 @@
 #include <bit>
 #include <cmath>
 #include <unordered_map>
+#include <vector>
 
 namespace
 {
@@ -172,13 +173,39 @@ double rt_step_surface(double y)
 //   a tick; short by as much before his action hold took the bounce's first step to the next tick): route en-ph's
 //   Peahat bounces ~2 units each, 85 at the end, en-tn's lunge 2.4 long (session qa). Once a tick, both halves move
 //   by 30's speed.
+// - 020A0CA0 ... 020B210C, cLib_addCalc2: the Bokoblin's (BK 189) speedF, all 17 of its approaches. Its backstep
+//   turns 17 -> -3 -> -20 a tick at 30, each tick moving by the speed after its step; scaled, the half moves took 7
+//   and -3 (2 units where 30 moves -3), 5 units a reversal, and its place drifted from 30's through the fight. Route
+//   en-bk (RNDFIX 0.7, TICKVEC on): the Bokoblin 151 units at most from 30's -> 30 (mean 37.7 -> 13.5), Link 66.7 ->
+//   42.8, and Link's second hit on it on 30's tick (was a tick early) (session main). WWHD_DEBUG_ONCEATICK=LR[,LR...]
+//   adds call sites, as a probe.
 namespace
 {
-	constexpr uint32 kOnceATick[] = { 0x0247E8F0u, 0x02171158u, 0x024428BCu, 0x0243FAC8u };
+	constexpr uint32 kOnceATick[] = { 0x0247E8F0u, 0x02171158u, 0x024428BCu, 0x0243FAC8u,
+		// BK 189's speedF (+0x370) approaches (cLib_addCalc2, every call with r3 = this + 0x370)
+		0x020A0CA0u, 0x020A0CD8u, 0x020A1188u, 0x020A12B8u, 0x020A1334u, 0x020A1370u, 0x020A139Cu, 0x020A1D94u,
+		0x020A67F4u, 0x020A68B8u, 0x020A7430u, 0x020A75B4u, 0x020A7DBCu, 0x020A7E00u, 0x020A7E58u, 0x020A7E98u,
+		0x020B210Cu };
 	bool OnceATick(uint32 lr)
 	{
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ONCEATICK"); return !(e && atoi(e) == 0); }();
-		return on && std::find(std::begin(kOnceATick), std::end(kOnceATick), lr) != std::end(kOnceATick);
+		// a probe: WWHD_DEBUG_ONCEATICK=LR[,LR...] (hex return addresses) adds call sites to the list
+		static const std::vector<uint32> extra = [] {
+			std::vector<uint32> v;
+			if (const char* e = getenv("WWHD_DEBUG_ONCEATICK"))
+				for (char* p = (char*)e; *p; p += (*p == ',') ? 1 : 0)
+				{
+					char* q;
+					const uint32 a = (uint32)strtoul(p, &q, 16);
+					if (q == p)
+						break;
+					v.push_back(a);
+					p = q;
+				}
+			return v;
+		}();
+		return on && (std::find(std::begin(kOnceATick), std::end(kOnceATick), lr) != std::end(kOnceATick) ||
+			std::find(extra.begin(), extra.end(), lr) != extra.end());
 	}
 }
 
