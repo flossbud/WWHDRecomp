@@ -318,139 +318,23 @@
     "460": "ice block",
     "64": "table"
   },
-  "queue_note": "Round 4 (2026-10-05; rounds 1-3 are done). 'top' takes items from the top down, 'bottom' from the bottom up, 'main' takes free items one at a time; claim before starting (tools/progress/publish.sh claim ID) and stop where another session's claims begin. Session qa is retired: the main session triages the owner's bugs (the Bugs list) and deploys. Keep the claim's note and your status line current.",
+  "queue_note": "Round 9 (2026-10-07, the owner's plan): no new bug or physics hunting. Top converts the types still at 30 with ids below 260, bottom those from 260 up; a type that never changes state gets a verdict (needs nothing) instead. qa fixes every known bug, and converts any type a bug blocked (top and bottom file the bug, send it and the type to qa, and move on). The main session routes the owner's bugs and notes and deploys in batches. After the actors: the owner's extensive testing and repair, with the whole queue redistributed.",
   "queue": [
     {
-      "id": "weather",
-      "name": "Weather and sky effects: dust motes, rain, snow, stars, mist, fog, clouds (bottom's, in progress)"
+      "id": "actors-top",
+      "name": "Round 9: convert the types still at 30 with ids below 260, or record each that never changes state as needing nothing (top's)", "ids": [20, 25, 26, 28, 31, 32, 34, 35, 36, 37, 41, 44, 53, 54, 58, 59, 62, 66, 69, 70, 72, 76, 77, 78, 79, 80, 81, 82, 86, 88, 95, 100, 108, 109, 110, 115, 117, 126, 130, 132, 133, 134, 146, 147, 149, 155, 156, 158, 160, 161, 163, 177, 178, 180, 183, 184, 196, 197, 201, 229, 239, 242, 248, 249, 253, 256, 257, 258, 259]
     },
     {
-      "id": "cutscenes",
-      "name": "Cutscenes (JStudio, dDemo) at 60: more of them checked against 30 (the opening, the Great Deku Tree, Valoo, Jabun, the Master Sword, the ending) (bottom's, in progress)"
+      "id": "actors-bottom",
+      "name": "Round 9: convert the types still at 30 with ids from 260 up, or record each that never changes state as needing nothing (bottom's)", "ids": [261, 263, 264, 266, 270, 278, 279, 281, 282, 283, 288, 290, 293, 298, 306, 308, 310, 311, 312, 315, 333, 349, 350, 354, 356, 378, 384, 385, 386, 387, 388, 389, 390, 392, 393, 395, 400, 403, 404, 405, 408, 409, 411, 412, 413, 414, 415, 416, 417, 418, 419, 420, 421, 425, 429, 433, 434, 435, 440, 441, 442, 444, 448, 452, 464, 466, 467, 475]
     },
     {
-      "id": "ui30",
-      "name": "The HUD and message box at 30 Hz: the message box's spinning \"next\" icon (bottom's observation) and the HUD's corner block every hz30 scan shows; the HD UI's update runs on whole ticks (tick_rules.txt 020359AC)"
-    },
-    {
-      "id": "doors",
-      "name": "Dungeon doors and shutters still at 30: DOOR12 301 (22 in the Earth Temple alone), ATDOOR 302, MDOOR 303, SHUTTER 112/113, MBDOOR 115 (their opening and closing, door routes back/door2) (main's)", "ids": [301, 302, 303, 112, 113, 115]
-    },
-    {
-      "id": "sea-objects",
-      "name": "On the sea, still at 30: the salvage arm (Salvage 401, SALVAGE_TBOX 402), the rudder (Kaji 60), Tetra's ship (Obj_Pirateship 57), Ganon's ships (Obj_Gaship 125/127), the buoy race (Obj_Buoyrace 268, Obj_Buoyflag 465), sea cannons (Canon 61)", "ids": [401, 402, 60, 57, 125, 127, 268, 465, 61]
-    },
-    {
-      "id": "npcs-left",
-      "name": "NPCs still at 30 (blink rules per blink_audit.py -a): NPC_OS 314, YM1 315, LS1 321, P2 323, KM1 333, BTSW 349/350, PM1 354, PF1 356, the auction (361, 382), CO1 370, HI1 377, SV 378, Carlov's MT/MN 379/380", "ids": [314, 315, 321, 323, 333, 349, 350, 354, 356, 361, 382, 370, 377, 378, 379, 380]
-    },
-    {
-      "id": "objects-left",
-      "name": "Moving objects still at 30: the gong (Obj_Gong 284), ladders (Obj_Ladder 85), liftable rocks (Stone2 455), fire walls (Obj_Firewall 286), barriers (Obj_Barrier 285), Iball 399, the Triangle statues (Obj_Doguu 265), the Wind Temple's fans (FAN 299: its joint callback), Obj_Tribox 44", "ids": [284, 85, 455, 286, 285, 399, 265, 299, 44]
-    },
-    {
-      "id": "companions",
-      "name": "Companions and the Hyoi seagull: Medli's glide with Link and Makar's (WWHD_DEBUG_COMPANION; Makar needs his story state to follow), the Hyoi seagull (NPC_KAM 195: route hyoi, it never answers the pear yet)"
-    },
-    {
-      "id": "mtimer",
-      "name": "Round 5: the other g_Counter.mTimer readers that converted processes see a tick ahead on half ticks (Link's damage flash, the hookshot's chain f_021768B0, the cloth stand-items f_0251ECE8, the Boko stick, the ship f_02475DA8): drawlag as the plants' (top's)"
-    },
-    {
-      "id": "salvage",
-      "name": "Round 5: salvaging (SALVAGE_TBOX 402 and the crane's pull) with a route",
-      "ids": [402]
-    },
-    {
-      "id": "drifts",
-      "name": "Round 5: predeploy's WARN routes, each's cause found and fixed or recorded: land 99, swing 70, sail 65, sidle 53, plants 45 units from 30's end (main's)"
-    },
-    {
-      "id": "census",
-      "name": "Round 5: the 180-odd types still at 30: a census of which move in play (placed in a stage and changing state at 30), the rest recorded as still; convert the movers"
-    },
-    {
-      "id": "contacts",
-      "name": "Round 6: a converted barrier re-counts a continuous contact as a new hit every tick: check whether converted enemies do the same (double hits, damage), fix the shared cause (bottom's)"
-    },
-    {
-      "id": "camera",
-      "name": "Round 6: the follow camera turns ~13% slower in a sustained turn (Link swimming; the drifts' sidle and land): the k75 approximation, made exact"
-    },
-    {
-      "id": "heavythrow",
-      "name": "Round 6: the heavy throw's tick lead (Link's hands a tick ahead from the throw's start: a boulder lands 37 units past 30's)"
-    },
-    {
-      "id": "walkstart",
-      "name": "Round 6: Link's first walking ticks differ from 30's (2.4 units in 3 ticks on tour), which the camera then follows: the root of predeploy's tour, land, crawl and sidle distances; and predeploy pairing 30's ticks with 60's frames by state (the pairing varies by run) (top's)"
-    },
-    {
-      "id": "pushes",
-      "name": "Round 6: collision pushes for converted actors at 60 (cCcD_Stts::Move clears the push vector on half steps: lost or doubled?), as contacts' family; a known case: land's push at Outset's lookout tower legs (f1500) that 60 never gets (bottom's)"
-    },
-    {
-      "id": "hits",
-      "name": "Round 6: a whole tick's At/Tg hit flags stay until the next resolution, so a converted actor sees each hit on its half step and its next whole step: audit the converted types for hit checks with no whole-tick guard (double damage, double reactions) and fix them (bottom's)"
-    },
-    {
-      "id": "animstart",
-      "name": "Round 6: an animation or action set up after Link's common update in a whole step advances on the half step at 60, a tick later at 30: the walk's first tick, the heavy throw (the carry animation's end found by a half step), swing's and sail's jump and swim transitions; a rule that knows which set-ups step in their own tick (top's)"
-    },
-    {
-      "id": "bossfights",
-      "name": "Round 7: the bosses fought by a route at 30 and 60 (WWHD_DEBUG_BOSS, the debug menu's refights): phases, damage taken and given, on the same ticks; Gohma first (hookshot), then Kalle Demos (boomerang), Jalhalla (light), Molgera, Helmaroc, Gyorg, the Big Octo, Puppet Ganon, Ganondorf (bottom's)"
-    },
-    {
-      "id": "eqwhole",
-      "name": "Round 7: equality tests of whole-tick counts in converted types (`if (timer == N)` seen again on the half step: an event twice a tick, Gohma's armor cracking after 2 rocks): audit every converted type (bottom's eqsites.py) and rule the sites with eqwhole (main's)"
-    },
-    {
-      "id": "resolve",
-      "name": "Round 7: the collision resolution after the half step, so converted actors (and Link's pose since animstart) are at 30's tick end when hits are resolved (Kalle Demos' extra sword hit); the Co push split redone for it (top's, with bottom)"
-    },
-    {
-      "id": "hitcounts",
-      "name": "Round 7: counters added to while a hit reads true (the tick's hits persist until the next resolution, so both steps read them: Jalhalla's m47E): audit the converted types and keep them to whole ticks (main's)"
-    },
-    {
-      "id": "bossweapons",
-      "name": "Round 7: Link's items on the bosses at 30 and 60 (the hookshot on Molgera's tongue, arrows at Gohdan's eyes, the hammer on Helmaroc's mask, light arrows on Ganondorf), and Gohdan's demo counter (bottom's)"
-    },
-    {
-      "id": "testaids",
-      "name": "Round 7: test aids every comparison needs: the random stream kept aligned at 60 (converted actors' half-step draws from their own stream or rolled back: WWHD_60FPS_RNDSYNC, maybe the default), and WWHD_DEBUG_PLACE working mid-fight and after a stage warp (bottom's)"
-    },
-    {
-      "id": "ramp",
-      "name": "Round 7: Link's walk-start speed ramp at 60: the whole step moves at the mid-tick speed, a few units off 30 by the walk's end, the root of predeploy's land and sidle; moved at 30's tick-end speed without disturbing the feet's measure (top's)"
-    },
-    {
-      "id": "census-left",
-      "name": "Round 7: the 24 placed types no test created (census.txt's list): created with the placement survey, WWHD_DEBUG_PLACE and WWHD_DEBUG_EVENT, tested and converted where they move (bottom's)"
-    },
-    {
-      "id": "items2",
-      "name": "Round 8: predeploy routes for Link's items not covered yet (boomerang, bombs, grappling hook, Iron Boots, Skull Hammer, Mirror Shield, Power Bracelets, fire and ice arrows, magic armor), 30 against 60, what parts fixed (top's)"
-    },
-    {
-      "id": "rides",
-      "name": "Round 8: riding moving grounds at 60 (dBgS::MoveBg*: a stepping ground stopping on its half step leaves its move flag into the next whole step; a stepping rider on a 30 Hz ground moves with it on whole steps only): Link on lifts and platforms, then items and enemies (bottom's)"
-    },
-    {
-      "id": "landings",
-      "name": "Round 8: Link's landing reactions (falls, jumps, the ledge 0x2C, rolls) react in the half step after a whole-step landing, half a tick early, as the knockback did (B39): ruled to whole ticks (bottom's)"
-    },
-    {
-      "id": "dungeons2",
-      "name": "Round 8: predeploy routes for the dungeons' mechanics, 30 against 60 (as items2 did for the items): Dragon Roost's lava platforms and water jars, the Forbidden Woods' boomerang switches and Deku Leaf updrafts, the Tower of the Gods' beams, statues and rising water, the Earth Temple's mirrors and Medli's light, the Wind Temple's fans, springs and Iron Boots, Ganon's Tower's trials (top's)"
-    },
-    {
-      "id": "enemies2",
-      "name": "Round 8: predeploy routes fighting each enemy type, 30 against 60 (as items2 for the items): Moblin, Darknut (its armour cut off), Mighty Darknut, Wizzrobe, ReDead's freeze, Floormaster's grab, Armos, Peahat, Boko Baba, Kargaroc, Magtail, Stalfos (its head), Poe and the lantern, Miniblins, Bubbles, Gyorg; damage taken and given, reactions on 30's ticks (bottom's)"
+      "id": "qa-bugs",
+      "name": "Round 9: every known bug (qa's): B62's extra sword hits (landing), B57 the camera in long turns (the exact camera on by default, tour and land moved off Outset's corner), N28 the owner's test arena (Gohma's room with no warp), then each bug and blocked type top and bottom send"
     }
   ],
   "later": [
+    "The owner's extensive testing and repair, once the actors are converted (the whole queue redistributed then)",
     "Uncapped frame rate (D21 step 4): the owner's call when to start it"
   ],
   "queue_done": [
@@ -479,6 +363,38 @@
     "hz30-outdoors",
     "leftovers",
     "perf",
-    "hz30-dungeons"
+    "hz30-dungeons",
+    "weather",
+    "cutscenes",
+    "ui30",
+    "doors",
+    "sea-objects",
+    "npcs-left",
+    "objects-left",
+    "companions",
+    "mtimer",
+    "salvage",
+    "drifts",
+    "census",
+    "contacts",
+    "camera",
+    "heavythrow",
+    "walkstart",
+    "pushes",
+    "hits",
+    "animstart",
+    "bossfights",
+    "eqwhole",
+    "resolve",
+    "hitcounts",
+    "bossweapons",
+    "testaids",
+    "ramp",
+    "census-left",
+    "items2",
+    "rides",
+    "landings",
+    "dungeons2",
+    "enemies2"
   ]
 }
