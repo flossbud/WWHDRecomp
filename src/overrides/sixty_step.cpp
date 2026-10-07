@@ -814,6 +814,38 @@ void f_0241650C(PPCInterpreter_t* __restrict ctx)
 	s_turnHalf[link] = TurnHalf{ StepId(), mid, end };
 }
 
+// daPy_lk_c::procMoveTurn(Link r3): the turn while moving (0x18; the known issue "actions ending on an animation a tick
+// early", session top): his facing (shape_angle.y) approaches his heading by cLib_addCalcAngleS, and checkNextMode
+// ends the turn once they're equal. Stepped, the approach's half steps reached it half a tick sooner and the turn
+// ended in a half step a tick before 30's (route moveturn's 180-degree flick: 0x18 -> 6 at 60's key 2285 against
+// 30's tick 1143). So the call's whole step with a step of 1 (the approach a tick's, its end test 30's) and the
+// approach left out of the half step (tick_rules link_actions.txt), whose end test then reads the same facing; the
+// facing drawn half way for the whole step's frame, as setSpeedAndAngleNormal's.
+void f_0241B050(PPCInterpreter_t* __restrict ctx)
+{
+	if (!Stepped() || !SpeedTick())
+		[[clang::musttail]] return orig_f_0241B050(ctx);
+	const uint32 link = GPR(3);
+	if (g_rtHalfTick)
+	{
+		const auto it = s_turnHalf.find(link);
+		if (it != s_turnHalf.end() && it->second.step == StepId() - 1 && rd16(link + 0x32A) == it->second.mid)
+			wr16(link + 0x32A, it->second.end);       // the tick's facing back for its end test
+		[[clang::musttail]] return orig_f_0241B050(ctx);
+	}
+	const uint16 before = rd16(link + 0x32A);
+	const float step = g_rtStep;
+	g_rtStep = 1.0f;
+	orig_f_0241B050(ctx);
+	g_rtStep = step;
+	if (rd32(link + 0x65F0) != 0x18)
+		return;                                        // the turn ended: the next action's own facing
+	const uint16 end = rd16(link + 0x32A);
+	const uint16 mid = (uint16)(before + (sint16)(end - before) / 2);
+	wr16(link + 0x32A, mid);
+	s_turnHalf[link] = TurnHalf{ StepId(), mid, end };
+}
+
 // daPy_lk_c::procAtnMove(Link r3): the L-targeting walk (B58, the owner's note N4): WWHD's setSpeedAndAngleAtn
 // (f_02417538) calls setNormalSpeedF itself. Its speed change too once a tick, in the whole step: at 30 releasing
 // L while moving takes the atn walk's whole drop (12 to 6) on the tick it switches to procMove; at 60 the whole

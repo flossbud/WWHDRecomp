@@ -33,3 +33,7 @@
 023F2D70    whole       stfs            setDemoData: the stick 1, each call (no "stick")
 023F3190    whole       stw             setDemoData (walk): mDemo's mode = N_WALK or N_DASH (or N_WAIT)
 023F32B0    whole       bl 02543280     setDemoData: dComIfGp_evmng_cutEnd(mStaffIdx), Link's cut done (N_WAIT and the waits)
+# procMoveTurn (f_0241B050, 0x18, the turn while moving): its facing's approach once a tick (session top, the known
+# issue "actions ending on an animation a tick early"): the call's whole step runs with a step of 1 (sixty_step.cpp's
+# override), and the approach is left out of the half step, whose end test (facing == heading) then reads the tick's
+0241B080    whole       bl 0200f378     link procMoveTurn: cLib_addCalcAngleS(&shape_angle.y, current.angle.y, ...)
