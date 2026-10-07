@@ -2799,6 +2799,31 @@ void f_02518798(PPCInterpreter_t* __restrict ctx)
 void f_0200E558(PPCInterpreter_t* __restrict ctx)
 {
 	s_ccPass++;                                      // for the hits probe (below)
+	// WWHD_DEBUG_ATLOG=path (a test aid, at 30 too): before each resolution, its At colliders and Link's Tg ones (game
+	// frame, half tick, at|tg, the process name, the collider, its center, radius and next float +0x118..+0x127, the At
+	// vector +0x7C)
+	static FILE* atlog = [] { const char* e = getenv("WWHD_DEBUG_ATLOG"); return e ? fopen(e, "w") : nullptr; }();
+	if (atlog)
+	{
+		const uint32 ccs = GPR(3);
+		auto f = [](uint32 ea) { return std::bit_cast<float>(rd32(ea)); };
+		auto dump = [&](const char* what, uint32 list, uint32 n, bool linkOnly) {
+			for (uint32 i = 0; i < std::min(n, 0x300u); i++)
+			{
+				const uint32 obj = rd32(ccs + list + 4 * i), stts = obj ? rd32(obj + 0x44) : 0;
+				const uint32 actor = stts ? rd32(stts + 0xC) : 0;
+				const uint16 name = actor >= 0x10000000u && actor < 0x50000000u ? rd16(actor + 8) : 0;
+				if (!obj || (linkOnly && name != 168))
+					continue;
+				fprintf(atlog, "%u %d %s %u %08x c %.1f %.1f %.1f r %.1f %.1f v %.1f %.1f %.1f\n", wwhd::rt::GameFrame(wwhd::os::SwapCount()),
+					g_rtHalfTick ? 1 : 0, what, name, obj, f(obj + 0x118), f(obj + 0x11C), f(obj + 0x120), f(obj + 0x124),
+					f(obj + 0x128), f(obj + 0x7C), f(obj + 0x80), f(obj + 0x84));
+			}
+		};
+		dump("at", 0x0, rd32(ccs + 0x2800), false);
+		dump("tg", 0x400, rd32(ccs + 0x2804), true);
+		fflush(atlog);
+	}
 	// WWHD_DEBUG_PUSHLOG=path (a test aid, at 30 too): after each resolution, the Co colliders pushed (swap,
 	// process name, Stts, the push)
 	static FILE* dbg = [] { const char* e = getenv("WWHD_DEBUG_PUSHLOG"); return e ? fopen(e, "w") : nullptr; }();

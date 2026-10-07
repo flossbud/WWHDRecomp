@@ -96,7 +96,7 @@
 025BA494    src/overrides/sixty.cpp            dSv_info_c::isItem: forced under WWHD_DEBUG_FLAGS (a test aid)
 02557228    src/overrides/sixty.cpp            dScnKy_env_light_c::setSunpos (drawKankyo): the whole tick's frame draws the sun half way from the last tick's time
 02557834    src/overrides/sixty.cpp            WWHD's second sun position (drawKankyo): the same
-025165A4    src/overrides/sixty_step.cpp       dCcD_Cyl::MoveCAtTg: the half step's vector over the tick (WWHD_60FPS_TICKVEC)
-02516618    src/overrides/sixty_step.cpp       dCcD_Cyl::MoveCAt: the half step's vector over the tick (WWHD_60FPS_TICKVEC)
-02516680    src/overrides/sixty_step.cpp       dCcD_Cyl::MoveCTg: the half step's vector over the tick (WWHD_60FPS_TICKVEC)
-025167E4    src/overrides/sixty_step.cpp       dCcD_Sph::MoveCAt: the half step's vector over the tick (WWHD_60FPS_TICKVEC)
+025165A4    src/overrides/sixty_step.cpp       dCcD_Cyl::MoveCAtTg: the half step's vector over the tick (WWHD_60FPS_TICKVEC=0 off)
+02516618    src/overrides/sixty_step.cpp       dCcD_Cyl::MoveCAt: the half step's vector over the tick (WWHD_60FPS_TICKVEC=0 off)
+02516680    src/overrides/sixty_step.cpp       dCcD_Cyl::MoveCTg: the half step's vector over the tick (WWHD_60FPS_TICKVEC=0 off)
+025167E4    src/overrides/sixty_step.cpp       dCcD_Sph::MoveCAt: the half step's vector over the tick (WWHD_60FPS_TICKVEC=0 off)

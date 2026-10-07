@@ -684,22 +684,58 @@ void f_02516094(PPCInterpreter_t* __restrict ctx)
 // tick's move from the middle of the tick: an attack's direction along a swing's arc, which the one hit sets where
 // it sends its target (route en-mo: the Moblin's thrust sent Link off ~10 degrees from 30's, 80 a tick, ~120 units
 // apart by its end; session qa). The half step's vector runs from the center its whole step's call found, the tick's
-// move. WWHD_60FPS_TICKVEC=1 on (off by default, a trial).
+// move. WWHD_60FPS_TICKVEC=0 off.
+// And for the types listed (kAtWhole), an attack's place (MoveCAt) stays as the whole step set it: theirs comes from
+// the model's joints as the last call's calc left them, at 30 the last tick's pose, while the half step reads the
+// whole step's calc, half a tick on (route en-tn: the Darknut's sword ~110 units ahead of 30's at the tick's
+// resolution, its blow a tick early: wepon_hit_check reads getAnmMtx before its calc). The whole step's read is 30's,
+// and its vector, from the last whole step's place, a tick's. Not where the place comes out of the calc made before
+// the check (the Moblin's spear, set in the joint callback: there the half step's is 30's, and holding the whole
+// step's sent Link's knockback 30 degrees off). WWHD_DEBUG_ATWHOLE=name,... (a probe) lists more.
 namespace
 {
 	bool TickVec()
 	{
-		static const bool on = [] { const char* e = getenv("WWHD_60FPS_TICKVEC"); return e && atoi(e) == 1; }();
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_TICKVEC"); return !(e && atoi(e) == 0); }();
 		return on;
+	}
+	bool AtWhole(uint16 name)
+	{
+		static const std::vector<uint16> types = [] {
+			std::vector<uint16> v = { 191 };            // TN, the Darknut
+			if (const char* e = getenv("WWHD_DEBUG_ATWHOLE"))
+				for (const char* p = e; *p;)
+				{
+					char* end;
+					v.push_back((uint16)strtoul(p, &end, 10));
+					if (end == p) break;
+					p = *end == ',' ? end + 1 : end;
+				}
+			return v;
+		}();
+		return std::find(types.begin(), types.end(), name) != types.end();
 	}
 	struct TickStart { uint32 c[3]; uint32 step; };
 	std::unordered_map<uint32, TickStart> s_tickStart;   // a collider's center as its whole step's call found it
-	template <void (*Orig)(PPCInterpreter_t*)>
+	template <void (*Orig)(PPCInterpreter_t*), bool At = false>
 	void MoveC(PPCInterpreter_t* __restrict ctx)
 	{
 		if (!Stepped() || !TickVec())
 			return Orig(ctx);
 		const uint32 collider = GPR(3);
+		if (At && g_rtActor && AtWhole(rd16(g_rtActor + 0x08)))
+		{
+			if (!g_rtHalfTick)
+				s_tickStart[collider] = { {}, StepId() };
+			else if (const auto it = s_tickStart.find(collider); it != s_tickStart.end())
+			{
+				const bool whole = it->second.step == StepId() - 1;
+				s_tickStart.erase(it);
+				if (whole)
+					return;                                // the whole step's place and vector stand
+			}
+			return Orig(ctx);
+		}
 		if (!g_rtHalfTick)
 			s_tickStart[collider] = { { rd32(collider + 0x118), rd32(collider + 0x11C), rd32(collider + 0x120) }, StepId() };
 		else if (const auto it = s_tickStart.find(collider); it != s_tickStart.end())
@@ -718,7 +754,7 @@ void f_025165A4(PPCInterpreter_t* __restrict ctx)
 }
 void f_02516618(PPCInterpreter_t* __restrict ctx)
 {
-	MoveC<orig_f_02516618>(ctx);
+	MoveC<orig_f_02516618, true>(ctx);
 }
 void f_02516680(PPCInterpreter_t* __restrict ctx)
 {
@@ -726,7 +762,7 @@ void f_02516680(PPCInterpreter_t* __restrict ctx)
 }
 void f_025167E4(PPCInterpreter_t* __restrict ctx)
 {
-	MoveC<orig_f_025167E4>(ctx);
+	MoveC<orig_f_025167E4, true>(ctx);
 }
 
 // dCcD_GObjInf::ClrTgHit(collider r3): clears its last Tg hit and counts its hit mark's effect counter

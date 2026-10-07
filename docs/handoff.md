@@ -288,7 +288,7 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   **The hit's vector (TICKVEC)**: dCcD_Cyl::MoveCAtTg/MoveCAt/MoveCTg and dCcD_Sph::MoveCAt (025165A4, 02516618,
   02516680, 025167E4: vector +0x7C At, +0xB4 Tg, center +0x118) set the vector to the move since the last call: at
   60 half a tick's, from mid-tick, and Link's knockback heads from it (en-mo: 12 degrees against 30's 22, ~120 units
-  apart at its end). WWHD_60FPS_TICKVEC=1 (off by default): the half step's vector from the center its whole step's
+  apart at its end). TICKVEC: the half step's vector from the center its whole step's
   call found; en-mo's knockback within 2 units of 30's to f1046, then 30's meets something at f1047 (34 units of x
   lost) and 60's half moves don't: 34 apart at the end. Gates with it on: checks all MATCH, regress unchanged
   (8e209bd7), predeploy's 50 routes byte-identical, gohmatail 54.0 both (gohmarock not on ww-4 yet). The fights not in
@@ -296,9 +296,20 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   0.4 -> 83.5 (both part at the Darknut's blow, 2 ticks early there; farthest 164 -> 138). With RNDFIX 0.7 its
   first knockback lands 145 units off against 115: speed 25 at both, but 30 moves ~10.7 a tick and hits the wall at
   f1031 (0x6A), 60 moves 15 (off) or 19 (on) and doesn't; the heading's turn moves which side of that wall contact
-  it falls. Kept off (main's rule: a worse route not fully explained). Next for it: the Darknut's blow on 30's tick
-  (its sword's vector then from 30's phase of the swing) and the knockback's wall contact at speed (one move against
-  two half moves).
+  it falls. Then found (WWHD_DEBUG_ATLOG=path: each resolution's At colliders and Link's Tg ones, center, radius,
+  vector): at 60's resolution the Darknut's sword sphere stood ~110 units (half a tick of the swing) ahead of 30's,
+  its blow a resolution early. wepon_hit_check reads its sword's joint (getAnmMtx) before its calc: at 30 the last
+  tick's pose, at 60's half step the whole step's, half a tick on. Now (on by default, WWHD_60FPS_TICKVEC=0 off): the
+  tick's vector everywhere, and for listed types (AtWhole in sixty_step.cpp, TN 191; WWHD_DEBUG_ATWHOLE=name,... adds)
+  the half step's MoveCAt leaves the whole step's place and vector. Not for the Moblin: its spear's place comes from
+  the joint callback in the calc made before its check, its half step's place is 30's, and the whole step's sent
+  Link 30 degrees off. RNDFIX 0.7: Link after the Darknut's blow lands 11.5 units from 30's (was 115), after the
+  Moblin's 34 (was ~120; the rest the wall contact: at f1047 30's one 80-unit move ends deeper in the wall and is
+  pushed (-34, -52), 60's two halves (-0.3, -54): where a move ends decides the push, not fixed: a tick-exact move
+  would show the knockback at 30 Hz). Live random fights: en-mo 1037 -> 138, en-st 681 -> 82, en-bk 368 -> 343, eight
+  the same, en-tn's end 0.4 -> 0.3 (its farthest 164 -> 181: those runs part at the blow, 2 ticks early there from
+  the live random stream). Each new type measured for the mode hold gets its At check too: the atlog at both rates,
+  the attack's center at 60's resolution against 30's.
   Converted (356, 281, 404, 293; session qa's line). Filed B69 (bottom has it): the puzzle's B button shows the sword,
   not Cancel, at 60 (unconverted too). Left: SBOX 293 (a chart save), Obj_HSH 290 (placed as "Hsh"/"Hsh2", stage
   not found yet), and the converted Vfan/Mkiek/MknjD/WARPDEMO20 in their events.
