@@ -899,6 +899,19 @@ void f_02419BF0(PPCInterpreter_t* __restrict ctx)
 	s_inNormalSpeed = outer;
 }
 
+// daPy_lk_c::procWHideMove(Link r3, 0x15): sidling along a wall, its speed by setNormalSpeedF too (the stick's
+// share of the HIO's sidle speed, steps 0.5 to 2.0): at 60 its rise came in each step, the half step's end ahead of 30's
+// tick by up to 2.3 units (the known issue's hands-on check: route sidleboth, owner_drc). Once a tick as above.
+void f_0242AFB8(PPCInterpreter_t* __restrict ctx)
+{
+	if (!Stepped() || !SpeedTick())
+		[[clang::musttail]] return orig_f_0242AFB8(ctx);
+	const bool outer = s_inNormalSpeed;
+	s_inNormalSpeed = true;
+	orig_f_0242AFB8(ctx);
+	s_inNormalSpeed = outer;
+}
+
 // daPy_lk_c::setNormalSpeedF(Link r3, target f1, ...): mNormalSpeed toward the stick's speed
 void f_02416230(PPCInterpreter_t* __restrict ctx)
 {
