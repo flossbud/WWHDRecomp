@@ -1,0 +1,14 @@
+# Route: Dragon Roost Cavern's boss-door room (room 10), the owner's note N18 (session top): the heat haze over
+# the dragon head's two torches (EP 185 "bonbori" at 186/632,6626,115; each calls setSimple(AK_JP_O_KAGEROU00)
+# a step, a particle that samples the frame's copy) seen from the room's back, where the owner stood (their F9
+# recording: 336,5500,3185 facing -z, first person). A stage warp to spawn 5, Link placed there, turned in place
+# to face the door, R (the bow on the 100% save) for the first-person view toward the torches.
+# FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_STAGE=920:M_NewD2,5,10,-1
+#env WWHD_DEBUG_PLACE=1000:336,5500,3185
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; the warp at f920
+1100 LS=-0.4,0 30 # turn in place to face the boss door (-z)
+1150 R 3       # the bow's first-person aim, toward the dragon head
