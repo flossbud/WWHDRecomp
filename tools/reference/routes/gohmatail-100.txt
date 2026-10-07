@@ -1,0 +1,16 @@
+# Route: the grappling hook on Valoo's tail in Gohma's room (the owner's N20: "the scene where the hook wraps around
+# Valoo's tail ... too quick?"; session bottom), with the 100% save and Gohma back (WWHD_DEBUG_BOSS=1, no intro): from
+# the room's spawn the hook out, the view 18 frames up and 2 left onto the tail's post (KUI 250, swinging ~1860 up over
+# the pit), thrown at f1160: it catches (the post's health +0x3A1: 1 at f1174, the pull 2 at f1215), Link is lifted
+# into the swing (0x77 at f1280, 0x78 at f1320). FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by
+# tools/sixty/run.sh.
+#env WWHD_DEBUG_BOSS=1
+#env WWHD_DEBUG_STAGE=920:M_DragB,0,0,-1
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; Gohma's room from the warp at f920
+1100 Y 3       # the grappling hook out (first person)
+1115 RUP 18    # the view up onto the tail's post
+1140 RLEFT 2   # and a little left
+1160 Y 3       # thrown: it wraps the tail
