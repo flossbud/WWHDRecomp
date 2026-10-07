@@ -34,3 +34,15 @@
 02171220    whole       bl 025e1a40     himo2 catch: the coil's first sound (ROPE_COIL_1)
 02171264    whole       bl 025e1a40     himo2 catch: the coil's sound at 13 (ROPE_COIL_2)
 021712B8    whole       bl 025e1a40     himo2 catch: the coil's sound at 26 and 39 (ROPE_COIL_3)
+#
+# ---- the hands-on check (round 11): Link's sidle round a corner (procWHideMove f_0242AFB8, 0x15). Each call pushes
+# him into the wall by 0.8 * HIO mWall field_0x50 along his facing (current.pos -= k sin/cos(shape_angle.y), k at
+# 0x10036080), a per-tick amount the wall's collision takes back: at 60 two full pushes a tick against half the move,
+# so on a corner's angled face (drc, the wall past the jars, z 8250) the collision slid him back and he never turned
+# it (95 units off 30's after). Now h of itself per step.
+0242B454    *h@f0       fnmsubs         procWHideMove: pos.x -= k sin(shape) (into the wall; at the end change)
+0242B46C    *h@f0       fnmsubs         procWHideMove: pos.z -= k cos(shape)
+0242B4C8    *h@f0       fnmsubs         procWHideMove: pos.x -= k sin(shape) (no front floor)
+0242B4DC    *h@f0       fnmsubs         procWHideMove: pos.z -= k cos(shape)
+0242B5E0    *h@f0       fnmsubs         procWHideMove: pos.x -= k sin(shape) (the move)
+0242B5F8    *h@f0       fnmsubs         procWHideMove: pos.z -= k cos(shape)
