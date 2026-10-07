@@ -162,11 +162,7 @@
     },
     {
       "title": "Enemies falling into water",
-      "detail": "At 30 they hang at the surface about 2 ticks before sinking, at 60 they don't (the shared enemy move's ground check)"
-    },
-    {
-      "title": "Hand-made gravity arcs",
-      "detail": "Hand-made gravity still ruled *h arcs about g/4 a tick off 30's; the exact rules: late on the speed.y store where the position moves first, keep on the add where gravity comes first, fall@ before fopAcM_posMove (done: Ganondorf, Puppet Ganon, Molgera's larvae, Chuchus)"
+      "detail": "At 30 they hang at the surface about 2 ticks before sinking, at 60 they sink from the first contact: the in-water check runs a line from the last step's place, a whole tick back at 30 and half a tick at 60 (sampling, not a count; recorded in tick_rules.txt)"
     }
   ],
   "labels": {
