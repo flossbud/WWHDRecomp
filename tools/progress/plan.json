@@ -342,7 +342,7 @@
     },
     {
       "id": "bottom-next",
-      "name": "Round 11 (bottom's): sidling round a corner stuck at 60 (fixed, landing), B69 (the picture puzzle's B button showed the sword, not Cancel: fixed, landing), then Obj_HSH 290's event (from qa's events)"
+      "name": "Round 11 (bottom's): sidling round a corner stuck at 60 (fixed, landing), B69 (the picture puzzle's B button showed the sword, not Cancel: fixed, landing), Obj_HSH 290 (needs nothing: the reading stones), then B70 (a new talk accepted sooner after one ends at 60)"
     },
     {
       "id": "warns",
