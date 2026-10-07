@@ -3369,6 +3369,11 @@ it in a window; D21 "Step 2"):**
     Link's half step (0240D2C0, 0240D784) set B's sword again and the HD port draws the HUD every frame. A converted
     process's half-step writes to them are now put back (sixty.cpp HudStatus, WWHD_60FPS_HUDHOLD=0 off): Cancel shows on
     both frames (captures at swaps 1780/1781).
+  - B70 (found on Obj_HSH's talk: a new talk accepted ~10-18 ticks early at 60): WWHD's own Link field +0x8260 (+0x448
+    +0x7E18, past the GameCube's daPy_lk_c), a wait set to 30 as a talk ends, counted down once a call in his execute
+    (0240CE6C): `whole` (notes_bottom.txt). Found by WWHD_STATE_DUMP_GLOBALS at consecutive ticks (the state dump has
+    every actor's full bytes, past the 0x8000 the track keeps) and a scan for counters running twice as fast at 60.
+    Route hshcut (Siren room 13): a second talk refused at 1094-1116 and taken at 1124 at both rates.
   - Ladders: on top's spawned ladder (ladspawn's spawn line), LRIGHT climbs (LUP is in changeLadderMoveProc's 90-degree
     dead zone; LDOWN steps down). Up and down within 0.16 units, transitions on 30's ticks: nothing to fix.
   - Note on reading tracks: a 60 track's key 2t+1 (shown t.5) is the tick's end, i.e. 30's key 2t; a change at 60's

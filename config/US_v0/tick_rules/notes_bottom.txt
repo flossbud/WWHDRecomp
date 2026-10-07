@@ -46,3 +46,10 @@
 0242B4DC    *h@f0       fnmsubs         procWHideMove: pos.z -= k cos(shape)
 0242B5E0    *h@f0       fnmsubs         procWHideMove: pos.x -= k sin(shape) (the move)
 0242B5F8    *h@f0       fnmsubs         procWHideMove: pos.z -= k cos(shape)
+#
+# ---- B70: a talk started again sooner after one ended at 60 (Obj_HSH's stone, Tower of the Gods room 13: accepted
+# at f1106 where 30 refused until 1116-1124). Link's execute counts down a word at +0x8260 (+0x448 +0x7E18, past
+# the GameCube's daPy_lk_c: WWHD's own), set to 30 as a talk ends, once a call: twice a tick at 60. Found by dumping
+# the globals and the actors each tick after the talk (WWHD_STATE_DUMP_GLOBALS) and tracing the store
+# (WWHD_STATE_CENSUS_TRACE). Its store once a tick, in the whole step (the clamp to 0 after it is harmless).
+0240CE6C    whole       stw             link execute: +0x8260 (WWHD's talk wait) - 1, once a tick
