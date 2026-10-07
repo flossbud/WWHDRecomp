@@ -343,6 +343,9 @@ namespace
 	// dungeons2), and pushing and pulling a block (0x33 procPushMove, 0x34 procPullMove, set up from 0x32 with the stick:
 	// their first step calls the block's push-pull callback, whose count starts the block's walk, at 30 the next tick;
 	// session qa, B48: route crate's crate a tick early, now its slide within 0.75 units of 30's).
+	// And the sidle's move (0x15, procWHideMove, set up from its wait 0x14 by the stick): its speed's change once a tick
+	// in the whole step (sixty_step.cpp), at 30 the next tick's; the half step's call after the set-up read the speed
+	// 0 and went back to the wait (the hands-on check).
 	// Tried and not held: 0x24 (procAutoJump: no change) and 0x36 (procSwimWait: swing 70 -> 137).
 	// WWHD_60FPS_HOLDEXTRA=a,b,... (hex action numbers): more of them, to try (the drifts item)
 	bool HoldsAfter(uint32 action)
@@ -359,7 +362,7 @@ namespace
 				}
 			return v;
 		}();
-		return action == 0x17 || action == 4 || action == 0x42 || action == 0x93 || action == 0x33 || action == 0x34 ||
+		return action == 0x17 || action == 4 || action == 0x42 || action == 0x93 || action == 0x33 || action == 0x34 || action == 0x15 ||
 			std::find(extra.begin(), extra.end(), action) != extra.end();
 	}
 	bool s_linkActionChanged = false;                 // by his action call in the last whole step
