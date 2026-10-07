@@ -228,7 +228,11 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   Link 0x04, steps; scratch route: figureA, WWHD_DEBUG_PLACE=1000:-7,0,-540, A, then the sticks): its view proc's
   turn (`split@r9`), tilt (`*h` after its int truncation), zoom (`*h`) and input wait (`late`) ran twice a tick
   (the trial: the turn 1024 against 512 a tick); now the trial finds only the event edges' one-off messages.
-  Converted (356, 281, 404; session qa's line). Filed B69 (bottom has it): the puzzle's B button shows the sword,
+  **SBOX 293** (the sunken box the crane brings up, for every salvage that gives an item, not only charts): route
+  `salvage` had its setup only in comments (now `#env` lines); its event held at 30 with Link in 0x8F (the crane,
+  140 ticks) and 0xD3 (191): both step now, SBOX within 1.5 units of 30's (6 at worst) once both exist. Filed: the
+  salvage's trigger tick follows the camera (f1173 at 60 with CAMTICK, f1198 without, f1186 at 30).
+  Converted (356, 281, 404, 293; session qa's line). Filed B69 (bottom has it): the puzzle's B button shows the sword,
   not Cancel, at 60 (unconverted too). Left: SBOX 293 (a chart save), Obj_HSH 290 (placed as "Hsh"/"Hsh2", stage
   not found yet), and the converted Vfan/Mkiek/MknjD/WARPDEMO20 in their events.
 - **B50, Link climbed onto ledges too soon** (found on the way: walking into route crate's crate): changeFrontWallTypeProc's
