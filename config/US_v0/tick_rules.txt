@@ -680,7 +680,10 @@
 # countdown at +0x3FB (0209BF2C) the decomp does not have.
 02041FF0    whole       stw             enemy common update: its tick count (+0xC) + 1
 02042004    whole       sthx            enemy common update: its three timers (+0x60) count down
-02042030    whole       sth             enemy common update: a countdown (+0x66) - 1
+02042030    late        sth             enemy common update: a countdown (+0x502, 3 at creation) - 1; the move (f_02043F34) is
+#                                       called only once it reads 0, before the count: whole, the whole step's 1 -> 0 let the
+#                                       half step move (and fall) half a tick early, so an enemy spawned in the air fell a tick
+#                                       ahead of 30's (B73; session bottom). Late: the half step counts after its test, as 30
 # the enemies' shared move (f_02043F34, from the common update; the actor at *r31): its position
 # takes speed * K plus the forward speed (+0x508, turned by the angle), then the knockback (+0x758);
 # speed.y loses gravity
