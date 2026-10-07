@@ -46,3 +46,38 @@
 0234035C    *h:f13      frsp            fig view: the tilt's step (float)(int)(stick y * C), halved after the truncation
 023403A4    *h:f12      fadds           fig view: the zoom's step, 2 * the trigger (from +0xA18)
 023403DC    *h:f12      fadds           fig view: the zoom's step, 2 * the trigger (from +0xA18; the tilt clamped)
+#
+# ---- the Stalfos's spin (ST 190, d_a_st.cpp fight() f_024972A4; session qa, B72). Its spinning attack (behaviors
+# 0xC/0xD, KAITENR1) turns its spin angle m0304 (+0x420) by (s16)(5000 x m0308) a call, m0308 (+0x424) its spin speed
+# (cLib_addCalc2 toward 1 by 0.1, stepped): at 60 the angle turned twice a tick (29520 against 30's 10116 by f1000,
+# route en-st, RNDFIX 0.7), its club's sphere sweeping ahead of 30's. Split: the tick's turn over its two steps. The
+# compiler copied the add (and m0308's ramp before it, kOnceATick) into each of fight()'s 29 paths.
+02497944    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+024979C4    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02497AEC    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02497C30    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02497D5C    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02497DD0    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02497E38    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02497EB8    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02497FE0    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+0249812C    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02498254    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+024982CC    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02498334    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+024983F8    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02498494    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02498598    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+0249865C    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+024986F8    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02498800    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+024988DC    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+0249895C    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02498A3C    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02498B40    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02498C1C    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02498C9C    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02498D8C    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02498E94    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+02498F70    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+024992A0    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call

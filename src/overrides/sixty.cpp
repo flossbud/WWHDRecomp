@@ -3271,8 +3271,11 @@ namespace
 //   MT 216, the Magtail (its mode and sub-state bytes +0x570/+0x571, one s16): its curl (mode 1, a one-call
 //   set-up sub-state 10) stepped a link a half tick early, so its curls and rolls drifted up to 15 ticks off 30's
 //   (route en-mt, RNDFIX 0.7: 14-16 units apart on average, 140-160 at most, Link 8.2 / 88.8 off 30's); held, its
-//   modes on 30's ticks but one each way, 3.5-4 / 17-21 apart, Link 1.4 / 2.5 (session bottom). Not held: ST 190, the
-//   Stalfos (+0x3E0/+0x3E2): unchanged by it, its gap is its blow landing 2.5 ticks late.
+//   modes on 30's ticks but one each way, 3.5-4 / 17-21 apart, Link 1.4 / 2.5 (session bottom).
+//   ST 190, the Stalfos (B72): its fight starts by a chain of one-call set-ups, m1DD0 (+0x2018, s8: 1, then 10 in the
+//   joint callback once it holds its club), then mActionState (+0x3E2) 5 and mFightBehavior (+0x3E4, s8) 10, 11 in
+//   fight(): each half a tick early at 60, its attack a tick early by the first; held, each on 30's tick (route en-st,
+//   RNDFIX 0.7). The s8s are held as their s16 words (the byte after each is padding).
 // WWHD_60FPS_MODEHOLD=0 turns it off; WWHD_DEBUG_MODELATE=name:off[:off...] (a probe) holds another type's fields too.
 namespace
 {
@@ -3288,6 +3291,7 @@ namespace
 			{
 				m[191] = { 0x594u, 0x596u };          // TN, the Darknut
 				m[216] = { 0x570u };                  // MT, the Magtail
+				m[190] = { 0x2018u, 0x3E2u, 0x3E4u }; // ST, the Stalfos (m1DD0, mActionState, mFightBehavior)
 			}
 			if (const char* e = getenv("WWHD_DEBUG_MODELATE"))
 			{

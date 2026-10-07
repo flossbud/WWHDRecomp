@@ -100,3 +100,6 @@
 02516618    src/overrides/sixty_step.cpp       dCcD_Cyl::MoveCAt: the half step's vector over the tick (WWHD_60FPS_TICKVEC=0 off)
 02516680    src/overrides/sixty_step.cpp       dCcD_Cyl::MoveCTg: the half step's vector over the tick (WWHD_60FPS_TICKVEC=0 off)
 025167E4    src/overrides/sixty_step.cpp       dCcD_Sph::MoveCAt: the half step's vector over the tick (WWHD_60FPS_TICKVEC=0 off)
+0251655C    src/overrides/sixty_step.cpp       dCcD_Cyl::StartCAt: noted for the half step's move (TICKVEC)
+02516580    src/overrides/sixty_step.cpp       dCcD_Cyl::StartCTg: noted for the half step's move (TICKVEC)
+025167C0    src/overrides/sixty_step.cpp       dCcD_Sph::StartCAt: noted for the half step's move (TICKVEC)

@@ -290,7 +290,8 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   early, so its curls and rolls drifted off 30's (a roll 15 ticks early by the route's end). Held: the two engaged
   Magtails 13.8/142 and 16.1/163 apart (mean/max) -> 4.0/16.9 and 3.5/20.6, Link 8.2/88.8 -> 1.4/2.5 with his
   actions all on 30's; listed. **ST 190** (+0x3E0/+0x3E2, GC m02C4/mActionState + 0x11C): unchanged by the hold
-  (327 apart either way): its blow lands on Link 2.5 ticks late and throws him another way (B72, qa's); not listed.
+  (327 apart either way): its blow lands on Link 2.5 ticks late and throws him another way (B72, qa's); listed since
+  on other fields (m1DD0, mActionState, mFightBehavior: B72 below).
   **BK 189** (dr at HD 0x49C, mode 0x4A0, action 0x4A2; session main, en-bk, RNDFIX 0.7, TICKVEC on): unheld, its
   mode steps come half a tick to 2 ticks early (the set-up 2 -> 4 at 1021/1021.5 against 30's 1023/1024); held,
   every mode step lands on 30's tick. But the Bokoblin itself goes further from 30's (alive: 7.8-20.8 units against
@@ -337,6 +338,22 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   the same, en-tn's end 0.4 -> 0.3 (its farthest 164 -> 181: those runs part at the blow, 2 ticks early there from
   the live random stream). Each new type measured for the mode hold gets its At check too: the atlog at both rates,
   the attack's center at 60's resolution against 30's.
+- **B72, the Stalfos's blow (session qa; route en-st, RNDFIX 0.7).** Four causes. (1) Its fight starts by a chain
+  of one-call set-ups, m1DD0 (HD +0x2018, s8: 1, then 10 in the joint callback once it holds its club), then
+  mActionState (+0x3E2) and mFightBehavior (+0x3E4, s8): each half a tick early, its spin a tick early. On the mode
+  hold's list (ST 190: those three words). (2) Its spin angle m0304 (+0x420) adds (s16)(5000 x m0308) a call: twice a
+  tick (split rule, enemies_qa.txt). (3) Its spin speed m0308 (+0x424) ramps by cLib_addCalc2 0.1 a tick; ten half
+  steps rounded to 0.50000006 where 30's five make 0.5, and its attack (|m0308| > 0.5) came on a tick early: once a
+  tick (kOnceATick 02499264). (4) TICKVEC: a collider started in the whole step (StartCAt/StartCTg, now overridden)
+  kept the half step's move as its vector, half a tick from mid-tick where 30's first call has none, and Link was
+  thrown the other way: the half step's move then starts it again. Link's first knockback now 50 units from 30's
+  (was 760); the fight within ~20-50 for 150 ticks, then a later blow (f1152) parts. The compiler copied the angle's
+  add and the ramp's call into each of fight()'s 29 paths: all 29 have the rule and the once-a-tick site (the angle
+  within ~30 of 30's through the spin). The later blow: the Stalfos chases Link, whose first knockback landed 50
+  units off (high-speed contact, as the Moblin's), 8 -> 47 units apart through its spin, which a wall then ends
+  1.5 ticks early (60 f1077.5, 30 f1079); not its timing (the club tip's wall line per tick changed nothing). Not AtWhole (its club's place
+  56 units off with it, 21 without). Tried and dropped: putting off a play-once animation's stop for non-Link
+  processes (its 40-tick attack animation already matched; the tick of lead came from the chain).
   Converted (356, 281, 404, 293; session qa's line). Filed B69 (bottom has it): the puzzle's B button shows the sword,
   not Cancel, at 60 (unconverted too). Left: SBOX 293 (a chart save), Obj_HSH 290 (placed as "Hsh"/"Hsh2", stage
   not found yet), and the converted Vfan/Mkiek/MknjD/WARPDEMO20 in their events.

@@ -179,13 +179,23 @@ double rt_step_surface(double y)
 //   en-bk (RNDFIX 0.7, TICKVEC on): the Bokoblin 151 units at most from 30's -> 30 (mean 37.7 -> 13.5), Link 66.7 ->
 //   42.8, and Link's second hit on it on 30's tick (was a tick early) (session main). WWHD_DEBUG_ONCEATICK=LR[,LR...]
 //   adds call sites, as a probe.
+// - 02497908 ... 02499264 (29, one in each of fight()'s paths), cLib_addCalc2: the Stalfos's spin speed m0308 (+0x424;
+//   ST 190, fight() f_024972A4) toward 1 by 0.1 a tick. Its attack comes on when |m0308| > 0.5: ten half steps of
+//   0.05 rounded to 0.50000006 (3F000001) where 30's five of 0.1 make 0.5 exactly, and the club's sphere came on a
+//   tick early, its hit and its vector with it (B72, route en-st, RNDFIX 0.7: Link thrown the other way, 760 units
+//   apart; session qa). Once a tick: 30's values.
 namespace
 {
 	constexpr uint32 kOnceATick[] = { 0x0247E8F0u, 0x02171158u, 0x024428BCu, 0x0243FAC8u,
 		// BK 189's speedF (+0x370) approaches (cLib_addCalc2, every call with r3 = this + 0x370)
 		0x020A0CA0u, 0x020A0CD8u, 0x020A1188u, 0x020A12B8u, 0x020A1334u, 0x020A1370u, 0x020A139Cu, 0x020A1D94u,
 		0x020A67F4u, 0x020A68B8u, 0x020A7430u, 0x020A75B4u, 0x020A7DBCu, 0x020A7E00u, 0x020A7E58u, 0x020A7E98u,
-		0x020B210Cu };
+		0x020B210Cu,
+		// the Stalfos's m0308 ramp, in each of fight()'s 29 paths
+		0x02497908u, 0x02497988u, 0x02497AB0u, 0x02497BF4u, 0x02497D20u, 0x02497D94u, 0x02497DFCu, 0x02497E7Cu,
+		0x02497FA4u, 0x024980F0u, 0x02498218u, 0x02498290u, 0x024982F8u, 0x024983BCu, 0x02498458u, 0x0249855Cu,
+		0x02498620u, 0x024986BCu, 0x024987C4u, 0x024988A0u, 0x02498920u, 0x02498A00u, 0x02498B04u, 0x02498BE0u,
+		0x02498C60u, 0x02498D50u, 0x02498E58u, 0x02498F34u, 0x02499264u };
 	bool OnceATick(uint32 lr)
 	{
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ONCEATICK"); return !(e && atoi(e) == 0); }();
@@ -742,7 +752,7 @@ namespace
 		}();
 		return std::find(types.begin(), types.end(), name) != types.end();
 	}
-	struct TickStart { uint32 c[3]; uint32 step; };
+	struct TickStart { uint32 c[3]; uint32 step; bool started; };
 	std::unordered_map<uint32, TickStart> s_tickStart;   // a collider's center as its whole step's call found it
 	template <void (*Orig)(PPCInterpreter_t*), bool At = false>
 	void MoveC(PPCInterpreter_t* __restrict ctx)
@@ -750,30 +760,51 @@ namespace
 		if (!Stepped() || !TickVec())
 			return Orig(ctx);
 		const uint32 collider = GPR(3);
-		if (At && g_rtActor && AtWhole(rd16(g_rtActor + 0x08)))
+		if (!g_rtHalfTick)
 		{
-			if (!g_rtHalfTick)
-				s_tickStart[collider] = { {}, StepId() };
-			else if (const auto it = s_tickStart.find(collider); it != s_tickStart.end())
-			{
-				const bool whole = it->second.step == StepId() - 1;
-				s_tickStart.erase(it);
-				if (whole)
-					return;                                // the whole step's place and vector stand
-			}
+			s_tickStart[collider] = { { rd32(collider + 0x118), rd32(collider + 0x11C), rd32(collider + 0x120) }, StepId(), false };
 			return Orig(ctx);
 		}
-		if (!g_rtHalfTick)
-			s_tickStart[collider] = { { rd32(collider + 0x118), rd32(collider + 0x11C), rd32(collider + 0x120) }, StepId() };
-		else if (const auto it = s_tickStart.find(collider); it != s_tickStart.end())
-		{
-			if (it->second.step == StepId() - 1)
-				for (int i = 0; i < 3; i++)
-					wr32(collider + 0x118 + 4 * i, it->second.c[i]);
-			s_tickStart.erase(it);
-		}
+		const auto it = s_tickStart.find(collider);
+		if (it == s_tickStart.end())
+			return Orig(ctx);
+		const TickStart t = it->second;
+		s_tickStart.erase(it);
+		if (t.step != StepId() - 1)
+			return Orig(ctx);
+		if (At && g_rtActor && AtWhole(rd16(g_rtActor + 0x08)))
+			return;                                        // the whole step's place and vector stand
+		if (t.started)
+			for (int i = 0; i < 3; i++)                    // started in the whole step: the tick's start, no move
+				wr32(collider + 0x118 + 4 * i, rd32(GPR(4) + 4 * i));
+		else
+			for (int i = 0; i < 3; i++)
+				wr32(collider + 0x118 + 4 * i, t.c[i]);
 		Orig(ctx);
 	}
+	// dCcD_Cyl::StartCAt, StartCTg, dCcD_Sph::StartCAt (collider r3, pos r4): a zero vector and the center = pos (an
+	// attack's first call). At 30 the tick that starts it has no move; a stepping process's half step after its whole
+	// step's start moved it, a vector of half a tick from mid-tick where 30's is 0 (the Stalfos's club's first hit:
+	// Link thrown the other way; B72). The half step's move then starts it again.
+	template <void (*Orig)(PPCInterpreter_t*)>
+	void StartC(PPCInterpreter_t* __restrict ctx)
+	{
+		if (Stepped() && TickVec() && !g_rtHalfTick)
+			s_tickStart[GPR(3)] = { {}, StepId(), true };
+		Orig(ctx);
+	}
+}
+void f_0251655C(PPCInterpreter_t* __restrict ctx)
+{
+	StartC<orig_f_0251655C>(ctx);
+}
+void f_02516580(PPCInterpreter_t* __restrict ctx)
+{
+	StartC<orig_f_02516580>(ctx);
+}
+void f_025167C0(PPCInterpreter_t* __restrict ctx)
+{
+	StartC<orig_f_025167C0>(ctx);
 }
 void f_025165A4(PPCInterpreter_t* __restrict ctx)
 {
