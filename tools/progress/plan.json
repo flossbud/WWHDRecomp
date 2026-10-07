@@ -448,6 +448,7 @@
     "270": "draws nothing (an empty _draw, d_a_coming2.cpp): a manager the King of Red Lions makes, deciding on 30's ticks when sea objects come; what it makes are their own types",
     "282": "never created in WWHD: no stage places it (every stage's rooms and stage file, all layers, scanned by its object name) and no code creates it by process",
     "288": "its execute only sets its matrix (d_a_obj_monument.cpp); the one field that moves (+0x1BC) is its draw's lighting (settingTevStruct), 30's rate at whole ticks (sea room 13, types_test)",
+    "290": "Obj_HSH (d_a_obj_hsehi1, Tower of the Gods rooms 7 and 13): a stone you read (its events hsehi1_talk/hsehi1_tact); its execute sets attention flags and steps the talk's message, no timers or motion. Run through its talk at 30 and 60 (Siren room 13, Hsh2): its bytes the same on every tick (session bottom)",
     "298": "still where placed (Abship,0,0): no state change at 30 over 200 ticks (census, movers.sh)",
     "306": "never created in WWHD: no stage places it (every stage's rooms and stage file, all layers, scanned by its object name) and no code creates it by process",
     "308": "still where placed (Abship,0,0): no state change at 30 over 200 ticks (census, movers.sh)",
