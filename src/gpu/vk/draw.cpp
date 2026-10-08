@@ -34,6 +34,7 @@
 #include <glslang/Public/ResourceLimits.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
 #include <array>
+#include <cstring>
 
 Latte::E_GX2SURFFMT LatteTexture_ReconstructGX2Format(const Latte::LATTE_SQ_TEX_RESOURCE_WORD1_N& texUnitWord1,
 	const Latte::LATTE_SQ_TEX_RESOURCE_WORD4_N& texUnitWord4);  // latte_glue.cpp
@@ -72,13 +73,27 @@ namespace wwhd::gpu
 		// A shader program's Fnv, once a frame per program: a frame's thousands of draws use a few
 		// hundred programs, and hashing every draw's three byte by byte took a quarter of the GPU
 		// thread's time facing Outset at 60 fps (D21). A program doesn't change within a frame.
+		// Its first use in a frame compares the program with a copy of its bytes from the last hash
+		// (memcmp, vectorised) and hashes again only when they differ, so the hash is always the
+		// content's, as before; hashing every program byte by byte each frame was still 9% of the
+		// render thread (docs/research/perf-baseline.md). The per-draw table is larger too: two
+		// programs sharing a slot of the old 1,024 hashed each other out within a frame.
 		uint64 ProgramHash(const uint8* code, uint32 size)
 		{
 			struct Entry { const uint8* code; uint32 size, frame; uint64 hash; };
-			static std::array<Entry, 1024> s_memo{};
+			static std::array<Entry, 4096> s_memo{};
 			Entry& e = s_memo[((uintptr_t)code >> 8) & (s_memo.size() - 1)];   // programs are 256-byte aligned
-			if (e.code != code || e.size != size || e.frame != s.frame + 1)
-				e = { code, size, s.frame + 1, Fnv(code, size) };
+			if (e.code == code && e.size == size && e.frame == s.frame + 1)
+				return e.hash;
+			struct Known { std::vector<uint8> bytes; uint64 hash; };
+			static std::unordered_map<const uint8*, Known> s_known;
+			Known& k = s_known[code];
+			if (k.bytes.size() != size || memcmp(k.bytes.data(), code, size) != 0)
+			{
+				k.bytes.assign(code, code + size);
+				k.hash = Fnv(code, size);
+			}
+			e = { code, size, s.frame + 1, k.hash };
 			return e.hash;
 		}
 

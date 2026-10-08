@@ -108,3 +108,12 @@ Candidates, by what these numbers say:
   rival's "shader-state memo"), index decoding (cache decoded index buffers), `SampleTexture` and descriptors
   (skip redundant binds, as their "CPU paths");
 - name the top guest functions (`f_0281B4EC`, `f_0275EBC0`, `f_0281B970`, `f_02759564`) before anything guest-side.
+
+## Changes measured against this baseline
+
+- **ProgramHash's copy check** (src/gpu/vk/draw.cpp, session qa): a program's first use in a frame compares it with
+  a copy of its bytes (memcmp) and hashes it again only when it changed, and the per-draw table has 4,096 slots, not
+  1,024. Exact (the hash is the content's, as before): checks' captures byte-identical (PSNR inf), predeploy all ok.
+  ProgramHash 9.1% -> 3.1% of the render thread's samples (continue at 60). `perf-ab.sh` at 60, three alternating
+  rounds each (render thread per frame, gameplay): continue 3.20 -> 2.98 ms (-7%), house 3.60 -> 3.28 ms (-9%);
+  every run with it below every run without.
