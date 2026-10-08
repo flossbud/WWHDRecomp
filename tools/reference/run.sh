@@ -23,6 +23,8 @@
 #                                 callers wait on it with `kill -0`
 #   REF_FRESH=1                   delete the emulated NAND (portable/mlc01: saves, account) first,
 #                                 so every run starts from the same state
+#   REF_CPU_MODE=3                Cemu's CPU mode in the game profile (default 0: one host thread, what every
+#                                 check needs; 3: one host thread per core, an experiment for real time)
 #   REF_SAVE=dir                  start from this save: the game's save files (cking.sav, the
 #                                 Pictograph photos cking_pic*.sav, cking_playlog.sav) are copied into
 #                                 the default account's save folder, replacing what is there (after
@@ -51,7 +53,7 @@ if [ -n "${REF_SAVE:-}" ]; then
     rm -rf "$save" && mkdir -p "$save" && cp "$REF_SAVE"/*.sav "$save/"
 fi
 mkdir -p "$portable/controllerProfiles" "$portable/gameProfiles"
-cp "$here/0005000010143500.ini" "$portable/gameProfiles/"
+sed "s/^cpuMode = 0/cpuMode = ${REF_CPU_MODE:-0}/" "$here/0005000010143500.ini" > "$portable/gameProfiles/0005000010143500.ini"
 cp "$here/controller0.xml" "$portable/controllerProfiles/controller0.xml"
 sed "s|<logflag>0</logflag>|<logflag>${REF_LOGFLAG:-0}</logflag>|" "$here/settings.xml" \
     > "$portable/settings.xml"  # also skips the first-run wizard

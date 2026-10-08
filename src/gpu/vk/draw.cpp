@@ -1102,19 +1102,31 @@ namespace wwhd::gpu
 			return off;
 		}
 
-		// uniform blocks (LatteBufferCache_syncGPUUniformBuffers): the range the shader reads
+		// uniform blocks (LatteBufferCache_syncGPUUniformBuffers): the range the shader reads. The shader declares the
+		// block as the quick buffer's size (Cemu's DetermineSize: the highest static index + 1, or the whole 64 KB with
+		// a dynamic index), so it reads nothing past that: only that much is filled (the block's bytes, then zeros) and
+		// taken from the ring. The descriptor's 64 KB range stays in the buffer (RingAlloc keeps 64 KB spare).
+		// WWHD_UBLOCK_FULL=1: 64 KB filled and taken per block, as before (for A/Bs)
 		VkDeviceSize UniformBlock(Shader& sh, bool vertex, uint32 index)
 		{
 			uint32 blockRegs = vertex ? mmSQ_VTX_UNIFORM_BLOCK_START : mmSQ_PS_UNIFORM_BLOCK_START;
 			MPTR phys = LatteGPUState.contextRegister[blockRegs + index * 7 + 0];
 			uint32 size = LatteGPUState.contextRegister[blockRegs + index * 7 + 1] + 1;
+			uint32 readable = 65536;
 			for (auto& q : sh.dec->list_quickBufferList)
 				if (q.index == index)
+				{
 					size = std::min<uint32>(size, q.size);
-			VkDeviceSize off = RingAlloc(65536, s.props.limits.minUniformBufferOffsetAlignment);
-			memset(s.ring.data + off, 0, 65536);
-			if (phys)
-				memcpy(s.ring.data + off, memory_getPointerFromPhysicalOffset(phys), std::min<uint32>(size, 65536));
+					readable = std::min<uint32>(readable, q.size);
+				}
+			static const bool full = [] { const char* e = getenv("WWHD_UBLOCK_FULL"); return e && atoi(e) == 1; }();
+			if (full)
+				readable = 65536;
+			VkDeviceSize off = RingAlloc(readable, s.props.limits.minUniformBufferOffsetAlignment);
+			uint32 copy = phys ? std::min<uint32>(size, readable) : 0;
+			if (copy)
+				memcpy(s.ring.data + off, memory_getPointerFromPhysicalOffset(phys), copy);
+			memset(s.ring.data + off + copy, 0, readable - copy);
 			return off;
 		}
 
@@ -1132,9 +1144,61 @@ namespace wwhd::gpu
 
 		uint32 s_sets = 0, s_imageDescriptors = 0, s_bufferDescriptors = 0;  // allocated from the pool since the last submit
 
+		// Descriptor sets reused (docs/research/deck-plan.md item 3): a set's contents are the shader's (its layout and
+		// buffer bindings, which all point at the ring's start with a fixed range: the draw's data goes in the dynamic
+		// offsets) and the images' (sampler, view, layout), so a draw whose shader and images equal an earlier draw's
+		// since the pool was last reset binds that draw's set, without vkAllocateDescriptorSets and
+		// vkUpdateDescriptorSets. Cleared with the pool (OnSubmitted) and whenever an image view is destroyed
+		// (ForgetSets: a later view may get its handle). WWHD_SETCACHE=0: off.
+		struct CachedSet
+		{
+			const Shader* sh;
+			std::vector<VkDescriptorImageInfo> images;
+			VkDescriptorSet set;
+		};
+		std::unordered_map<uint64, CachedSet> s_setCache;
+		uint64 s_setHits = 0, s_setMisses = 0;                 // WWHD_RENDER_STATS's line
+
+		uint64 SetKey(const Shader& sh, const std::vector<VkDescriptorImageInfo>& images)
+		{
+			auto mix = [](uint64 h, uint64 v) { h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2); return h * 0xFF51AFD7ED558CCDull; };
+			uint64 h = mix(0, (uint64)(uintptr_t)&sh);
+			for (const auto& i : images)
+				h = mix(mix(mix(h, (uint64)i.sampler), (uint64)i.imageView), (uint64)i.imageLayout);
+			return h;
+		}
+
+		bool SameImages(const std::vector<VkDescriptorImageInfo>& a, const std::vector<VkDescriptorImageInfo>& b)
+		{
+			if (a.size() != b.size())
+				return false;
+			for (size_t i = 0; i < a.size(); i++)
+				if (a[i].sampler != b[i].sampler || a[i].imageView != b[i].imageView || a[i].imageLayout != b[i].imageLayout)
+					return false;
+			return true;
+		}
+
 		VkDescriptorSet Descriptors(Shader& sh, bool vertex, const std::vector<VkDescriptorImageInfo>& images,
 			std::vector<uint32>& dynamicOffsets, float vpW, float vpH)
 		{
+			// the draw's data, in binding order: the uniform vars, then the blocks
+			if (sh.mapping.uniformVarsBufferBindingPoint >= 0)
+				dynamicOffsets.push_back((uint32)UniformVars(sh, vertex, vpW, vpH));
+			for (uint8 i : sh.uniformBuffers)
+				dynamicOffsets.push_back((uint32)UniformBlock(sh, vertex, i));
+			static const bool cache = [] { const char* e = getenv("WWHD_SETCACHE"); return !(e && atoi(e) == 0); }();
+			uint64 key = 0;
+			if (cache)
+			{
+				key = SetKey(sh, images);
+				auto it = s_setCache.find(key);
+				if (it != s_setCache.end() && it->second.sh == &sh && SameImages(it->second.images, images))
+				{
+					s_setHits++;
+					return it->second.set;
+				}
+				s_setMisses++;
+			}
 			VkDescriptorSetAllocateInfo ai{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
 			ai.descriptorPool = s.descriptors;
 			ai.descriptorSetCount = 1;
@@ -1166,7 +1230,6 @@ namespace wwhd::gpu
 				w.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 				w.pBufferInfo = &vars;
 				writes.push_back(w);
-				dynamicOffsets.push_back((uint32)UniformVars(sh, vertex, vpW, vpH));
 			}
 			for (uint8 i : sh.uniformBuffers)
 			{
@@ -1177,9 +1240,10 @@ namespace wwhd::gpu
 				w.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 				w.pBufferInfo = &blocks;
 				writes.push_back(w);
-				dynamicOffsets.push_back((uint32)UniformBlock(sh, vertex, i));
 			}
 			vkUpdateDescriptorSets(s.device, (uint32)writes.size(), writes.data(), 0, nullptr);
+			if (cache)
+				s_setCache[key] = CachedSet{ &sh, images, set };
 			return set;
 		}
 
@@ -1401,14 +1465,21 @@ namespace wwhd::gpu
 	void OnSubmitted()
 	{
 		s_sets = s_imageDescriptors = s_bufferDescriptors = 0;
+		s_setCache.clear();
+	}
+
+	void ForgetSets()
+	{
+		s_setCache.clear();
 	}
 
 	// WWHD_RENDER_STATS=N: a line every N frames
 	void DrawStats(uint32 frame)
 	{
 		if (s_statsEvery && frame % s_statsEvery == 0)
-			Log(fmt::format("frame {}: {} draws, {} skipped; {} shaders, {} pipelines; decoded indices {} reused, {} decoded",
-				frame, s_draws, s_skipped, s_shaders.size(), s_pipelines.size(), s_indexHits, s_indexMisses));
+			Log(fmt::format("frame {}: {} draws, {} skipped; {} shaders, {} pipelines; decoded indices {} reused, {} decoded; "
+				"descriptor sets {} reused, {} written",
+				frame, s_draws, s_skipped, s_shaders.size(), s_pipelines.size(), s_indexHits, s_indexMisses, s_setHits, s_setMisses));
 	}
 
 	// The first start without hitches (D20): everything the shader list (shader_list.cpp) has that the

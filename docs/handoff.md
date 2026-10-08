@@ -4065,6 +4065,19 @@ it in a window; D21 "Step 2"):**
 routes' traces, command streams and sound, diff mode). Android: 60 ticks doubles the game's CPU,
 phones throttle; converted systems only cost what they convert.
 
+### Session cloud (from 2026-10-08): performance on the worker
+
+The cloud session (docs/cloud-handoff.md, tailnet mode) works on the worker from checkout `/wwhd/WWHDRecomp-cloud`
+toward the owner's goal: full speed at 60 there (its power-capped i5 standing in for the Deck's CPU).
+- **Tooling**: `tools/sixty/perf/worker-ab.sh` and `worker_absum.py` (the worker's perf-ab; README there).
+  `tools/reference/run.sh` takes `REF_CPU_MODE` (an experiment; default 0, as every check needs).
+- **Baseline** (perf-baseline.md, "the worker"): without the lazy DrawDone the worker is serialized on its GPU (30 at
+  16.7 fps, 60 at 20.8); with it 49 fps at 60, and the limit is the host thread that runs all guest code (96% busy,
+  19.5 ms a frame); ~40% of that thread is the guest's job and sound threads (a Wii U runs them on other cores).
+- **Landed, shared renderer code** (draw.cpp, renderer.cpp, texture.cpp): deck-plan item 3's uniform-block trim and
+  descriptor-set reuse (`WWHD_UBLOCK_FULL=1` / `WWHD_SETCACHE=0` turn them off): the render thread -12.9% a frame on
+  the worker; checks, regress and predeploy unchanged.
+
 ## Waiting on the owner
 
 - **The sound check** of the task loop's fast path (item 1): they listen in a window when they have

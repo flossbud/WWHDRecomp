@@ -394,6 +394,7 @@ namespace wwhd::gpu
 	void DestroyImage(Image& img)
 	{
 		ForgetImage(img.image);
+		ForgetSets();
 		for (VkImageView v : img.layerViews)
 			if (v)
 				vkDestroyImageView(s.device, v, nullptr);

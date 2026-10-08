@@ -233,3 +233,16 @@ How to read it:
   thread's frame; render-thread savings (item 3) show as its CPU a frame, and may help the game thread only through
   the power cap (less package power on one core, higher clocks on the other).
 - A/Bs here therefore run with `WWHD_LAZY_DRAWDONE=1` in both variants, the switch under test on and off.
+
+Measured against it (session cloud): deck-plan item 3's uniform-block trim and descriptor-set reuse, the render
+thread 9.94 -> 8.69 ms a frame (-12.9%), the game thread -1.3% (deck-plan.md, item 3).
+
+**Where the game thread's time goes on the worker** (continue at 60, lazy DrawDone, `WWHD_PROFILE_DEPTH=64`, by each
+sample's outermost guest frame, i.e. the guest thread): the game's main thread (`f_028EA120` > main) 58%, the task
+threads' job worker (`task_ThreadEntry` > `task_MessageLoop` > `job_WorkerTask`: the render job lists, among them
+RenderDisplay's, whose `f_02759564` is the hottest single function, 3.8%) 20%, two sound threads (`f_0281B024`,
+`f_02813C84`: the game's mixing) ~12%, others ~5%. All run on the one host thread (`OSSched`): on the Wii U the job
+and sound threads have cores of their own. So ~40% of the host thread that limits the worker at 60 is work the console
+does in parallel. Cemu's three-host-thread mode (`REF_CPU_MODE=3` in `tools/reference/run.sh`, an experiment) crashes
+at once in our runtime (in an AX callback the interpreter runs): running the guest's cores on host threads of their
+own is a design of its own (D19's open "one host thread or three").

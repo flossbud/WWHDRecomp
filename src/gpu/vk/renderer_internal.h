@@ -155,6 +155,7 @@ namespace wwhd::gpu
 	void DrawInit();
 	void EndRendering();                                          // before anything outside a render pass
 	void OnSubmitted();                                           // per-frame resources can be reused
+	void ForgetSets();                                            // an image view is destroyed: no set may be reused
 	void DrawStats(uint32 frame);
 
 	// texture.cpp

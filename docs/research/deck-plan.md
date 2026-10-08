@@ -133,6 +133,26 @@ reused when its images and uniform data equal the last one's) and a pipeline loo
   state of the one before).
 Each step: `WWHD_RENDER_STATS` counts of hits, captures byte-identical on and off, `perf-ab.sh` (render thread).
 
+**Item 3, two more steps, on ww-4 (session cloud, measured on the worker):**
+- *Uniform blocks filled only as far as the shader reads.* `UniformBlock` took 64 KB of the ring per block per draw,
+  zeroed it all and copied the block. The shader declares the block as its quick buffer's size (Cemu's
+  `DetermineSize`: the highest static index + 1, or the whole 64 KB with a dynamic index) and reads nothing past it,
+  so now only that much is taken and filled (the block's bytes, then zeros); the descriptor's 64 KB range stays in the
+  buffer (`RingAlloc` keeps 64 KB spare). `WWHD_UBLOCK_FULL=1`: as before.
+- *Descriptor sets reused* (the design above): a set's contents are the shader's and the images' alone, so a draw
+  whose shader and images (sampler, view, layout) equal an earlier one's since the pool's reset binds that set (no
+  allocate, no update); cleared with the pool and whenever an image view is destroyed. 92% of sets reused on continue
+  (`WWHD_RENDER_STATS`). `WWHD_SETCACHE=0`: off.
+- A/B (`worker-ab.sh`, continue at 60, lazy DrawDone on in all, 5 rounds paired): the render thread's CPU a frame
+  9.94 -> 9.12 ms with the first (-8.5%), -> 8.69 ms with both (**-12.9%**, every run below every run); the game
+  thread 19.35 -> 19.10 ms (-1.3%, lower in 5/5 rounds: the power cap's share); 49.3 -> 49.9 fps.
+- Gates: checks all MATCH, captures PSNR inf; regress identical to the last ww-4 run; predeploy 50 ok, gohmatail WARN
+  54.0 and gohmarock 4.8 as before.
+- Left: the render thread's libc time on the worker (29% of it; ~16% is `RendererDraw`'s vertex data copied into the
+  ring per draw, ~4% the index cache's compare and copy) and the driver (23%). A vertex copy can't be skipped without
+  knowing the guest's bytes are unchanged, and a compare costs about what the copy does: not worth it without write
+  tracking (item 6). A pipeline lookaside isn't worth it either (`GetPipeline` 1.4%).
+
 ## Android
 
 The same items apply (the code is C++; the recompiled program builds for ARM64 like the rest), plus what the rival

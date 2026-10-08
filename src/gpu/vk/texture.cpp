@@ -745,6 +745,7 @@ namespace wwhd::gpu
 		auto it = s_surfaceViewCache.find(image);
 		if (it == s_surfaceViewCache.end())
 			return;
+		ForgetSets();
 		for (auto& [key, view] : it->second)
 			vkDestroyImageView(s.device, view, nullptr);
 		s_surfaceViewCache.erase(it);

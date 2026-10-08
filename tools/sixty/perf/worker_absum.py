@@ -59,7 +59,7 @@ for path in sorted(glob.glob(os.path.join(d, f"ab-*-{route}-*.frames"))):
 
 keys = [("fps", "fps", 1), ("work", "work ms", 2), ("cpu", "cpu ms", 2), ("gpu", "render ms", 2), ("drawdone", "drawdone", 2),
         ("sched", "game %", 1), ("render", "render %", 1)]
-names = list(runs)
+names = [n for n in rate_of if n in runs] + [n for n in runs if n not in rate_of]   # the variants' order: the first is the base
 if names:
     print("\nmedian over runs:" + "".join(f" {label:>10s}" for _, label, _ in keys))
     for n in names:
