@@ -29,7 +29,9 @@ while IFS= read -r line; do
 done < <(grep '^#env [A-Z_0-9]*=' "$ref/routes/$route" || true)
 [ -n "$save" ] && export REF_SAVE=$save
 export CEMU_BIN=${CEMU_BIN:-$(cd "$here/../.." && pwd)/build/wwhd/wwhd-null} WWHD_NATIVE=${WWHD_NATIVE:-on}
-export WWHD_VIRTUAL_SPEED=${WWHD_VIRTUAL_SPEED:-3}
+# SIXTY_REALTIME=1: real time instead of the virtual clock (no virtual speed): for comparing real-time modes
+# (tools/sixty/tests/rt_routes.sh); the checks never use it
+[ -z "${SIXTY_REALTIME:-}" ] && export WWHD_VIRTUAL_SPEED=${WWHD_VIRTUAL_SPEED:-3}
 for rate in "${rates[@]}"; do
     dir=$out/$rate
     rm -rf "$dir" && mkdir -p "$dir"
@@ -41,7 +43,7 @@ for rate in "${rates[@]}"; do
     ending=(WWHD_EXIT_FRAME=$exit_frame)
     [ -n "${SIXTY_TRACE:-}" ] && ending=(CEMU_HLE_TRACE=$dir/trace.zst CEMU_HLE_TRACE_FILTER=$SIXTY_TRACE CEMU_HLE_TRACE_EXIT_FRAME=$exit_frame)
     env "${ending[@]}" WWHD_60FPS=$sixty WWHD_60FPS_FROM=$from WWHD_STATE_DUMP=$dir REF_PIDFILE=$dir/pid \
-        REF_FRESH=1 REF_VIRTUAL_CLOCK=1 CEMU_INPUT_SCRIPT=$ref/routes/$route "$ref/run.sh"
+        REF_FRESH=1 REF_VIRTUAL_CLOCK=$([ -z "${SIXTY_REALTIME:-}" ] && echo 1) CEMU_INPUT_SCRIPT=$ref/routes/$route "$ref/run.sh"
     while kill -0 "$(cat "$dir/pid")" 2>/dev/null; do sleep 5; echo "run.sh: $rate: $(wc -l < "$dir/hashes.txt" 2>/dev/null || echo 0) actor states"; done
     echo "run.sh: $rate done in $(( $(date +%s) - start )) s: $(tail -1 "$dir/hashes.txt" | cut -d' ' -f1) whole ticks"
 done

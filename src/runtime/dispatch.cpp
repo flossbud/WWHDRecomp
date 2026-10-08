@@ -43,11 +43,14 @@ void LatteBufferCache_notifyDCFlush(MPTR address, uint32 size);
 
 // 60 fps (D21, tools/recomp/runtime/ppc_ops.h): set per frame by src/overrides/sixty.cpp
 bool g_rtHalfTick = false;
-float g_rtStep = 1.0f;
+// The values set around one converted step (the step, its notes, hold) are per host thread: with Cemu's three host
+// threads (real time, docs/research/threads.md) the game's sound and job threads on the other cores never run inside
+// the frame thread's step. g_rtHalfTick is the frame's and stays shared (render jobs on other cores see it as before).
+thread_local float g_rtStep = 1.0f;
 bool g_rtSixty = false;
-float g_rtNote = 0.0f;
-bool g_rtLateNotes = false;
-bool g_rtHold = false;
+thread_local float g_rtNote = 0.0f;
+thread_local bool g_rtLateNotes = false;
+thread_local bool g_rtHold = false;
 
 namespace wwhd::rt
 {
@@ -81,10 +84,12 @@ namespace wwhd::rt
 	// caller's frame), or by another thread, makes the call visible, and so does running interpreted
 	// code (its stores go unseen) or the thread leaving its core (a timeslice ending, a wait: other
 	// threads ran meanwhile, and their stores stop the watch too). The call's OS calls are counted;
-	// the caller judges them. Only the fast paths watch, so there is one host thread and at most one
-	// watch: a thread that begins one ends any other's.
-	Quiet g_quiet;
-	static uint64 s_quietTokens = 0;
+	// the caller judges them. A watch is its host thread's (thread_local, with Cemu's three host threads:
+	// docs/research/threads.md): a thread that begins one ends any other's on that host thread; the other cores' stores
+	// never reach it, which is the same as the watched thread being preempted for the watch's length (the task loop
+	// waits at most 1 ms: what only memory tells the handler is seen at most that much later).
+	thread_local constinit Quiet g_quiet;
+	static std::atomic<uint64> s_quietTokens{ 0 };
 
 	static sint32 s_quietDebug = 0;          // WWHD_QUIET_DEBUG=n: log why the first n watched calls weren't quiet
 
@@ -221,7 +226,9 @@ namespace wwhd::rt
 		{
 			s_mode = Mode::Native;
 			const char* fast = getenv("WWHD_FAST_PATHS");
-			s_fastPaths = !PPCTimer_isVirtualClock() && !coreinit::__CemuIsMulticoreMode() && !(fast && strcmp(fast, "0") == 0);
+			// real time only; with Cemu's three host threads too, now that a quiet watch is its host thread's
+			// (docs/research/threads.md)
+			s_fastPaths = !PPCTimer_isVirtualClock() && !(fast && strcmp(fast, "0") == 0);
 			if (s_fastPaths)
 				Log("native: real-time fast paths on (WWHD_FAST_PATHS=0 turns them off)");
 			if (const char* debug = getenv("WWHD_QUIET_DEBUG"))

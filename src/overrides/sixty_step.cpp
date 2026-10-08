@@ -110,7 +110,7 @@ namespace
 }
 
 // The process whose execute runs (src/overrides/sixty.cpp's fpcM_Execute override sets it)
-extern uint32 g_rtActor;
+extern thread_local uint32 g_rtActor;
 
 // fall@ step rules (tools/recomp/generate.py): an actor's execute that inlines fopAcM_calcSpeed's
 // `speed.y += gravity` (AM2's in each of its states) notes what this step's gravity added, as the
@@ -576,7 +576,7 @@ namespace
 // checked before its set-up (procHangMove passing frame 0 set itself up again every tick; session top).
 // Under a `tick` rule (g_rtTickWindow, its call made in the whole step only) the window is the whole tick's: from
 // where the whole step's starts, a tick's rate long (Link's slash while moving: its speed drop on 30's tick).
-bool g_rtTickWindow = false;
+thread_local bool g_rtTickWindow = false;
 void f_027F2BF8(PPCInterpreter_t* __restrict ctx)
 {
 	if (!Stepped())
@@ -1053,7 +1053,7 @@ namespace
 // step's speed was half-way there, high while he slows: a room's walk-in moved ~0.4 units a tick too far and stopped
 // early on its distance check (B59), and an L-targeting release slid further (B58). Now 30's smoothing in both
 // steps, the half step's from the m359C and the stick before the whole step: both take 30's speed for the tick.
-extern bool g_rtLinkGroundLost;
+extern thread_local bool g_rtLinkGroundLost;
 void f_023FCB9C(PPCInterpreter_t* __restrict ctx)
 {
 	const uint32 link = GPR(3);

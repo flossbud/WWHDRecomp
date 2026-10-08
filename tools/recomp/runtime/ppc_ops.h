@@ -20,9 +20,9 @@ extern uint8* memory_base;
 // the 4 KB pages it keeps (an entry per page: 0 for none), and a store into neither of the pages it
 // touches is passed over here, without the call (most of a half tick's frame's stores are into the heap);
 // g_rtStoreAll sends every store on regardless (a fast path's quiet watch needs them all).
-extern bool g_rtJournalOn;
-extern const uint32* g_rtStorePages;
-extern bool g_rtStoreAll;
+extern thread_local bool g_rtJournalOn;          // per host thread (docs/research/threads.md)
+extern thread_local const uint32* g_rtStorePages;
+extern thread_local bool g_rtStoreAll;
 void rt_journal_store(uint32 ea, uint32 size, uint32 pc);
 #define RT_STORE(ea, n, pc) do { if (g_rtJournalOn) [[unlikely]] { const uint32* rt_pages = g_rtStorePages; \
 	if (!rt_pages || g_rtStoreAll || rt_pages[(uint32)(ea) >> 12] || rt_pages[((uint32)(ea) + (n) - 1) >> 12]) \
@@ -35,9 +35,9 @@ void rt_journal_store(uint32 ea, uint32 size, uint32 pc);
 // WWHD_60FPS_FROM's swap on). The runtime owns them (src/runtime/dispatch.cpp, set by
 // src/overrides/sixty.cpp).
 extern bool g_rtHalfTick;
-extern float g_rtStep;
+extern thread_local float g_rtStep;   // the per-step values are per host thread (docs/research/threads.md)
 // `tick` rules: a call made in a stepping process's whole step checks the whole tick ahead (sixty_step.cpp)
-extern bool g_rtTickWindow;
+extern thread_local bool g_rtTickWindow;
 extern bool g_rtSixty;
 #define RT_WHOLE_TICK() (!g_rtHalfTick)
 // `late` tick rules: once a tick, at its end: the half tick when the code steps at 60 (g_rtStep
@@ -48,12 +48,12 @@ extern bool g_rtSixty;
 // (its value then, by the generated code's else branch: late_wr8 and on, below); if an event's edge
 // then holds that process's half step, src/overrides/sixty.cpp makes the noted stores there, so the
 // tick's once-a-tick stores aren't lost (a count would fall a tick behind 30's for the whole event)
-extern bool g_rtLateNotes;
+extern thread_local bool g_rtLateNotes;
 void rt_late_note(uint32 ea, uint32 size, uint64 value);
 #define RT_SIXTY() (g_rtSixty)
 // `hold` tick rules: skipped while g_rtHold is up (src/overrides/sixty.cpp raises it around a step that must
 // leave the instruction out: Link's half step after his whole step changed his action skips the action's call)
-extern bool g_rtHold;
+extern thread_local bool g_rtHold;
 #define RT_HOLD() (g_rtHold)
 // Step rules (config/US_v0/tick_rules.txt, tools/recomp/generate.py) for code run with a time step
 #define RT_STEPPED() (g_rtStep != 1.0f)
@@ -74,7 +74,7 @@ static inline double rt_step_approach75(double k)
 // speed.y (and of gravity's part) so that its posMove's step ends where 30's tick does
 double rt_step_surface(double y);
 static inline uint32 rt_step_split(uint32 v) { const sint32 s = (sint32)v; return (uint32)(g_rtHalfTick ? s / 2 : s - s / 2); }
-extern float g_rtNote;                 // a value noted by a step rule for a later one in the same step
+extern thread_local float g_rtNote;                 // a value noted by a step rule for a later one in the same step
 // vec@ / arc@: for one call, the vector (three floats) at ea is h of itself; for arc@ (a velocity)
 // y is h y + (1 - h)/2 (y - g_rtNote), g_rtNote its value before gravity was added this step. The
 // vector is put back after the call (outside the store journal: nothing of it is left).

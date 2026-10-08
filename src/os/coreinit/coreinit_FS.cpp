@@ -5,6 +5,7 @@
 // Cemu's (tools/reference/stream_check.sh).
 // wwhd: requests go to the FSA service in place (../iosu/fsa_service.h) rather than through IOSU's
 // kernel; each asynchronous reply reaches the IPC thread as IOSU's did (IPCDriver_PostReply).
+#include <mutex>
 #include <OS/RPL/rpl.h>
 #include "../iosu/fsa_service.h"
 #include "config/ActiveSettings.h"
@@ -466,8 +467,14 @@ namespace coreinit
 	// wwhd: the request served in place, on this thread, then its reply delivered as IOSU's kernel
 	// delivered it once its FSA thread had served it (with the virtual clock, before IOS_IoctlAsync
 	// returned: cemu-patches/0003): to this core's IPC thread, which runs callback(result, context)
+	// Served under a host mutex: Cemu's one IOSU thread used to serialise the FSA client and handle tables, and with
+	// Cemu's three host threads (real time, docs/research/threads.md) guest threads on several cores call in at once.
+	// The serving is host code that never switches guest threads, so the lock is never held across a switch; with one
+	// host thread it is never contended (the checks see no difference).
 	FSA_RESULT __FSAServe(iosu::fsa::FSAShimBuffer* shimBuffer)
 	{
+		static std::mutex s_serveMutex;
+		std::lock_guard serveLock(s_serveMutex);
 		FSA_CMD_OPERATION_TYPE operation = (FSA_CMD_OPERATION_TYPE)shimBuffer->operationType.value();
 		if (shimBuffer->ipcReqType == 0)
 			return iosu::fsa::Ioctl(shimBuffer->fsaDevHandle, operation, shimBuffer);

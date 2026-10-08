@@ -53,6 +53,8 @@ for n in $(seq $([ "${PERF_WARMUP:-1}" = 0 ] && echo 1 || echo 0) "$rounds"); do
         done
         log=$dir/ab-$name-$route-$n
         rm -f "$log.frames" "$log.threads" "$dir/.a" "$dir/.b"
+        # the route's own setup: its "#env NAME=VALUE" lines (stage warps, spawns), as tools/sixty/run.sh applies them
+        while IFS= read -r line; do envs+=("${line#\#env }"); done < <(grep '^#env [A-Z_0-9]*=' "$script" || true)
         if [ "$rate" = 60 ]; then sixty=1 exit=$((frames * 2)) start=1800; else sixty= exit=$frames start=900; fi
         pidf=$dir/pid-$name
         env WWHD_NATIVE=on WWHD_RENDER=vk "${envs[@]}" WWHD_60FPS=$sixty WWHD_AUDIO_HASH=/dev/null WWHD_FRAME_LOG=$log.frames WWHD_EXIT_FRAME=$exit \

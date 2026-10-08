@@ -48,7 +48,7 @@
 
 void wwhd_SetSwapInterval(uint32 interval);       // os/gx2/core/GX2_Misc.cpp
 
-extern const PPCInterpreter_t* g_rtJournalThread;   // the half tick journal's thread (runtime/diff.cpp)
+extern thread_local const PPCInterpreter_t* g_rtJournalThread;   // the half tick journal's thread (runtime/diff.cpp)
 
 namespace
 {
@@ -634,7 +634,7 @@ namespace
 				GuestChain(4).c_str()), fflush(log);
 	}
 
-	uint32 s_drawing = 0;                            // the process whose draw is running (fpcM_Draw), or 0
+	thread_local uint32 s_drawing = 0;                          // the process whose draw is running (fpcM_Draw), or 0
 
 	// WWHD_STATE_CENSUS_HEAP=1: the main thread's stores anywhere else too (heap objects: layouts,
 	// effects, sound), counted by the process being drawn and the first 4 callers, as "heap" in
@@ -2961,7 +2961,7 @@ void f_025162A4(PPCInterpreter_t* __restrict ctx)
 // trigger firing in its half step: made up at the frame's end, the processes after it drew a number early,
 // a Bokoblin wandered off). Only a converted process's own execute counts: its draw pass's draws (with
 // cM_rndF's, f_02019788's caller is the same for most draws) were taken for repeats and the make-up lost.
-extern uint32 g_rtActor;
+extern thread_local uint32 g_rtActor;
 namespace
 {
 	bool RndSync()
@@ -2970,7 +2970,7 @@ namespace
 		return on;
 	}
 	std::unordered_map<uint32, std::vector<uint32>> s_rndHalf;   // a stepping process's half-step draws (callers)
-	uint32 s_rndExec = 0;                           // the converted process whose execute runs (f_025DE58C), or 0
+	thread_local uint32 s_rndExec = 0;                          // the converted process whose execute runs (f_025DE58C), or 0
 	uint64 s_rndMadeUp = 0;
 	FILE* RndLog()
 	{
@@ -3575,8 +3575,8 @@ void f_024F08A8(PPCInterpreter_t* __restrict ctx)
 
 // fpcM_Execute: every process's execute goes through it (fpcM_Management's execute pass, f_025DE788):
 // actors, the camera, the environment, the HUD and menus, scenes. Noted for the half ticks' rollback.
-uint32 g_rtActor = 0;                               // the process whose execute runs (rt_step_fall's)
-bool g_rtLinkGroundLost = false;                    // Link's half step after his whole step's move lost the ground
+thread_local uint32 g_rtActor = 0;                               // the process whose execute runs (rt_step_fall's)
+thread_local bool g_rtLinkGroundLost = false;                    // Link's half step after his whole step's move lost the ground
 
 // The HUD's button labels (B69): the play info's mRStatus, mAStatus, mDoStatus (+0x5BB5..+0x5BB7, the R, B and A
 // buttons) and their forces (+0x5BB8..+0x5BBA; the GameCube's 0x492D..0x4932) are set by the actors' executes each

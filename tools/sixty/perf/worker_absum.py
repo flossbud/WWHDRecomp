@@ -44,7 +44,10 @@ def run(path, rate):
 
 runs = {}   # name -> {round: stats}
 for path in sorted(glob.glob(os.path.join(d, f"ab-*-{route}-*.frames"))):
-    m = re.match(r"ab-(.+)-([^-]+)-(\d+)\.frames$", os.path.basename(path))
+    # ab-NAME-ROUTE-N.frames; the route may hold hyphens (en-tn): with ROUTE given, split on it
+    base = os.path.basename(path)
+    m = (re.match(rf"ab-(.+)-({re.escape(route)})-(\d+)\.frames$", base) if route != "*" else None) \
+        or re.match(r"ab-(.+?)-(.+)-(\d+)\.frames$", base)
     if not m or m.group(3) == "0":
         continue
     name = m.group(1)

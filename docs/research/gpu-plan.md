@@ -71,3 +71,12 @@ Who (2026-10-08): session cloud finishes the three host threads (soak, gates, `W
 fight scene's numbers; session cloud2 takes items 1 and 2 (the renderer) once its write-watch branch lands; session
 cloud3 continues the deck-plan's CPU items (5: the journal, 7: Link's half step), then the settings menu (4). Timing
 runs on the worker go through session cloud.
+
+## Frame dips without slowdown (the owner, 2026-10-08)
+
+Today a pair of frames (whole tick, half tick) that overruns its two vsyncs starts the next pair late, so a dip slows
+the game (pacing.cpp). The owner wants dips to look like dips (fewer frames), not slow motion: 45 fps should play at
+full speed. Design: in real time, when a frame is behind its schedule, the next frame is a whole tick (its half tick
+skipped) until caught up, so the game keeps 30 ticks a second and only the in-between frames go. The first step of
+the uncapped phase (D21 step 4); 30 and the checks (virtual clock, never behind) unchanged. Session cloud, after
+`WWHD_CORES=3` lands.

@@ -16,10 +16,10 @@ void rt_jump_ctr(PPCInterpreter_t* ctx);
 void rt_bad_branch(PPCInterpreter_t* ctx, uint32 ea, uint32 target);
 void rt_trap(PPCInterpreter_t* ctx, uint32 ea);
 void rt_dcache_flush(uint32 ea);
-extern bool g_rtJournalOn;
-extern bool g_rtStoreAll;                          // every store to rt_journal_store, past RT_STORE's page filter (ppc_ops.h)
+extern thread_local bool g_rtJournalOn;
+extern thread_local bool g_rtStoreAll;                          // every store to rt_journal_store, past RT_STORE's page filter (ppc_ops.h)
 void rt_journal_store(uint32 ea, uint32 size, uint32 pc);
-extern void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc);   // the 60 fps tools' store hook (diff.cpp)
+extern thread_local void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc);   // the 60 fps tools' store hook (diff.cpp)
 void rt_yield(PPCInterpreter_t* ctx, uint32 pc);
 
 namespace wwhd::rt
@@ -63,7 +63,7 @@ namespace wwhd::rt
 		uint32 osCalls = 0;
 		bool visible = false;
 	};
-	extern Quiet g_quiet;
+	extern thread_local constinit Quiet g_quiet;           // per host thread: a watch is its host thread's
 	void QuietStore(uint32 ea, uint32 size);               // rt_journal_store during a watch
 	inline bool QuietLive()                                // a watch is on and its call not yet seen to be visible
 	{

@@ -25,6 +25,8 @@
 #                                 so every run starts from the same state
 #   REF_CPU_MODE=3                Cemu's CPU mode in the game profile (default 0: one host thread, what every
 #                                 check needs; 3: one host thread per core, an experiment for real time)
+#   REF_ARGS="..."                more arguments for the emulator (e.g. --force-multicore-interpreter: Cemu's
+#                                 three host threads without its JIT, docs/research/threads.md)
 #   REF_SAVE=dir                  start from this save: the game's save files (cking.sav, the
 #                                 Pictograph photos cking_pic*.sav, cking_playlog.sav) are copied into
 #                                 the default account's save folder, replacing what is there (after
@@ -74,9 +76,10 @@ pidfile=${REF_PIDFILE:-$portable/cemu.pid}
 if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
     echo "already running as pid $(cat "$pidfile") ($pidfile)" >&2; exit 1
 fi
+[ -n "${REF_ARGS:-}" ] && echo "run.sh: emulator arguments: $REF_ARGS"
 for attempt in 1 2 3; do
     : > "$portable/log.txt"
-    (cd "$(dirname "$bin")" && exec "$bin" -g "$game" >/dev/null 2>&1) &
+    (cd "$(dirname "$bin")" && exec "$bin" -g "$game" ${REF_ARGS:-} >/dev/null 2>&1) &
     echo $! > "$pidfile"
     # Cemu 2.6 sometimes deadlocks in a forked child before logging starts; retry if so.
     for _ in $(seq 60); do grep -q 'Run title' "$portable/log.txt" 2>/dev/null && { echo "cemu running (attempt $attempt)"; exit 0; }; sleep 1; done

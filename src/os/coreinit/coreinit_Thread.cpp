@@ -781,8 +781,13 @@ namespace coreinit
 		}
 	}
 
+	// With Cemu's three host threads (real time, docs/research/threads.md) only core 1's host thread sleeps here, on its
+	// own run queue (cores 0 and 2 sleep on their queues' semaphores); its wake-ups are the same: a thread queued on it
+	// (__OSAddReadyThreadToRunQueue wakes it), the next alarm, 1 ms.
 	static bool __OSAnyRunnable()
 	{
+		if (g_isMulticoreMode)
+			return !g_coreRunQueueThreadCount[1].isZero();
 		for (sint32 i = 0; i < PPC_CORE_COUNT; i++)
 			if (!g_coreRunQueueThreadCount[i].isZero())
 				return true;
@@ -1248,6 +1253,81 @@ namespace coreinit
 	uint32 s_lehmer_lcg[PPC_CORE_COUNT] = { 0 };
 	sint32 s_sliceBudget[PPC_CORE_COUNT] = { 0 }; // wwhd-reference: timeslice size, to count executed instructions
 
+	// WWHD_THREAD_STATS=path (a probe, real time): at exit, each guest thread's host CPU time over its timeslices,
+	// with its name, entry, core affinity and priority, to see which work shares the scheduler's host thread
+	// (docs/research/threads.md). Off: one getenv at the first slice.
+	namespace threadstats
+	{
+		struct Entry { uint64 ns = 0; uint32 slices = 0; };
+		std::unordered_map<OSThread_t*, Entry> s_entries;
+		thread_local OSThread_t* t_thread = nullptr;
+		thread_local uint64 t_start = 0;
+
+		uint64 CpuNs()
+		{
+			timespec ts;
+			clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+			return (uint64)ts.tv_sec * 1000000000ull + (uint64)ts.tv_nsec;
+		}
+
+		void Write()
+		{
+			static bool done = false;
+			if (done)
+				return;
+			done = true;
+			FILE* f = fopen(getenv("WWHD_THREAD_STATS"), "w");
+			if (!f)
+				return;
+			uint64 total = 0;
+			for (auto& [t, e] : s_entries)
+				total += e.ns;
+			std::vector<std::pair<uint64, OSThread_t*>> order;
+			for (auto& [t, e] : s_entries)
+				order.push_back({ e.ns, t });
+			std::sort(order.rbegin(), order.rend());
+			fprintf(f, "# thread entry affinity priority cpu_s share slices name\n");
+			for (auto& [ns, t] : order)
+			{
+				const char* name = t->threadName.GetPtr();
+				fprintf(f, "%08x %08x %u %d %.2f %.1f%% %u %s\n", memory_getVirtualOffsetFromPointer(t), (uint32)t->entrypoint.GetMPTR(),
+					(uint32)t->context.affinity & 7, (sint32)t->effectivePriority, ns / 1e9, total ? 100.0 * ns / total : 0.0,
+					s_entries[t].slices, name ? name : "?");
+			}
+			fclose(f);
+		}
+
+		bool On()
+		{
+			static const bool on = [] {
+				if (!getenv("WWHD_THREAD_STATS"))
+					return false;
+				atexit(Write);
+				at_quick_exit(Write);
+				return true;
+			}();
+			return on;
+		}
+
+		void Start(OSThread_t* thread)                   // under the scheduler lock
+		{
+			if (!On())
+				return;
+			t_thread = thread;
+			t_start = CpuNs();
+		}
+
+		void Stop()                                      // under the scheduler lock
+		{
+			if (!On() || !t_thread)
+				return;
+			Entry& e = s_entries[t_thread];
+			e.ns += CpuNs() - t_start;
+			e.slices++;
+			t_thread = nullptr;
+		}
+	}
+
 	void __OSThreadStartTimeslice(OSThread_t* thread, PPCInterpreter_t* hCPU)
 	{
 		uint32 coreIndex = PPCInterpreter_getCoreIndex(hCPU);
@@ -1261,6 +1341,7 @@ namespace coreinit
 		hCPU->remainingCycles += (s_lehmer_lcg[coreIndex] & 0x7F);
 		s_lehmer_lcg[coreIndex] = (uint32)((uint64)s_lehmer_lcg[coreIndex] * 279470273ull % 0xfffffffbull);
 		s_sliceBudget[coreIndex] = hCPU->remainingCycles;
+		threadstats::Start(thread);
 		if (PPCTimer_isVirtualClock())
 		{
 			uint64 now = PPCInterpreter_getMainCoreCycleCounter();
@@ -1399,6 +1480,8 @@ namespace coreinit
 					if (!PPCTimer_isVirtualClock())
 						__OSIdleWait();
 				}
+				else if (!PPCTimer_isVirtualClock())
+					__OSIdleWait();                          // wwhd: core 1's host thread sleeps too (real time)
 			}
 			else
 			{
@@ -1430,6 +1513,7 @@ namespace coreinit
 				PPCTimer_advanceVirtualClock((uint64)executed);
 			s_sliceBudget[core] = 0;
 		}
+		threadstats::Stop();
 		// store context of current thread
 		__OSStoreThread(OSGetCurrentThread(), &hostThread->ppcInstance);
 		cemu_assert_debug(PPCInterpreter_getCurrentInstance() == nullptr);
@@ -1578,7 +1662,13 @@ namespace coreinit
 		if (sSchedulerActive.exchange(true))
 			return;
 		cemu_assert_debug(numCPUEmulationThreads == 1 || numCPUEmulationThreads == 3);
+		// wwhd: WWHD_CORES=3 runs the three emulated cores on three host threads, in real time only (the virtual clock,
+		// every check, keeps one); the game profile's CPU mode stays the interpreter, so Cemu's JIT stays off and our
+		// hook runs everything (docs/research/threads.md). WWHD_CORES=1: one host thread (the default for now).
+		if (const char* cores = getenv("WWHD_CORES"); cores && !PPCTimer_isVirtualClock())
+			numCPUEmulationThreads = atoi(cores) == 3 ? 3 : 1;
 		g_isMulticoreMode = numCPUEmulationThreads > 1;
+		cemuLog_log(LogType::Force, "wwhd: guest cores on {} host thread{}", numCPUEmulationThreads, numCPUEmulationThreads > 1 ? "s" : "");
 		if (numCPUEmulationThreads == 1)
 			sSchedulerThreads.emplace_back(OSSchedulerCoreEmulationThread, (void*)0);
 		else if (numCPUEmulationThreads == 3)

@@ -1036,9 +1036,12 @@ namespace wwhd::gpu
 		// uniform variables (uniformData_updateUniformVars, LatteBufferCache_LoadRemappedUniforms)
 		VkDeviceSize UniformVars(Shader& sh, bool vertex, float viewportW, float viewportH)
 		{
+			// filled in place in the ring (no copy through a vector): the same bytes over [0, size)
 			uint32 size = sh.uniforms.offset_endOfBlock;
-			std::vector<uint8> data(size, 0);
-			auto at = [&](sint32 offset) { return data.data() + offset; };
+			VkDeviceSize off = RingAlloc(std::max<uint32>(size, 16), s.props.limits.minUniformBufferOffsetAlignment);
+			uint8* data = s.ring.data + off;
+			memset(data, 0, size);
+			auto at = [&](sint32 offset) { return data + offset; };
 			const auto& r = LatteGPUState.contextNew;
 			uint32* regs = LatteGPUState.contextRegister;
 			for (sint32 t = 0; t < LATTE_NUM_MAX_TEX_UNITS; t++)
@@ -1097,8 +1100,6 @@ namespace wwhd::gpu
 				float v[4] = { 1.0f, 1.0f, (float)(sint32)viewportW, (float)(sint32)viewportH };
 				memcpy(at(sh.uniforms.offset_fragCoordScale), v, 16);
 			}
-			VkDeviceSize off = RingAlloc(std::max<uint32>(size, 16), s.props.limits.minUniformBufferOffsetAlignment);
-			memcpy(s.ring.data + off, data.data(), size);
 			return off;
 		}
 
@@ -1131,15 +1132,14 @@ namespace wwhd::gpu
 		}
 
 		// the stage's textures, before anything else of the draw is allocated (they may upload)
-		std::vector<VkDescriptorImageInfo> Textures(Shader& sh, bool vertex, std::span<Image* const> attachments)
+		void Textures(Shader& sh, bool vertex, std::span<Image* const> attachments, std::vector<VkDescriptorImageInfo>& images)
 		{
-			std::vector<VkDescriptorImageInfo> images(sh.mapping.getTextureCount());
+			images.resize(sh.mapping.getTextureCount());
 			for (sint32 i = 0; i < sh.mapping.getTextureCount(); i++)
 			{
 				Sampled t = SampleTexture(sh.dec, vertex, sh.mapping.getRelativeTextureUnitFromRelativeBindingPoint(i), attachments);
 				images[i] = { t.sampler, t.view, t.layout };
 			}
-			return images;
 		}
 
 		uint32 s_sets = 0, s_imageDescriptors = 0, s_bufferDescriptors = 0;  // allocated from the pool since the last submit
@@ -1208,7 +1208,8 @@ namespace wwhd::gpu
 			s_sets++;
 			s_imageDescriptors += (uint32)images.size();
 			s_bufferDescriptors += (uint32)sh.uniformBuffers.size() + 1;
-			std::vector<VkWriteDescriptorSet> writes;
+			static std::vector<VkWriteDescriptorSet> writes;    // the render thread's alone: kept, not allocated per draw
+			writes.clear();
 			for (sint32 i = 0; i < sh.mapping.getTextureCount(); i++)
 			{
 				VkWriteDescriptorSet w{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
@@ -1760,15 +1761,17 @@ namespace wwhd::gpu
 				attachments[nAttachments++] = c;
 		if (t.depth)
 			attachments[nAttachments++] = t.depth;
-		std::vector<VkDescriptorImageInfo> vsImages = Textures(*vs, true, { attachments, nAttachments });
-		std::vector<VkDescriptorImageInfo> psImages = Textures(*ps, false, { attachments, nAttachments });
+		static std::vector<VkDescriptorImageInfo> vsImages, psImages;   // per-draw lists, kept (not allocated per draw)
+		Textures(*vs, true, { attachments, nAttachments }, vsImages);
+		Textures(*ps, false, { attachments, nAttachments }, psImages);
 		Reserve();
 
 		Indices idx = DecodeIndices(physIndices, count, prim);
 		// vertex buffers: the range the draw can reach (LatteBufferCache_Sync)
 		uint32 baseVertex = regs[mmSQ_VTX_BASE_VTX_LOC], baseInstance = regs[mmSQ_VTX_START_INST_LOC];
 		uint32 instances = r.VGT_DMA_NUM_INSTANCES.get_NUM_INSTANCES();
-		std::vector<std::pair<uint32, VkDeviceSize>> vbufs;
+		static std::vector<std::pair<uint32, VkDeviceSize>> vbufs;
+		vbufs.clear();
 		for (auto& g : fetch->bufferGroups)
 		{
 			uint32* b = regs + mmSQ_VTX_ATTRIBUTE_BLOCK_START + g.attributeBufferIndex * 7;
@@ -1794,7 +1797,8 @@ namespace wwhd::gpu
 				return fmt::format("depth range {}..{} outside 0..1 (depth target {}x{}, halfZ {})", nearZ, farZ,
 					t.depth ? t.depth->width : 0, t.depth ? t.depth->height : 0, halfZ); });
 
-		std::vector<uint32> dynamicOffsets;
+		static std::vector<uint32> dynamicOffsets;
+		dynamicOffsets.clear();
 		VkDescriptorSet sets[2] = { Descriptors(*vs, true, vsImages, dynamicOffsets, vpW, vpH), VK_NULL_HANDLE };
 		sets[1] = Descriptors(*ps, false, psImages, dynamicOffsets, vpW, vpH);
 		VkPipelineLayout layout = PipelineLayout(vs, ps);

@@ -40,8 +40,8 @@ namespace wwhd::rt
 // The 60 fps tools (src/overrides/sixty.cpp): while set, with g_rtJournalOn, every store generated
 // code makes is handed to it before it is made, with the guest instruction making it (0 from
 // hand-written code; src/runtime/diff.cpp)
-extern bool g_rtJournalOn;
-extern void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc);
+extern thread_local bool g_rtJournalOn;
+extern thread_local void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc);
 // With it, a table of the 4 KB pages it wants (an entry per page: 0 for none; g_rtStorePages, ppc_ops.h):
 // stores into other pages don't reach it (unless a fast path's watch runs); g_rtStoresPassed counts
 // those that called rt_journal_store directly
