@@ -359,6 +359,22 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   181 (89/29.5), MO2 188 (188/42.6), all identical or within a unit; PW 212 with EndLate mixed (Link 69.8 -> 63.2, the
   Poe 600 -> 617). None listed. Parallel runs need a binary each (CEMU_BIN to a copy, as predeploy does): sharing
   build/wwhd/wwhd-null, runs died mid-way without an EXIT line.
+- **Session qa's wrap-up (2026-10-08, at the 95% stop).** Landed in this stretch (each gated: checks MATCH,
+  regress, predeploy 0 FAIL): Link's slash (procCutA's lunge, the bounce held, both speed decreases once a tick),
+  the mode hold as a per-type list (TN, ST, AM2, BL, and MT from bottom), the animation end for Link (his whole
+  step ends a play-once animation his tick would) and EndLate for listed types (BL), ExactFrame (Link's half-step
+  frame bit-exact), TICKVEC (the hit vector over the tick, AtWhole for TN, a whole-step start keeps no move),
+  GroundLate (AM2's landings), the decision hold (FM's hand; reaches cLib_addCalcPosXZ2, cLib_addCalc2,
+  cLib_addCalcPos), the Stalfos's spin (29 split rules, 29 once-a-tick ramps), the Armos's needle, and on the
+  render thread ProgramHash's copy check (-7 to -9%) and the sampler key word by word. Open threads, each with its
+  entry here: en-st's later blow (the club joint's pose at the first hit, 26 units), en-fm's last 48 units (Link's
+  combo near the hand: a parry at 60), en-pw (the hold mixed), en-bb (not a gated approach), high-speed knockback
+  wall contact (left: a fix would show 30 Hz), MO2 not listed (its hold costs a half walk step). Perf:
+  `docs/research/perf-baseline.md` (the numbers and the A/Bs), `docs/research/texture-tracking.md` (page
+  write-protection for textures, designed, not built). Method notes: windows sampled mid-tick and float
+  knife-edges (0.50000006 > 0.5, 16.0000048 > 16) were the commonest causes this round; parallel run.sh runs need
+  a binary each (CEMU_BIN to a copy). Scratch comparison scripts (not in git): the desktop worker's
+  /wwhd/data/m6/WWHDRecomp-qa/b66 (`apart.py`, `apt.py`, `spd.py`, `inst.py`, `modes.py`, `hot.py`, `inl.py`).
 - **en-pw, the Poe (PW 212; session qa; RNDFIX 0.7): measured, not listed.** Its hit at f1051 sets state 2/50, and
   the next call starts its knockback (51, speed -20): at 60 the half step, a tick early, the Poe up to ~600 units off.
   The mode hold on +0x482/+0x484 (mAction/mMode): the Poe within 6.4 units to f1160, ~45 at most after; Link within 3-8
