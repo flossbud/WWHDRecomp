@@ -94,6 +94,7 @@ namespace wwhd::gpu
 	void SubmitAndWait();                                         // ends rendering first; the GPU idle after it
 	void SubmitFrame();                                           // a swap's submit (lazy: not waited for)
 	bool LazyDrawDone();                                          // WWHD_LAZY_DRAWDONE=1 in real time
+	void HostReadBarrier();                                       // a copy's results visible to the host after the fence
 	void WaitPending();                                           // the GPU done with every submitted frame (no submit)
 	void Transition(Image& img, VkImageLayout layout);
 	Image CreateImage(VkFormat format, VkImageAspectFlags aspect, uint32 w, uint32 h, VkImageUsageFlags usage, uint32 layers = 1);

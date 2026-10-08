@@ -315,6 +315,17 @@ namespace wwhd::gpu
 		BeginSlot();
 	}
 
+	// After a copy into a host-visible buffer that the host reads once the fence is waited for: the fence makes the
+	// copy's writes available to the device, not visible to the host; this barrier does that (the spec's
+	// "host access to device memory" rule). It records no work on any image or buffer.
+	void HostReadBarrier()
+	{
+		VkMemoryBarrier b{ VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+		b.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		b.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+		vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &b, 0, nullptr, 0, nullptr);
+	}
+
 	// ---- images ------------------------------------------------------------------------------
 	// every transition waits for everything before it: correctness first
 	void Transition(Image& img, VkImageLayout layout)
@@ -606,6 +617,7 @@ namespace wwhd::gpu
 			r.imageSubresource = { depth ? (VkImageAspectFlags)VK_IMAGE_ASPECT_DEPTH_BIT : img.aspect, 0, layer, 1 };
 			r.imageExtent = { img.width, img.height, 1 };
 			vkCmdCopyImageToBuffer(s.cmd, img.image, img.layout, buf, 1, &r);
+			HostReadBarrier();
 			SubmitAndWait();
 			uint8* px;
 			vkMapMemory(s.device, mem, 0, size, 0, (void**)&px);
@@ -692,6 +704,7 @@ namespace wwhd::gpu
 		r.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
 		r.imageExtent = { tv.width, tv.height, 1 };
 		vkCmdCopyImageToBuffer(s.cmd, img.image, img.layout, buf, 1, &r);
+		HostReadBarrier();
 		SubmitAndWait();
 		uint8* px;
 		vkMapMemory(s.device, mem, 0, size, 0, (void**)&px);

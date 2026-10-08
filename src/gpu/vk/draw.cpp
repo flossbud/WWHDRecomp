@@ -1433,6 +1433,7 @@ namespace wwhd::gpu
 				c.imageOffset = { (sint32)px, (sint32)py, 0 };
 				c.imageExtent = { 1, 1, 1 };
 				vkCmdCopyImageToBuffer(s.cmd, target->image, target->layout, buf, 1, &c);
+				HostReadBarrier();
 				SubmitAndWait();
 				if (mapped[0] != last)
 				{
