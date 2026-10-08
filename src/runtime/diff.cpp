@@ -49,6 +49,8 @@ const uint32* g_rtStorePages = nullptr;
 const PPCInterpreter_t* g_rtJournalThread = nullptr;
 bool g_rtStoreAll = false;
 uint64 g_rtStoresPassed = 0;
+const uint64* g_rtStoreBits = nullptr;
+const int* g_rtStoreHold = nullptr;
 
 namespace wwhd::rt
 {
@@ -71,11 +73,37 @@ void rt_journal_store(uint32 ea, uint32 size, uint32 pc)
 	// call; this is for the stores made by calling here directly). A store it doesn't take still goes to a fast
 	// path's quiet watch (another thread's store, or one outside the watched call's dead stack, ends it), and only
 	// there: before, under a watch every store went through the half tick's hook as well, which drops them
-	const PPCInterpreter_t* t = g_rtJournalThread;
 	const uint32* pages = g_rtStorePages;
+	// the half tick's journal's bytes that need no call (g_rtStoreBits, override.h): a store into those only is passed
+	// over here, before the rest (most of a half tick's stores, ~32,000 a frame on continue, go again into bytes saved
+	// already: the matrix stack, a draw's fields)
+	if (const uint64* bits = g_rtStoreBits; bits && pages && !*g_rtStoreHold && !QuietLive())
+	{
+		const uint32 e = pages[ea >> 12], off = ea & 0xFFF;
+		if (e && off + size <= 0x1000 && size <= 32)
+		{
+			const uint64* b = bits + ((e & 0x3FFFFFFFu) - 1) * 64;
+			const uint32 i0 = off >> 6, i1 = (off + size - 1) >> 6;
+			uint64 m0, m1 = 0;
+			if (i0 == i1)
+				m0 = ((1ull << size) - 1) << (off & 63);
+			else
+			{
+				m0 = ~0ull << (off & 63);
+				const uint32 end = (off + size) & 63;
+				m1 = end ? (1ull << end) - 1 : ~0ull;
+			}
+			if ((b[i0] & m0) == m0 && (b[i1] & m1) == m1)
+			{
+				g_rtStoresPassed++;
+				return;
+			}
+		}
+	}
+	const PPCInterpreter_t* t = g_rtJournalThread;
 	if ((t && PPCInterpreter_getCurrentInstance() != t) || (pages && !pages[ea >> 12] && !pages[(ea + size - 1) >> 12]))
 	{
-		if (g_quiet.token)
+		if (QuietLive())
 			QuietStore(ea, size);
 		else
 			g_rtStoresPassed++;
@@ -84,7 +112,7 @@ void rt_journal_store(uint32 ea, uint32 size, uint32 pc)
 	if (g_rtStoreCensus) [[unlikely]]                // the 60 fps tools (overrides/sixty.cpp)
 	{
 		g_rtStoreCensus(ea, size, pc);
-		if (g_quiet.token)                           // and a fast path's watch (real time at 60 fps)
+		if (QuietLive())                             // and a fast path's watch (real time at 60 fps)
 			QuietStore(ea, size);
 		return;
 	}

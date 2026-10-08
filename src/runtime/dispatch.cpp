@@ -97,7 +97,12 @@ namespace wwhd::rt
 		}
 		g_quiet.visible = true;
 		g_rtJournalOn = g_rtStoreCensus != nullptr;   // nothing more to learn from this call's stores
-		                                              // (but the 60 fps hook may still want them)
+		                                              // (but the 60 fps hook may still want them,
+		static const bool filter = [] { const char* e = getenv("WWHD_JOURNAL_SKIP"); return !(e && atoi(e) == 0); }();
+		if (filter)                                   // through its page filter again: a half tick's frame runs
+			g_rtStoreAll = false;                     // within a watched task call, and every store of it went to
+		                                              // the hook, ~2% of the game thread at 60; WWHD_JOURNAL_SKIP=0:
+		                                              // as before)
 	}
 
 	void QuietStore(uint32 ea, uint32 size)

@@ -46,3 +46,7 @@ extern void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc);
 // stores into other pages don't reach it (unless a fast path's watch runs); g_rtStoresPassed counts
 // those that called rt_journal_store directly
 extern uint64 g_rtStoresPassed;
+// With them, per page of the table (its entry's low 30 bits - 1) 64 words, a bit per byte: a store into bytes all
+// set returns at once (saved already this frame, or not kept), unless *g_rtStoreHold or a fast path's watch
+extern const uint64* g_rtStoreBits;
+extern const int* g_rtStoreHold;

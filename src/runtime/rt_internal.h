@@ -65,6 +65,10 @@ namespace wwhd::rt
 	};
 	extern Quiet g_quiet;
 	void QuietStore(uint32 ea, uint32 size);               // rt_journal_store during a watch
+	inline bool QuietLive()                                // a watch is on and its call not yet seen to be visible
+	{
+		return g_quiet.token && !g_quiet.visible;
+	}
 	inline void QuietOsCall()                              // an OS call from native code
 	{
 		if (g_quiet.token) [[unlikely]]

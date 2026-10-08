@@ -800,6 +800,24 @@ namespace
 		for (const ActorRange& r : s_ranges)
 			if (r.high > r.low)
 				mark(r.low, r.high);
+		// a part page's bytes outside what it keeps need no call (RollbackStore passes them over): their bits set
+		auto keep = [](uint32 low, uint32 high) {
+			for (uint32 p = low >> 12; p <= (high - 1) >> 12; p++)
+				if (const uint32 e = s_page[p]; e & kPartPage)
+				{
+					uint64* bits = s_savedBits[(e & ~kPartPage) - 1].data();
+					const uint32 a = std::max(low, p << 12) - (p << 12), b = std::min<uint64>(high, (uint64)(p + 1) << 12) - (p << 12);
+					for (uint32 i = a; i < b; i++)
+						bits[i >> 6] &= ~(1ull << (i & 63));
+				}
+		};
+		for (uint32 p : s_pagesSet)
+			if (s_page[p] & kPartPage)
+				s_savedBits[(s_page[p] & ~kPartPage) - 1].fill(~0ull);
+		keep(kGlobalsLow, kGlobalsHigh);
+		for (const ActorRange& r : s_ranges)
+			if (r.high > r.low)
+				keep(r.low, r.high);
 	}
 
 	void JournalPagesClear()
@@ -3139,7 +3157,17 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		{
 			JournalPages();
 			if (!Census())
+			{
 				g_rtStorePages = s_page.data();         // HalfTickStore does nothing with stores into other pages
+				// and rt_journal_store passes over those into bytes saved already or not kept (WWHD_JOURNAL_SKIP=0: not),
+				// but while a converted process's execute runs (each store into a global is noted: s_convGlobals)
+				static const bool skip = [] { const char* e = getenv("WWHD_JOURNAL_SKIP"); return !(e && atoi(e) == 0); }();
+				if (skip && !s_savedBits.empty())
+				{
+					g_rtStoreHold = &s_converting;
+					g_rtStoreBits = s_savedBits.front().data();
+				}
+			}
 		}
 	}
 	if (PushSplit())
@@ -3152,6 +3180,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		g_rtJournalOn = wwhd::rt::QuietWatching();   // a fast path's watch may still need it
 		g_rtJournalThread = nullptr;
 		g_rtStorePages = nullptr;
+		g_rtStoreBits = nullptr;
 		g_rtStoreCensus = nullptr;
 		RollbackRestore();
 		JournalPagesClear();
