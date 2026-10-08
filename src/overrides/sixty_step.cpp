@@ -303,8 +303,11 @@ void f_0200F164(PPCInterpreter_t* __restrict ctx)
 	[[clang::musttail]] return orig_f_0200F164(ctx);
 }
 
+bool rt_decision_hold(PPCInterpreter_t* ctx);      // sixty.cpp: the decision hold (a listed site's half step)
 void f_0200F268(PPCInterpreter_t* __restrict ctx)
 {
+	if (Stepped() && rt_decision_hold(ctx))
+		return;
 	if (Stepped())
 	{
 		FPR(1).fp0 = Single(Approach(FPR(1).fp0));

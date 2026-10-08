@@ -3364,6 +3364,100 @@ namespace
 	}
 }
 
+// The decision hold (session qa, route en-fm): a gated approach, a call made only while a test on a moving value
+// passes, decides at 30 once a tick, from the tick's start; a stepping process's half step tests it again mid-tick, and
+// where a window is passed half way the half step decides otherwise (the Floormaster's hand, modeAttack f_02146A34,
+// slides 40 units a tick toward its grab point by cLib_addCalcPosXZ2 while its distance is outside a window: its half
+// step at 4291 was inside it and stopped there, 30's samples 4311 and 4271 carried it on, 20 units off from then on, its
+// grab and Link's parry with it). For the call sites listed (by return address) the half step takes its whole step's
+// decision: a call the whole step didn't make is left out, and one it made that the half step's test skipped is made
+// after the half step from its arguments (the pointers as passed, so the target as it stands then). The first: FM 119's
+// approach (02146B54). WWHD_60FPS_DECISIONHOLD=0 off; WWHD_DEBUG_DECISIONHOLD=LR,... (a probe) adds sites.
+namespace
+{
+	constexpr uint32 kDecisionHold[] = { 0x02146B54u };
+	bool DecisionHoldSite(uint32 lr)
+	{
+		static const std::vector<uint32> extra = [] {
+			std::vector<uint32> v;
+			if (const char* e = getenv("WWHD_DEBUG_DECISIONHOLD"))
+				for (const char* p = e; *p;)
+				{
+					char* end;
+					v.push_back((uint32)strtoul(p, &end, 16));
+					if (end == p) { v.pop_back(); break; }
+					p = *end == ',' ? end + 1 : end;
+				}
+			return v;
+		}();
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_DECISIONHOLD"); return !(e && atoi(e) == 0); }();
+		return on && (std::find(std::begin(kDecisionHold), std::end(kDecisionHold), lr) != std::end(kDecisionHold) ||
+			std::find(extra.begin(), extra.end(), lr) != extra.end());
+	}
+	struct DecisionCall { uint32 actor, lr, r3, r4; double f1, f2; uint32 swap; bool half; };
+	std::vector<DecisionCall> s_decisions;           // the listed calls its whole step made
+	bool s_decisionReplay = false;
+	uint64 s_decisionsSkipped = 0, s_decisionsMade = 0;
+	void DecisionStats()
+	{
+		cemuLog_log(LogType::Force, "wwhd sixty: decision hold: {} half-step calls left out, {} made after the half step", s_decisionsSkipped, s_decisionsMade);
+	}
+}
+
+// From the approach's override (sixty_step.cpp, cLib_addCalcPosXZ2): true when a stepping process's half step leaves
+// this call out
+bool rt_decision_hold(PPCInterpreter_t* ctx)
+{
+	if (s_decisionReplay || !g_rtSixty || g_rtStep == 1.0f || !g_rtActor || !DecisionHoldSite(ctx->spr.LR))
+		return false;
+	static bool once = [] { atexit(DecisionStats); at_quick_exit(DecisionStats); return true; }();
+	(void)once;
+	const uint32 swap = wwhd::os::SwapCount();
+	if (!g_rtHalfTick)
+	{
+		s_decisions.push_back({ g_rtActor, ctx->spr.LR, ctx->gpr[3], ctx->gpr[4], ctx->fpr[1].fp0, ctx->fpr[2].fp0, swap, false });
+		return false;
+	}
+	for (DecisionCall& d : s_decisions)
+		if (d.actor == g_rtActor && d.lr == ctx->spr.LR && d.swap + 1 == swap)
+		{
+			d.half = true;
+			return false;
+		}
+	s_decisionsSkipped++;
+	return true;                                      // its whole step didn't: no move this tick, as at 30
+}
+
+namespace
+{
+	// after a process's half step: the listed calls its whole step made and its half step's test left out
+	void DecisionReplay(PPCInterpreter_t* ctx, uint32 proc)
+	{
+		const uint32 swap = wwhd::os::SwapCount();
+		for (const DecisionCall& d : s_decisions)
+			if (d.actor == proc && d.swap + 1 == swap && !d.half)
+			{
+				Registers regs;
+				regs.Save(ctx);
+				const uint32 sp = (ctx->gpr[1] - 0x100) & ~0xFu;
+				wr32(sp, ctx->gpr[1]);                 // a back chain
+				ctx->gpr[1] = sp;
+				ctx->gpr[3] = d.r3;
+				ctx->gpr[4] = d.r4;
+				ctx->fpr[1].fp0 = ctx->fpr[1].fp1 = d.f1;
+				ctx->fpr[2].fp0 = ctx->fpr[2].fp1 = d.f2;
+				ctx->spr.LR = d.lr;
+				s_decisionReplay = true;
+				f_0200F268(ctx);                       // the half step's share (its override scales it)
+				s_decisionReplay = false;
+				regs.Restore(ctx);
+				s_decisionsMade++;
+			}
+		s_decisions.erase(std::remove_if(s_decisions.begin(), s_decisions.end(),
+			[&](const DecisionCall& d) { return d.actor == proc; }), s_decisions.end());
+	}
+}
+
 // The ground a stepping process's whole step landed on, seen from its next tick (session qa, route en-am): its Acch's
 // ground hit (dBgS_Acch::CrrPos f_024F08A8, the flags at +0x28, 0x20 the ground) comes from its move; at 30 the
 // tick's move lands it and the next tick's call reads it (an Armos AM2 203 lands, rests a tick on the ground, then
@@ -3696,6 +3790,8 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	if (g_rtHalfTick && HudHold())
 		hud.Restore();
 	ModeLateAfter(proc);
+	if (g_rtHalfTick)
+		DecisionReplay(ctx, proc);
 	if (landing && LandSnap())
 		LandSnapAfter(proc, landingBits);
 	if (oneShotHidden)

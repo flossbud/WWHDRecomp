@@ -359,14 +359,17 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   181 (89/29.5), MO2 188 (188/42.6), all identical or within a unit; PW 212 with EndLate mixed (Link 69.8 -> 63.2, the
   Poe 600 -> 617). None listed. Parallel runs need a binary each (CEMU_BIN to a copy, as predeploy does): sharing
   build/wwhd/wwhd-null, runs died mid-way without an EXIT line.
-- **en-fm, the Floormaster (FM 119; session qa; RNDFIX 0.7): recorded, not fixed.** Its attack (modeAttack, mode 8
-  at +0x3C8) slides its hand toward the grab point 40 units a tick (cLib_addCalcPosXZ2, maxStep 40) only while the
-  distance is outside a window: `!(dist > HIO.0E0 && dist < HIO.0C4) && dist < HIO.0E4 + 10`. At 60 the half step
-  samples it mid-tick: at 4291 (f1324's half) it's inside and the hand stops, where 30's samples (4311, then 4271) carry
-  it 20 units further. The hand stays 20 off (41.6 later), and the knock-ons follow: the B at f1390 finds a parry
-  (0x47) at 60, a slash at 30; Link 109 at most. Fixes considered: the approach once a tick (the hand would move at
-  30 Hz on screen), or the half step repeating its whole step's decision (a skipped call made from saved arguments:
-  new machinery). Neither done.
+- **en-fm, the Floormaster (FM 119; session qa; RNDFIX 0.7).** Its attack (modeAttack f_02146A34, mode 8 at +0x3C8)
+  slides its hand toward the grab point 40 units a tick (cLib_addCalcPosXZ2, maxStep 40) only while the distance is
+  outside a window: `!(dist > HIO.0E0 && dist < HIO.0C4) && dist < HIO.0E4 + 10`. At 60 the half step sampled it
+  mid-tick: at 4291 (f1324's half) inside, the hand stopped, where 30's samples (4311, then 4271) carried it 20 units
+  further. **The decision hold** (sixty.cpp, kDecisionHold by return address; WWHD_60FPS_DECISIONHOLD=0 off,
+  WWHD_DEBUG_DECISIONHOLD=LR,... adds): for a listed gated approach the half step takes its whole step's decision (a
+  call the whole step didn't make is left out; one it made and the half step's test skipped is made after the half
+  step from its arguments). FM's 02146B54 the first: the hand within 1.1 units of 30's to f1440 (was 20), Link's
+  farthest 109 -> 95. Left: Link's combo near it (f1373/f1388 a slash's end a tick apart, and the B at f1390 a parry,
+  0x47, at 60), 48 units, and the hand's next choice from where Link stands. Windows sampled mid-tick are a common
+  drift source: other gated approaches can be listed the same way (the probe first).
 - **en-am, the Armos (AM2 203; session qa; route en-am, RNDFIX 0.7; main's fight survey's second, Link 271 units
   at most).** Three causes. (1) Its hop is a chain of one-call set-ups (mode 4 on the ground -> mode 3 -> the jump):
   on the mode hold's list (mAction/mMode +0x3E8/+0x3E9, one s16). (2) Its landing: it acts (reads mAcch's ground hit),
