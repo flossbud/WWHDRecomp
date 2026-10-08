@@ -197,3 +197,14 @@ probe) the AX thread fell from 2,191 to 333 samples. Fix (src/runtime/diff.cpp, 
 names its thread (`g_rtJournalThread`, the frame thread) and `rt_journal_store` passes other threads' stores over at
 once, unless a fast path's quiet watch needs them. AX on continue at 60: 2,191 -> 287 samples (30: 413). Exact: the
 stores passed over were dropped before; checks, regress, predeploy and the save route's sound hash at 60 unchanged.
+
+### The half tick's journal, cheaper (deck-plan item 5)
+
+After the AX fix the journal was still 4.5% of the game thread at 60 (continue: `rt_journal_store` 755 samples
+inclusive, `HalfTickStore` 404, `QuietStore` 146). A fast path's quiet watch (real time, D19) is on for much of a
+half tick, and under it every store went to `rt_journal_store` and on into `HalfTickStore`, including the stores
+into pages the half tick's journal doesn't keep (the heap) and other threads' stores, which `HalfTickStore` then
+drops (without a watch the page filter passes them over before the hook). Now such a store goes to the quiet
+watch only (src/runtime/diff.cpp). Exact: the kept pages are all of .data/.bss and every actor's range
+(JournalPages), and a held draw's stores still all go through (its page table is cleared). Continue at 60: the
+journal 4.5% -> 2.6% of the game thread (957 -> 618 samples; `HalfTickStore` 404 -> 161).

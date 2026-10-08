@@ -66,21 +66,21 @@ void rt_journal_store(uint32 ea, uint32 size, uint32 pc)
 	// the half tick's journal is the frame thread's (g_rtJournalThread, set by overrides/sixty.cpp): another guest
 	// thread running meanwhile (the sound's AX thread, its frame callbacks every 3 ms) is neither put back nor watched
 	// there, and its stores going through all of it made the game's audio code about six times dearer at 60 fps
-	// (docs/research/perf-baseline.md); a fast path's quiet watch still sees them (another thread's store ends it)
-	if (const PPCInterpreter_t* t = g_rtJournalThread; t && !g_quiet.token && PPCInterpreter_getCurrentInstance() != t)
+	// (docs/research/perf-baseline.md). And the half tick's journal takes only stores into the pages it marked (most
+	// of a frame's stores are into the heap: matrices, display lists, packets; RT_STORE checks this too, without the
+	// call; this is for the stores made by calling here directly). A store it doesn't take still goes to a fast
+	// path's quiet watch (another thread's store, or one outside the watched call's dead stack, ends it), and only
+	// there: before, under a watch every store went through the half tick's hook as well, which drops them
+	const PPCInterpreter_t* t = g_rtJournalThread;
+	const uint32* pages = g_rtStorePages;
+	if ((t && PPCInterpreter_getCurrentInstance() != t) || (pages && !pages[ea >> 12] && !pages[(ea + size - 1) >> 12]))
 	{
-		g_rtStoresPassed++;
+		if (g_quiet.token)
+			QuietStore(ea, size);
+		else
+			g_rtStoresPassed++;
 		return;
 	}
-	// the half tick's journal takes only stores into the pages it marked (most of a frame's stores are
-	// into the heap: matrices, display lists, packets), unless a fast path's watch needs them all (RT_STORE
-	// checks this too, without the call; this is for the stores made by calling here directly)
-	if (const uint32* pages = g_rtStorePages)
-		if (!pages[ea >> 12] && !pages[(ea + size - 1) >> 12] && !g_quiet.token)
-		{
-			g_rtStoresPassed++;
-			return;
-		}
 	if (g_rtStoreCensus) [[unlikely]]                // the 60 fps tools (overrides/sixty.cpp)
 	{
 		g_rtStoreCensus(ea, size, pc);
