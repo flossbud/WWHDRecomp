@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # tailnet-setup.sh - a cloud session joins the owner's tailnet and gets the workers (docs/cloud-handoff.md).
-# Run it at the start of every cloud session (it does nothing when already set up): bash tools/cloud/tailnet-setup.sh
+# Run it at the start of every cloud session (it does nothing when already set up): bash tools/cloud/tailnet-setup.sh [NAME]
+# NAME (or WWHD_CLOUD_SESSION) names this session: cloud, cloud2, cloud3... Each needs its own, because it picks the
+# session's worker directory (/wwhd/WWHDRecomp-NAME: sync.sh mirrors the checkout there with --delete, so two
+# sessions sharing one would overwrite each other's trees and builds) and its name on the progress page.
 #
 # Tailscale runs in userspace (no TUN device, no root network setup); SSH goes through `tailscale nc`. The tailnet's
 # rules let this node (tag:wwhd-cloud, an ephemeral key) reach the worker's SSH and the owner's PC's SSH only, and the
@@ -81,8 +84,11 @@ EOF
 chmod 600 ~/.ssh/config
 
 # 3. This checkout as a parallel session: its own worker directory and name, the desktop's login file, the remote
-echo /wwhd/WWHDRecomp-cloud > "$root/.worker-dir"
-echo cloud > "$root/.session"
+name=${1:-${WWHD_CLOUD_SESSION:-$(cat "$root/.session" 2>/dev/null || echo cloud)}}
+case "$name" in cloud|cloud[0-9]*) ;; *) echo "tailnet-setup: the session name must be cloud, cloud2, cloud3..." >&2; exit 2 ;; esac
+echo "/wwhd/WWHDRecomp-$name" > "$root/.worker-dir"
+echo "$name" > "$root/.session"
+echo "tailnet-setup: session $name, worker directory /wwhd/WWHDRecomp-$name"
 printf 'WWHD_DESKTOP_SSH=%s\nWWHD_DESKTOP_HOME=%s\n' "$WWHD_DESKTOP_SSH" "$WWHD_DESKTOP_HOME" > "$root/tools/worker/desktop.env"
 git -C "$root" remote get-url worker >/dev/null 2>&1 || git -C "$root" remote add worker worker:/wwhd/git/WWHDRecomp.git
 git -C "$root" config user.name flossbud

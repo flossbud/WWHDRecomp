@@ -14,8 +14,10 @@ the worker that has the game.
 - **Joining the tailnet.** At the start of every session, run `bash tools/cloud/tailnet-setup.sh`.
   - The cloud environment's variables carry the keys and the logins; the script's header lists them.
   - It joins the owner's tailnet in userspace and writes `~/.ssh/config` for `worker` and the PC.
-  - It sets up this checkout as session `cloud`: worker directory `/wwhd/WWHDRecomp-cloud`, `.session` = cloud, and the
-    `worker` remote.
+  - It sets up this checkout as a named session: `bash tools/cloud/tailnet-setup.sh cloud2` (cloud, cloud2, cloud3...;
+    one name per session, never shared), with worker directory `/wwhd/WWHDRecomp-NAME`, `.session` = NAME, and the
+    `worker` remote. Two sessions on one worker directory overwrite each other's trees and builds (sync.sh mirrors
+    with --delete).
   - Set `WWHD_ON=worker` if the environment hasn't.
   - From then on, `tools/worker/sync.sh`, `tools/worker/w` and `tools/worker/job` work exactly as for a local session.
     Read `docs/handoff.md` ("Parallel sessions", "Infrastructure", "Hard rules").
