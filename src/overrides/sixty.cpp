@@ -3372,7 +3372,10 @@ namespace
 // grab and Link's parry with it). For the call sites listed (by return address) the half step takes its whole step's
 // decision: a call the whole step didn't make is left out, and one it made that the half step's test skipped is made
 // after the half step from its arguments (the pointers as passed, so the target as it stands then). The first: FM 119's
-// approach (02146B54). WWHD_60FPS_DECISIONHOLD=0 off; WWHD_DEBUG_DECISIONHOLD=LR,... (a probe) adds sites.
+// approach (02146B54). WWHD_60FPS_DECISIONHOLD=0 off; WWHD_DEBUG_DECISIONHOLD=LR,... (a probe) adds sites. The
+// approaches it reaches: cLib_addCalcPosXZ2, cLib_addCalc2 and cLib_addCalcPos. Tried and not listed: the Kargaroc's
+// (BB 181) eight (its swoop's place x/z 0205F52C/0205F544: no change; all eight: the Kargaroc 50 -> 33.5 units at most,
+// Link unchanged, route en-bb RNDFIX 0.7).
 namespace
 {
 	constexpr uint32 kDecisionHold[] = { 0x02146B54u };
@@ -3394,7 +3397,7 @@ namespace
 		return on && (std::find(std::begin(kDecisionHold), std::end(kDecisionHold), lr) != std::end(kDecisionHold) ||
 			std::find(extra.begin(), extra.end(), lr) != extra.end());
 	}
-	struct DecisionCall { uint32 actor, lr, r3, r4; double f1, f2; uint32 swap; bool half; };
+	struct DecisionCall { uint32 actor, lr, r3, r4; double f1, f2, f3, f4; uint32 swap; bool half; void (*fn)(PPCInterpreter_t*); };
 	std::vector<DecisionCall> s_decisions;           // the listed calls its whole step made
 	bool s_decisionReplay = false;
 	uint64 s_decisionsSkipped = 0, s_decisionsMade = 0;
@@ -3404,9 +3407,10 @@ namespace
 	}
 }
 
-// From the approach's override (sixty_step.cpp, cLib_addCalcPosXZ2): true when a stepping process's half step leaves
-// this call out
-bool rt_decision_hold(PPCInterpreter_t* ctx)
+// From the approaches' overrides (sixty_step.cpp: cLib_addCalcPosXZ2, cLib_addCalc2, cLib_addCalcPos; fn, the one to
+// replay): true when a stepping process's half step leaves this call out (its return, where it has one, then the
+// distance left: cLib_addCalcPos's)
+bool rt_decision_hold(PPCInterpreter_t* ctx, void (*fn)(PPCInterpreter_t*))
 {
 	if (s_decisionReplay || !g_rtSixty || g_rtStep == 1.0f || !g_rtActor || !DecisionHoldSite(ctx->spr.LR))
 		return false;
@@ -3415,7 +3419,8 @@ bool rt_decision_hold(PPCInterpreter_t* ctx)
 	const uint32 swap = wwhd::os::SwapCount();
 	if (!g_rtHalfTick)
 	{
-		s_decisions.push_back({ g_rtActor, ctx->spr.LR, ctx->gpr[3], ctx->gpr[4], ctx->fpr[1].fp0, ctx->fpr[2].fp0, swap, false });
+		s_decisions.push_back({ g_rtActor, ctx->spr.LR, ctx->gpr[3], ctx->gpr[4], ctx->fpr[1].fp0, ctx->fpr[2].fp0,
+			ctx->fpr[3].fp0, ctx->fpr[4].fp0, swap, false, fn });
 		return false;
 	}
 	for (DecisionCall& d : s_decisions)
@@ -3425,6 +3430,17 @@ bool rt_decision_hold(PPCInterpreter_t* ctx)
 			return false;
 		}
 	s_decisionsSkipped++;
+	if (fn == f_0200EE00)                             // cLib_addCalcPos returns the distance left
+	{
+		const uint32 v = ctx->gpr[3], t = ctx->gpr[4];
+		double d = 0.0;
+		for (int i = 0; i < 3; i++)
+		{
+			const double c = (double)std::bit_cast<float>(rd32(t + 4 * i)) - (double)std::bit_cast<float>(rd32(v + 4 * i));
+			d += c * c;
+		}
+		ctx->fpr[1].fp0 = ctx->fpr[1].fp1 = (double)(float)std::sqrt(d);
+	}
 	return true;                                      // its whole step didn't: no move this tick, as at 30
 }
 
@@ -3446,9 +3462,11 @@ namespace
 				ctx->gpr[4] = d.r4;
 				ctx->fpr[1].fp0 = ctx->fpr[1].fp1 = d.f1;
 				ctx->fpr[2].fp0 = ctx->fpr[2].fp1 = d.f2;
+				ctx->fpr[3].fp0 = ctx->fpr[3].fp1 = d.f3;
+				ctx->fpr[4].fp0 = ctx->fpr[4].fp1 = d.f4;
 				ctx->spr.LR = d.lr;
 				s_decisionReplay = true;
-				f_0200F268(ctx);                       // the half step's share (its override scales it)
+				d.fn(ctx);                             // the half step's share (its override scales it)
 				s_decisionReplay = false;
 				regs.Restore(ctx);
 				s_decisionsMade++;

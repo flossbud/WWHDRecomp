@@ -219,6 +219,8 @@ namespace
 	}
 }
 
+bool rt_decision_hold(PPCInterpreter_t* ctx, void (*fn)(PPCInterpreter_t*));   // sixty.cpp: the decision hold
+
 // cLib_addCalc(f32* v r3, target f1, scale f2, maxStep f3, minStep f4) -> |target - v| f1
 void f_0200ECD4(PPCInterpreter_t* __restrict ctx)
 {
@@ -244,6 +246,8 @@ void f_0200ECD4(PPCInterpreter_t* __restrict ctx)
 // cLib_addCalc2(f32* v r3, target f1, scale f2, maxStep f3)
 void f_0200ED84(PPCInterpreter_t* __restrict ctx)
 {
+	if (Stepped() && rt_decision_hold(ctx, f_0200ED84))
+		return;
 	if (Stepped() && OnceATick(ctx->spr.LR))
 	{
 		if (g_rtHalfTick)
@@ -278,6 +282,8 @@ void f_0200EDC8(PPCInterpreter_t* __restrict ctx)
 // cLib_addCalcPos / cLib_addCalcPosXZ(cXyz* v r3, target r4, scale f1, maxStep f2, minStep f3)
 void f_0200EE00(PPCInterpreter_t* __restrict ctx)
 {
+	if (Stepped() && rt_decision_hold(ctx, f_0200EE00))
+		return;
 	if (Stepped())
 	{
 		FPR(1).fp0 = Single(Approach(FPR(1).fp0));
@@ -309,10 +315,9 @@ void f_0200F164(PPCInterpreter_t* __restrict ctx)
 	[[clang::musttail]] return orig_f_0200F164(ctx);
 }
 
-bool rt_decision_hold(PPCInterpreter_t* ctx);      // sixty.cpp: the decision hold (a listed site's half step)
 void f_0200F268(PPCInterpreter_t* __restrict ctx)
 {
-	if (Stepped() && rt_decision_hold(ctx))
+	if (Stepped() && rt_decision_hold(ctx, f_0200F268))
 		return;
 	if (Stepped())
 	{

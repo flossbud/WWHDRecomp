@@ -369,6 +369,8 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   With its 12 speedF approaches (cLib_addCalc0 on +0x370, 0244BC70..0244D480) once a tick too (cLib_addCalc0 now reads
   kOnceATick; probe WWHD_DEBUG_ONCEATICK): the Poe 63.8 / 7.8 (max / mean; unheld 600 / 108), Link's mean to f1240
   1.2 (4.6), but at f1242 a slash bounces two ticks later and Link's whole-route mean is 32 against 22. Not listed.
+  Session bottom's idea, its body's Tg hit (ChkTgHit at 0244F314) read in the whole step only: no change at all (the
+  whole step reads the hit and sets 2/50; the early move is the next call's set-up, 51, in the half step).
 - **en-fm, the Floormaster (FM 119; session qa; RNDFIX 0.7).** Its attack (modeAttack f_02146A34, mode 8 at +0x3C8)
   slides its hand toward the grab point 40 units a tick (cLib_addCalcPosXZ2, maxStep 40) only while the distance is
   outside a window: `!(dist > HIO.0E0 && dist < HIO.0C4) && dist < HIO.0E4 + 10`. At 60 the half step sampled it
@@ -380,6 +382,9 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   farthest 109 -> 95. Left: Link's combo near it (f1373/f1388 a slash's end a tick apart, and the B at f1390 a parry,
   0x47, at 60), 48 units, and the hand's next choice from where Link stands. Windows sampled mid-tick are a common
   drift source: other gated approaches can be listed the same way (the probe first).
+  The hold now reaches cLib_addCalc2 and cLib_addCalcPos too (a skipped cLib_addCalcPos returns the distance left).
+  Tried on the Kargaroc (BB 181, en-bb): its swoop's place x/z (0205F52C/0205F544) no change, all eight of its
+  approaches the Kargaroc 50 -> 33.5 at most, Link unchanged (89.2): not listed. Its drift isn't a gated approach.
 - **en-am, the Armos (AM2 203; session qa; route en-am, RNDFIX 0.7; main's fight survey's second, Link 271 units
   at most).** Three causes. (1) Its hop is a chain of one-call set-ups (mode 4 on the ground -> mode 3 -> the jump):
   on the mode hold's list (mAction/mMode +0x3E8/+0x3E9, one s16). (2) Its landing: it acts (reads mAcch's ground hit),
