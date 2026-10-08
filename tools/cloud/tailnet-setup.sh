@@ -30,8 +30,12 @@ fi
 command -v ssh >/dev/null || { $sudo apt-get install -y openssh-client >/dev/null 2>&1 || { $sudo apt-get update >/dev/null && $sudo apt-get install -y openssh-client >/dev/null; }; }
 mkdir -p "$st"
 if ! tailscale --socket="$sock" status >/dev/null 2>&1; then
+    # a container restart leaves a daemon or state from the last start, whose ephemeral node is gone: start clean
+    [ -f "$st.pid" ] && kill "$(cat "$st.pid")" 2>/dev/null && sleep 2
+    rm -rf "$st" && mkdir -p "$st"
     setsid nohup tailscaled --tun=userspace-networking --state="$st/tailscaled.state" --socket="$sock" \
         --statedir="$st" > "$st/tailscaled.log" 2>&1 < /dev/null &
+    echo $! > "$st.pid"
     for _ in $(seq 1 30); do [ -S "$sock" ] && break; sleep 1; done
     tailscale --socket="$sock" up --authkey="$TS_AUTHKEY" --hostname="wwhd-cloud" --accept-dns=false
 fi
