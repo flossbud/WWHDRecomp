@@ -344,6 +344,29 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   the same, en-tn's end 0.4 -> 0.3 (its farthest 164 -> 181: those runs part at the blow, 2 ticks early there from
   the live random stream). Each new type measured for the mode hold gets its At check too: the atlog at both rates,
   the attack's center at 60's resolution against 30's.
+- **en-bl, the Bubble (BL 207; session qa, from main's notes; RNDFIX 0.7).** Two causes, and a third in Link.
+  (1) Its state 11 waits for its animation's end (f_020AB020: the morf's frame control state bit or rate 0, tested
+  before its update): at 60 the whole step's update reached the end and the half step's call read it, its dive a
+  tick early (60 976.5, 30 977), its hit on Link with it. EndLate (sixty_step.cpp, per type: 207): a stop reached in
+  a listed type's whole step is put off to its half step's update. (2) Its dive's set-ups (11 -> 12 -> 13 in one
+  call, then the next): on the mode hold's list (+0x422/+0x426). (3) Link: a slash's combo test is frame > 16.0, and
+  60's two half adds of 0.6 made 16.0000048 where 30's one add of 1.2 makes 15.9999981: the next cut a tick early,
+  the B after it finding another part of the slash (the spin's charge, 0x58, not 0x44). His half step's frame is
+  now 30's to the bit (the tick's start + its rate, one single add; ExactFrame, WWHD_60FPS_EXACTFRAME=0 off). Link
+  within 4 units of 30's through the route, every action the same (was 54 at most).
+  **GroundLate and EndLate for other types (session qa, RNDFIX 0.7, Link's / the type's max apart from 30's):** no
+  gain on BK 189 (15.7/43.1 -> 16.1/42.5 with GroundLate), FM 119, WZ 208, MT 216 (2.1/20.5), PZ 210 (5.0/13.3), BB
+  181 (89/29.5), MO2 188 (188/42.6), all identical or within a unit; PW 212 with EndLate mixed (Link 69.8 -> 63.2, the
+  Poe 600 -> 617). None listed. Parallel runs need a binary each (CEMU_BIN to a copy, as predeploy does): sharing
+  build/wwhd/wwhd-null, runs died mid-way without an EXIT line.
+- **en-fm, the Floormaster (FM 119; session qa; RNDFIX 0.7): recorded, not fixed.** Its attack (modeAttack, mode 8
+  at +0x3C8) slides its hand toward the grab point 40 units a tick (cLib_addCalcPosXZ2, maxStep 40) only while the
+  distance is outside a window: `!(dist > HIO.0E0 && dist < HIO.0C4) && dist < HIO.0E4 + 10`. At 60 the half step
+  samples it mid-tick: at 4291 (f1324's half) it's inside and the hand stops, where 30's samples (4311, then 4271) carry
+  it 20 units further. The hand stays 20 off (41.6 later), and the knock-ons follow: the B at f1390 finds a parry
+  (0x47) at 60, a slash at 30; Link 109 at most. Fixes considered: the approach once a tick (the hand would move at
+  30 Hz on screen), or the half step repeating its whole step's decision (a skipped call made from saved arguments:
+  new machinery). Neither done.
 - **en-am, the Armos (AM2 203; session qa; route en-am, RNDFIX 0.7; main's fight survey's second, Link 271 units
   at most).** Three causes. (1) Its hop is a chain of one-call set-ups (mode 4 on the ground -> mode 3 -> the jump):
   on the mode hold's list (mAction/mMode +0x3E8/+0x3E9, one s16). (2) Its landing: it acts (reads mAcch's ground hit),

@@ -3279,6 +3279,9 @@ namespace
 //   AM2 203, the Armos (mAction +0x3E8, mMode +0x3E9, u8s held as one s16; route en-am, RNDFIX 0.7): its hop is a
 //   one-call set-up (mode 4 on the ground sets mode 3, which sets the jump), half a tick early a link; held, with its
 //   landing read a tick later (GroundLate below), its four on 30's hops (session qa).
+//   BL 207, the Bubble (its state words +0x422/+0x426; not in the decomp): its dive's set-up (state 11 waits for its
+//   animation's end, EndLate in sixty_step.cpp, then 12, 13 in the call) half a tick early; held, within ~2 units of
+//   30's through its fight (route en-bl, RNDFIX 0.7; session qa).
 // WWHD_60FPS_MODEHOLD=0 turns it off; WWHD_DEBUG_MODELATE=name:off[:off...] (a probe) holds another type's fields too.
 namespace
 {
@@ -3296,6 +3299,7 @@ namespace
 				m[216] = { 0x570u };                  // MT, the Magtail
 				m[190] = { 0x2018u, 0x3E2u, 0x3E4u }; // ST, the Stalfos (m1DD0, mActionState, mFightBehavior)
 				m[203] = { 0x3E8u };                  // AM2, the Armos (mAction, mMode: u8s, one s16)
+				m[207] = { 0x422u, 0x426u };          // BL, the Bubble (its state words)
 			}
 			if (const char* e = getenv("WWHD_DEBUG_MODELATE"))
 			{

@@ -532,7 +532,7 @@ namespace
 		return on;
 	}
 	// J3DFrameCtrl (HD): rate +0, frame +4, start +8, end +0xA (s16), loop mode +0xE, state +0xF
-	struct CtrlWhole { float frame, rate; sint16 end; uint32 step, held = 0; };
+	struct CtrlWhole { float frame, rate; sint16 end; uint32 step, held = 0; float start = 0.0f; };
 	std::unordered_map<uint32, CtrlWhole> s_ctrlWhole;  // Link's controls as their whole step's update left them
 	bool LinkCtrl(uint32 ctrl)
 	{
@@ -629,6 +629,33 @@ namespace
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ANIMEND"); return !(e && atoi(e) == 0); }();
 		return on;
 	}
+	bool ExactFrame()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_EXACTFRAME"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	// the types whose play-once ends come at the tick's end (below); WWHD_60FPS_ENDLATE=0 off, WWHD_DEBUG_ENDLATE=name,...
+	// (a probe) adds
+	bool EndLate(uint16 name)
+	{
+		static const std::vector<uint16> types = [] {
+			std::vector<uint16> v;
+			const char* off = getenv("WWHD_60FPS_ENDLATE");
+			if (!(off && atoi(off) == 0))
+				v.push_back(207);                         // BL, the Bubble
+			if (const char* e = getenv("WWHD_DEBUG_ENDLATE"))
+				for (const char* p = e; *p;)
+				{
+					char* end;
+					const uint16 n = (uint16)strtoul(p, &end, 10);
+					if (end == p) break;
+					v.push_back(n);
+					p = *end == ',' ? end + 1 : end;
+				}
+			return v;
+		}();
+		return std::find(types.begin(), types.end(), name) != types.end();
+	}
 	// whether a whole tick's update (frame + rate) stops a play-once control
 	bool TickStops(uint32 ctrl, float rate)
 	{
@@ -674,12 +701,42 @@ void f_027F2FC4(PPCInterpreter_t* __restrict ctx)
 		}
 	}
 	const float scaled = pace * (link && !g_rtHalfTick && AnimEnd() && TickStops(frameCtrl, pace) ? 1.0f : Step());
+	const float before = rdf(frameCtrl + 4);
 	wrf(frameCtrl, scaled);
 	orig_f_027F2FC4(ctx);
 	const float after = rdf(frameCtrl);
 	wrf(frameCtrl, after == scaled ? rate : after == -scaled ? -rate : after / Step());
 	if (link && !g_rtHalfTick)
+	{
 		s_ctrlWhole[frameCtrl] = { rdf(frameCtrl + 4), rdf(frameCtrl), sint16(rd16(frameCtrl + 0xA)), StepId() };
+		s_ctrlWhole[frameCtrl].start = before;
+	}
+	// His half step's frame is 30's to the bit: the tick's start plus the tick's rate, one single add as 30's update
+	// makes, not two half adds (their rounding put a slash's frame at 16.0000048 where 30's 15.9999981 stays under its
+	// combo test, frame > 16: the next cut a tick early, route en-bl, session qa). When the tick's update ran plainly
+	// (no set-up, the same rate both steps, no end or wrap: within 0.01 of it). WWHD_60FPS_EXACTFRAME=0 off.
+	else if (link && ExactFrame() && pace == rate && rd8(frameCtrl + 0xF) == 0)
+		if (const auto it = s_ctrlWhole.find(frameCtrl); it != s_ctrlWhole.end() && it->second.step == StepId() - 1
+			&& it->second.rate == rate && it->second.held != StepId())
+		{
+			const float exact = it->second.start + rate;   // a single's add (fadds)
+			if (std::fabs(exact - rdf(frameCtrl + 4)) < 0.01f)
+				wrf(frameCtrl + 4, exact);
+		}
+	// For the types listed (EndLate), a play-once end (loop modes 0 and 1) comes at the tick's end. They test it before
+	// their update (isStop: the state bit or rate 0): at 30 the tick whose update passes the end stops it and the next
+	// tick's call reads it; at 60 a whole step's half update that passed it stopped it there and the half step's call
+	// read it a tick before 30's (the Bubble BL 207, state 11 waiting for its animation's end: its dive a tick early,
+	// its hit on Link with it; route en-bl, session qa). A stop in the whole step is put off: the control stays just
+	// short of its end, running, and the half step's update stops it.
+	if (!link && !g_rtHalfTick && rate != 0.0f && rd8(frameCtrl + 0xE) <= 1 && rdf(frameCtrl) == 0.0f
+		&& (rd8(frameCtrl + 0xF) & 1) && g_rtActor && EndLate(rd16(g_rtActor + 0x08)))
+	{
+		const float start = float(sint16(rd16(frameCtrl + 8))), end = float(sint16(rd16(frameCtrl + 0xA)));
+		wrf(frameCtrl + 4, rate > 0.0f ? end - 0.001f : start + 0.001f);
+		wrf(frameCtrl, rate);
+		wr8(frameCtrl + 0xF, rd8(frameCtrl + 0xF) & ~1);
+	}
 }
 
 // ---- systems that run on whole ticks --------------------------------------------------------------
