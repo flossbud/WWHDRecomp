@@ -128,3 +128,9 @@ Developer tools, for those working on the recompiler itself:
 - [SuperDude88/TWWHD-Randomizer](https://github.com/SuperDude88/TWWHD-Randomizer) (MIT): symbol names tagged
   `twwhd-randomizer@…` in `config/US_v0/symbols.csv`.
 - Built incrementally with AI coding agents (Claude).
+
+## License
+
+[MPL-2.0](LICENSE), the same license as Cemu, which much of the runtime derives from. It covers this project's code
+and tools only. The game itself, and everything generated from your copy of it, is not part of this repository and
+not covered by it.
