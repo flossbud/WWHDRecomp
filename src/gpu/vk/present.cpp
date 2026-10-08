@@ -164,7 +164,10 @@ namespace wwhd::gpu
 		if (!img.image || img.width != s_overlay.w || img.height != s_overlay.h || img.format != format)
 		{
 			if (img.image)
+			{
+				WaitPending();                                   // the lazy path: the last frame's submit may still blit it
 				DestroyImage(img);
+			}
 			img = CreateImage(format, VK_IMAGE_ASPECT_COLOR_BIT, s_overlay.w, s_overlay.h, 0);
 			s_overlayUploaded = 0;
 		}
