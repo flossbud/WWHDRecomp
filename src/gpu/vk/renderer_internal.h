@@ -159,6 +159,23 @@ namespace wwhd::gpu
 	void ForgetSets();                                            // an image view is destroyed: no set may be reused
 	void DrawStats(uint32 frame);
 
+	// gpu_timing.cpp: WWHD_GPU_TIMING=1, GPU time by kind of work (docs/research/gpu-plan.md item 1)
+	namespace timing
+	{
+		enum class Kind : uint8 { Other, Pass, Upload, Copy, Mips, Grow, Reset, Clear, Scan, Present, Count };
+		bool On();
+		void Init();                                              // after the device and the first command buffer
+		void Begin();                                             // a command buffer begins (its slot's fence waited for)
+		void Mark(Kind kind, std::string_view label = {});        // from here on the GPU does `kind` work
+		void Frame();                                             // a swap
+		// a span of one kind of work, "other" after it
+		struct Scope
+		{
+			Scope(Kind kind, std::string_view label = {}) { Mark(kind, label); }
+			~Scope() { Mark(Kind::Other); }
+		};
+	}
+
 	// texture.cpp
 	struct Sampled { VkImageView view; VkSampler sampler; VkImageLayout layout; };
 	void TextureInit();

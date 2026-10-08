@@ -120,7 +120,7 @@ target_link_libraries(wwhd_frontend PRIVATE SDL3::SDL3 CemuAudio)   # SDL3 for t
 set_source_files_properties(frontend/window_system.cpp PROPERTIES COMPILE_DEFINITIONS WWHD_NULL_GPU)
 
 add_library(wwhd_gpu OBJECT gpu/null_gpu.cpp gpu/vk/vk.cpp gpu/vk/renderer.cpp gpu/vk/present.cpp
-	gpu/vk/shader_cache.cpp gpu/vk/shader_list.cpp gpu/vk/draw.cpp gpu/vk/texture.cpp gpu/vk/latte_glue.cpp)
+	gpu/vk/shader_cache.cpp gpu/vk/shader_list.cpp gpu/vk/draw.cpp gpu/vk/texture.cpp gpu/vk/latte_glue.cpp gpu/vk/gpu_timing.cpp)
 wwhd_like_cemu(wwhd_gpu)
 target_include_directories(wwhd_gpu PRIVATE gpu)
 

@@ -438,6 +438,7 @@ namespace wwhd::gpu
 		void Upload(Texture& t, const TexDesc& d, const TexFormat& f)
 		{
 			EndRendering();
+			timing::Scope span(timing::Kind::Upload);
 			VkImageMemoryBarrier b{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
 			b.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
 			b.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -666,6 +667,7 @@ namespace wwhd::gpu
 			if (c.written != surface.written)
 			{
 				EndRendering();
+				timing::Scope span(timing::Kind::Copy);
 				Transition(c.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 				if (w > surface.width || h > surface.height)           // the part the surface doesn't cover
 				{
@@ -784,6 +786,7 @@ namespace wwhd::gpu
 				if (!copying)
 				{
 					EndRendering();
+					timing::Mark(timing::Kind::Mips);
 					barrier(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 					copying = true;
 				}
@@ -796,7 +799,10 @@ namespace wwhd::gpu
 				c.written[level] = src->written;
 			}
 			if (copying)
+			{
 				barrier(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+				timing::Mark(timing::Kind::Other);
+			}
 			return &c;
 		}
 	}

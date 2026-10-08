@@ -184,6 +184,7 @@ namespace wwhd::gpu
 			Log("lazy GX2DrawDone: two frames in flight (WWHD_LAZY_DRAWDONE)");
 		}
 		DrawInit();
+		timing::Init();
 
 		// the reference's screenshot settings (cemu-patches/0007)
 		if (const char* spec = getenv("CEMU_SHOT_FRAMES"))
@@ -234,6 +235,7 @@ namespace wwhd::gpu
 			VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 			Check(vkBeginCommandBuffer(s.cmd, &bi), "vkBeginCommandBuffer");
 			s.bound = {};
+			timing::Begin();
 			// the lazy path: the last frame's submit wasn't waited for, so its work may still run on the GPU, and
 			// barriers are recorded only where an image changes layout. An image written at the end of one frame and
 			// again at the start of the next in the same layout would be a hazard with nothing between: this orders
@@ -252,6 +254,7 @@ namespace wwhd::gpu
 		void Submit(VkSemaphore signal = VK_NULL_HANDLE)
 		{
 			EndRendering();
+			timing::Mark(timing::Kind::Other);                        // the last span's end
 			Check(vkEndCommandBuffer(s.cmd), "vkEndCommandBuffer");
 			VkSubmitInfo si{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
 			si.commandBufferCount = 1;
@@ -509,6 +512,7 @@ namespace wwhd::gpu
 		if (img.image && img.width >= w && img.height >= h && img.layers >= layers)
 			return img;
 		EndRendering();                                             // clears and copies follow
+		timing::Scope span(timing::Kind::Grow);
 		Format f = depth ? DepthFormat(gx2) : ColorFormat(gx2);
 		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT |
 			(depth ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
@@ -565,6 +569,7 @@ namespace wwhd::gpu
 			if (newest <= img.written || newest <= img.resetFor)
 				continue;
 			img.resetFor = newest;
+			timing::Scope span(timing::Kind::Reset);
 			Transition(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 			VkImageSubresourceRange all{ img.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
 			if (img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT)
@@ -753,6 +758,7 @@ namespace wwhd::gpu
 		if (nWords < 23)
 			return;
 		EndRendering();
+		timing::Scope span(timing::Kind::Clear);
 		uint32 mask = p[0];
 		if ((mask & 1) && (uint32)p[1])
 		{
@@ -809,6 +815,7 @@ namespace wwhd::gpu
 		if (nWords < 9)
 			return;
 		EndRendering();
+		timing::Scope span(timing::Kind::Scan);
 		uint32 addr = p[0], w = p[1], h = p[2], pitch = p[3], gx2 = p[7], target = p[8];
 		static const bool trace = getenv("WWHD_RENDER_TRACE") != nullptr;
 		if (trace)
@@ -845,7 +852,11 @@ namespace wwhd::gpu
 		if (shotDrc && s.frame > 1 && s.shotFrames.count(s.frame - 1) && s.scan[1].image)
 			WritePPM(s.scan[1], s.frame - 1, "drc");
 		ResetOverwrittenSurfaces();
-		PresentRecord(s.scan[0]);
+		{
+			timing::Scope span(timing::Kind::Present);
+			PresentRecord(s.scan[0]);
+		}
+		timing::Frame();
 		SubmitFrame();
 		PresentQueue();
 		cache::SaveNowAndThen();

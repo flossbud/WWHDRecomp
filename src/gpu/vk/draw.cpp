@@ -494,6 +494,18 @@ namespace wwhd::gpu
 				w = std::min(w, t.depth->width);
 				h = std::min(h, t.depth->height);
 			}
+			if (timing::On())
+			{
+				const Image* first = nullptr;
+				uint32 colors = 0;
+				for (Image* c : t.color)
+					if (c)
+						first = first ? first : c, colors++;
+				const uint32 layers = first ? first->layers : t.depth ? t.depth->layers : 1;
+				timing::Mark(timing::Kind::Pass, fmt::format("{}x{} c{}{}{}{}", w, h, colors,
+					first ? fmt::format(" f{}", (int)first->format) : "", t.depth ? " d" : "",
+					layers > 1 ? fmt::format(" L{}", layers) : ""));
+			}
 			VkRenderingInfo ri{ VK_STRUCTURE_TYPE_RENDERING_INFO };
 			ri.renderArea = { { 0, 0 }, { w, h } };
 			ri.layerCount = 1;
@@ -1461,6 +1473,7 @@ namespace wwhd::gpu
 		{
 			vkCmdEndRendering(s.cmd);
 			s_rendering = false;
+			timing::Mark(timing::Kind::Other);
 		}
 	}
 
