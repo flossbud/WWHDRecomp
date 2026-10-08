@@ -400,6 +400,10 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   Converted (356, 281, 404, 293; session qa's line). Filed B69 (bottom has it): the puzzle's B button shows the sword,
   not Cancel, at 60 (unconverted too). Left: SBOX 293 (a chart save), Obj_HSH 290 (placed as "Hsh"/"Hsh2", stage
   not found yet), and the converted Vfan/Mkiek/MknjD/WARPDEMO20 in their events.
+  Traced further (after ExactFrame and the rest): the first hit's knockback heads 7 degrees off (-10572 against
+  30's -11787; both hit vectors 0, Link's Tg the same), because the club's sphere center at that resolution stands
+  26 units off 30's; AtWhole for ST puts it 66 off (its club isn't the lagged-joint pattern). So the club joint's pose
+  within the spin differs: a next layer, not done. The second round's 1.5 ticks and f1152's bounce follow from it.
 - **B50, Link climbed onto ledges too soon** (found on the way: walking into route crate's crate): changeFrontWallTypeProc's
   count of ticks pushing against a ledge (m3544, +0x6994; over the HIO's 14 he hops up, catches a wall or takes a
   small jump) ran on both steps: keep on its add (`link_qa.txt`). Route `climb`: the hop was 3.5 ticks early.
