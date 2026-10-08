@@ -359,6 +359,22 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   181 (89/29.5), MO2 188 (188/42.6), all identical or within a unit; PW 212 with EndLate mixed (Link 69.8 -> 63.2, the
   Poe 600 -> 617). None listed. Parallel runs need a binary each (CEMU_BIN to a copy, as predeploy does): sharing
   build/wwhd/wwhd-null, runs died mid-way without an EXIT line.
+- **Session top's wrap-up (2026-10-08, at the 95% stop).** Landed in this stretch (each gated: checks MATCH,
+  predeploy 50 ok; regress where shared): the closing hz30 sweep (the sun drawn between ticks: sea15 46 -> 1; Lwood's
+  sway; sea6/20/30 recorded), enemies falling into water (the half step after an entry keeps the surface height:
+  WWHD_60FPS_WATERHOLD), Windfall's auction bidding (AUCTION 382's counts once a tick; route `auction`), B74 (the
+  screen's colour fader at 30's length while its call runs every swap, the title's boat on 30's ticks; its first
+  version also halved the calcFade-form faders and lengthened the warp pots' fade 26 ticks: undone in 9385d6d,
+  route warppot back to 46.8), and on the render thread the bind cache (deck-plan item 3's first step, -2 to -3%,
+  `WWHD_BINDCACHE=0` off). Open: item 3's next steps (descriptor sets reused per pool, uniform blocks by their
+  bytes, a pipeline lookaside: designed in `docs/research/deck-plan.md`, not built); the owner's B74 "boat at full
+  visibility in single frames" not reproduced under the virtual clock (a real-time check); the auction's bid call a
+  tick early (a bidder's turn crossing its mark). Method notes: read `trial.py` without `--target` and without
+  `trial_filter` when an actor keeps its state in a heap object (the title) or its counts show as "only half";
+  check a fix that touches a per-frame system (faders) on a route through a scene change (warppot) as well as where
+  it was found. Scratch (not in git), the worker `/wwhd/data/m6/WWHDRecomp-top`: `fade.sh` (every frame of the title's
+  fade at both rates), `lags.py` (each tracked actor's s16 changes on other ticks), `chg.py`, `wat.sh`/`watv.py`
+  (an enemy's drop into water), `bindab.sh`.
 - **Session qa's wrap-up (2026-10-08, at the 95% stop).** Landed in this stretch (each gated: checks MATCH,
   regress, predeploy 0 FAIL): Link's slash (procCutA's lunge, the bounce held, both speed decreases once a tick),
   the mode hold as a per-type list (TN, ST, AM2, BL, and MT from bottom), the animation end for Link (his whole
