@@ -4078,6 +4078,23 @@ toward the owner's goal: full speed at 60 there (its power-capped i5 standing in
   descriptor-set reuse (`WWHD_UBLOCK_FULL=1` / `WWHD_SETCACHE=0` turn them off): the render thread -12.9% a frame on
   the worker; checks, regress and predeploy unchanged.
 
+### Session cloud3 (from 2026-10-08): deck-plan items 4, 5
+
+Cloud session cloud3 (tailnet mode, worker directory `/wwhd/WWHDRecomp-cloud3`, branch `ww-4-cloud3`).
+- **Item 4 (static actors' half-frame draws): measured, no gain, parked** on `ww-4-cloud3` (deck-plan.md, item 4).
+- **Item 7 (Link's half step): skipped** (the owner's choice): his execute is 307 -> 559 samples at 30 -> 60, the
+  same work again; ~1% of the game thread at most.
+- **Item 5 (the half tick's journal), landed (ww-4 938730f), shared code:** `src/runtime/dispatch.cpp`'s
+  `QuietVisible` drops `g_rtStoreAll` once a watched call is seen to be visible (a half tick's frame runs inside a
+  watched task call, task_loop.cpp, so every store of the frame, heap included, went to `rt_journal_store`:
+  93k calls a half frame on continue, 33k after); `src/runtime/diff.cpp`'s `rt_journal_store` returns first for a
+  store into bytes already saved this frame or not kept (`g_rtStoreBits`/`g_rtStoreHold`, override.h; sixty.cpp's
+  per-page bits, a part page's unkept bytes preset), but while a converted execute runs (`s_converting`: its
+  global stores are each noted) or a watch is undecided (`QuietLive`, rt_internal.h). `WWHD_JOURNAL_SKIP=0`: as
+  before. Exact by construction (the same stores are saved); checks all MATCH (PSNR inf), regress identical to
+  a `WWHD_JOURNAL_SKIP=0` run, predeploy 51 ok, 0 FAIL, gohmatail WARN 54.0, gohmarock 4.8 as before. Desktop
+  profile, continue at 60: the journal 2.1% -> 1.1% of all samples.
+
 ## Waiting on the owner
 
 - **The sound check** of the task loop's fast path (item 1): they listen in a window when they have

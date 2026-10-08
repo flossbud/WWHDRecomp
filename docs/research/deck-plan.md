@@ -184,6 +184,14 @@ Each step: `WWHD_RENDER_STATS` counts of hits, captures byte-identical on and of
   the TV reads the second block too: with it left unfilled (a probe on `f_027FDA54`) 5 of 7 tour3 captures at 30
   changed.
 
+**Item 5, landed (session cloud3, ww-4 938730f):** the journal's remaining cost was mostly a fast path's quiet
+watch: a half tick's frame runs inside a watched task call (task_loop.cpp), and `g_rtStoreAll` stayed set after
+the watch had already failed, so every store of the frame (93k a half frame on continue, the heap included) went
+through `rt_journal_store` and `QuietStore`. Now the watch drops it once the call is visible, and
+`rt_journal_store` returns first for bytes saved already or not kept (handoff.md, "Session cloud3"). Continue at 60,
+desktop profile: the journal 2.1% -> 1.1% of all samples, its calls 93k -> 33k a half frame. `WWHD_JOURNAL_SKIP=0`
+for an A/B. Left: the 33k calls' own cost (~1%): a check inline in `RT_STORE` (ppc_ops.h; it grows every store site).
+
 ## Android
 
 The same items apply (the code is C++; the recompiled program builds for ARM64 like the rest), plus what the rival
