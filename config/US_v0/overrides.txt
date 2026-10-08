@@ -104,6 +104,5 @@
 02516580    src/overrides/sixty_step.cpp       dCcD_Cyl::StartCTg: noted for the half step's move (TICKVEC)
 025167C0    src/overrides/sixty_step.cpp       dCcD_Sph::StartCAt: noted for the half step's move (TICKVEC)
 024F08A8    src/overrides/sixty.cpp            dBgS_Acch::CrrPos: a stepping process's whole step's landing read from its next tick (GroundLate's types)
-025F06A8    src/overrides/sixty.cpp            mDoGph_gInf_c::calcFade: a fader's step, every frame: half a tick's at 60 (B74)
-0252F5A0    src/overrides/sixty.cpp            a fader of calcFade's form, every frame: half a tick's at 60 (B74)
 027ECED4    src/overrides/sixty.cpp            the screen's colour fader (the title's fade to black), every frame: 30's length at 60 (B74)
+02728A74    src/overrides/sixty.cpp            the faders' frame call: the half call after the hold ends still waits (B74, warppot)

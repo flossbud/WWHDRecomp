@@ -4439,44 +4439,31 @@ void f_02557834(PPCInterpreter_t* __restrict ctx)
 // faders: a colour fader (f_027ECED4, its object at +0x440: a state +0 (0 black, 1 clear, 2 fading in, 3 fading
 // out), a delay +0x1C counted a call before it takes the state at +0x20, a frame +6 (u16) + 1 a call against a
 // length +4 (u16), and the alpha +0xB = 255 frame / length), held a while after a change by a countdown (+0x448,
-// tick_rules.txt), then mDoGph_gInf_c::calcFade (f_025F06A8: while mFade 0x101F4827, mFadeRate 0x101F4810 +=
+// below), then mDoGph_gInf_c::calcFade (f_025F06A8: while mFade 0x101F4827, mFadeRate 0x101F4810 +=
 // mFadeSpeed 0x101F4814, clamped) and another of calcFade's form (f_0252F5A0: while 0x101D616C, 0x101D6160 +=
-// 0x101D6164). At 60 the colour fader stepped every swap: the title's fade to black took 27 swaps (half 30's 0.9 s),
+// 0x101D6164: the warp pots' fade, called once a tick there, left as it is). At 60 the colour fader stepped every swap: the title's fade to black took 27 swaps (half 30's 0.9 s),
 // the black between the scenes, which waits on ticks, 49 swaps (30's 12 frames), the fade in 26 (the owner's B74).
 // At 60 its length is doubled for the call and its delay counts whole ticks: the fades as smooth as the frames,
-// their length 30's. The two calcFade-form faders, idle in the title's fade, get half their step the same way.
+// their length 30's.
 // WWHD_60FPS_FADE=0 off.
 namespace
 {
-	bool FadeHalf()
+	bool FadeOn()
 	{
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_FADE"); return !(e && atoi(e) == 0); }();
 		return g_rtSixty && on;
 	}
-	template <void (*Orig)(PPCInterpreter_t*), uint32 kSpeed>
-	void FadeStep(PPCInterpreter_t* ctx)
+	// whether the faders' frame call (f_02728A74, below) runs every swap (on consecutive swaps): not always at 60 (in
+	// route warppot's warp it runs once a tick: there the faders are 30's as they are, and halving them made the warp
+	// 26 ticks longer)
+	uint32 s_fadeLastSwap = 0;                          // the swap of the call before
+	bool s_fadePerSwap = false;
+	bool FadeHalf()
 	{
-		const uint32 speed = rd32(kSpeed);
-		wr32(kSpeed, std::bit_cast<uint32>(std::bit_cast<float>(speed) * 0.5f));
-		Orig(ctx);
-		wr32(kSpeed, speed);
+		return FadeOn() && s_fadePerSwap;
 	}
 }
-void orig_f_025F06A8(PPCInterpreter_t* __restrict ctx);
-void orig_f_0252F5A0(PPCInterpreter_t* __restrict ctx);
 void orig_f_027ECED4(PPCInterpreter_t* __restrict ctx);
-void f_025F06A8(PPCInterpreter_t* __restrict ctx)
-{
-	if (!FadeHalf())
-		[[clang::musttail]] return orig_f_025F06A8(ctx);
-	FadeStep<orig_f_025F06A8, 0x101F4814u>(ctx);
-}
-void f_0252F5A0(PPCInterpreter_t* __restrict ctx)
-{
-	if (!FadeHalf())
-		[[clang::musttail]] return orig_f_0252F5A0(ctx);
-	FadeStep<orig_f_0252F5A0, 0x101D6164u>(ctx);
-}
 void f_027ECED4(PPCInterpreter_t* __restrict ctx)
 {
 	if (!FadeHalf())
@@ -4484,10 +4471,43 @@ void f_027ECED4(PPCInterpreter_t* __restrict ctx)
 	const uint32 fader = GPR(3);
 	const uint16 length = rd16(fader + 0x4);
 	const sint32 delay = (sint32)rd32(fader + 0x1C);
+	// the delay counts whole ticks, and its end (read as 0: the next state) comes in a whole call, as 30's: on a half
+	// tick it's out of the call (-1: the state steps on), then back (route warppot: its warp came a tick early)
+	const bool hold = g_rtHalfTick && delay >= 0;
 	if (length != 0 && length < 0x8000)
 		wr16(fader + 0x4, (uint16)(length * 2));
+	if (hold)
+		wr32(fader + 0x1C, 0xFFFFFFFFu);
 	orig_f_027ECED4(ctx);
 	wr16(fader + 0x4, length);
-	if (g_rtHalfTick && delay > 0)
-		wr32(fader + 0x1C, (uint32)delay);         // the delay counts whole ticks
+	if (hold)
+		wr32(fader + 0x1C, (uint32)delay);
+}
+// f_02728A74 (the faders' frame call): while its hold (+0x448) runs, the colour fader waits (the hold - 1 a call).
+// When the call runs every swap, the hold counts whole ticks: a half call puts back what it took off, and the half
+// call after the whole call that took it to 0 still waits (30's fader runs again at the next tick's call).
+namespace
+{
+	uint32 s_fadeHoldAtWhole = 0;                       // the hold as the last whole call found it
+}
+void orig_f_02728A74(PPCInterpreter_t* __restrict ctx);
+void f_02728A74(PPCInterpreter_t* __restrict ctx)
+{
+	if (!FadeOn())
+		[[clang::musttail]] return orig_f_02728A74(ctx);
+	const uint32 swap = wwhd::os::SwapCount();
+	s_fadePerSwap = swap - s_fadeLastSwap == 1;
+	s_fadeLastSwap = swap;
+	const uint32 obj = GPR(3);
+	const uint32 hold = rd32(obj + 0x448);
+	if (!g_rtHalfTick || !s_fadePerSwap)
+	{
+		s_fadeHoldAtWhole = g_rtHalfTick ? 0 : hold;
+		[[clang::musttail]] return orig_f_02728A74(ctx);
+	}
+	if (hold == 0 && s_fadeHoldAtWhole != 0)
+		wr32(obj + 0x448, 1);                           // still holding this tick
+	orig_f_02728A74(ctx);
+	if (hold != 0 || s_fadeHoldAtWhole != 0)
+		wr32(obj + 0x448, hold);                        // the half call's - 1 put back
 }
