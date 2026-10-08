@@ -40,13 +40,15 @@ if [ "${1:-}" = --here ]; then
     exit 0
 fi
 self=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
+# the desktop's login, when run here (a copy run on a host by `bash -s` has no tools/worker beside it)
+[ -f "$(dirname "$self")/desktop-env.sh" ] && source "$(dirname "$self")/desktop-env.sh"
 a=(); [ $apply = 1 ] && a=(--apply)
 if [ "${1:-}" = install ]; then
     ssh -o BatchMode=yes worker 'mkdir -p ~/bin && cat > ~/bin/wwhd-cleanup.sh && chmod +x ~/bin/wwhd-cleanup.sh' < "$self"
     ssh -o BatchMode=yes worker '(crontab -l 2>/dev/null | grep -v wwhd-cleanup; echo "17 */6 * * * $HOME/bin/wwhd-cleanup.sh --apply --here /wwhd >> /wwhd/logs/cleanup.log 2>&1 # wwhd-cleanup") | crontab - && crontab -l | grep wwhd-cleanup'
     # the desktop: a systemd user timer (no cron there), every 6 hours
-    ssh -o BatchMode=yes owner@DESKTOP_ADDR 'mkdir -p ~/bin ~/.config/systemd/user && cat > ~/bin/wwhd-cleanup.sh && chmod +x ~/bin/wwhd-cleanup.sh' < "$self"
-    ssh -o BatchMode=yes owner@DESKTOP_ADDR 'cat > ~/.config/systemd/user/wwhd-cleanup.service <<EOT
+    ssh -o BatchMode=yes $WWHD_DESKTOP_SSH 'mkdir -p ~/bin ~/.config/systemd/user && cat > ~/bin/wwhd-cleanup.sh && chmod +x ~/bin/wwhd-cleanup.sh' < "$self"
+    ssh -o BatchMode=yes $WWHD_DESKTOP_SSH 'cat > ~/.config/systemd/user/wwhd-cleanup.service <<EOT
 [Unit]
 Description=WWHD worker: delete old test outputs in ~/wwhd-desk
 [Service]
@@ -66,4 +68,4 @@ systemctl --user daemon-reload && systemctl --user enable --now wwhd-cleanup.tim
     exit 0
 fi
 ssh -o BatchMode=yes worker "bash -s -- ${a[*]:-} --here /wwhd" < "$self"
-ssh -o BatchMode=yes -o ConnectTimeout=5 owner@DESKTOP_ADDR "test -d ~/wwhd-desk && bash -s -- ${a[*]:-} --here \$HOME/wwhd-desk" < "$self" 2>/dev/null || echo "desktop: not reachable or no worker there"
+ssh -o BatchMode=yes -o ConnectTimeout=5 $WWHD_DESKTOP_SSH "test -d ~/wwhd-desk && bash -s -- ${a[*]:-} --here \$HOME/wwhd-desk" < "$self" 2>/dev/null || echo "desktop: not reachable or no worker there"

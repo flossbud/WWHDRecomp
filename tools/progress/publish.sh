@@ -201,7 +201,7 @@ PY
 		# would share a file (one picture under both captions, deleted with the older one)
 		source "$root/tools/worker/target.sh"                # the worker the capture was made on (as for job)
 		if [ "$WWHD_ON" = desktop ]; then
-			ssh -o BatchMode=yes owner@DESKTOP_ADDR "podman exec wwhd-worker convert '$src' -resize 960x540 -quality 82 jpg:-" |
+			ssh -o BatchMode=yes $WWHD_DESKTOP_SSH "podman exec wwhd-worker convert '$src' -resize 960x540 -quality 82 jpg:-" |
 				ssh $host "mkdir -p $dir/shots && cat > $dir/shots/$name"
 		else
 			ssh $host "mkdir -p $dir/shots && docker exec wwhd-worker convert '$src' -resize 960x540 -quality 82 /wwhd/data/progress/shots/$name"

@@ -19,3 +19,5 @@ __pycache__/
 # a parallel session's worker checkout and name (tools/worker/sync.sh, tools/progress/publish.sh)
 /.worker-dir
 /.session
+# the owner desktop's SSH login (tools/worker/desktop-env.sh)
+/tools/worker/desktop.env

@@ -7,8 +7,9 @@
 # Without WWHD_ON the desktop is used when its worker is running (tools/worker/desktop.sh status),
 # else the worker. WWHD_ON=worker or WWHD_ON=desktop forces one. When the owner takes the desktop
 # back, commands go to the worker by themselves: sync and build there first (its build may be old).
+source "$(dirname "${BASH_SOURCE[0]}")/desktop-env.sh"   # the desktop's login (tools/worker/desktop.env)
 if [ -z "${WWHD_ON:-}" ]; then              # -n: the probe must not read the caller's stdin (w python3 - < script)
-    if ssh -n -o BatchMode=yes -o ConnectTimeout=4 owner@DESKTOP_ADDR \
+    if ssh -n -o BatchMode=yes -o ConnectTimeout=4 $WWHD_DESKTOP_SSH \
         "podman container inspect -f '{{.State.Running}}' wwhd-worker 2>/dev/null" 2>/dev/null | grep -q true; then
         WWHD_ON=desktop
     else
@@ -17,7 +18,7 @@ if [ -z "${WWHD_ON:-}" ]; then              # -n: the probe must not read the ca
 fi
 case "$WWHD_ON" in
     worker) W_SSH=worker; W_ENGINE=docker; W_ROOT=/wwhd ;;
-    desktop)  W_SSH=owner@DESKTOP_ADDR; W_ENGINE=podman; W_ROOT=/home/owner/wwhd-desk ;;
+    desktop)  W_SSH=$WWHD_DESKTOP_SSH; W_ENGINE=podman; W_ROOT=$WWHD_DESKTOP_HOME/wwhd-desk ;;
     *) echo "WWHD_ON=$WWHD_ON: worker or desktop" >&2; exit 2 ;;
 esac
 # a path inside the container (/wwhd/...) as the host sees it

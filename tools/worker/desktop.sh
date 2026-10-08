@@ -11,7 +11,8 @@
 # The desktop has the game, saves, tools and caches (~10 GB, copied from the worker's /wwhd once),
 # not the reference traces and captures: tools/sixty/tests/checks.sh runs on the worker only.
 set -euo pipefail
-host=owner@DESKTOP_ADDR
+source "$(dirname "$0")/desktop-env.sh"     # the desktop's login (tools/worker/desktop.env)
+host=$WWHD_DESKTOP_SSH
 on() { ssh -o BatchMode=yes -o ConnectTimeout=10 "$host" "$@"; }
 case "${1:-status}" in
 start)

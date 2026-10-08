@@ -602,7 +602,9 @@ startup time and CPU use matter (phones throttle when hot). Design D19 and D20 h
     another form: keep it on the worker (`/wwhd/data/ghidra-out`).
 - **The owner's desktop, `desktop`** (on the tailnet): Fedora 44, desktop CPU (24 threads),
   AMD GPU on RADV, GNOME on Wayland, three monitors, speakers.
-  - SSH: `ssh owner@DESKTOP_ADDR` (the default key works with `BatchMode=yes`). Use the IP: the
+  - SSH: `ssh owner@DESKTOP_ADDR` (`owner` here and in these docs stands for the desktop's own login, kept out of git:
+    `tools/worker/desktop.env` sets `WWHD_DESKTOP_SSH` and `WWHD_DESKTOP_HOME` for the worker scripts; copy it into a new
+    worktree, `tools/worker/desktop-env.sh` says what it holds) (the default key works with `BatchMode=yes`). Use the IP: the
     name `desktop` resolves to a public address through a search domain.
   - It suspends when idle and then drops off the tailnet (`tailscale status` shows "offline").
     That is not a crash.

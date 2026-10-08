@@ -22,9 +22,10 @@ case "$name" in *[!A-Za-z0-9._-]*) echo "job: bad name '$name'" >&2; exit 2 ;; e
 sess=$(cat "$(cd "$(dirname "$0")/../.." && pwd)/.session" 2>/dev/null || true)
 [ -n "$sess" ] && case "$name" in "$sess"-*) ;; *) name=$sess-$name ;; esac
 here=$(cd "$(dirname "$0")" && pwd)
+source "$here/desktop-env.sh"                 # the desktop's login (tools/worker/desktop.env)
 if [ "$cmd" != start ] && [ -z "${WWHD_ON:-}" ]; then
     WWHD_ON=worker
-    dt=$(ssh -n -o BatchMode=yes -o ConnectTimeout=5 owner@DESKTOP_ADDR "stat -c %Y /home/owner/wwhd-desk/logs/$name.log 2>/dev/null" 2>/dev/null || true)
+    dt=$(ssh -n -o BatchMode=yes -o ConnectTimeout=5 $WWHD_DESKTOP_SSH "stat -c %Y $WWHD_DESKTOP_HOME/wwhd-desk/logs/$name.log 2>/dev/null" 2>/dev/null || true)
     if [ -n "$dt" ]; then
         mt=$(ssh -n -o BatchMode=yes worker "stat -c %Y /wwhd/logs/$name.log 2>/dev/null" || true)
         if [ -z "$mt" ] || [ "$dt" -gt "$mt" ]; then WWHD_ON=desktop; fi
