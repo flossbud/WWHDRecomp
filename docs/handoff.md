@@ -375,6 +375,14 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   knife-edges (0.50000006 > 0.5, 16.0000048 > 16) were the commonest causes this round; parallel run.sh runs need
   a binary each (CEMU_BIN to a copy). Scratch comparison scripts (not in git): the desktop worker's
   /wwhd/data/m6/WWHDRecomp-qa/b66 (`apart.py`, `apt.py`, `spd.py`, `inst.py`, `modes.py`, `hot.py`, `inl.py`).
+  **Then the lazy GX2DrawDone (deck-plan item 2), landed off by default** (7123e87, ef9fad9):
+  `WWHD_LAZY_DRAWDONE=1` (real time, headless or windowed; ignored under the virtual clock): two of each per-frame
+  resource, the swap's submit not waited for, a semaphore from it to the window's present. A/B at 60 on the 13700K
+  (headless): the game thread's frame -1.42 ms (-15% continue, -17% house), the DrawDone wait 1.58 -> 0.12 ms. Exact:
+  `=2` runs it under the virtual clock, checks MATCH with captures byte-identical. Open: the owner's GPU (main offers a
+  launcher with it), an A/B there with vsync on and off, a validation-layer run; then on by default. Found on the way:
+  a frame that fills the 256 MB ring mid-frame submits early, which moves a few pixels (22-50, 1-2 levels): harmless
+  today (no route comes near), a latent exactness hazard if a frame ever passes ~192 MB. Details: deck-plan.md item 2.
 - **en-pw, the Poe (PW 212; session qa; RNDFIX 0.7): measured, not listed.** Its hit at f1051 sets state 2/50, and
   the next call starts its knockback (51, speed -20): at 60 the half step, a tick early, the Poe up to ~600 units off.
   The mode hold on +0x482/+0x484 (mAction/mMode): the Poe within 6.4 units to f1160, ~45 at most after; Link within 3-8
