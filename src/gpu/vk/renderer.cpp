@@ -343,21 +343,63 @@ namespace wwhd::gpu
 	}
 
 	// ---- images ------------------------------------------------------------------------------
-	// every transition waits for everything before it: correctness first
+	namespace
+	{
+		// WWHD_BARRIERS=narrow (gpu-plan.md item 2, an A/B for now): a transition waits only for the stages that used
+		// the image in its old layout, and makes their writes visible to the stages of the new one, so the GPU can
+		// overlap work on other images (the next pass's vertex work with this one's fragments). Each layout here has
+		// one use: attachments (read and written in their pass), sampling, a transfer's source or destination. A
+		// second write in the same layout (the next pass into an attachment, a copy after a clear) gets a barrier of
+		// its own: by default an unrelated transition in between orders it, as every barrier waits for everything.
+		// Images that change outside Transition (uploads, the mip chains, the window's) keep their own barriers.
+		bool NarrowBarriers()
+		{
+			static const bool on = [] { const char* e = getenv("WWHD_BARRIERS"); return e && strcmp(e, "narrow") == 0; }();
+			return on;
+		}
+
+		struct LayoutUse { VkPipelineStageFlags stages; VkAccessFlags write, read; };
+		LayoutUse UseOf(VkImageLayout layout)
+		{
+			switch (layout)
+			{
+			case VK_IMAGE_LAYOUT_UNDEFINED:
+				return { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0 };
+			case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+				return { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					VK_ACCESS_COLOR_ATTACHMENT_READ_BIT };
+			case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+				return { VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+					VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT };
+			case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:            // the renderer draws without geometry shaders
+				return { VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, VK_ACCESS_SHADER_READ_BIT };
+			case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+				return { VK_PIPELINE_STAGE_TRANSFER_BIT, 0, VK_ACCESS_TRANSFER_READ_BIT };
+			case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+				return { VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, 0 };
+			default:
+				return { VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT };
+			}
+		}
+	}
+
+	// by default every transition waits for everything before it: correctness first (WWHD_BARRIERS=narrow: above)
 	void Transition(Image& img, VkImageLayout layout)
 	{
-		if (img.layout == layout)
+		const bool narrow = NarrowBarriers();
+		const LayoutUse from = UseOf(img.layout), to = UseOf(layout);
+		if (img.layout == layout && (!narrow || !to.write))
 			return;
 		VkImageMemoryBarrier b{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
-		b.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
-		b.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+		b.srcAccessMask = narrow ? from.write : VK_ACCESS_MEMORY_WRITE_BIT;
+		b.dstAccessMask = narrow ? to.write | to.read : VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
 		b.oldLayout = img.layout;
 		b.newLayout = layout;
 		b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		b.image = img.image;
 		b.subresourceRange = { img.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
-		vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr,
-			0, nullptr, 1, &b);
+		vkCmdPipelineBarrier(s.cmd, narrow ? from.stages : VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+			narrow ? to.stages : VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
 		img.layout = layout;
 	}
 
