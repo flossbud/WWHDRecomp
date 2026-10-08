@@ -118,11 +118,11 @@ elif op == "show":
     if x["details"]:
         print("  " + x["details"])
     for f in x.get("images", []):
-        print("  image: " + url(f))
+        print(("  image: " if f.startswith("notes/img-") else "  file: ") + url(f))
     for n in x["notes"]:
         print(f"  {'owner' if n.get('session') == 'owner' else n.get('session') or '?'}: {n['text']}")
         for f in n.get("images", []):
-            print("    image: " + url(f))
+            print(("    image: " if f.startswith("notes/img-") else "    file: ") + url(f))
     sys.exit(0)
 else:
     x = find(a)
@@ -233,7 +233,7 @@ if op == "list":
     for n in notes:
         print(f"{n['id']} {'done' if n['done'] else 'open'} {n['time']}: {n['text']}")
         for f in n.get("images", []):
-            print(f"   image: http://WORKER_ADDR:8765/{f}")
+            print(f"   {'image' if f.startswith('notes/img-') else 'file'}: http://WORKER_ADDR:8765/{f}")
         for r in n.get("replies", []):
             print(f"   {r['session']}: {r['text']}")
     sys.exit(0)

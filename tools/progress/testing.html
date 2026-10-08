@@ -81,7 +81,7 @@ details.fold > summary { cursor: pointer; font-size: 13px; font-weight: 600; col
 .btn.quiet { border-color: transparent; background: none; color: var(--ink3); padding-left: 6px; padding-right: 6px; }
 .btn:disabled { opacity: .45; cursor: default; }
 
-/* the composer: text, a title for a bug, images pasted, dropped or picked */
+/* the composer: text, a title for a bug, images and other files pasted, dropped or picked */
 .comp { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background: #fff; }
 .card .comp { background: #fbfcfd; }
 .comp.drag { border-color: var(--link); background: #f4f8fd; }
@@ -94,6 +94,14 @@ details.fold > summary { cursor: pointer; font-size: 13px; font-weight: 600; col
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumb.up img { opacity: .45; }
 .thumb.up::after { content: "uploading…"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+.thumb .ext { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 6px;
+  font-size: 11px; color: var(--ink); text-align: center; word-break: break-all; }
+.thumb .ext b { font-size: 13px; }
+.thumb.up .ext { opacity: .45; }
+.files { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.files a { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 9px; border: 1px solid var(--line); border-radius: 6px;
+  font-size: 13px; color: var(--link); text-decoration: none; overflow-wrap: anywhere; }
+.files a b { font-size: 11px; color: var(--ink); }
 .thumb.err { outline: 2px solid var(--red); }
 .thumb button { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(10,26,43,.75); color: #fff;
   font-size: 14px; line-height: 22px; padding: 0; cursor: pointer; }
@@ -226,8 +234,14 @@ zoom.addEventListener("touchend", e => {
   const dx = e.changedTouches[0].clientX - touchX; touchX = null;
   if (Math.abs(dx) > 40) show(at + (dx < 0 ? 1 : -1));
 });
-const imgsHtml = (files, caption) => files && files.length ?
-  `<div class="imgs">${files.map((f, i) => `<img src="${esc(f)}" alt="${esc(caption)} image ${i + 1}" loading="lazy" data-imgs="${esc(JSON.stringify(files))}" data-cap="${esc(caption)}" data-i="${i}">`).join("")}</div>` : "";
+// a card's attachments: its images (opened in the viewer), then its other files (download links)
+const isImage = f => /^notes\/img-/.test(f) || /\.(png|jpe?g|gif|webp)$/i.test(f) && !/^notes\/f-/.test(f);
+const extOf = name => name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toUpperCase().slice(0, 5) : "FILE";
+const imgsHtml = (all, caption) => {
+  const imgs = (all || []).filter(isImage), files = (all || []).filter(f => !isImage(f));
+  return (imgs.length ? `<div class="imgs">${imgs.map((f, i) => `<img src="${esc(f)}" alt="${esc(caption)} image ${i + 1}" loading="lazy" data-imgs="${esc(JSON.stringify(imgs))}" data-cap="${esc(caption)}" data-i="${i}">`).join("")}</div>` : "")
+    + (files.length ? `<div class="files">${files.map(f => { const n = f.split("/").pop(); return `<a href="${esc(f)}" download="${esc(n)}"><b>${esc(extOf(n))}</b>${esc(n)}</a>`; }).join("")}</div>` : "");
+};
 document.addEventListener("click", e => {
   const img = e.target.closest("img[data-imgs]");
   if (img) openViewer(JSON.parse(img.dataset.imgs).map(f => ({file: f, caption: img.dataset.cap})), +img.dataset.i);
@@ -245,7 +259,7 @@ $("toastUndo").addEventListener("click", async () => {
   if (f) { try { await f(); await reload(); } catch (e) { alert("Couldn't undo: " + e.message); } }
 });
 
-// --- the composer: a bug's title (when asked), text, images pasted, dropped or picked (uploaded at once) ---
+// --- the composer: a bug's title (when asked), text, images or any other file pasted, dropped or picked (uploaded at once) ---
 async function uploadable(file) {
   const ok = ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type);
   if (ok && file.size <= 8 * 1024 * 1024) return file;
@@ -261,7 +275,7 @@ function composer({placeholder, title, titleValue, submit, label, cancel, needTe
   const fine = matchMedia("(pointer: fine)").matches;
   el.innerHTML = `${title ? `<input type="text" placeholder="${esc(title)}">` : ""}<textarea placeholder="${esc(placeholder)}"></textarea>
     <div class="pend"></div>
-    <div class="cbar"><label>Add image<input type="file" accept="image/*" multiple hidden></label><span class="tip">${fine ? "paste or drop images · Ctrl+Enter" : ""}</span>
+    <div class="cbar"><label>Add file<input type="file" multiple hidden></label><span class="tip">${fine ? "paste or drop images and files · Ctrl+Enter" : ""}</span>
       <span class="go">${cancel ? `<button class="btn quiet" data-c="cancel">Cancel</button>` : ""}<button class="btn dark" data-c="send">${esc(label)}</button></span></div>
     <div class="cerr" hidden></div>`;
   const ta = el.querySelector("textarea"), ti = el.querySelector("input[type=text]"), send = el.querySelector("[data-c=send]"), err = el.querySelector(".cerr");
@@ -270,25 +284,33 @@ function composer({placeholder, title, titleValue, submit, label, cancel, needTe
   const busy = () => pending.some(p => p.state === "up");
   const showErr = m => { err.hidden = !m; err.textContent = m || ""; };
   const draw = () => {
-    el.querySelector(".pend").innerHTML = pending.map((p, i) => `<div class="thumb ${p.state}"><img src="${p.url}" alt=""><button data-i="${i}" aria-label="Remove image">×</button></div>`).join("");
+    el.querySelector(".pend").innerHTML = pending.map((p, i) => `<div class="thumb ${p.state}">${p.url ? `<img src="${p.url}" alt="">` : `<span class="ext"><b>${esc(extOf(p.name))}</b>${esc(p.name)}</span>`}<button data-i="${i}" aria-label="Remove ${esc(p.name)}">×</button></div>`).join("");
     send.disabled = busy();
   };
   async function add(files) {
     for (const f of files) {
-      if (!f || !f.type.startsWith("image/")) continue;
-      const p = {url: URL.createObjectURL(f), state: "up", file: null};
+      if (!f) continue;
+      const image = f.type.startsWith("image/") && f.type !== "image/svg+xml";
+      const p = {url: image ? URL.createObjectURL(f) : null, name: f.name || "file", state: "up", file: null};
       pending.push(p); draw();
-      try { const b = await uploadable(f); p.file = (await api("POST", "/api/image", b, b.type)).file; p.state = "ok"; }
-      catch (e) { p.state = "err"; showErr("An image didn't upload: " + e.message); }
+      try {
+        if (image) { const b = await uploadable(f); p.file = (await api("POST", "/api/image", b, b.type)).file; }
+        else {
+          if (f.size > 500 * 1024 * 1024) throw new Error("over 500 MB");
+          p.file = (await api("POST", "/api/file?name=" + encodeURIComponent(p.name), f, "application/octet-stream")).file;
+        }
+        p.state = "ok";
+      }
+      catch (e) { p.state = "err"; showErr(`${p.name} didn't upload: ${e.message}`); }
       draw();
     }
   }
-  function reset() { ta.value = ""; if (ti) ti.value = ""; pending.forEach(p => URL.revokeObjectURL(p.url)); pending = []; draw(); showErr(""); }
+  function reset() { ta.value = ""; if (ti) ti.value = ""; pending.forEach(p => p.url && URL.revokeObjectURL(p.url)); pending = []; draw(); showErr(""); }
   async function go() {
     const text = ta.value.trim(), images = pending.filter(p => p.state === "ok").map(p => p.file), t = ti ? ti.value.trim() : "";
     if (busy()) return;
     if (title && !t) { showErr("Give it a short title."); ti.focus(); return; }
-    if (needText && !text && !images.length) { showErr("Say what you saw (or add a screenshot)."); ta.focus(); return; }
+    if (needText && !text && !images.length) { showErr("Say what you saw (or add a screenshot or file)."); ta.focus(); return; }
     if (!title && !needText && !text && !images.length) return;
     send.disabled = true; showErr("");
     try { await submit({text, images, title: t}); reset(); }
@@ -308,7 +330,7 @@ function composer({placeholder, title, titleValue, submit, label, cancel, needTe
   el.querySelector("input[type=file]").addEventListener("change", e => { add([...e.target.files]); e.target.value = ""; });
   el.addEventListener("click", e => {
     const x = e.target.closest(".thumb button");
-    if (x) { URL.revokeObjectURL(pending[+x.dataset.i].url); pending.splice(+x.dataset.i, 1); draw(); return; }
+    if (x) { const u = pending[+x.dataset.i].url; if (u) URL.revokeObjectURL(u); pending.splice(+x.dataset.i, 1); draw(); return; }
     const c = e.target.closest("[data-c]"); if (!c) return;
     if (c.dataset.c === "send") go(); else if (cancel) cancel();
   });
@@ -323,7 +345,7 @@ reportBox.innerHTML = `<div class="kind" id="kind"><button data-k="bug" class="o
 function drawReport(prefill) {
   const c = reportKind === "bug" ?
     composer({title: "What's wrong, in a line (e.g. “Bow: the string arm looks 30 on Outset”)", titleValue: prefill && prefill.title,
-      placeholder: "Where, what you did, what you saw (and what 30 fps does, if you know). Paste or drop screenshots.", label: "Report bug",
+      placeholder: "Where, what you did, what you saw (and what 30 fps does, if you know). Paste or drop screenshots or files.", label: "Report bug",
       submit: async r => {
         const bug = await post("/api/bugs", {title: r.title, details: r.text, images: r.images});
         if (prefill && prefill.item) await post("/api/checks/" + prefill.item, {state: "problem", bug: bug.id});

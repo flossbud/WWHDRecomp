@@ -8,6 +8,8 @@ locks). The API (JSON; every request carries the header X-WWHD, so another site 
 owner's browser: a custom header needs a CORS preflight, which this server never grants):
   POST   /api/image              an image as the body (Content-Type image/png|jpeg|webp|gif, at most 10 MB)
                                  -> {"file": "notes/img-....png"} (also at /api/notes/image)
+  POST   /api/file?name=NAME     any other file as the body (at most 500 MB) -> {"file": "notes/f-.../NAME"}; served
+                                 only as a download (never run as a page here), listed with a bug's or note's images
   bugs.json (under .claims.lock, as publish.sh bug takes it); the owner's notes are {text, session: "owner",
   time, images}:
   POST   /api/bugs               {"title", "details"?, "images"?} -> the new bug (open, by the owner)
@@ -35,6 +37,7 @@ import time
 ROOT = os.path.dirname(os.path.abspath(__file__))
 IMAGES = os.path.join(ROOT, "notes")
 MAX_IMAGE = 10 * 1024 * 1024
+MAX_FILE = 500 * 1024 * 1024
 MAX_TEXT = 20000
 KINDS = {"image/png": (".png", b"\x89PNG\r\n\x1a\n"), "image/jpeg": (".jpg", b"\xff\xd8\xff"),
          "image/gif": (".gif", b"GIF8"), "image/webp": (".webp", b"RIFF")}
@@ -66,10 +69,11 @@ class Store:
 
 
 def clean_images(images):
-    """Only files this server stored: notes/img-*.ext that exist."""
+    """Only files this server stored: notes/img-*.ext and notes/f-*/NAME that exist."""
     if not isinstance(images, list):
         return []
-    return [f for f in images[:20] if isinstance(f, str) and re.fullmatch(r"notes/img-[\w-]+\.(png|jpg|gif|webp)", f)
+    return [f for f in images[:20] if isinstance(f, str)
+            and (re.fullmatch(r"notes/img-[\w-]+\.(png|jpg|gif|webp)", f) or re.fullmatch(r"notes/f-[\w-]+/[\w.-]+", f))
             and os.path.exists(os.path.join(ROOT, f))]
 
 
@@ -83,6 +87,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_error(404)
             return None
         return super().send_head()
+
+    def is_upload(self):
+        """A file /api/file stored: served as a download, whatever its name says it is. Decided on the file the URL
+        resolves to (as the static handler resolves it), so an encoded or dotted URL can't serve one as a page."""
+        f = os.path.realpath(self.translate_path(self.path))
+        return f.startswith(os.path.join(os.path.realpath(IMAGES), "f-"))
+
+    def guess_type(self, path):
+        return "application/octet-stream" if self.is_upload() else super().guess_type(path)
+
+    def end_headers(self):
+        if self.command in ("GET", "HEAD") and self.is_upload():
+            self.send_header("Content-Disposition", "attachment")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Security-Policy", "sandbox")
+        super().end_headers()
 
     def reply(self, code, obj):
         body = json.dumps(obj).encode()
@@ -115,6 +135,31 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             f.write(data)
         return self.reply(200, {"file": name})
 
+    def file(self):
+        from urllib.parse import parse_qs, urlsplit
+        name = (parse_qs(urlsplit(self.path).query).get("name") or [""])[0]
+        name = re.sub(r"[^\w.-]+", "_", os.path.basename(name)).strip("._")[:100] or "file"
+        n = int(self.headers.get("Content-Length") or 0)
+        if n <= 0 or n > MAX_FILE:
+            return self.reply(413, {"error": "empty, or over 500 MB"})
+        rel = f"notes/f-{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}/{name}"
+        path = os.path.join(ROOT, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        # written as it arrives (never all in memory); a cut-off upload leaves nothing behind
+        try:
+            with open(path, "wb") as f:
+                while n:
+                    chunk = self.rfile.read(min(n, 1 << 20))
+                    if not chunk:
+                        raise ConnectionError("upload cut off")
+                    f.write(chunk)
+                    n -= len(chunk)
+        except Exception:
+            os.remove(path)
+            os.rmdir(os.path.dirname(path))
+            raise
+        return self.reply(200, {"file": rel})
+
     def api(self, method):
         if not self.path.startswith("/api/"):
             return self.reply(404, {"error": "no such thing"})
@@ -123,6 +168,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         path = self.path.split("?")[0].rstrip("/")
         if method == "POST" and path in ("/api/image", "/api/notes/image"):
             return self.image()
+        if method == "POST" and path == "/api/file":
+            return self.file()
         raw = self.body(1024 * 1024) if method in ("POST", "PATCH") else b"{}"
         try:
             req = json.loads(raw or b"null")
