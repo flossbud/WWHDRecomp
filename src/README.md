@@ -22,6 +22,7 @@ code (docs/recompiler-design.md, Architecture; D12 for the GPU split).
 | `overrides/` | overrides (D9): generated functions replaced by ours (`config/US_v0/overrides.txt`), the original still callable as `orig_f_X`; `task_loop.cpp`, the game's task loop, sleeps through idle rounds in real time |
 | `runtime/imports.cpp` | `rt_import`/`rt_import_data` (D4), bound from what Cemu's loader wrote into guest memory |
 | `runtime/profile.cpp` | a sampling profiler (`WWHD_PROFILE=path`): where host CPU time goes; `tools/profile_report.py` summarises it, `tools/reference/timing.sh` times a route without the trace (`WWHD_EXIT_FRAME=N` ends a run) |
+| `runtime/write_watch.{h,cpp}` | page write-protection with stamps (`WWHD_WRITE_WATCH=1`, real time only; not wired in yet): which guest pages were written since a mark, a `SIGSEGV` handler chained before Cemu's, `HostWrite` scopes, a `sigaltstack` per host thread (`docs/research/texture-tracking.md`); unit tests: `runtime/tests/run.sh` |
 | `os/tcl/tcl_host.h` | host waits on TCL (forked): the GPU thread sleeps until the CPU submits, the CPU until a submission retires |
 | `runtime/diff.cpp` | diff mode (D8.2, M3): pure functions run natively, are rewound, and are compared (registers, stores, cycles) with the interpreter's run of the same call |
 | `CMakeLists.txt` (and `../CMakeLists.txt`) | the build: Cemu's libraries from its source tree as a subproject, without Latte and with our forks in place of their originals; our sources in CemuCafe's compile context; `wwhd-null` linked like Cemu's own executable |

@@ -125,7 +125,7 @@ wwhd_like_cemu(wwhd_gpu)
 target_include_directories(wwhd_gpu PRIVATE gpu)
 
 add_library(wwhd_runtime OBJECT runtime/dispatch.cpp runtime/imports.cpp runtime/diff.cpp runtime/profile.cpp
-	runtime/without_forks.cpp)
+	runtime/without_forks.cpp runtime/write_watch.cpp)
 wwhd_like_cemu(wwhd_runtime)
 
 add_library(wwhd_os OBJECT os/coreinit_memory.cpp os/coreinit_queue_wait.cpp os/coreinit_thread_state.cpp
