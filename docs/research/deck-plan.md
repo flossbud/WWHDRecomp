@@ -87,6 +87,12 @@ Cost: 256 MB more host-visible memory with the flag on.
 **A/B** (perf-ab, the same binary with the flag on and off, alternating; game thread's work a frame at 60): continue
 9.51 -> 8.09 ms (-1.42 ms, -15%), house 8.56 -> 7.14 ms (-1.42 ms, -17%); the DrawDone wait 1.58 -> 0.12 ms; the
 render thread's CPU unchanged (3.12 / 3.14 ms, 3.61 / 3.65 ms); every run with it below every run without.
+**With a window** (session qa): the swap's submit signals a semaphore per swapchain image and its present waits for
+it (`PresentSemaphore`, present.cpp); a swapchain rebuild idles the queue and both slots before the old images go.
+`WWHD_LAZY_DRAWDONE=1` now applies with a window too. Tested only on the worker: lavapipe on a private Xvfb, the
+continue route at 60 to frame 2400 with it on and off, both clean, the window's picture right in both. Not yet:
+the owner's GPU (a window on the desktop: the owner's to open), its A/B there (`drawdone_ms`, with vsync off and on),
+and a run under the Vulkan validation layer (not installed on the worker).
 
 Done this week (`perf-baseline.md`): ProgramHash's copy check (render thread -7 to -9%), the index cache (bottom,
 ~-0.3 ms on continue), the sampler key (SampleTexture 7.2% -> 5.6%).

@@ -234,19 +234,21 @@ namespace wwhd::gpu
 			Check(vkBeginCommandBuffer(s.cmd, &bi), "vkBeginCommandBuffer");
 		}
 
-		void Submit()
+		void Submit(VkSemaphore signal = VK_NULL_HANDLE)
 		{
 			EndRendering();
 			Check(vkEndCommandBuffer(s.cmd), "vkEndCommandBuffer");
 			VkSubmitInfo si{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
 			si.commandBufferCount = 1;
 			si.pCommandBuffers = &s.cmd;
+			si.signalSemaphoreCount = signal ? 1 : 0;
+			si.pSignalSemaphores = &signal;
 			Check(vkQueueSubmit(s.queue, 1, &si, s.fence), "vkQueueSubmit");
 		}
 	}
 
-	// Real time without a window only (a window's present would need a semaphore from the submit: not yet), and
-	// never under the virtual clock: the checks keep the full wait, so they stay exact by construction.
+	// Real time only, never under the virtual clock: the checks keep the full wait, so they stay exact by
+	// construction. With a window the present waits for the swap's submit by a semaphore (present.cpp).
 	// WWHD_LAZY_DRAWDONE=2 (a test) also under the virtual clock: the guest's time is its cycles there, so the
 	// checks then compare the lazy path's pictures with the references (captures byte-identical: it renders the same)
 	bool LazyDrawDone()
@@ -254,9 +256,19 @@ namespace wwhd::gpu
 		static const bool on = [] {
 			const char* e = getenv("WWHD_LAZY_DRAWDONE");
 			const int v = e ? atoi(e) : 0;
-			return !HasWindow() && (v == 2 || v == 3 || (v == 1 && !PPCTimer_isVirtualClock()));
+			return v == 2 || v == 3 || (v == 1 && !PPCTimer_isVirtualClock());
 		}();
 		return on;
+	}
+
+	void WaitPending()
+	{
+		for (uint32 i = 0; i < 2; i++)
+			if (s.pending[i])
+			{
+				WaitFence(s.fences[i]);
+				s.pending[i] = false;
+			}
 	}
 
 	void SubmitAndWait()
@@ -279,7 +291,7 @@ namespace wwhd::gpu
 	{
 		if (!s.cmds[1])
 			return SubmitAndWait();
-		Submit();
+		Submit(PresentSemaphore());                                 // a window's present waits for it (none without one)
 		s.pending[s.slot] = true;
 		s.slot ^= 1;
 		s.cmd = s.cmds[s.slot], s.fence = s.fences[s.slot], s.descriptors = s.pools[s.slot];

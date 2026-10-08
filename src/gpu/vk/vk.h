@@ -34,7 +34,7 @@ namespace wwhd::vk
 	X(vkCmdBindVertexBuffers) X(vkCmdBindIndexBuffer) X(vkCmdDraw) X(vkCmdDrawIndexed) X(vkCmdSetViewport) \
 	X(vkCmdSetScissor) X(vkCmdSetBlendConstants) X(vkCmdSetDepthBias) \
 	X(vkCreateSwapchainKHR) X(vkDestroySwapchainKHR) X(vkGetSwapchainImagesKHR) X(vkAcquireNextImageKHR) \
-	X(vkQueuePresentKHR)
+	X(vkQueuePresentKHR) X(vkCreateSemaphore) X(vkDestroySemaphore)
 
 #define WWHD_VK_DECLARE(f) extern PFN_##f f;
 	WWHD_VK_GLOBAL(WWHD_VK_DECLARE)

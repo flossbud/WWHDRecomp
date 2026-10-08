@@ -27,6 +27,8 @@ namespace wwhd::gpu
 			VkFence acquired = VK_NULL_HANDLE;
 			uint32 index = 0;
 			bool pending = false;                                // an image was acquired and drawn this swap
+			std::vector<VkSemaphore> rendered;                   // per image: the lazy path's swap submit signals it
+			bool signalled = false;                              // this swap's present waits for rendered[index]
 		} w;
 
 		struct OverlayPixels
@@ -117,8 +119,15 @@ namespace wwhd::gpu
 			ci.oldSwapchain = w.chain;
 			VkSwapchainKHR chain;
 			Check(vkCreateSwapchainKHR(s.device, &ci, nullptr, &chain), "vkCreateSwapchainKHR");
+			// the lazy path's frames in flight may still draw into the old images and its presents wait for their
+			// semaphores: the queue idle first (a rebuild is rare: a resize)
+			vkQueueWaitIdle(s.queue);
+			WaitPending();
+			for (VkSemaphore sem : w.rendered)
+				vkDestroySemaphore(s.device, sem, nullptr);
+			w.rendered.clear();
 			if (w.chain)
-				vkDestroySwapchainKHR(s.device, w.chain, nullptr);  // nothing uses it: every swap waits for its submit
+				vkDestroySwapchainKHR(s.device, w.chain, nullptr);  // nothing uses it now
 			w.chain = chain;
 			vkGetSwapchainImagesKHR(s.device, w.chain, &n, nullptr);
 			w.images.resize(n);
@@ -290,6 +299,24 @@ namespace wwhd::gpu
 		PresentQueue();
 	}
 
+	// the semaphore the swap's submit signals and its present waits for (the lazy path: the submit isn't waited for);
+	// one per image: an image is acquired again (its fence waited for) only once its last present is done with it
+	VkSemaphore PresentSemaphore()
+	{
+		if (!w.pending)
+			return VK_NULL_HANDLE;
+		if (w.rendered.size() != w.images.size())
+			w.rendered.resize(w.images.size(), VK_NULL_HANDLE);
+		VkSemaphore& sem = w.rendered[w.index];
+		if (!sem)
+		{
+			VkSemaphoreCreateInfo sci{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+			Check(vkCreateSemaphore(s.device, &sci, nullptr, &sem), "vkCreateSemaphore");
+		}
+		w.signalled = true;
+		return sem;
+	}
+
 	void PresentQueue()
 	{
 		if (!w.pending)
@@ -299,7 +326,13 @@ namespace wwhd::gpu
 		pi.swapchainCount = 1;
 		pi.pSwapchains = &w.chain;
 		pi.pImageIndices = &w.index;
-		VkResult r = vkQueuePresentKHR(s.queue, &pi);             // the submit has finished: nothing to wait for
+		if (w.signalled)                                          // the lazy path: the submit may not have finished
+		{
+			pi.waitSemaphoreCount = 1;
+			pi.pWaitSemaphores = &w.rendered[w.index];
+			w.signalled = false;
+		}
+		VkResult r = vkQueuePresentKHR(s.queue, &pi);             // otherwise the submit has finished: nothing to wait for
 		if (r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR)
 			w.width = 0;                                          // rebuild at the next swap
 		else

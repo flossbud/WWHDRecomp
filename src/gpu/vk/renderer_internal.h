@@ -56,7 +56,7 @@ namespace wwhd::gpu
 		VkFence fence = VK_NULL_HANDLE;
 		VkDescriptorPool descriptors = VK_NULL_HANDLE;           // reset after every submit
 		Ring ring;
-		// the lazy GX2DrawDone (WWHD_LAZY_DRAWDONE=1; real time without a window; WIP, docs/research/deck-plan.md
+		// the lazy GX2DrawDone (WWHD_LAZY_DRAWDONE=1; real time; docs/research/deck-plan.md
 		// item 2): two of each per-frame resource, the frame's submit (SubmitFrame) not waiting for the GPU. Slot 1's
 		// are made only when it's on; cmd, fence and descriptors are the current slot's, and the ring's
 		// [ringBase, ringEnd) its half (the whole ring when off)
@@ -81,7 +81,8 @@ namespace wwhd::gpu
 	uint32 MemoryType(uint32 bits, VkMemoryPropertyFlags props);
 	void SubmitAndWait();                                         // ends rendering first; the GPU idle after it
 	void SubmitFrame();                                           // a swap's submit (lazy: not waited for)
-	bool LazyDrawDone();                                          // WWHD_LAZY_DRAWDONE=1 in real time without a window
+	bool LazyDrawDone();                                          // WWHD_LAZY_DRAWDONE=1 in real time
+	void WaitPending();                                           // the GPU done with every submitted frame (no submit)
 	void Transition(Image& img, VkImageLayout layout);
 	Image CreateImage(VkFormat format, VkImageAspectFlags aspect, uint32 w, uint32 h, VkImageUsageFlags usage, uint32 layers = 1);
 	VkImageView LayerView(Image& img, uint32 layer);             // a 2D view of one layer (img.view for layer 0)
@@ -101,6 +102,7 @@ namespace wwhd::gpu
 	bool CanPresent(uint32 queueFamily);                          // true without a window
 	void PresentRecord(Image& scan);                              // before the swap's submit: into the next window image
 	void PresentQueue();                                          // after it
+	VkSemaphore PresentSemaphore();                               // the swap's submit signals it when the lazy path presents
 
 	// shader_cache.cpp: the cache on disk (design D20); its records are draw.cpp's byte strings
 	namespace cache
