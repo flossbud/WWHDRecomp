@@ -1,0 +1,74 @@
+# Steam Deck and Android: the performance plan
+
+Session qa, 2026-10-08, for B75 (the Deck runs the game at 35-55% speed: CPU-bound). Built from
+`docs/research/perf-baseline.md` (the baseline, the A/Bs, session bottom's half-frame split),
+`docs/research/rival-study.md` (§6, their performance work) and `docs/research/texture-tracking.md`. Gains are per
+60 fps frame on the 13700K (real time, headless, the save route `continue` unless noted) and an estimate for the
+Deck's Zen 2 at ~2x per thread (its 2.4-3.5 GHz cores against the 13700K's P-cores: an estimate until the quick tests
+below measure it).
+
+## Where the time goes now (the 13700K, at 60)
+
+| thread | continue | the Darknut fight (en-tn) | Deck estimate (fight) |
+|---|---|---|---|
+| game (scheduler) thread | 7.2 ms a frame (43% of a core) | 9.5 ms (57%) | ~19 ms: over the 16.7 ms budget |
+| render thread | ~3.0 ms (after this week's two wins) | ~5.3 ms | ~11 ms, plus the GPU wait |
+| the game thread waiting in GX2DrawDone (frame log `drawdone`) | 1.6 ms | 2.0 ms | grows with the render thread |
+
+60 fps adds 73-83% to the game thread (bottom's split): the converted processes' half-step executes are only ~13%
+of that, the actors' draws about as much (every actor draws every frame), and most is elsewhere: **the sound's AX
+processing runs about five times its 30 fps cost**, the half frame's own path, the journal. On the Deck the game
+thread alone doesn't fit 60 in a fight; at 30 it needs ~9 ms of a 33 ms frame. That is the plan's main fork.
+
+## The quick tests (first, on the owner's Deck; an hour or two)
+
+1. **Clocks and governor.** `cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor` and the frequencies while
+   playing (`watch -n1 grep MHz /proc/cpuinfo`); SteamOS's power profile and TDP limit (Quick Access, Performance).
+   On our own worker the `powersave` governor alone cost 10% at 30 (recompiler-design.md, "Idle threads and
+   clocks"): a half-busy thread that sleeps a thousand times a second sits at low clocks. Retry with
+   `performance` and the TDP at its maximum.
+2. **30 fps** (`WWHD_60FPS` unset): if the game runs at full speed at 30, the Deck can ship now with 30 as its
+   default and 60 as an option, while the items below bring 60 within reach.
+3. **Per-thread CPU and a profile** on the Deck: the same three scenes (`perf-top.sh`, `WWHD_PROFILE`), so every
+   estimate here becomes a measurement. The routes, the save and the scripts copy as they are (`~/wwhd-test`).
+4. **Thread placement**: the game and render threads on different physical cores (not SMT siblings of one core),
+   `taskset` to try; if it helps, the frontend sets the affinity.
+
+## The items, in priority order
+
+| # | item | gain, 13700K | gain, Deck (est.) | effort | risk | how it stays exact |
+|---|---|---|---|---|---|---|
+| 1 | **The sound at 60** (AX ~5x its 30 cost; session bottom is on it) | ~0.6 ms a frame on the game thread (8% of it) | ~1.2-1.5 ms | 0.5-1 day once the cause is found | low | the audio hash (`WWHD_AUDIO_HASH`) at 60 equals 30's; checks' sound |
+| 2 | **GX2DrawDone waits for recording, not the GPU** (the rival's "lazy DrawDone", their biggest win: +13-53%) | up to 1.6 ms a frame of the game thread's wall time (a wait, not CPU) | more: the wait grows with a slower render thread | 1 day | medium (ordering: a CPU read of a GPU result after DrawDone) | checks' command streams and captures byte-identical; a route that reads back (picto box) |
+| 3 | **Render thread: skip redundant work per draw** (the rival's "CPU paths": unchanged descriptors, vertex and uniform binds, a pipeline lookaside; `Descriptors`/`Textures` are 12-13% inclusive) | 0.3-0.6 ms (10-20% of the render thread) | 0.7-1.5 ms | 2-4 days, one A/B'd step at a time | low | each step: captures byte-identical, `perf-ab.sh` |
+| 4 | **Half frames: static actors draw from their whole frame** (signs, bridges, palms, door knobs, the sky box: bottom's list) | ~0.2-0.3 ms (the actors' draws are ~6% of the game thread at 60) | ~0.5 ms | 2-3 days | medium (an actor taken for static that moves draws a frame late: the hz30 sweep catches it) | 30 unchanged (checks); the half frame's picture against the interpolation (hz30) |
+| 5 | **The half step's journal** (`HalfTickStore` + `rt_journal_store`, ~3%) | ~0.2 ms | ~0.4 ms | 1-2 days | low | regress and predeploy unchanged |
+| 6 | **Texture tracking by write-protection** (`texture-tracking.md`) | ~0.05 ms (the sampled check is ~1.3% of the render thread) | ~0.1-0.2 ms | ~2 days | medium (a writer the audit misses: the verify mode finds it) | the checks' verify mode, 0 missed writers; and it removes real time's up-to-a-second texture lag |
+| 7 | **Link's half step cheaper** (his execute doubles at 60; the one actor worth it) | ~0.1 ms | ~0.2 ms | 1-2 days | medium (his half step's exactness work) | predeploy |
+
+Done this week (`perf-baseline.md`): ProgramHash's copy check (render thread -7 to -9%), the index cache (bottom,
+~-0.3 ms on continue), the sampler key (SampleTexture 7.2% -> 5.6%).
+
+Items 1-5 together are worth ~2.5-3 ms a frame on the game thread's wall time on the 13700K, ~5-6 ms on the Deck:
+enough for 60 on the save route, likely not in the heaviest fights (~19 ms estimated). So:
+
+- **Ship 30 on the Deck first** if quick test 2 shows full speed, with 60 as an option;
+- **60 on the Deck in fights** needs more than these items: either a deeper cut of the half frame (only the converted
+  processes and the draw run again, not the frame's whole body: a design of its own, the largest lever) or a
+  30 Hz game with interpolated presentation for weak CPUs. Decide after the quick tests' numbers.
+
+## Android
+
+The same items apply (the code is C++; the recompiled program builds for ARM64 like the rest), plus what the rival
+needed on phones (rival-study §6): the two heavy threads pinned to the fastest cores (`/sys/.../cpuinfo_max_freq`),
+an ADPF hint session (`APerformanceHint`) for the game and render threads' target durations, and a thermal-aware
+frame rate (`AThermal_getThermalHeadroom`: 60 while there's headroom, 30 when hot). The rival reached 30-32 fps in
+the heaviest scenes on a Galaxy S25 Ultra. An Android build of ours doesn't exist yet: the port itself (Cemu's
+platform layer, a Vulkan surface, input) comes before any of this and is the larger effort (weeks, not days).
+
+## Gates for every item
+
+Checks (traces, command streams, sound, captures byte-identical, PSNR inf), regress, predeploy 0 FAIL, and an A/B
+(`~/wwhd-test/perf-ab.sh`, alternating builds, render or game thread per frame from the frame log) for the claimed
+gain. Profile shares (`WWHD_PROFILE`, `tools/profile_report.py`) when the A/B can't resolve a small change. Parallel
+runs need a binary each.
