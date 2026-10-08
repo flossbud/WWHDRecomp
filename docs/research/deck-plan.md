@@ -190,7 +190,8 @@ the watch had already failed, so every store of the frame (93k a half frame on c
 through `rt_journal_store` and `QuietStore`. Now the watch drops it once the call is visible, and
 `rt_journal_store` returns first for bytes saved already or not kept (handoff.md, "Session cloud3"). Continue at 60,
 desktop profile: the journal 2.1% -> 1.1% of all samples, its calls 93k -> 33k a half frame. `WWHD_JOURNAL_SKIP=0`
-for an A/B. Left: the 33k calls' own cost (~1%): a check inline in `RT_STORE` (ppc_ops.h; it grows every store site).
+for an A/B. **A/B on the worker** (worker-ab.sh, continue:1800, 6 rounds paired, lazy DrawDone on in both): the game
+thread's work a frame 20.05 -> 19.67 ms (-2.1%, lower in 6/6), 49.9 -> 50.8 fps, every run better. Left: the 33k calls' own cost (~1%): a check inline in `RT_STORE` (ppc_ops.h; it grows every store site).
 
 ## Android
 
