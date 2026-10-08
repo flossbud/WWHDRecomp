@@ -6,6 +6,14 @@
 # (route door2: turning half a tick early, then walking a tick and a half early, 25 units ahead).
 0240D6D8    hold        bctrl           link execute: (this->*mCurProcFunc)(), a member function
 0240D6F8    hold        bctrl           link execute: (this->*mCurProcFunc)(), a virtual one
+# procWaitTurn (f_0241AF64, the turn in place 0x17; the pots' known issue, session bottom): its end is the facing's
+# approach (cLib_addCalcAngleS, 8000 a tick, h of it a step) reaching the target, tested after it in the same call.
+# At 60 the half step could reach it and end the turn half a tick early (a carried turn after a 40-unit facing
+# difference from the lift). The remaining angle rests at 0 once reached and the test's other branch does nothing,
+# so `eqwhole`: a half step that reaches it leaves the end to the next whole step, 30's tick.
+# Test (a small pot spawned behind Link on Outset's dock, lifted, then LUP 6/12/19 frames: a carried turn back): the
+# turn ended at 60's 1024.5 against 30's 1025 and the walk came a tick early; now both on 30's ticks.
+0241AFE8    eqwhole     cmpi            procWaitTurn: the approach's remaining angle == 0: checkNextMode (the turn's end)
 # A landing's reaction on whole ticks only (session top, items2: route armor, a bomb's blast). At 30 an action
 # that lands in a tick's move reacts in the next tick's action call; at 60 the arc reaches the ground up to half a
 # tick sooner (a whole step's move), and the half step after it reacted, in the state paired with 30's tick of

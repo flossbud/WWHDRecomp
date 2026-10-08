@@ -3589,6 +3589,13 @@ it in a window; D21 "Step 2"):**
     posMoveF_grade tick-exact (sixty_step.cpp s_tickExact: the whole step takes the tick's accelerations, the half step
     none, both move half the tick's speed): within 0.23 units; its delete at depth comes half a tick early (unseen).
     WWHD_60FPS_TICKEXACT=0 off. The same mode could serve other strong-drag Euler moves.
+    Later (the known issue's leftover): the carried turn in place ended half a tick early (procWaitTurn's end test,
+    0241AFE8, now eqwhole: the half step that reaches the target leaves the end to the next whole step); a pot spawned
+    behind Link on the dock (WWHD_DEBUG_SPAWN=950:453,707fff00,-201660,190,312465), lifted, LUP: the turn's end and the
+    walk on 30's ticks. The lift's hand-over to the carry wait (0x6F -> 0x73 when its animation stops, rate < 0.01)
+    came a tick late before qa's ExactFrame (two half adds of 0.45 left the frame at 8.9999981 where 30's nine adds of
+    0.9 reach 9: ANIMEND's whole-tick test fell short); with it, on 30's tick (1015): lift, carry, turn, walk and throw
+    all on 30's ticks.
   - Sidling: the predeploy sidle routes never sidle (the A comes walking: a roll). To sidle in drc: stop at the wall,
     LDOWN+LRIGHT to face it, hold A (releasing A leaves the sidle), A+LUP moves along it. procWHideMove (f_0242AFB8,
     0x15) ran up to 2.3 units ahead: its setNormalSpeedF now once a tick (as the walk's), and 0x15 is in HoldsAfter
