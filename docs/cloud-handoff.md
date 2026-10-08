@@ -19,7 +19,15 @@ the worker that has the game.
   - Set `WWHD_ON=worker` if the environment hasn't.
   - From then on, `tools/worker/sync.sh`, `tools/worker/w` and `tools/worker/job` work exactly as for a local session.
     Read `docs/handoff.md` ("Parallel sessions", "Infrastructure", "Hard rules").
-- **What it can reach.** Only the worker's SSH, plus the owner's PC's SSH for deploys. On the PC, the key runs nothing but a
+- **The desktop worker (from 2026-10-08, the owner's choice).** With `WWHD_CLOUD_DESKTOP_KEY` in the environment you have
+  a full login on the owner's PC, so the desktop worker works as it does for local sessions. With `WWHD_ON` unset,
+  commands go to the desktop while its worker runs, else the worker.
+  - It's the owner's own machine: touch nothing outside `~/wwhd-desk` and the worker container. Leave `~/wwhd-play`
+    (their saves and cache) to deploys.
+  - When the owner wants the PC back, they stop the worker (`tools/worker/desktop.sh stop`), and everything falls back
+    to the worker.
+  - The Deck stand-in measurements stay on the worker.
+- **What it can reach.** the worker's SSH and the owner's PC's SSH (deploys go through the receiver: host `pc-deploy`). On the PC, the key runs nothing but a
   receiver: `status` (is the game running), and writes of the deploy files into `~/wwhd-play`.
   - Don't try to reach anything else on the tailnet: the rules block it, and it isn't yours to probe.
   - The login names are the owner's own account names. They live in the environment variables and in
@@ -50,7 +58,7 @@ the worker that has the game.
   - Local sessions may be working too. Before a long gate, claim the item: `tools/progress/publish.sh claim ID "what"`
     from this checkout. Tell them in `docs/handoff.md` when you land something that touches shared code.
 - **Deploying to the owner's PC.** Only with the owner's OK, asked each time in this chat; say what's in the build.
-  - Then run `WWHD_DEPLOY_KEY=~/.ssh/wwhd_cloud_deploy tools/play/deploy-cloud.sh "$WWHD_DESKTOP_SSH"` after a full
+  - Then run `WWHD_DEPLOY_KEY=~/.ssh/wwhd_cloud_deploy tools/play/deploy-cloud.sh pc-deploy` after a full
     build on the worker.
   - It refuses while the game is running. If it does, wait and ask again.
   - Mark the bugs it fixes: `publish.sh bug fixed ID "fixed: deployed ww-4 SHA"`.
