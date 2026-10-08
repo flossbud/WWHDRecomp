@@ -4098,6 +4098,19 @@ Cloud session cloud3 (tailnet mode, worker directory `/wwhd/WWHDRecomp-cloud3`, 
   a `WWHD_JOURNAL_SKIP=0` run, predeploy 51 ok, 0 FAIL, gohmatail WARN 54.0, gohmarock 4.8 as before. Desktop
   profile, continue at 60: the journal 2.1% -> 1.1% of all samples.
 
+### Session cloud2 (2026-10-08): write-watch and a present-path review, branch ww-4-cloud2
+
+A second cloud session (checkout `/wwhd/WWHDRecomp-cloud2`), kept off the worker while session cloud times there.
+- **`src/runtime/write_watch.{h,cpp}`** (deck-plan item 6's runtime half; `texture-tracking.md`, "The runtime half,
+  built"): page stamps, protect/unprotect, a `SIGSEGV` handler chained before Cemu's, `HostWrite`, a `sigaltstack`
+  per host thread. Off unless `WWHD_WRITE_WATCH=1`, compiled into `wwhd_runtime`, and called by nothing yet. Unit
+  tests (`src/runtime/tests/run.sh`, no game) cover threads and a fiber that moves between host threads. Wiring it
+  in (`ThreadInit` in `OSSchedulerCoreEmulationThread`, `Init`, texture.cpp, `HostWrite` in `FSAProcessCmd_read`) needs
+  the game: the steps are in texture-tracking.md.
+- **deck-plan item 2, paper review of the lazy DrawDone's present path**: the semaphores and fences are right. Two
+  fixes are needed before it's on by default: the overlay image destroyed while in flight, and no barrier between
+  overlapping frames on the GPU.
+
 ## Waiting on the owner
 
 - **The sound check** of the task loop's fast path (item 1): they listen in a window when they have
