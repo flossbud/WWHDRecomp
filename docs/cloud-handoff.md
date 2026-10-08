@@ -42,8 +42,10 @@ the worker that has the game.
   `predeploy.sh gohmatail gohmarock`.
   - Speed work must leave 30 bit-identical and the 60 results unchanged, unless a change is meant to move them and says
     so.
-  - Push to `worker` first: `git push worker HEAD:ww-4`, the source of truth. Then push the same commit to `origin`
-    (GitHub); the histories are identical.
+  - Push to `worker` only: `git push worker HEAD:ww-4`. the worker mirrors every branch pushed to it on to GitHub by
+    itself, within seconds, through a post-receive hook with a repo-only deploy key and a guard that refuses anything
+    with the owner's name. Its log is `/wwhd/logs/github-mirror.log` on the worker. Don't push to `origin` yourself:
+    the sandbox can't, and it doesn't need to.
   - A refused push means someone landed first: rebase and re-gate (code) or just rebase (docs).
   - Local sessions may be working too. Before a long gate, claim the item: `tools/progress/publish.sh claim ID "what"`
     from this checkout. Tell them in `docs/handoff.md` when you land something that touches shared code.
