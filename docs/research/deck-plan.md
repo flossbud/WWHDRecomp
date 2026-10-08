@@ -179,9 +179,10 @@ Each step: `WWHD_RENDER_STATS` counts of hits, captures byte-identical on and of
   the game thread (noise), the watch +42. The static models are the cheap ones (few joints). The other
   camera-free parts of a static actor's draw (settingTevStruct `f_025626A4`, setLightTevColorType `f_02562F5C`:
   ~0.9% of the game thread at 60 for every actor's half-frame draw together) would gain less than the watch costs.
-- *A lead outside item 4:* viewCalc fills both of a model's blocks with the same view (~1% of the game thread at
-  60, every frame). If the second is the GamePad's (not shown in real time: WW-3 item 10), filling it only when
-  something reads it would halve that; not checked yet.
+- *A lead outside item 4, checked and dropped:* viewCalc fills both of a model's blocks with the same view
+  (`f_027F53CC`, 2.4% of the game thread at 60 on continue). The GamePad's screen shows only the item menu, and
+  the TV reads the second block too: with it left unfilled (a probe on `f_027FDA54`) 5 of 7 tour3 captures at 30
+  changed.
 
 ## Android
 
