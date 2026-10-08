@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# w [-t] COMMAND...  - run a command in the WWHD worker container on the worker, from this checkout's
+# w [-t] COMMAND...  - run a command in the WWHD worker container on the worker (tools/worker/target.sh), from this checkout's
 # worker checkout (/wwhd/WWHDRecomp, or the path in .worker-dir: see sync.sh). Use -t for an
 # interactive shell (w -t bash).
 # Examples:  tools/worker/w tools/ghidra/rebuild.sh

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# desktop.sh start|stop|status: the second worker on the owner's desktop (24 threads, 31 GB),
+# desktop.sh start|stop|status: the second worker on the owner's PC (24 threads, 31 GB),
 # the same wwhd-worker image under rootless podman, /wwhd being ~/wwhd-desk there
 # (tools/worker/target.sh: WWHD_ON=desktop sends sync.sh, w and job to it).
 #   start   (re)create the container: all 24 threads (the owner lends the whole desktop), 28 GB of
@@ -11,7 +11,7 @@
 # The desktop has the game, saves, tools and caches (~10 GB, copied from the worker's /wwhd once),
 # not the reference traces and captures: tools/sixty/tests/checks.sh runs on the worker only.
 set -euo pipefail
-source "$(dirname "$0")/desktop-env.sh"     # the desktop's login (tools/worker/desktop.env)
+source "$(dirname "$0")/hosts.sh"           # the machines' addresses (tools/worker/hosts.env)
 host=$WWHD_DESKTOP_SSH
 on() { ssh -o BatchMode=yes -o ConnectTimeout=10 "$host" "$@"; }
 case "${1:-status}" in

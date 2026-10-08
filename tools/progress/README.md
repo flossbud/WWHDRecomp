@@ -1,7 +1,8 @@
 # Progress page
 
-A small status page for the owner (desktop and phone), served from the worker host on the tailnet:
-**http://WORKER_ADDR:8765** (bound to the tailnet address only).
+A small status page for the owner (desktop and phone), served from the worker's host on the tailnet:
+**port 8765 on the worker's tailnet address** (bound to that address only; `WWHD_PROGRESS_URL` in
+`tools/worker/hosts.env`).
 
 - `index.html`: the page (no external files). It reads `progress.json`, `sessions.json` (the "working
   on" lines), `shots.json` and `shots-archive.json`, `claims.json` (the queue) and `bugs.json` next to it every 20 seconds.
@@ -18,7 +19,7 @@ A small status page for the owner (desktop and phone), served from the worker ho
   (items with "ids" in `plan.json`, the actor types they cover, fill theirs on their own);
   `publish.sh shot PPM CAPTION` adds a capture made
   on the worker; `publish.sh usage` copies the Claude account's usage meters from the editing machine into `usage.json` (a crontab entry
-  on the editing machine, tagged `wwhd-usage`, runs it every 5 minutes; only percentages and reset times leave the editing machine);
+  there, tagged `wwhd-usage`, runs it every 5 minutes; only percentages and reset times leave that machine);
   `publish.sh serve` installs `server.py` and starts it, or restarts it when it changed (a crontab
   `@reboot` entry on the worker, tagged `wwhd-progress`, starts `.server.py` after a reboot).
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # (Re)create the long-lived worker container on the worker with its resource caps:
 #   24 GB RAM with no swap, 10 of 12 CPU threads, 4096 processes, and the Intel iGPU
-#   (/dev/dri). the worker keeps ~7 GB and 2 threads for its own jobs (Tailscale subnet
-#   router, backup monitoring, other services). Disk is the 250 GB /wwhd loop volume
-#   (/var/lib/wwhd/wwhd.img, see README.md), so the worker can't fill the worker's root disk.
-# An out-of-memory job is killed inside the container; the worker and the editing machine are unaffected.
+#   (/dev/dri). The host keeps ~7 GB and 2 threads for its own jobs. Disk is the 250 GB /wwhd
+#   loop volume (/var/lib/wwhd/wwhd.img, see README.md), so the worker can't fill the host's root disk.
+# An out-of-memory job is killed inside the container; the host and the editing machine are unaffected.
 set -euo pipefail
-ssh worker 'set -e
+source "$(dirname "$0")/hosts.sh"           # the worker's address (tools/worker/hosts.env)
+ssh "$WWHD_WORKER_SSH" 'set -e
 mkdir -p /wwhd/home /wwhd/cache /wwhd/opt /wwhd/WWHDRecomp
 docker rm -f wwhd-worker >/dev/null 2>&1 || true
 docker run -d --name wwhd-worker --init --restart unless-stopped \

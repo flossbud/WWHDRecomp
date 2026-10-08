@@ -1,5 +1,5 @@
 # WWHD recomp worker: every heavy job (Ghidra, Cemu builds and runs, compiling generated code,
-# traces) runs in this container on the worker, never on the editing machine container.
+# traces) runs in this container on the worker, never on the editing machine.
 # Big tools (Ghidra, the Cemu source build) live on the /wwhd volume, not in the image; see
 # tools/worker/README.md. Rebuild the image with tools/worker/image.sh.
 FROM debian:trixie
@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # uv for the repo's inline-dependency Python tools
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
 
-# Same uid/gid as owner on the worker so files on /wwhd keep one owner. GPU access comes from
+# Same uid/gid as owner on the worker's host so files on /wwhd keep one owner. GPU access comes from
 # `--group-add` at run time (host video=44, render=992), not from groups baked in here.
 RUN groupadd -g 1000 owner && useradd -m -u 1000 -g 1000 -s /bin/bash owner
 USER owner

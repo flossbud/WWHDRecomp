@@ -25,7 +25,7 @@ REF_LOGFLAG=2 WWHD_GAME=... tools/reference/run.sh      # log every GX2 call to 
                                                        # (~1 GB per 3.5 min: short runs only)
 ```
 
-On the worker worker Cemu renders on the Intel iGPU (Intel iGPU) through Mesa's anv driver. Xvfb has
+On the worker Cemu renders on the Intel iGPU through Mesa's anv driver. Xvfb has
 no DRI3, so `run.sh` sets `MESA_VK_WSI_DEBUG=sw`: the GPU renders and Mesa copies each frame into
 Xvfb through the CPU. `REF_GPU=llvmpipe` renders in software instead (Mesa lavapipe): about 1.5x
 slower on menus and slower still in 3D, and its frames agree with the GPU's to 49-55 dB.
@@ -48,7 +48,7 @@ slower on menus and slower still in 3D, and its frames agree with the GPU's to 4
 ## Patched source build (deterministic reference)
 
 The AppImage can't provide repeatable runs, so the real reference is Cemu built from source at
-the pinned commit (`c717fcab`), with the patches in `cemu-patches/`, running in the worker
+the pinned commit (`c717fcab`), with the patches in `cemu-patches/`, running in the
 worker (`tools/worker/setup-volume.sh cemu`, then `cemu-rebuild` after patch changes).
 
 **Status (2026-09-28): deterministic.** `determinism.sh` ran two fresh boots to frame 600 and

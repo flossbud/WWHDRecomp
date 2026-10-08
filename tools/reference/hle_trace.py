@@ -15,7 +15,7 @@ Format (see tools/reference/cemu-patches): an 8-byte magic "HLETRC01", then tagg
 A trace from a killed process ends mid-record; the reader stops at the last complete one.
 Everything streams in 64 MB chunks (call records parsed in bulk with numpy), so memory use is
 bounded no matter how big the trace is. Never load a whole trace into memory: that is how
-a 272 MB trace took down the editing machine container on 2026-09-28.
+a 272 MB trace took down the editing machine's container on 2026-09-28.
 """
 import argparse
 import collections

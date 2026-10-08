@@ -1,7 +1,7 @@
 """The progress page's server (tools/progress/README.md): the pages and their data as static files, plus what
 the owner writes on the testing page (testing.html): bug verdicts and reports, notes, checks of new work.
 
-Usage (on the worker host, from the data directory): python3 server.py PORT BIND_ADDRESS
+Usage (on the worker's host, from the data directory): python3 server.py PORT BIND_ADDRESS
 
 Static files are served as python's http.server serves them, but for dot files (the pid, the log, the
 locks). The API (JSON; every request carries the header X-WWHD, so another site can't post from the

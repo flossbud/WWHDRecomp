@@ -11,18 +11,20 @@
 #   TS_AUTHKEY             the tailnet key (ephemeral, pre-approved, tagged tag:wwhd-cloud)
 #   WWHD_CLOUD_SSH_KEY     the worker's key for this session (the private key, base64)
 #   WWHD_CLOUD_DEPLOY_KEY  the PC's deploy key (the private key, base64)
-#   WWHD_WORKER_USER     the login on the worker
-#   WWHD_DESKTOP_SSH       user@DESKTOP_ADDR, the PC (for deploy-cloud.sh only)
-#   WWHD_DESKTOP_HOME      that account's home (tools/worker/desktop-env.sh)
+#   WWHD_WORKER_ADDR       the worker's tailnet address
+#   WWHD_WORKER_USER       the login on the worker
+#   WWHD_DESKTOP_SSH       user@address of the PC
+#   WWHD_DESKTOP_HOME      that account's home
 #   WWHD_CLOUD_DESKTOP_KEY the PC's full login key (base64; the owner's choice, 2026-10-08): with it the desktop
 #                          worker is usable too (WWHD_ON unset: the desktop while its worker runs, else the worker)
 #   WWHD_ON                optional: worker or desktop forces one
-# None of these values go into git (the logins are the owner's account names).
+# The script writes tools/worker/hosts.env (gitignored) from them. None of these values go into git (the addresses
+# are the owner's machines', the logins the owner's account names).
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 st=$HOME/.tailscale-wwhd
 sock=$st/tailscaled.sock
-for v in TS_AUTHKEY WWHD_CLOUD_SSH_KEY WWHD_CLOUD_DEPLOY_KEY WWHD_WORKER_USER WWHD_DESKTOP_SSH WWHD_DESKTOP_HOME; do
+for v in TS_AUTHKEY WWHD_CLOUD_SSH_KEY WWHD_CLOUD_DEPLOY_KEY WWHD_WORKER_ADDR WWHD_WORKER_USER WWHD_DESKTOP_SSH WWHD_DESKTOP_HOME; do
     [ -n "${!v:-}" ] || { echo "tailnet-setup: $v isn't set (the cloud environment's variables)" >&2; exit 2; }
 done
 sudo=; [ "$(id -u)" = 0 ] || sudo=sudo
@@ -59,7 +61,7 @@ fi
 desk_user=${WWHD_DESKTOP_SSH%@*}; desk_ip=${WWHD_DESKTOP_SSH#*@}
 cat > ~/.ssh/config <<EOF
 Host worker
-    HostName WORKER_ADDR
+    HostName $WWHD_WORKER_ADDR
     User $WWHD_WORKER_USER
     IdentityFile ~/.ssh/wwhd_cloud_worker
     IdentitiesOnly yes
@@ -83,22 +85,24 @@ Host pc-deploy
 EOF
 chmod 600 ~/.ssh/config
 
-# 3. This checkout as a parallel session: its own worker directory and name, the desktop's login file, the remote
+# 3. This checkout as a parallel session: its own worker directory and name, hosts.env, the worker remote
 name=${1:-${WWHD_CLOUD_SESSION:-$(cat "$root/.session" 2>/dev/null || echo cloud)}}
 case "$name" in cloud|cloud[0-9]*) ;; *) echo "tailnet-setup: the session name must be cloud, cloud2, cloud3..." >&2; exit 2 ;; esac
 echo "/wwhd/WWHDRecomp-$name" > "$root/.worker-dir"
 echo "$name" > "$root/.session"
 echo "tailnet-setup: session $name, worker directory /wwhd/WWHDRecomp-$name"
-printf 'WWHD_DESKTOP_SSH=%s\nWWHD_DESKTOP_HOME=%s\n' "$WWHD_DESKTOP_SSH" "$WWHD_DESKTOP_HOME" > "$root/tools/worker/desktop.env"
+printf 'WWHD_WORKER_SSH=worker\nWWHD_DESKTOP_SSH=%s\nWWHD_DESKTOP_HOME=%s\nWWHD_PROGRESS_URL=http://%s:8765\n' \
+    "$WWHD_DESKTOP_SSH" "$WWHD_DESKTOP_HOME" "$WWHD_WORKER_ADDR" > "$root/tools/worker/hosts.env"
+rm -f "$root/tools/worker/desktop.env"            # the older file: hosts.env has its two lines
 git -C "$root" remote get-url worker >/dev/null 2>&1 || git -C "$root" remote add worker worker:/wwhd/git/WWHDRecomp.git
 git -C "$root" config user.name flossbud
 git -C "$root" config user.email 224492734+flossbud@users.noreply.github.com
 
 # 4. Check both paths
-ssh -o BatchMode=yes -o ConnectTimeout=20 worker 'echo "worker: $(hostname), $(docker ps --format "{{.Names}}" | grep -c wwhd-worker) worker container"'
+ssh -o BatchMode=yes -o ConnectTimeout=20 worker 'echo "worker: $(docker ps --format "{{.Names}}" | grep -c wwhd-worker) worker container"'
 echo "deploy receiver: $(ssh -o BatchMode=yes -o ConnectTimeout=20 pc-deploy status)"
 if [ -n "${WWHD_CLOUD_DESKTOP_KEY:-}" ]; then
     echo "desktop worker: $(ssh -o BatchMode=yes -o ConnectTimeout=20 "$WWHD_DESKTOP_SSH" "podman container inspect -f '{{.State.Running}}' wwhd-worker 2>/dev/null || echo 'not running'")"
 fi
-git -C "$root" fetch -q worker && echo "worker remote: ww-4 at $(git -C "$root" rev-parse --short worker/ww-4)"
+git -C "$root" fetch -q worker && echo "worker remote: main at $(git -C "$root" rev-parse --short worker/main 2>/dev/null || echo '(none yet)')"
 echo "tailnet-setup: ready (WWHD_ON=${WWHD_ON:-unset: the desktop while its worker runs, else the worker})"

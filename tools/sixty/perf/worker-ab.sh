@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# worker-ab.sh ROUTE:FRAMES ROUNDS VARIANT... - perf-ab.sh for a worker (the worker: its container, the Intel GPU
+# worker-ab.sh ROUTE:FRAMES ROUNDS VARIANT... - perf-ab.sh for a worker (its container, the Intel GPU
 # through anv, headless; session cloud). Real-time runs of the game from the 100% save, the variants alternating,
 # ROUNDS times each, one run at a time. Timings only: the frame logs and thread CPU stay in the output directory.
 #   VARIANT  NAME[:K=V,K=V...]: the environment that variant adds. RATE=30|60 (default 60) is the frame rate;

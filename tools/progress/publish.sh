@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# The progress page (tools/progress/README.md), served from the worker host on the tailnet.
+# The progress page (tools/progress/README.md), served from the worker's host on the tailnet
+# (its address: WWHD_WORKER_SSH and WWHD_PROGRESS_URL in tools/worker/hosts.env).
 #   publish.sh              collect the data (collect.py) and publish it with the page
 #   publish.sh now TEXT     set this session's "working on" line (one small write: cheap to call often);
 #                           the session is the name in .session (gitignored), "main" without one;
@@ -23,7 +24,7 @@
 #   publish.sh still ID -   take a type off that list (it does change state after all)
 #   publish.sh bug add TITLE [DETAILS]       record a bug the owner reported (prints its id, B1...)
 #   publish.sh bug start|ready|fixed|verified|wontfix|reopen ID [NOTE]
-#                           its state: open -> working (by this session) -> ready (the fix is in ww-4,
+#                           its state: open -> working (by this session) -> ready (the fix is in main,
 #                           waiting to be deployed) -> fixed (deployed, waiting for the owner's
 #                           retest) -> verified (the owner
 #                           confirmed); wontfix with the reason; reopen if the retest fails
@@ -42,8 +43,8 @@
 #                           on the worker, never on the editing machine or in git (captures are game data); none is ever deleted
 #   publish.sh usage        the Claude account's usage meters (5 h, week, per model) from the editing machine's
 #                           /api/usage/claude ($WWHD_USAGE_URL, default http://127.0.0.1:7690) to usage.json:
-#                           percentages and reset times only, the login token never leaves the editing machine. A
-#                           crontab entry on the editing machine (tagged wwhd-usage) runs it every 5 minutes
+#                           percentages and reset times only, the login token never leaves that machine. A
+#                           crontab entry there (tagged wwhd-usage) runs it every 5 minutes
 #   publish.sh notes                         the owner's testing notes (written on the page), newest first
 #   publish.sh notes reply ID TEXT           answer one (shown under it on the page, as this session)
 #   publish.sh notes done|reopen ID [TEXT]   mark it handled (with an optional reply) or open again
@@ -52,7 +53,8 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
-host=worker
+source "$root/tools/worker/hosts.sh"        # the worker's address (tools/worker/hosts.env)
+host=$WWHD_WORKER_SSH
 dir=/wwhd/data/progress
 port=8765
 
@@ -90,9 +92,9 @@ PY
 
 # bugs.json on the host, changed under the claims' lock: [{id, title, details, state, session, notes, reported, time}]
 bugs() {
-	ssh $host "mkdir -p $dir && flock $dir/.claims.lock python3 - $dir/bugs.json $(printf %q "$1") $(printf %q "$(json_str "${2:-}")") $(printf %q "$(json_str "${3:-}")") $(printf %q "$session") $(date +%s)" <<'PY'
+	ssh $host "mkdir -p $dir && flock $dir/.claims.lock python3 - $dir/bugs.json $(printf %q "$WWHD_PROGRESS_URL") $(printf %q "$1") $(printf %q "$(json_str "${2:-}")") $(printf %q "$(json_str "${3:-}")") $(printf %q "$session") $(date +%s)" <<'PY'
 import json, os, sys, time
-path, op, a, b, session, t = sys.argv[1], sys.argv[2], json.loads(sys.argv[3]), json.loads(sys.argv[4]), sys.argv[5], int(sys.argv[6])
+path, site, op, a, b, session, t = sys.argv[1], sys.argv[2], sys.argv[3], json.loads(sys.argv[4]), json.loads(sys.argv[5]), sys.argv[6], int(sys.argv[7])
 bugs = json.load(open(path)) if os.path.exists(path) else []
 def find(i):
     for x in bugs:
@@ -113,7 +115,7 @@ elif op == "list":
     sys.exit(0)
 elif op == "show":
     x = find(a)
-    url = lambda f: "http://WORKER_ADDR:8765/" + f
+    url = lambda f: (site or "PROGRESS_URL").rstrip("/") + "/" + f
     print(f"{x['id']} {x['state']} {x['session'] or '-'}{' (reported by the owner)' if x.get('by') == 'owner' else ''}: {x['title']}")
     if x["details"]:
         print("  " + x["details"])
@@ -223,9 +225,9 @@ save(path, shots[:24])
 PY
 		;;
 	notes)
-		ssh $host "python3 - $dir/notes.json $(printf %q "${2:-list}") $(printf %q "${3:-}") $(printf %q "$(json_str "${4:-}")") $(printf %q "$session") $(date +%s)" <<'PY'
+		ssh $host "python3 - $dir/notes.json $(printf %q "$WWHD_PROGRESS_URL") $(printf %q "${2:-list}") $(printf %q "${3:-}") $(printf %q "$(json_str "${4:-}")") $(printf %q "$session") $(date +%s)" <<'PY'
 import fcntl, json, os, sys
-path, op, nid, text, session, t = sys.argv[1], sys.argv[2], sys.argv[3], json.loads(sys.argv[4]), sys.argv[5], int(sys.argv[6])
+path, site, op, nid, text, session, t = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], json.loads(sys.argv[5]), sys.argv[6], int(sys.argv[7])
 lock = open(os.path.join(os.path.dirname(path), ".notes.lock"), "a")
 fcntl.flock(lock, fcntl.LOCK_EX)   # the server takes it too
 notes = json.load(open(path)) if os.path.exists(path) else []
@@ -233,7 +235,7 @@ if op == "list":
     for n in notes:
         print(f"{n['id']} {'done' if n['done'] else 'open'} {n['time']}: {n['text']}")
         for f in n.get("images", []):
-            print(f"   {'image' if f.startswith('notes/img-') else 'file'}: http://WORKER_ADDR:8765/{f}")
+            print(f"   {'image' if f.startswith('notes/img-') else 'file'}: {(site or 'PROGRESS_URL').rstrip('/')}/{f}")
         for r in n.get("replies", []):
             print(f"   {r['session']}: {r['text']}")
     sys.exit(0)
@@ -251,7 +253,7 @@ print(f"{n['id']}: {op} ({session})")
 PY
 		;;
 	usage)
-		u=$(curl -sf -m 20 "${WWHD_USAGE_URL:-http://127.0.0.1:7690}/api/usage/claude") || { echo "usage: the editing machine didn't answer" >&2; exit 1; }
+		u=$(curl -sf -m 20 "${WWHD_USAGE_URL:-http://127.0.0.1:7690}/api/usage/claude") || { echo "usage: the usage meters didn't answer" >&2; exit 1; }
 		printf '%s' "$u" | python3 -c 'import json,sys,time; d=json.load(sys.stdin); s=d["snapshot"]
 json.dump({"meters": s["meters"], "fetchedAt": s["fetchedAt"] // 1000, "stale": d.get("stale", False), "published": int(time.time())}, sys.stdout)' |
 			ssh $host "cat > $dir/usage.json.tmp && mv $dir/usage.json.tmp $dir/usage.json"

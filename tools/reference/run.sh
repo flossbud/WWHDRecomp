@@ -32,7 +32,7 @@
 #                                 (/wwhd/data/saves on the worker).
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-# default: the patched build on the worker worker, else the extracted AppImage
+# default: the patched build on the worker, else the extracted AppImage
 if [ -z "${CEMU_BIN:-}" ] && [ -x /wwhd/opt/cemu-src/bin/Cemu_release ]; then CEMU_BIN=/wwhd/opt/cemu-src/bin/Cemu_release; fi
 bin=${CEMU_BIN:-$HOME/opt/cemu/squashfs-root/AppRun}
 case "$bin" in
