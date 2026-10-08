@@ -88,12 +88,19 @@ Off unless `WWHD_WRITE_WATCH=1`; unit tests without the game or Cemu: `src/runti
 - **Stamps are a global sequence, not the frame counter**: every way a protected page becomes writable (a fault,
   `Unprotect`, `HostWrite`'s start) takes the next number, and `HostWrite` stamps again at its end. So "written after my
   mark" is exact, whatever the frame count, and a texture sharing a page with one that was unprotected re-hashes once
-  instead of missing a later write.
+  instead of missing a later write. The stamp is stored **before** the `mprotect` that opens a page (in the handler
+  and in `Unprotect`/`HostWrite`): stored after, a write landing in between is changed bytes with no stamp yet, and a
+  watcher checking then takes them for unchanged (the invariant test below finds thousands of those in 2 s with the
+  order reversed; the first version had it reversed in `Unprotect`/`HostWrite`). A failed `mprotect` in `Protect`
+  (`vm.max_map_count`) stamps its pages, so they look changed, never unchanged. `WrittenSince` is true while a page is
+  pinned by a `HostWrite` scope.
 - **Races.** Page states and `mprotect`s change under one spinlock, which the handler takes too (no thread can fault
   while holding it, so no self-deadlock). Two threads faulting on the same page: the second finds it already writable
   and retries the store (`raced`); the same address faulting 1000 times in a row from one thread is taken as not
   writable after all and chained. Pages inside a `HostWrite` scope are pinned: `Protect` skips them, so a kernel write
-  in progress never gets `EFAULT` because a watcher protected its page meanwhile.
+  in progress never gets `EFAULT` because a watcher protected its page meanwhile. The handler's thread-locals are
+  initial-exec TLS. (The retry allowance is 1000 faults on one address rather than one: a thread that raced on an
+  address once may race on it again later with nothing in between, and only a page that stays shut loops.)
 - **Chaining.** The previous `SIGSEGV` action is read before ours goes in. A fault outside the region, on a page we
   never protected, or one we can't make writable goes to it: an `SA_SIGINFO` handler (Cemu's
   `handlerDumpingSignal`) is called directly with the same `siginfo` and context; `SIG_DFL` is put back and the access
@@ -106,6 +113,13 @@ Off unless `WWHD_WRITE_WATCH=1`; unit tests without the game or Cemu: `src/runti
   each round, ~1250 raced faults of ~1650), and a fiber writing a protected page with under 1.5 KB of its 64 KB stack
   left, on one host thread, then parked and resumed on another; a control in a child process shows that same write
   without `ThreadInit` kills the process (the signal frame doesn't fit), so the alternate stack is what saves it.
+- **Tests** (`src/runtime/tests/write_watch_test.cpp`): stamps; chaining to an `siglongjmp` handler, to a crash handler
+  that exits (child's exit status) and to `SIG_DFL` (child dies of `SIGSEGV`); `EFAULT` without `HostWrite`, none with
+  it, nested scopes; 8 threads on shared pages; a 16 KB fiber stack nearly full, on two host threads in turn (and the
+  control that dies without `ThreadInit`); the invariant "bytes changed after `Protect` ⇒ `WrittenSince`", checked
+  page by page while four writers store nonstop and a fifth thread unprotects pages (0 misses in 20 runs; the
+  stamp-after-open variants of the handler and of `Unprotect` fail it every run); the cost of a fault: **~4.5-7 µs**
+  in this sandbox (a protect plus a faulting write, less half a protect plus unprotect), as the rival's 3.7 µs.
 
 **How it plugs in (needs the game; not done):**
 1. `ThreadInit()` at the top of `OSSchedulerCoreEmulationThread` (`src/os/coreinit/coreinit_Thread.cpp`, after
@@ -115,10 +129,30 @@ Off unless `WWHD_WRITE_WATCH=1`; unit tests without the game or Cemu: `src/runti
 2. `Init(memory_base, 4 GB)` once on the main thread, after Cemu's `ExceptionHandler_Init` (in its `main`) and after
    the title is prepared (`frontend/cemu_boot.cpp`), before the scheduler threads start; only in real time
    (`!PPCTimer_isVirtualClock()`), so the checks never run it.
-3. `texture.cpp` (`Get`'s check, around `SampleMemory`): when `Active()`, a texture keeps `mark`; its check is
-   `t.protectedOk && !WrittenSince(p, n, t.mark)` (skip), else `t.mark = Mark(); t.protectedOk = Protect(p, n);` then
-   the whole hash as today. `kWholeEvery`/`kWholeBudget`/`SampleMemory` stay for when it's off. A stamp-rate cap: a
-   texture re-stamped in, say, 8 frames running stays unprotected and hashes whole (no fault storm).
+3. `texture.cpp`, the check in the texture lookup (`if (t.checkedFrame != s.frame)`, which today picks between
+   `SampleMemory` and the whole hash). The texture entry gains `uint32 mark`, `bool watched` and a small
+   `uint8 hotFrames`. When `write_watch::Active()` and not `HashWholeAlways()`:
+   ```
+   if (t.watched && !write_watch::WrittenSince(p, n, t.mark))
+       ;                                              // unchanged since the hash: nothing to do
+   else {
+       t.mark = write_watch::Mark();                  // mark, then protect, then hash: a racing write is seen next time
+       t.hotFrames = t.watched ? std::min(t.hotFrames + 1, 255) : 0;   // stamped again right after a hash
+       t.watched = t.hotFrames < 8 && write_watch::Protect(p, n);
+       whole = true;                                  // the hash and Upload as today
+   }
+   ```
+   - The mark and `Protect` go **before** `HashMemory`, never after: a write between a hash and a later protect would
+     be lost.
+   - `hotFrames` is the stamp-rate cap. A texture the game rewrites every frame (a render-to-texture copy target, a
+     movie) stops being protected after 8 frames running, and is hashed whole each frame, as today, without a fault
+     storm. It resets when a check finds it unchanged.
+   - A texture whose memory the render thread itself fills (`Upload` only reads guest memory; the GPU-written
+     surfaces are images, not guest memory, D13) needs nothing more.
+   - `kWholeEvery`, `kWholeBudget` and `SampleMemory` stay for when write-watch is off.
+   - The virtual clock keeps `HashWholeAlways()`, so the checks never take this path, except in the verify mode
+     (5).
+   - Two textures on one page are fine: either one's fault or protect stamps the page, and both re-hash once.
 4. `HostWrite` around kernel writes into guest memory: `fsc_readFile` into `destPtr` in `FSAProcessCmd_read`
    (`src/os/iosu/iosu_fsa.cpp`) first; then the audit (anything `read()`/`fread()`/`recv()`ing into guest memory,
    the `.wua` reader below `fsc`).

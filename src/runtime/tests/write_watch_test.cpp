@@ -2,6 +2,7 @@
 // Build and run: src/runtime/tests/run.sh. Each check prints "ok" or "FAIL"; the exit status is the FAIL count.
 #include "../write_watch.h"
 #include <atomic>
+#include <chrono>
 #include <cerrno>
 #include <csetjmp>
 #include <csignal>
@@ -74,7 +75,7 @@ template <class F> static int InChild(F f)
 // ---- fibers ------------------------------------------------------------------------------------------
 // A fiber with a small stack and a guard page below it. It writes to two protected pages near the bottom
 // of its stack, the first on one host thread, the second after it moved to another.
-constexpr size_t kFiberStack = 64 * 1024;
+constexpr size_t kFiberStack = 16 * 1024;
 static uintptr_t s_fiberLo;
 static ucontext_t s_fiberCtx, *s_back;
 static volatile char* s_fiberTarget;
@@ -137,6 +138,23 @@ int main()
 			*(volatile char*)(r + 3 * P) = 1;  // outside the region
 		});
 		Check(WIFSIGNALED(st) && WTERMSIG(st) == SIGSEGV, "chain to SIG_DFL: the process dies of SIGSEGV");
+	}
+	// a crash handler that exits (Cemu's, with crash dumps off, ends in _Exit(1)) still gets the fault
+	{
+		int st = InChild([] {
+			struct sigaction crash{};
+			crash.sa_sigaction = [](int, siginfo_t*, void*) { _exit(42); };
+			crash.sa_flags = SA_SIGINFO;
+			sigemptyset(&crash.sa_mask);
+			sigaction(SIGSEGV, &crash, nullptr);
+			char* r = (char*)mmap(nullptr, 4 * P, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+			ww::Init(r, 2 * P);
+			ww::Protect(r, P);
+			r[0] = 1;                                  // ours: handled, not passed on
+			mprotect(r + 3 * P, P, PROT_NONE);
+			*(volatile char*)(r + 3 * P) = 1;        // not ours
+		});
+		Check(WIFEXITED(st) && WEXITSTATUS(st) == 42, "chain to an exiting crash handler: its exit status");
 	}
 	// control: a thread without ThreadInit faulting near the bottom of a fiber's stack can't take the signal
 	// there (so the fiber test below really needs the alternate stack)
@@ -295,6 +313,94 @@ int main()
 		for (int t = 0; t < kThreads; t++)
 			values &= Pg(kFirst)[t] == (char)(kRounds - 1);
 		Check(values, "threads: the stores all landed");
+	}
+
+	// ---- the watcher's invariant under load ----------------------------------------------------------
+	// Four writers store into pages 52-59 nonstop, a fifth thread unprotects some of them, while a re-protector loops: mark, Protect, copy the bytes; later,
+	// compare the bytes with the copy FIRST, then ask WrittenSince. Bytes that differ while WrittenSince says no
+	// would be a missed write (a stamp stored after its page opened gives some).
+	{
+		constexpr int kFirst = 52, kCount = 8;
+		std::atomic<bool> stop{false};
+		std::vector<std::thread> ws;
+		for (int t = 0; t < 4; t++)
+			ws.emplace_back([&, t] {
+				ww::ThreadInit();
+				uint32_t x = 0x9E3779B9u * (t + 1);
+				while (!stop.load(std::memory_order_relaxed))
+				{
+					x ^= x << 13, x ^= x >> 17, x ^= x << 5;
+					((volatile char*)Pg(kFirst + x % kCount))[(x >> 8) % P] = (char)x;
+					if ((x & 63) == 0)
+						std::this_thread::yield();
+				}
+			});
+		ws.emplace_back([&] {                        // and pages opened by Unprotect, which writers then hit
+			uint32_t x = 12345;
+			while (!stop.load(std::memory_order_relaxed))
+			{
+				x ^= x << 13, x ^= x >> 17, x ^= x << 5;
+				ww::Unprotect(Pg(kFirst + x % kCount), P);
+				for (int i = 0; i < 2000; i++)
+					asm volatile("" ::: "memory");
+			}
+		});
+		std::vector<char> copy(kCount * P);
+		uint64_t rounds = 0, missed = 0, changed = 0;
+		auto until = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+		while (std::chrono::steady_clock::now() < until)
+		{
+			uint32_t m = ww::Mark();
+			ww::Protect(Pg(kFirst), kCount * P);
+			memcpy(copy.data(), Pg(kFirst), copy.size());
+			// each page checked on its own until all were written: a page's first write after the Protect is the
+			// moment a late stamp would show, and the checks keep landing near it
+			for (int k = 0; k < 400; k++)
+			{
+				int open = 0;
+				for (int i = 0; i < kCount; i++)
+				{
+					bool differs = memcmp(&copy[i * P], Pg(kFirst + i), P) != 0;
+					bool written = ww::WrittenSince(Pg(kFirst + i), P, m);
+					missed += differs && !written;
+					changed += differs;
+					open += written;
+				}
+				if (open == kCount)
+					break;
+			}
+			rounds++;
+		}
+		stop = true;
+		for (auto& t : ws)
+			t.join();
+		printf("      invariant: %llu rounds, %llu page checks with changed bytes, %llu missed\n", (unsigned long long)rounds,
+			(unsigned long long)changed, (unsigned long long)missed);
+		Check(missed == 0 && changed > 0, "invariant: bytes changed after Protect => WrittenSince, 4 writers and an unprotector");
+	}
+
+	// ---- what a fault costs ---------------------------------------------------------------------------
+	{
+		constexpr int kN = 20000;
+		uint64_t f0 = ww::GetStats().faults;
+		auto t0 = std::chrono::steady_clock::now();
+		for (int i = 0; i < kN; i++)
+		{
+			ww::Protect(Pg(60), P);
+			Pg(60)[i % P] = 1;
+		}
+		auto t1 = std::chrono::steady_clock::now();
+		for (int i = 0; i < kN; i++)
+		{
+			ww::Protect(Pg(61), P);
+			ww::Unprotect(Pg(61), P);
+		}
+		auto t2 = std::chrono::steady_clock::now();
+		double both = std::chrono::duration<double, std::micro>(t1 - t0).count() / kN;
+		double noFault = std::chrono::duration<double, std::micro>(t2 - t1).count() / kN;
+		Check(ww::GetStats().faults - f0 == kN, "cost: one fault per protect-and-write");
+		printf("      cost: protect + faulting write %.2f us, protect + unprotect %.2f us: a fault ~%.2f us\n", both,
+			noFault, both - noFault / 2);
 	}
 
 	// ---- a fiber moving between host threads -------------------------------------------------------

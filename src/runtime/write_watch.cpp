@@ -28,7 +28,7 @@ namespace wwhd::rt::write_watch
 			std::atomic<uint32_t> stamp;
 			uint8_t state;
 			uint8_t pad;
-			uint16_t pins;
+			std::atomic<uint16_t> pins;              // changed under the lock; read without it by WrittenSince
 		};
 		static_assert(sizeof(Page) == 8);
 
@@ -46,9 +46,11 @@ namespace wwhd::rt::write_watch
 		std::atomic_flag s_lock = ATOMIC_FLAG_INIT;
 		std::atomic<uint64_t> s_faults, s_raced, s_onAlt, s_chained, s_hostWrites, s_protects;
 
-		thread_local uintptr_t t_altLo, t_altHi;     // this thread's ThreadInit stack
-		thread_local uintptr_t t_raceAddr;
-		thread_local uint32_t t_raceCount;
+		// read in the handler: initial-exec, so no lazy TLS allocation can happen in it (were this ever in a .so)
+#define WW_TLS thread_local __attribute__((tls_model("initial-exec")))
+		WW_TLS uintptr_t t_altLo, t_altHi;           // this thread's ThreadInit stack
+		WW_TLS uintptr_t t_raceAddr;
+		WW_TLS uint32_t t_raceCount;
 
 		void Lock()
 		{
@@ -299,13 +301,13 @@ namespace wwhd::rt::write_watch
 		Lock();
 		for (size_t i = first; i <= last;)
 		{
-			if (s_pages[i].state == kProtected || s_pages[i].pins)
+			if (s_pages[i].state == kProtected || s_pages[i].pins.load(std::memory_order_relaxed))
 			{
 				i++;
 				continue;
 			}
 			size_t j = i;
-			while (j <= last && s_pages[j].state != kProtected && !s_pages[j].pins)
+			while (j <= last && s_pages[j].state != kProtected && !s_pages[j].pins.load(std::memory_order_relaxed))
 				j++;
 			if (ProtectRun(i, j - i, PROT_READ))
 			{
@@ -314,7 +316,14 @@ namespace wwhd::rt::write_watch
 				s_protects.fetch_add(1, std::memory_order_relaxed);
 			}
 			else
-				ok = false;                              // ENOMEM: too many mappings (vm.max_map_count)
+			{
+				// ENOMEM: too many mappings (vm.max_map_count). The pages stay writable, so they must look
+				// changed after any mark taken before this, never unchanged
+				ok = false;
+				uint32_t stamp = NextStamp();
+				for (size_t k = i; k < j; k++)
+					s_pages[k].stamp.store(stamp, std::memory_order_release);
+			}
 			i = j;
 		}
 		Unlock();
@@ -336,12 +345,13 @@ namespace wwhd::rt::write_watch
 				size_t j = i;
 				while (j <= last && s_pages[j].state == kProtected)
 					j++;
+				// the stamp before the page opens: a write landing right after the mprotect must find it already
+				// stamped, or a watcher checking between the two would take changed bytes for unchanged
+				for (size_t k = i; k < j; k++)
+					s_pages[k].stamp.store(stamp, std::memory_order_release);
 				if (ProtectRun(i, j - i, PROT_READ | PROT_WRITE))
 					for (size_t k = i; k < j; k++)
-					{
-						s_pages[k].stamp.store(stamp, std::memory_order_release);
 						s_pages[k].state = kWritable;
-					}
 				i = j;
 			}
 		}
@@ -363,8 +373,8 @@ namespace wwhd::rt::write_watch
 		if (!Pages(p, n, first, last))
 			return true;
 		for (size_t i = first; i <= last; i++)
-			if (s_pages[i].stamp.load(std::memory_order_acquire) > m)
-				return true;
+			if (s_pages[i].stamp.load(std::memory_order_acquire) > m || s_pages[i].pins.load(std::memory_order_acquire))
+				return true;                             // pinned: a HostWrite is writing it now
 		return false;
 	}
 
@@ -392,7 +402,7 @@ namespace wwhd::rt::write_watch
 		uint32_t stamp = NextStamp();
 		for (size_t i = first; i <= last; i++)
 		{
-			s_pages[i].pins++;
+			s_pages[i].pins.fetch_add(1, std::memory_order_acq_rel);
 			s_pages[i].stamp.store(stamp, std::memory_order_release);
 		}
 		Release(first, last, stamp);
@@ -408,8 +418,8 @@ namespace wwhd::rt::write_watch
 		uint32_t stamp = NextStamp();                    // after the write: a watcher that marked during it re-hashes
 		for (size_t i = first; i <= last; i++)
 		{
-			s_pages[i].pins--;
 			s_pages[i].stamp.store(stamp, std::memory_order_release);
+			s_pages[i].pins.fetch_sub(1, std::memory_order_acq_rel);
 		}
 		Unlock();
 	}

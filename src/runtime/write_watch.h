@@ -44,14 +44,16 @@ namespace wwhd::rt::write_watch
 	// Make the pages covering [p, p + n) read-only (page-rounded: a neighbour on the same page faults too, one
 	// stamp). Pages inside a HostWrite scope stay writable (they get the scope's end stamp instead). Order for a
 	// watcher: m = Mark(); if (Protect()) hash; later WrittenSince(m): a write racing the hash faults and is seen.
-	// False: not active, outside the region, or mprotect failed (vm.max_map_count): hash whole as without it.
+	// False: not active, outside the region, or mprotect failed (vm.max_map_count; those pages are stamped, so
+	// they look changed after any earlier mark): hash whole as without it.
 	// The pages must be committed read-write guest memory (the handler and Unprotect make them read-write).
 	bool Protect(const void* p, size_t n);
 	// Writable again. Every way a protected page becomes writable (a fault, this, HostWrite) stamps it, so a
 	// watcher of a neighbouring range on the same page re-hashes once rather than missing a later write.
 	void Unprotect(const void* p, size_t n);
 
-	// Was any page of [p, p + n) stamped after mark m? Ranges outside the region: always true (no knowledge).
+	// Was any page of [p, p + n) stamped after mark m, or is one inside a HostWrite scope now? Exact: bytes that
+	// changed after a Protect that followed m make it true. Ranges outside the region: always true (no knowledge).
 	bool WrittenSince(const void* p, size_t n, uint32_t m);
 	// The newest stamp on [p, p + n) (0: never stamped).
 	uint32_t LastStamp(const void* p, size_t n);
