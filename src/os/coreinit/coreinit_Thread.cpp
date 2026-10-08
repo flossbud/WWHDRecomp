@@ -20,6 +20,7 @@ void LatteTiming_signalVsync();
 #include "util/helpers/Semaphore.h"
 #include "util/helpers/ConcurrentQueue.h"
 #include "util/Fiber/Fiber.h"
+#include "../../runtime/write_watch.h"
 
 #include "util/helpers/helpers.h"
 
@@ -1621,6 +1622,7 @@ namespace coreinit
 		t_assignedCoreIndex = (sint32)(uintptr_t)_assignedCoreIndex;
 
 		enableFlushDenormalsToZero();
+		wwhd::rt::write_watch::ThreadInit();   // a signal stack of its own: a guest fiber's write fault doesn't run on the fiber's stack
 
 #if BOOST_OS_LINUX
 		if (g_gdbstub)
