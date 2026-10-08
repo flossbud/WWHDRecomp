@@ -306,8 +306,21 @@ namespace wwhd::gpu
 				si.compareEnable = VK_TRUE;
 				si.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 			}
+			// the cache's key: the create info's fields, eight bytes at a time (a byte at a time, for every
+			// texture of every draw, was a third of SampleTexture's own time: docs/research/perf-baseline.md)
 			uint64 key = 0xCBF29CE484222325ull;
-			auto mix = [&](const void* p, size_t n) { for (size_t i = 0; i < n; i++) key = (key ^ ((const uint8*)p)[i]) * 0x100000001B3ull; };
+			auto mix = [&](const void* p, size_t n) {
+				const uint8* b = (const uint8*)p;
+				size_t i = 0;
+				for (; i + 8 <= n; i += 8)
+				{
+					uint64 w;
+					memcpy(&w, b + i, 8);
+					key = (std::rotl(key ^ w, 29) + w) * 0x9FB21C651E98DF25ull;
+				}
+				for (; i < n; i++)
+					key = (key ^ b[i]) * 0x100000001B3ull;
+			};
 			mix(&si.magFilter, offsetof(VkSamplerCreateInfo, unnormalizedCoordinates) - offsetof(VkSamplerCreateInfo, magFilter));
 			if (si.pNext)
 				mix(&border.customBorderColor, sizeof(border.customBorderColor));

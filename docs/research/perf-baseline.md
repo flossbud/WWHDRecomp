@@ -127,7 +127,13 @@ Candidates, by what these numbers say:
   alternating rounds, the same binary with `WWHD_INDEXCACHE=0` against on (render thread per frame, median of each
   run): continue 3.40 / 3.18 / 3.95 -> 2.90 / 3.33 / 2.91 ms, house 3.22 / 3.25 / 3.30 -> 3.30 / 3.12 / 3.22 ms:
   within the runs' noise on house, about -0.3 ms on continue. Exact: checks' captures byte-identical, predeploy ok.
-
+- **The sampler cache's key word by word** (src/gpu/vk/texture.cpp `Sampler`, session qa): SampleTexture's own
+  hottest loop was the sampler key, a byte-at-a-time FNV over ~56 bytes of the create info for every texture of every
+  draw (about a third of its self time; found from the profile's hot addresses and the disassembly, the build has no
+  line info). Now eight bytes at a time: the same fields, the same samplers. SampleTexture 7.2% -> 5.6% of the render
+  thread's samples; the A/B (continue 3.02 ms both, house 3.24 -> 3.28) doesn't resolve a change this size (its runs
+  spread ~0.2 ms). Captures byte-identical, predeploy all ok. Its other hot loop (~19% of its self time) is the
+  texture memory check (SampleMemory/HashMemory), already sampled in real time.
 ## The half frames' cost on the game thread, split (session bottom)
 
 `WWHD_PROFILE` on the desktop (13700K, real time, headless, the build after the index cache), continue (to f1800)
