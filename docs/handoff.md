@@ -4110,6 +4110,13 @@ A second cloud session (checkout `/wwhd/WWHDRecomp-cloud2`), kept off the worker
 - **deck-plan item 2, paper review of the lazy DrawDone's present path**: the semaphores and fences are right. Two
   fixes are needed before it's on by default: the overlay image destroyed while in flight, and no barrier between
   overlapping frames on the GPU.
+- **Gated on the desktop worker (2026-10-08, ww-4-cloud2 233dfe2 on ww-4 9ef881b; built with no errors):** the checks
+  as they are, with `WWHD_LAZY_DRAWDONE=2` (its 15 captures byte-identical to the plain run's) and with
+  `WWHD_WRITE_WATCH=1 WWHD_TEXTURE_HASH=verify`: all MATCH, diff 0 mismatches, captures PSNR inf; verify 0 misses,
+  0 chained (564 faults, 202 protects by frame 600). Real time headless (continue, 7200 frames at 60), watch on and
+  verify on: no crash, 0 misses, 0 chained, 0 raced, ~0.13 faults a frame once loaded (1308 and 5354 faults in all;
+  the early ones are the load). regress identical to ww-4's; predeploy 50 ok; gohmatail 54.0 WARN (as ww-4),
+  gohmarock ok. `ThreadInit` in the scheduler thread is still not in (0 faults on alt stacks): session cloud's file.
 
 ## Waiting on the owner
 
