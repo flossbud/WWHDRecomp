@@ -404,6 +404,7 @@ namespace wwhd::gpu
 		// whole every frame and decides as before, and a hash that changed while the watch saw no write is a miss:
 		// logged with its address (the writer the watch doesn't see: a kernel write without HostWrite). The checks
 		// must show 0.
+		namespace write_watch = wwhd::rt::write_watch;
 		enum class Watch { off, on, verify };
 		Watch WatchMode()
 		{
