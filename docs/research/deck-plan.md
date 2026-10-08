@@ -94,6 +94,60 @@ continue route at 60 to frame 2400 with it on and off, both clean, the window's 
 the owner's GPU (a window on the desktop: the owner's to open), its A/B there (`drawdone_ms`, with vsync off and on),
 and a run under the Vulkan validation layer (not installed on the worker).
 
+**Item 2's present path against the Vulkan spec (session cloud2, a paper review, no runs; `PresentSemaphore`/
+`PresentQueue`/`Acquire`/`Build` in present.cpp, `SubmitFrame`/`SubmitAndWait`/`BeginSlot`/`Submit` in renderer.cpp,
+`DrawOverlay`).** Right by the spec:
+- *Binary semaphores.* The signal is submitted before the present that waits for it (`RendererSwap`: `PresentRecord`,
+  `SubmitFrame`, `PresentQueue`), and each signal gets exactly one wait (`PresentSemaphore` only on the lazy submit,
+  `PresentQueue` always right after; on `OUT_OF_DATE`/`SUBOPTIMAL` the present's wait still executes, the spec says
+  so). "Unsignaled when signalled" (VUID-vkQueueSubmit-pSignalSemaphores-00067) holds because there is one semaphore
+  per swapchain image, signalled only after that image was acquired again with its fence waited, which implies its
+  last present's wait ran: the pattern the Vulkan guide's "swapchain semaphore reuse" page recommends (a semaphore per
+  frame in flight would be the bug).
+- *Fences.* Every submit's fence is unsignaled and not in use (`WaitFence` resets right after the wait; a slot records
+  only after its fence; `SubmitAndWait` waits both slots). The acquire's fence is waited and reset every swap.
+- *Reuse.* A slot's command buffer and descriptor pool are reset only after its fence (`BeginSlot`); the set cache is
+  cleared there, so no set crosses slots; the ring's halves are per slot; the index cache copies into a fresh
+  `RingAlloc`. A ring-full `SubmitAndWait` inside `PresentRecord` (the overlay's upload) is fine: the swap's signal
+  covers everything earlier in submission order.
+- *Presents without a semaphore* (lazy off, `PresentOverlayOnly`) follow a host fence wait: the writes are complete
+  and available, so the presentation engine sees them. Pre-existing and fine in practice (the spec's prose asks for
+  semaphores; no VUID, validation doesn't flag it). Submit and present use one queue from one thread
+  (`PresentOverlayOnly` runs before the GPU thread starts).
+
+Problems, in order:
+1. **The overlay image is destroyed while the other slot may still read it** (VUID-vkDestroyImage-image-01000,
+   vkDestroyImageView-01026). `DrawOverlay` calls `DestroyImage` when the overlay's size or format changes; the last
+   frame's submit (the other slot, not waited for) may still be blitting from it. The image-destruction audit above
+   predates the windowed lazy path ("the overlay is windowed only"). Core validation flags it whenever the overlay
+   resizes during play. Fix: `WaitPending()` before that `DestroyImage` (rare: a resize of the overlay).
+2. **Frames now overlap on the GPU without barriers between them.** The fence wait at each swap used to separate
+   frame N's GPU work from N+1's; now N+1's commands may run while N's do. Barriers are recorded only on layout
+   changes (`Transition`, `BeginRendering`), so an image written at the end of one frame and again at the start of the
+   next in the same layout (a render target that stays `COLOR_ATTACHMENT_OPTIMAL`, a depth buffer) is a write-after-
+   write hazard with no barrier. Two render passes on one target within a frame have the same gap already; the frame
+   boundary used to hide it across frames. Runs look clean because drivers tend to serialise submissions, which the
+   spec doesn't promise. Fix: one global memory barrier at the start of each command buffer in `BeginSlot` when the
+   lazy path is on (`ALL_COMMANDS` to `ALL_COMMANDS`, `MEMORY_WRITE` to `MEMORY_READ | MEMORY_WRITE`). N+1's GPU work
+   then starts after N's, as before; the CPU gain (the point of the lazy path) stays, and the captures can't move.
+   The validation run should enable synchronization validation (`VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT`)
+   to show this, and probably the within-frame cases too.
+3. **Minor: a swapchain rebuild destroys the per-image semaphores after `vkQueueWaitIdle`.** A present takes no
+   fence, so formally nothing proves its semaphore wait has run (the guide's point: only
+   `VK_EXT_swapchain_maintenance1`'s present fences do). Reusing them for the new swapchain wouldn't be provably safe
+   either. Every engine does the idle wait and the layers accept it, so leave it, or later use the extension where
+   present (recent Mesa has it; check the Deck's driver).
+4. **For the vsync A/B (not a spec issue):** `Acquire` waits for its fence on the render thread before the swap's
+   submit. With FIFO (`WWHD_VSYNC=1`) that blocks the render thread at the display's rate, and the game's GX2DrawDone
+   waits on the render thread's recording, so with vsync on the gain may show as steadier pacing rather than a lower
+   `drawdone_ms`. One acquired image at a time keeps VUID-vkAcquireNextImageKHR-swapchain-01802.
+5. Aside: the scan buffer's re-creation (`dst = CreateImage(...)` in the copy to the scan buffer) drops the old image
+   without destroying it. That leaks on a size or format change, and isn't a hazard. If it's fixed, it needs
+   `WaitPending()` first, as in 1.
+
+Fixes 1 and 2 are a few lines each; neither can change a capture (the virtual clock never takes the lazy path,
+and =2's captures would show it if it did).
+
 Done this week (`perf-baseline.md`): ProgramHash's copy check (render thread -7 to -9%), the index cache (bottom,
 ~-0.3 ms on continue), the sampler key (SampleTexture 7.2% -> 5.6%).
 
