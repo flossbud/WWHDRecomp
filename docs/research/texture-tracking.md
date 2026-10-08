@@ -134,10 +134,13 @@ Off unless `WWHD_WRITE_WATCH=1`; unit tests without the game or Cemu: `src/runti
    `uint8 hotFrames`. When `write_watch::Active()` and not `HashWholeAlways()`:
    ```
    if (t.watched && !write_watch::WrittenSince(p, n, t.mark))
-       ;                                              // unchanged since the hash: nothing to do
+       t.hotFrames = 0;                               // unchanged since the hash: nothing else to do
    else {
+       if (t.watched)
+           t.hotFrames = std::min(t.hotFrames + 1, 255);   // stamped again since the last hash
+       else if (s.frame % 64 == 0)
+           t.hotFrames = 0;                           // capped: try watching it again now and then
        t.mark = write_watch::Mark();                  // mark, then protect, then hash: a racing write is seen next time
-       t.hotFrames = t.watched ? std::min(t.hotFrames + 1, 255) : 0;   // stamped again right after a hash
        t.watched = t.hotFrames < 8 && write_watch::Protect(p, n);
        whole = true;                                  // the hash and Upload as today
    }
@@ -146,7 +149,7 @@ Off unless `WWHD_WRITE_WATCH=1`; unit tests without the game or Cemu: `src/runti
      be lost.
    - `hotFrames` is the stamp-rate cap. A texture the game rewrites every frame (a render-to-texture copy target, a
      movie) stops being protected after 8 frames running, and is hashed whole each frame, as today, without a fault
-     storm. It resets when a check finds it unchanged.
+     storm. It is tried again every 64 frames, and the count resets when a check finds it unchanged.
    - A texture whose memory the render thread itself fills (`Upload` only reads guest memory; the GPU-written
      surfaces are images, not guest memory, D13) needs nothing more.
    - `kWholeEvery`, `kWholeBudget` and `SampleMemory` stay for when write-watch is off.
