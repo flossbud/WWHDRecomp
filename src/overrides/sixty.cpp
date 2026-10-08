@@ -3066,6 +3066,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 			[[clang::musttail]] return orig_f_0274C264(ctx);
 		static bool once = [] { atexit(CensusWrite); at_quick_exit(CensusWrite); return true; }();
 		(void)once;
+		s_frameThread = PPCInterpreter_getCurrentInstance();   // for WWHD_STATE_CENSUS_HEAP=1 at 30 too
 		g_rtStoreCensus = CensusStore;
 		g_rtJournalOn = true;
 		orig_f_0274C264(ctx);
@@ -4431,4 +4432,62 @@ void f_02557834(PPCInterpreter_t* __restrict ctx)
 	SunBack(halfway);
 	if (g_rtSixty && !g_rtHalfTick)
 		s_sunTimeLast = s_sunTimeHeld;                 // after both suns of the whole tick's frame
+}
+
+// ---- the screen fades (B74) ---------------------------------------------------------------------------
+// The game task's calc (f_0203593C) calls f_02728A74 once a frame (every swap at 60), and it steps the screen's
+// faders: a colour fader (f_027ECED4, its object at +0x440: a state +0 (0 black, 1 clear, 2 fading in, 3 fading
+// out), a delay +0x1C counted a call before it takes the state at +0x20, a frame +6 (u16) + 1 a call against a
+// length +4 (u16), and the alpha +0xB = 255 frame / length), held a while after a change by a countdown (+0x448,
+// tick_rules.txt), then mDoGph_gInf_c::calcFade (f_025F06A8: while mFade 0x101F4827, mFadeRate 0x101F4810 +=
+// mFadeSpeed 0x101F4814, clamped) and another of calcFade's form (f_0252F5A0: while 0x101D616C, 0x101D6160 +=
+// 0x101D6164). At 60 the colour fader stepped every swap: the title's fade to black took 27 swaps (half 30's 0.9 s),
+// the black between the scenes, which waits on ticks, 49 swaps (30's 12 frames), the fade in 26 (the owner's B74).
+// At 60 its length is doubled for the call and its delay counts whole ticks: the fades as smooth as the frames,
+// their length 30's. The two calcFade-form faders, idle in the title's fade, get half their step the same way.
+// WWHD_60FPS_FADE=0 off.
+namespace
+{
+	bool FadeHalf()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_FADE"); return !(e && atoi(e) == 0); }();
+		return g_rtSixty && on;
+	}
+	template <void (*Orig)(PPCInterpreter_t*), uint32 kSpeed>
+	void FadeStep(PPCInterpreter_t* ctx)
+	{
+		const uint32 speed = rd32(kSpeed);
+		wr32(kSpeed, std::bit_cast<uint32>(std::bit_cast<float>(speed) * 0.5f));
+		Orig(ctx);
+		wr32(kSpeed, speed);
+	}
+}
+void orig_f_025F06A8(PPCInterpreter_t* __restrict ctx);
+void orig_f_0252F5A0(PPCInterpreter_t* __restrict ctx);
+void orig_f_027ECED4(PPCInterpreter_t* __restrict ctx);
+void f_025F06A8(PPCInterpreter_t* __restrict ctx)
+{
+	if (!FadeHalf())
+		[[clang::musttail]] return orig_f_025F06A8(ctx);
+	FadeStep<orig_f_025F06A8, 0x101F4814u>(ctx);
+}
+void f_0252F5A0(PPCInterpreter_t* __restrict ctx)
+{
+	if (!FadeHalf())
+		[[clang::musttail]] return orig_f_0252F5A0(ctx);
+	FadeStep<orig_f_0252F5A0, 0x101D6164u>(ctx);
+}
+void f_027ECED4(PPCInterpreter_t* __restrict ctx)
+{
+	if (!FadeHalf())
+		[[clang::musttail]] return orig_f_027ECED4(ctx);
+	const uint32 fader = GPR(3);
+	const uint16 length = rd16(fader + 0x4);
+	const sint32 delay = (sint32)rd32(fader + 0x1C);
+	if (length != 0 && length < 0x8000)
+		wr16(fader + 0x4, (uint16)(length * 2));
+	orig_f_027ECED4(ctx);
+	wr16(fader + 0x4, length);
+	if (g_rtHalfTick && delay > 0)
+		wr32(fader + 0x1C, (uint32)delay);         // the delay counts whole ticks
 }

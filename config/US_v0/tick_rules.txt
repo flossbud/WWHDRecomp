@@ -25,6 +25,9 @@
 025DFA14    whole       bctrl           fpcM_Management's pre-function (none from fapGm_Execute)
 025DFA44    whole       bctrl           fapGm_After: scene, overlap and camera managers
 025DFA58    whole       bl 02715310     the HD game manager's per-frame update (some_gfx_ptr; beside the menu controller f_027152B4)
+# the game task's calc's screen faders (f_02728A74, every frame; B74, sixty.cpp's FadeHalf): a countdown before its
+# colour fader runs again
+02728AB8    whole       stw             screen faders: the hold (+0x448) - 1 a frame, once a tick
 # dScnPly_Draw (f_025AF8A0), the play scene's draw: its simulation, as in the GameCube's
 025AF938    whole       bl 02518798     dComIfG_Ccsp()->Move(): collision resolution
 025AF944    whole       bl 024ee9c8     dComIfG_Bgsp()->ClrMoveFlag()

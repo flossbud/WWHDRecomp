@@ -23,6 +23,17 @@
 024B869C    whole       stw             title: the countdown (+0x58) - 1, stored once a tick
 024B86A8    whole       bl 025e1988     title: its sound 0x90B at the count's 0 (the half step sees the 0 a step early: once)
 024B8270    *h@f0       fadds           title: a pane's slide (+0x48) + its step a call
+# After the A press (B74, session top: the trial over ticks 405-475, read without --target: the process object is on
+# the heap): three counts in f_024B7CFC ran a call a step, so the logo's exit (its boat's fade and moves, worked out
+# from them: +0x274, +0x118, the model's +0x22C) ran twice as fast; at 60 the boat was gone half way through the
+# screen's fade to black, at 30 it is still there when the screen goes black.
+024B7D34    keep:r10    addi            title: a frame count (+0x54) + 1, tested after (200)
+024B7DCC    late        stw             title: a count (+0x64) + 1 up to 100, tested before
+024B7F28    late        stw             title: a countdown (+0x5C) - 1, tested before
+024B7D8C    keep:r10    addi            title: the logo's count (+0x278, from below 0 up to 0) + 1, the boat's place worked out
+#                                       from it after (+0x274, +0x118)
+024B8770    keep:r7     addi            title (its execute, f_024B8670, mode 3 after the A press): the boat's exit count (+0x278)
+#                                       + 1 a call, its matrix (f_024B83F4) and place worked out from it after
 #
 # Wall (process 429, d_a_wall.cpp: a bombable wall, Siren room 0; mode_break f_024D4618): once bombed it hides and
 # its smoke fades (cLib_chaseF, stepped) after its break count (+0x6F4, u8) passes 10. The census's "still" was its
