@@ -359,6 +359,13 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   181 (89/29.5), MO2 188 (188/42.6), all identical or within a unit; PW 212 with EndLate mixed (Link 69.8 -> 63.2, the
   Poe 600 -> 617). None listed. Parallel runs need a binary each (CEMU_BIN to a copy, as predeploy does): sharing
   build/wwhd/wwhd-null, runs died mid-way without an EXIT line.
+- **en-pw, the Poe (PW 212; session qa; RNDFIX 0.7): measured, not listed.** Its hit at f1051 sets state 2/50, and
+  the next call starts its knockback (51, speed -20): at 60 the half step, a tick early, the Poe up to ~600 units off.
+  The mode hold on +0x482/+0x484 (mAction/mMode): the Poe within 6.4 units to f1160, ~45 at most after; Link within 3-8
+  through f1239 (was 34 by f1220); then a slash bounces at 60 at f1242 and Link's farthest ends 115.7 (69.9 unheld):
+  mixed, not listed. Under the hold: its knockback's speed decay moves a quarter of a decrease further a tick (its
+  speed approaches once a tick, as BK's, untried), and its swoop (33 -> 34) moves in the tick it's set up at 30, which
+  the hold puts half a tick later.
 - **en-fm, the Floormaster (FM 119; session qa; RNDFIX 0.7).** Its attack (modeAttack f_02146A34, mode 8 at +0x3C8)
   slides its hand toward the grab point 40 units a tick (cLib_addCalcPosXZ2, maxStep 40) only while the distance is
   outside a window: `!(dist > HIO.0E0 && dist < HIO.0C4) && dist < HIO.0E4 + 10`. At 60 the half step sampled it
