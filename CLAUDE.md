@@ -1,11 +1,17 @@
 # Notes for agents
 
 - Goal: static **recomp** of the game; decompile only what we need to change. See the plan.
-- **Heavy jobs run on the worker worker, never in the editing machine container** (Cemu, Ghidra
+- **Heavy jobs run on the worker, never on the editing machine** (Cemu, Ghidra
   rebuilds, big builds, trace analysis): `tools/worker/sync.sh` then `tools/worker/w <cmd>`.
   Long-running worker jobs: `tools/worker/job start|wait|stop NAME`. Never kill by pattern.
-  the editing machine is for editing, git and light checks. Tools reading big files must stream.
-  See `tools/worker/README.md`.
+  The editing machine is for editing, git and light checks. Tools reading big files must stream.
+  See `tools/worker/README.md`. The machines' addresses live in the gitignored `tools/worker/hosts.env`
+  (copy `hosts.env.example`).
+- **The repo is public.** No machine names, tailnet addresses, or the owner's account names or real name in git
+  (files or commit messages). Say "the worker", "the desktop worker" (the owner's PC) and "the editing machine".
+- Branches: `main` is the shared branch and the only one on GitHub (the worker mirrors it). Integrate with
+  `git fetch worker && git rebase worker/main`, then `git push worker HEAD:main`; each session keeps one work branch
+  on the worker remote only.
 - Target: WWHD **USA v0** `cking.rpx` (sha256 in `orig/README.md`). All addresses assume it.
 - **Never** commit or emit game data: no `.rpx`/`.rpl`/`.wua`, no extracted assets, no raw
   decompiler dumps, no generated recompiler output. `orig/` is gitignored — keep it that way.

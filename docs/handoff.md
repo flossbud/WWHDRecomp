@@ -14,14 +14,17 @@ there tries the lazy GX2DrawDone (off by default). **The next phase, in the owne
    (`docs/cloud-handoff.md`; their PRs are merged here after the real checks).
 4. **Uncapped**, built on the half steps (D21 step 4), when the owner says.
 **Identity:** commit as `flossbud` <224492734+flossbud@users.noreply.github.com> (the repo's default); the owner's
-real name never goes into git. The history was rewritten to that on 2026-10-08; the desktop's login is in the
-gitignored `tools/worker/desktop.env`.
+real name never goes into git. The history was rewritten to that on 2026-10-08. **The repo is public**: no machine
+names, tailnet addresses or account names in git either (files or commit messages). Say "the worker" (the build/test
+machine), "the desktop worker" (the owner's PC) and "the editing machine"; the addresses and logins live in the
+gitignored `tools/worker/hosts.env` (`hosts.env.example` lists them; `tools/worker/hosts.sh` reads it).
+**The shared branch is `main`** (on the `worker` remote; it was `ww-4` until 2026-10-08, and older notes below say
+ww-4). The worker mirrors `main`, and only `main`, to GitHub.
 
 
 Read this first, then `CLAUDE.md`, `docs/recompiler-design.md` (decisions D1–D21, milestones,
 status paragraphs) and the READMEs in `src/`, `tools/reference/`, `tools/recomp/`, `tools/worker/`.
-WW-4's work is on branch `ww-4` (worktree `/srv/projects/WWHDRecomp/.worktrees/ww-4`, based on
-`ww-3`), pushed to the `worker` remote.
+WW-4's work is on branch `main` (until 2026-10-08 `ww-4`, based on `ww-3`), pushed to the `worker` remote.
 
 **The task (the owner's decision, 2026-10-01): native 60 fps, then an uncapped frame rate.**
 Not interpolation: the game's own logic runs at 60 ticks a second and comes out right, and in the
@@ -41,23 +44,23 @@ WW-4's actor conversion is split between two sessions working side by side:
   `tools/sixty/tests/*` write to `/wwhd/data/m6/<checkout>/`. Never touch the other session's
   worktree, worker checkout, jobs or outputs. One build at a time each: the worker is shared.
 - **The queue** is `tools/progress/plan.json` "queue" (areas in story order), shown on the progress
-  page (http://WORKER_ADDR:8765). Before starting an item: `tools/progress/publish.sh claim ID
+  page (`WWHD_PROGRESS_URL` in `tools/worker/hosts.env`). Before starting an item: `tools/progress/publish.sh claim ID
   "what"` (it refuses an item the other session holds); when its types are converted, checked and
   integrated: `publish.sh done ID "summary"`. Stop when the next item is the other session's. At
   each step `publish.sh now "TEXT"`; after each integration `publish.sh` (the numbers).
 - **Rules go in per-area files**, `config/US_v0/tick_rules/<area>.txt` (the generator reads them
   after `tick_rules.txt`; an address may be ruled once in all of them), so the sessions never edit
   the same rules file. Docs: append to your own subsection of "WW-4: 60 fps" below.
-- **Integration**: `ww-4` (on the `worker` remote) is the shared branch. To integrate a finished
-  step: commit on your branch, `git fetch worker && git rebase worker/ww-4`, resolve (the
+- **Integration**: `main` (on the `worker` remote) is the shared branch. To integrate a finished
+  step: commit on your branch, `git fetch worker && git rebase worker/main`, resolve (the
   default list `kConvertedByDefault` in `src/overrides/sixty.cpp` has one string literal per
   session: append to your own line), rebuild, run `tools/sixty/tests/checks.sh NAME` (all must match) and, after shared changes
-  (helpers, shared rules), `tools/sixty/tests/regress.sh`; then `git push worker HEAD:ww-4` and
-  `git push worker HEAD:ww-4-<session> --force-with-lease`. If the push to ww-4 is refused, the
+  (helpers, shared rules), `tools/sixty/tests/regress.sh`; then `git push worker HEAD:main` and
+  `git push worker HEAD:<your branch> --force-with-lease`. If the push to main is refused, the
   other session integrated first: fetch, rebase, check again.
 - Shared code (sixty.cpp, sixty_step.cpp, generate.py, ppc_ops.h, the helpers): change it only
   when needed, say so in the commit, and rerun `regress.sh`: the other session's actors use it too.
-- **The owner's testing page** (http://WORKER_ADDR:8765/testing.html, from 2026-10-06): the owner
+- **The owner's testing page** (`testing.html` on the progress site, from 2026-10-06): the owner
   retests fixed bugs there (**Fixed** -> `verified`; **Still broken** -> `open` again, with what they saw),
   reports new bugs (open, `"by": "owner"`), adds notes and screenshots to any bug, checks finished queue
   items (a problem becomes a bug) and writes general notes. Their entries are notes from `owner`. At each
@@ -67,15 +70,15 @@ WW-4's actor conversion is split between two sessions working side by side:
   a reopened or new bug gets `bug start` by whoever takes it, as before.
 - **Usage: wrap up at 75% of the week** (the owner's rule from 2026-10-06; it replaces "stop at 50%").
   The Claude account's usage is on the progress page (the sidebar; the phone's Now tab) and in
-  `curl -s http://WORKER_ADDR:8765/usage.json` (`weekly_all`'s `percent`, every 5 minutes). Below
+  `curl -s $WWHD_PROGRESS_URL/usage.json` (`weekly_all`'s `percent`, every 5 minutes). Below
   75% work as usual. At 75% wrap up, don't stop dead: finish or park the step in hand (integrate what
   passes the checks, or commit the rest on your branch with notes), write the handoff, set
   `publish.sh now`, release claims you won't finish (`publish.sh release ID`), and start no new item.
 
 ### Two workers: the owner's desktop first, the worker as the fallback (from 2026-10-05)
 
-- **The desktop worker is the default** while the owner lends it (`desktop`, desktop CPU, 24
-  threads, AMD GPU): the same `wwhd-worker` image under rootless podman, with all 24 threads and
+- **The desktop worker is the default** while the owner lends it (the owner's PC, 24 threads, an AMD
+  GPU on RADV): the same `wwhd-worker` image under rootless podman, with all 24 threads and
   28 GB of 31, `/wwhd` being `~/wwhd-desk` there, with the game, saves, tools, caches, the checks'
   references (gx2 streams, the save/route/tour/sail/menus/warp traces, the g3 captures) and the
   Ghidra project. `tools/worker/sync.sh`, `w`, `job start` and `publish.sh shot` go there by
@@ -83,7 +86,7 @@ WW-4's actor conversion is split between two sessions working side by side:
   job on either worker. Measured there: a full build 5:21 (the worker 20-30 min), a spawn test 1:20,
   the full `checks.sh` 16 min, all with the worker's results (every check MATCHES, diff 0
   mismatches, captures byte-identical). Sync and build once there (your `.worker-dir` path).
-- **the worker is the fallback**: when the owner takes the desktop back (`tools/worker/desktop.sh
+- **The worker is the fallback**: when the owner takes the desktop back (`tools/worker/desktop.sh
   stop`; `status` says on or off), the same commands go to the worker, whose checkout and build may be
   old: sync and build there first. `WWHD_ON=worker` / `WWHD_ON=desktop` force one. Only main (or
   the session the owner asks) runs `desktop.sh stop`/`start`. While it's on, a user unit
@@ -390,7 +393,7 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   tick early (a bidder's turn crossing its mark). Method notes: read `trial.py` without `--target` and without
   `trial_filter` when an actor keeps its state in a heap object (the title) or its counts show as "only half";
   check a fix that touches a per-frame system (faders) on a route through a scene change (warppot) as well as where
-  it was found. Scratch (not in git), the worker `/wwhd/data/m6/WWHDRecomp-top`: `fade.sh` (every frame of the title's
+  it was found. Scratch (not in git), the worker's `/wwhd/data/m6/WWHDRecomp-top`: `fade.sh` (every frame of the title's
   fade at both rates), `lags.py` (each tracked actor's s16 changes on other ticks), `chg.py`, `wat.sh`/`watv.py`
   (an enemy's drop into water), `bindab.sh`.
 - **Session qa's wrap-up (2026-10-08, at the 95% stop).** Landed in this stretch (each gated: checks MATCH,
@@ -516,7 +519,7 @@ name `qa` (same `.worker-dir`/`.session` mechanism, same integration into `ww-4`
 - **The owner's copy** (since qa's retirement: the main session, coordinator `ww-4-5a`, deploys and
   triages the owner's bugs, assigning them to `top` or `bottom`; run `tools/sixty/tests/predeploy.sh`
   first): before that only `qa` deployed to `~/wwhd-play` on the desktop
-  (`tools/play/deploy.sh owner@DESKTOP_ADDR`, after a build of the current `ww-4` tip with the
+  (`tools/play/deploy.sh $WWHD_DESKTOP_SSH`, after a build of the current `ww-4` tip with the
   checks passing), so what the owner plays is always the integrated state; say in the bug notes
   which commit is deployed. `top` and `bottom` deploy only to `~/wwhd-test` (headless). Don't
   touch the owner's saves or shader cache; open a window only when they ask.
@@ -559,8 +562,8 @@ startup time and CPU use matter (phones throttle when hot). Design D19 and D20 h
   no decompiler dumps, no generated recompiler output, no shader caches, captures or saves.
   Generated C++ and objects live only in `build/`, which is gitignored, as is `orig/`. It's a
   personal project on a legally owned copy. Core dumps contain game memory: delete them.
-- **Heavy work runs on the worker worker, never on the editing machine.** Heavy means Cemu, builds,
-  Ghidra and big traces. A 272 MB trace once crashed the editing machine VM. the editing machine is for editing,
+- **Heavy work runs on the worker, never on the editing machine.** Heavy means Cemu, builds,
+  Ghidra and big traces. A 272 MB trace once crashed the editing machine's container. It is for editing,
   git and light checks (the census and the generator run fine there). Real-time play and real-time
   measurements go to the owner's desktop (below).
 - **Long jobs:** `tools/worker/job start NAME CMD…`, then `job wait NAME [MIN] [STALL_MIN]`, which
@@ -574,7 +577,7 @@ startup time and CPU use matter (phones throttle when hot). Design D19 and D20 h
   replaces files by rename.
 - **Commits:** `git -c user.name="flossbud" -c user.email="224492734+flossbud@users.noreply.github.com" commit …`, with
   the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Push with
-  `git push worker ww-4` (the current branch). Commit when a step is done and its checks pass.
+  `git push worker HEAD:main`. Commit when a step is done and its checks pass.
 - **Every rename or retype needs evidence** (`config/US_v0/symbols.csv` has an evidence column).
   A function counts as "done" only once an external check passes (fixture or trace diff).
 - **Talking to the owner:** they often read on a phone. Put choices as a numbered list at the end
@@ -585,29 +588,29 @@ startup time and CPU use matter (phones throttle when hot). Design D19 and D20 h
 
 ## Infrastructure
 
-- **Worker:** Docker `wwhd-worker` on the worker (a mini PC, 6-core CPU).
-  - SSH alias `worker` (Tailscale), with key `~/.ssh/worker_ed25519`.
+- **Worker:** Docker `wwhd-worker` on the worker (6 cores, 12 threads, an Intel iGPU).
+  - SSH through the tailnet: `WWHD_WORKER_SSH` in `tools/worker/hosts.env` (an `~/.ssh/config` alias with a key of
+    its own).
   - Limits: 24 GB RAM, no swap, 10 CPUs.
   - Volume `/wwhd` is a 250 GB sparse image. Paths: repo mirror `/wwhd/WWHDRecomp`, data
     `/wwhd/data` (ROM, traces, saves, captures), logs `/wwhd/logs`.
   - `tools/worker/sync.sh` pushes the working tree. `tools/worker/w CMD` runs a command in the
     container (stdin passes through: `tools/worker/w python3 - args < script.py`).
-- **Power cap:** the host has a 60 W RAPL cap (PL1 45 W / PL2 60 W). Its 90 W adapter latched off
-  under full load before the cap. The host also keeps IP LAN_ADDR via a timer. Details are in
-  the the owner's KB (`an incident note`). Don't undo the cap.
+- **Power cap:** the host has a 60 W RAPL cap (PL1 45 W / PL2 60 W): uncapped all-core load draws more
+  than its power supply delivers. Don't undo the cap.
   It's also why real-time runs on the worker are slow: time real time on the desktop.
-- **GPU (worker):** Intel Intel iGPU through Mesa anv. Xvfb has no DRI3, so `run.sh` sets
+- **GPU (worker):** the Intel iGPU through Mesa anv. Xvfb has no DRI3, so `run.sh` sets
   `MESA_VK_WSI_DEBUG=sw`. `REF_GPU=llvmpipe` forces software rendering (lavapipe), which every
   frame comparison uses.
 - **Cemu source:**
-  - the editing machine `~/opt/cemu-src`, branch `wwhd-reference`, for **editing only**; never build it
-    on the editing machine.
+  - The editing machine's `~/opt/cemu-src`, branch `wwhd-reference`, for **editing only**; never build it
+    there.
   - The worker builds `/wwhd/opt/cemu-src` at pinned commit `c717fcab` plus
     `tools/reference/cemu-patches/0001–0016` (0011 is the execution seam; 0013 and 0014 are
     rendering fixes, see D16; 0015 lets our CMake build use Cemu as a subproject; 0016 has each
     SysAllocator record its declaration). The same tree is the source of our build's Cemu
     libraries, so a patch there reaches both.
-  - To change a patch: commit on the editing machine branch, run
+  - To change a patch: commit on the editing machine's branch, run
     `git format-patch -1 --start-number N -o tools/reference/cemu-patches/`, sync, then
     `tools/worker/job start cemu-rebuild tools/worker/setup-volume.sh cemu-rebuild` (incremental,
     about 5–10 min). Our forks (`src/forks.txt`) are no longer reached by cemu-patches.
@@ -618,18 +621,18 @@ startup time and CPU use matter (phones throttle when hot). Design D19 and D20 h
     finds references, dumps words with function names, and finds where a value is stored (vtables
     aren't marked as pointers, so `find` a method's address). Their output is the game's code in
     another form: keep it on the worker (`/wwhd/data/ghidra-out`).
-- **The owner's desktop, `desktop`** (on the tailnet): Fedora 44, desktop CPU (24 threads),
-  AMD GPU on RADV, GNOME on Wayland, three monitors, speakers.
-  - SSH: `ssh owner@DESKTOP_ADDR` (`owner` here and in these docs stands for the desktop's own login, kept out of git:
-    `tools/worker/desktop.env` sets `WWHD_DESKTOP_SSH` and `WWHD_DESKTOP_HOME` for the worker scripts; copy it into a new
-    worktree, `tools/worker/desktop-env.sh` says what it holds) (the default key works with `BatchMode=yes`). Use the IP: the
-    name `desktop` resolves to a public address through a search domain.
+- **The owner's desktop, the desktop worker** (on the tailnet): Linux, 24 threads, an AMD GPU on RADV, GNOME on
+  Wayland.
+  - SSH: `ssh $WWHD_DESKTOP_SSH` (`owner` in these docs stands for the desktop's own login, kept out of git:
+    `tools/worker/hosts.env` sets `WWHD_DESKTOP_SSH` and `WWHD_DESKTOP_HOME` for the worker scripts; copy it into a new
+    worktree, `hosts.env.example` says what it holds) (the default key works with `BatchMode=yes`). Use the tailnet
+    address, not the machine's name: the name resolves to a public address through a search domain.
   - It suspends when idle and then drops off the tailnet (`tailscale status` shows "offline").
     That is not a crash.
   - `~/wwhd-play`: **the owner's** copy (program, Cemu's data files, the game, the test save, and in
     `portable/` their emulated NAND, saves and shader cache). Don't reset their saves or cache.
   - `~/wwhd-test`: the agents' copy for headless tests (its `game/wwhd.wua` links to wwhd-play's).
-  - `tools/play/deploy.sh owner@DESKTOP_ADDR [DIR]` (from the editing machine, after `tools/recomp/build.sh && src/build.sh`: src/build.sh alone keeps the old generated code, so new tick rules would be missing while sixty.cpp converts their types)
+  - `tools/play/deploy.sh $WWHD_DESKTOP_SSH [DIR]` (from the editing machine, after `tools/recomp/build.sh && src/build.sh`: src/build.sh alone keeps the old generated code, so new tick rules would be missing while sixty.cpp converts their types)
     streams the build there. It replaces the binary by rename (a running game is untouched) and
     rewrites `play.sh`, `portable/settings.xml` and the game profile.
   - Headless test: `cd ~/wwhd-test && WWHD_WINDOW=0 WWHD_SAVE=saves/wwhd_100
@@ -2063,7 +2066,7 @@ it in a window; D21 "Step 2"):**
     (`src/overrides/sixty_step.cpp`). Step rules on them scale twice (tried: every converted enemy
     drifted, Peahats stopped taking off). Rules belong in the actor's own code.
   - **Progress page** (the owner's request): `tools/progress/` (README there), served from the worker
-    on the tailnet at http://WORKER_ADDR:8765. After each step: `tools/progress/publish.sh`
+    on the tailnet (`WWHD_PROGRESS_URL`). After each step: `tools/progress/publish.sh`
     (data) and `publish.sh now TEXT`; captures via `publish.sh shot PPM CAPTION` (they stay on
     the worker). Keep `tools/progress/plan.json` (milestones, known issues) current.
   - **Converting an actor**: `uv run tools/sixty/actor_rmw.py PROCESS` lists the type's
@@ -3845,7 +3848,7 @@ it in a window; D21 "Step 2"):**
     and shove more at 60, not less; (2) a mode set on a whole step acts on that tick's half step (the Moblin's
     mode 2 decisions), so each "set, then act next call" link of a state machine is half a tick at 60 against a
     tick at 30. Next: the batch `seedfights.sh` (scratch, both workers' bin/: Moblin 188 and Bokoblin 189 spawned
-    150 ahead at f950-958, seed 940; outputs the worker /wwhd/data/m6/WWHDRecomp-bottom/seed) for counts, and the
+    150 ahead at f950-958, seed 940; outputs the worker's /wwhd/data/m6/WWHDRecomp-bottom/seed) for counts, and the
     A/B `seednoconv.sh` (desktop: the same with 188/189 unconverted): if 60's extra hits stay with the enemies at
     whole ticks, the cause is Link's side (his cut's colliders checked on both steps), else the enemies'.
 - **Session main: sail's launch (predeploy's sail, WARN ~51)**: from session top's look. At 60 the boat sets sail in
@@ -4068,10 +4071,10 @@ phones throttle; converted systems only cost what they convert.
 ### Session cloud (from 2026-10-08): performance on the worker
 
 The cloud session (docs/cloud-handoff.md, tailnet mode) works on the worker from checkout `/wwhd/WWHDRecomp-cloud`
-toward the owner's goal: full speed at 60 there (its power-capped i5 standing in for the Deck's CPU).
+toward the owner's goal: full speed at 60 there (its power-capped CPU standing in for the Deck's).
 - **Tooling**: `tools/sixty/perf/worker-ab.sh` and `worker_absum.py` (the worker's perf-ab; README there).
   `tools/reference/run.sh` takes `REF_CPU_MODE` (an experiment; default 0, as every check needs).
-- **Baseline** (perf-baseline.md, "the worker"): without the lazy DrawDone the worker is serialized on its GPU (30 at
+- **Baseline** (perf-baseline.md, "The worker"): without the lazy DrawDone the worker is serialized on its GPU (30 at
   16.7 fps, 60 at 20.8); with it 49 fps at 60, and the limit is the host thread that runs all guest code (96% busy,
   19.5 ms a frame); ~40% of that thread is the guest's job and sound threads (a Wii U runs them on other cores).
 - **Landed, shared renderer code** (draw.cpp, renderer.cpp, texture.cpp): deck-plan item 3's uniform-block trim and

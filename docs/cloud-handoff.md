@@ -8,17 +8,19 @@ D12, D18, D19, D20, D21).
 
 ## Tailnet mode (from 2026-10-08): the cloud session is a worker session
 
-This section overrides the rest of the file where they differ: the owner gave the cloud session access to the worker,
-the worker that has the game.
+This section overrides the rest of the file where they differ: the owner gave the cloud session access to the worker
+(the build/test machine), which has the game.
 
 - **Joining the tailnet.** At the start of every session, run `bash tools/cloud/tailnet-setup.sh`.
-  - The cloud environment's variables carry the keys and the logins; the script's header lists them.
-  - It joins the owner's tailnet in userspace and writes `~/.ssh/config` for `worker` and the PC.
+  - The cloud environment's variables carry the keys, the addresses and the logins; the script's header lists them
+    (`WWHD_WORKER_ADDR` and `WWHD_WORKER_USER` for the worker).
+  - It joins the owner's tailnet in userspace, writes `~/.ssh/config` for `worker` and the PC, and writes
+    `tools/worker/hosts.env` (gitignored) for the worker scripts.
   - It sets up this checkout as a named session: `bash tools/cloud/tailnet-setup.sh cloud2` (cloud, cloud2, cloud3...;
     one name per session, never shared), with worker directory `/wwhd/WWHDRecomp-NAME`, `.session` = NAME, and the
     `worker` remote. Two sessions on one worker directory overwrite each other's trees and builds (sync.sh mirrors
     with --delete).
-  - Set `WWHD_ON=worker` if the environment hasn't.
+  - Set `WWHD_ON=worker` to force the worker (unset: the desktop worker while it runs, else the worker).
   - From then on, `tools/worker/sync.sh`, `tools/worker/w` and `tools/worker/job` work exactly as for a local session.
     Read `docs/handoff.md` ("Parallel sessions", "Infrastructure", "Hard rules").
 - **The desktop worker (from 2026-10-08, the owner's choice).** With `WWHD_CLOUD_DESKTOP_KEY` in the environment you have
@@ -29,32 +31,34 @@ the worker that has the game.
   - When the owner wants the PC back, they stop the worker (`tools/worker/desktop.sh stop`), and everything falls back
     to the worker.
   - The Deck stand-in measurements stay on the worker.
-- **What it can reach.** the worker's SSH and the owner's PC's SSH (deploys go through the receiver: host `pc-deploy`). On the PC, the key runs nothing but a
+- **What it can reach.** The worker's SSH and the owner's PC's SSH (deploys go through the receiver: host `pc-deploy`). On the PC, the key runs nothing but a
   receiver: `status` (is the game running), and writes of the deploy files into `~/wwhd-play`.
   - Don't try to reach anything else on the tailnet: the rules block it, and it isn't yours to probe.
-  - The login names are the owner's own account names. They live in the environment variables and in
-    `tools/worker/desktop.env` (gitignored), never in git.
-- **Game data.** The game, its traces, dumps, captures and the recompiled output stay on the worker. That's the same rule as
+  - The addresses and login names are the owner's. They live in the environment variables and in
+    `tools/worker/hosts.env` (gitignored), never in git (the repo is public: no machine names either; say "the
+    worker", "the desktop worker" and "the editing machine").
+- **Game data.** The game, its traces, dumps, captures and the recompiled output stay on the workers. That's the same rule as
   for local sessions: don't copy them into this sandbox, into a PR, or into a message. Small numbers and verdicts are fine
   (a position error, MATCHES, an md5).
   - `/wwhd/data/ghidra-out` and decompiler output are the game's code in another form: read them on the worker
     (`tools/worker/w`), and quote only what a commit needs as evidence.
-- **Your goal (the owner's): the game at full speed at 60 on the worker.** Its 6-core CPU is power-capped to 45-60 W, a
-  stand-in for the Steam Deck's CPU: if the game holds 60 there, the Deck's CPU side will.
-  - Its Intel Intel iGPU is weaker than the Deck's GPU, so treat the render thread's numbers there as pessimistic.
+- **Your goal (the owner's): the game at full speed at 60 on the worker.** Its 6-core desktop CPU is power-capped to
+  45-60 W, a stand-in for the Steam Deck's CPU: if the game holds 60 there, the Deck's CPU side will.
+  - Its Intel iGPU is weaker than the Deck's GPU, so treat the render thread's numbers there as pessimistic.
   - Work through `docs/research/deck-plan.md` in order, items that need the game included.
   - Measure on the worker with alternating A/B rounds of the same binary, flag on and off
-    (`tools/sixty/perf/perf-ab.sh` is the desktop version: your first step is a the worker variant that runs in its worker container on the Intel GPU, headless; see its README and `perf-baseline.md` for how qa measured). Report relative gains: the worker is
+    (`tools/sixty/perf/perf-ab.sh` is the desktop version: your first step is a worker variant that runs in its container on the Intel GPU, headless; see its README and `perf-baseline.md` for how qa measured). Report relative gains: the worker is
     noisy, so use more rounds rather than fewer.
   - The main session confirms absolute numbers on the owner's PC later.
-- **Landing a change.** You merge into `ww-4` yourself, with the full gates a local session uses: checks all MATCH
+- **Landing a change.** You merge into `main` yourself, with the full gates a local session uses: checks all MATCH
   (traces, streams, sound, diff, captures PSNR inf), regress reviewed line by line, predeploy 0 FAIL, plus
   `predeploy.sh gohmatail gohmarock`.
   - Speed work must leave 30 bit-identical and the 60 results unchanged, unless a change is meant to move them and says
     so.
-  - Push to `worker` only: `git push worker HEAD:ww-4`. the worker mirrors every branch pushed to it on to GitHub by
+  - Push to `worker` only: `git push worker HEAD:main`. The worker mirrors `main`, and only `main`, to GitHub by
     itself, within seconds, through a post-receive hook with a repo-only deploy key and a guard that refuses anything
-    with the owner's name. Its log is `/wwhd/logs/github-mirror.log` on the worker. Don't push to `origin` yourself:
+    with the owner's names or the machines' names and addresses. Its log is `/wwhd/logs/github-mirror.log` on the
+    worker. Your work branch (`ww-4-cloud`, ...) stays on the worker remote. Don't push to `origin` yourself:
     the sandbox can't, and it doesn't need to.
   - A refused push means someone landed first: rebase and re-gate (code) or just rebase (docs).
   - Local sessions may be working too. Before a long gate, claim the item: `tools/progress/publish.sh claim ID "what"`
@@ -63,8 +67,8 @@ the worker that has the game.
   - Then run `WWHD_DEPLOY_KEY=~/.ssh/wwhd_cloud_deploy tools/play/deploy-cloud.sh pc-deploy` after a full
     build on the worker.
   - It refuses while the game is running. If it does, wait and ask again.
-  - Mark the bugs it fixes: `publish.sh bug fixed ID "fixed: deployed ww-4 SHA"`.
-- **The progress site** (http://WORKER_ADDR:8765 on the worker; `tools/progress/README.md`). Keep your part of it
+  - Mark the bugs it fixes: `publish.sh bug fixed ID "fixed: deployed main SHA"`.
+- **The progress site** (on the worker: `WWHD_PROGRESS_URL` in `tools/worker/hosts.env`; `tools/progress/README.md`). Keep your part of it
   current with `tools/progress/publish.sh` from this checkout: it writes as session `cloud` (`.session`) over SSH to
   the worker.
   - `publish.sh now "TEXT"` when you start something and as it changes (one line, cheap; e.g. "deck-plan item 3:
@@ -72,7 +76,7 @@ the worker that has the game.
   - `publish.sh claim ID "note"` before a work item: its ids are plan.json's queue, e.g. `next-deck`, or
     `publish.sh item ID NAME` for one that isn't listed. Then `publish.sh step ID DONE TOTAL` for its bar, and
     `publish.sh done ID "result"` when it lands.
-  - Bugs: `publish.sh bug start|ready|fixed ID "note"` as their state changes ("ready" when the fix is in ww-4,
+  - Bugs: `publish.sh bug start|ready|fixed ID "note"` as their state changes ("ready" when the fix is in main,
     "fixed" once deployed); `publish.sh bug note ID "finding"` for findings; `publish.sh bug add TITLE DETAILS` for a new
     one you find.
   - The queue itself (plan.json `queue`, `queue_note`, `known_issues`): edit and commit it like code (docs-only, no
@@ -85,8 +89,8 @@ the worker that has the game.
 - **Reporting.** The owner reads on a phone.
   - At each landed item, say in a few lines what changed, the measured gain, the gates, and what's next.
   - Add your entries to `docs/handoff.md` (a "Session cloud" paragraph, like the local sessions' wrap-ups).
-  - You can't see the credit balance. When the owner says to stop, finish or park the step in hand: commit WIP on a
-    `ww-4-cloud` branch on the worker, with notes.
+  - You can't see the credit balance. When the owner says to stop, finish or park the step in hand: commit WIP on your
+    `ww-4-cloud...` branch on the worker remote, with notes.
 
 ## Where things stand
 
@@ -111,7 +115,7 @@ does at 30. This isn't interpolation.
 
 - **The Steam Deck is too slow (bug B75).** It runs the game at 35-55% speed, 22-34 frames/s. The
   game thread is CPU-bound:
-  - on an desktop CPU it needs ~40% of a core for real time;
+  - on the owner's desktop (a fast 24-thread CPU) it needs ~40% of a core for real time;
   - 82% of that is the recompiled game code itself, spread flat with no hotspot;
   - the GPU-command thread uses another ~25%.
 - **A rival project exists:** https://github.com/ZeldaWWHDRecomp/ZeldaWWHDRecomp (MPL-2.0).
@@ -136,7 +140,7 @@ does at 30. This isn't interpolation.
   - write unit tests;
   - set up CI;
   - port to other platforms and compilers.
-- **Local verification after you:** the local main session merges your branch into `ww-4` only
+- **Local verification after you:** the local main session merges your branch into `main` only
   after running the real checks on the owner's machines:
   - `tools/sixty/tests/checks.sh`: traces, streams and sound must MATCH;
   - `regress.sh`;
@@ -149,10 +153,9 @@ does at 30. This isn't interpolation.
 - **Never commit game data.** No `.rpx/.rpl/.wua/.wud`, no extracted assets, no decompiler output, no
   generated recompiler output, no shader caches, captures, saves or core dumps. `orig/` and `build/`
   stay gitignored. If a tool would produce game-derived output, it doesn't go in git.
-- **Branches:** work on `cloud/<topic>` branches and open a PR into `ww-4`.
-  - Never push to `ww-4` or to any other session's branch (`ww-4-top`, `ww-4-bottom`, `ww-4-qa`, ...).
-  - The local sessions push to a separate remote (the worker); the main session mirrors `ww-4` to
-    GitHub.
+- **Branches:** (before tailnet mode) work on `cloud/<topic>` branches and open a PR into `main`.
+  - Never push to another session's branch.
+  - The local sessions push to a separate remote (the worker), which mirrors `main` to GitHub.
 - **Commits:** `git -c user.name="flossbud" -c user.email="224492734+flossbud@users.noreply.github.com" commit`, with a
   message ending `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Write messages like the
   existing ones: what changed and why, with numbers where there are any.

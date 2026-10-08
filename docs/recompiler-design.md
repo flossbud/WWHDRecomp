@@ -970,7 +970,7 @@ queues one wakes it), the next alarm, or 1 ms (sound and NFC polling); the null 
 host-timed vsync when it waits for a flip or for commands instead of spinning; every 10 s the log
 gets frame rate, frame-time median, 99th percentile and worst, and how busy the scheduler thread
 was. The virtual clock takes none of these paths (save route: trace, command stream and sound
-identical). Played on the owner's desktop (desktop CPU, AMD GPU on RADV, `tools/play/`),
+identical). Played on the owner's desktop (a 24-thread desktop CPU, an AMD GPU on RADV, `tools/play/`),
 headless along the save route: 30 fps from the title on, frame time median 33.3 ms and 99th 35 ms
 once loaded; the hitches are first sights of shaders (worst 1 s during boot, 50-190 ms loading
 Outset), which a pipeline cache on disk would take away on the next run.
@@ -1087,7 +1087,7 @@ handles with the same XOR (common when they are allocated side by side, as prepa
 another pair's layout; lavapipe crashed on a binding the layout didn't have. Layouts are now keyed
 by the pair itself and the pipeline key starts from `Mix(Mix(0, vs), ps)`.
 
-**Measured** on the owner's desktop (AMD GPU, RADV), the save route in real time, headless:
+**Measured** on the owner's desktop (an AMD GPU, RADV), the save route in real time, headless:
 * first start (empty caches, Mesa's too): 633 shaders (1.0 s of translation) and 432 pipelines
   (0.8 s) as first sights during the first minute, the worst frames 1 s and 347 ms;
 * second start: prepared in 0.0 s, no first sights;
@@ -1133,7 +1133,7 @@ compressed). The first list was 866 shaders and 642 pipelines. *Checked*:
 capturing run, then a first start from the list it made) gives 30 of 30 captures identical, and the
 first start's cache holds exactly the capturing run's records (631 shaders, 430 pipelines), all made
 before the game started (2.7 s) and none during play; the captures are also identical to those made
-before the change. *On the owner's desktop* (AMD GPU, RADV), empty caches (Mesa's off too), in
+before the change. *On the owner's desktop* (an AMD GPU, RADV), empty caches (Mesa's off too), in
 real time: 866 shaders translated from the game files in 2.2 s and everything prepared in 2.3 s,
 then the whole title route met 1 shader and 1 pipeline (5 ms) in 6 minutes and the save route
 nothing, where a first start used to meet 633 shaders and 432 pipelines in its first minute (frames

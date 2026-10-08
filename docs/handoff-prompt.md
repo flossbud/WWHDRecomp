@@ -53,17 +53,17 @@ Rules to keep (details in the handoff):
 - **Never commit or emit game data.** No ROM, RPX, extracted assets, decompiler output (Ghidra
   dumps stay in `/wwhd/data/ghidra-out` on the worker), generated recompiler output, shader caches,
   captures or saves. `build/` and `orig/` stay gitignored.
-- **Heavy work runs on the worker worker, never on the editing machine.** That means Cemu, builds, Ghidra
+- **Heavy work runs on the worker, never on the editing machine.** That means Cemu, builds, Ghidra
   and traces. Use `tools/worker/sync.sh`, `tools/worker/w CMD` and
   `tools/worker/job start|wait|tail|stop NAME`. Never kill by pattern.
 - **Wait in chunks.** Wait on jobs for at most 9 minutes per call, and tell the owner what's
   running. No silent long waits.
-- **Real-time tests run headless on the owner's desktop:** `ssh owner@DESKTOP_ADDR`, in
+- **Real-time tests run headless on the owner's desktop:** `ssh $WWHD_DESKTOP_SSH` (`tools/worker/hosts.env`), in
   `~/wwhd-test`, with `WWHD_WINDOW=0` (silent). `~/wwhd-play` is the owner's: don't touch their saves
   or cache, and open a window there only when they ask. The desktop may be asleep (offline), and the
   owner may be using it: keep runs short.
 - **Commits:** `git -c user.name="flossbud" -c user.email="224492734+flossbud@users.noreply.github.com" commit`, with the
-  trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`, then `git push worker ww-4`.
+  trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`, then `git push worker HEAD:main`.
   Commit each step once its checks pass.
 - **Every rename in `config/US_v0/symbols.csv` needs evidence.**
 - **Keep a future Android release in mind:** portable code, Vulkan features Android drivers have,

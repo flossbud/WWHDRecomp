@@ -195,7 +195,7 @@ if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
   own conclusion: *"the CPU translation isn't the bottleneck on this machine; the renderer work
   matters more on slower CPUs."*
 * **Ours:** guest code costs about 3 host cycles per guest instruction (D2). In real time on the
-  desktop CPU, the single scheduler thread (all three guest cores) uses 18-33% of a core at 30 fps and
+  owner's desktop (a fast 24-thread desktop CPU), the single scheduler thread (all three guest cores) uses 18-33% of a core at 30 fps and
   41-73% at 60 fps. The GPU thread uses 8-18% at 30 and 15-31% at 60 (handoff, "60 fps cost").
 * **Per guest instruction, the generated code should cost about the same.** Both use the same
   struct model with `__restrict`. They have no per-block cycle charge and no store-journal check, but

@@ -1,7 +1,7 @@
 # The GPU side: 60 on weak GPUs, and a settings menu (the owner's plan, 2026-10-08)
 
 Why: on the worker (the Deck stand-in) the CPU side of 60 now fits (three host threads and the lazy DrawDone: the game
-thread 15.3 ms a frame on continue; docs/research/threads.md), and the frame rate stops at ~54 fps because the Intel iGPU
+thread 15.3 ms a frame on continue; docs/research/threads.md), and the frame rate stops at ~54 fps because its Intel iGPU
 needs ~18.7 ms a frame for the game's rendering (the render thread waits on its fences). 60 needs ~11% off the GPU.
 Weaker hardware (phones, the Deck in heavy scenes) needs more. The owner's order:
 

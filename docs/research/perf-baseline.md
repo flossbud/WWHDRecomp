@@ -2,7 +2,7 @@
 
 Session qa, 2026-10-08. A measurement only: nothing in the game path changed. Build 0a10de3 (ww-4), deployed to
 the desktop's `~/wwhd-test` and run there in real time, headless (`WWHD_WINDOW=0`), from the 100% save. The desktop
-is an desktop CPU (24 threads). It is also the worker, so other sessions' jobs share it: CPU time per frame and per
+is a fast desktop CPU (24 threads). It is also the worker, so other sessions' jobs share it: CPU time per frame and per
 thread is the measure, not frame times.
 
 Runs (driver: `~/wwhd-test/qa-perf.sh`; outputs in `~/wwhd-test/perf/` and `perf/qa/`, timings only):
@@ -209,10 +209,10 @@ watch only (src/runtime/diff.cpp). Exact: the kept pages are all of .data/.bss a
 (JournalPages), and a held draw's stores still all go through (its page table is cleared). Continue at 60: the
 journal 4.5% -> 2.6% of the game thread (957 -> 618 samples; `HalfTickStore` 404 -> 161).
 
-## the worker (session cloud, 2026-10-08)
+## The worker (session cloud, 2026-10-08)
 
-The owner's stand-in for the Steam Deck's CPU: the worker's 6-core CPU, power-capped to 45 W sustained (60 W bursts), its
-Intel iGPU through anv, in the worker container (10 threads), headless. `tools/sixty/perf/worker-ab.sh` (the worker's
+The owner's stand-in for the Steam Deck's CPU: the worker's 6-core desktop CPU, power-capped to 45 W sustained (60 W
+bursts), its Intel iGPU through anv, in the worker container (10 threads), headless. `tools/sixty/perf/worker-ab.sh` (the worker's
 perf-ab: variants of one build, alternating, a warm-up round for the shader cache, one run at a time) and
 `worker_absum.py` (gameplay only, game frame 900 on; each variant paired round by round with the first). ww-4 7910acf,
 continue (1800 game frames), 5 rounds each, every run within a few % of its variant's others:
@@ -225,7 +225,7 @@ continue (1800 game frames), 5 rounds each, every run within a few % of its vari
 
 How to read it:
 - **Without the lazy DrawDone the worker is serialized on its GPU**: each frame the game waits ~30 ms in GX2DrawDone
-  while the render thread finishes recording and the Intel iGPU runs the frame, nothing overlapping. Even 30 runs at
+  while the render thread finishes recording and the iGPU runs the frame, nothing overlapping. Even 30 runs at
   17 fps. (Its CPU a frame includes that wait's spinning: 25-29 ms against 19.5 ms with the wait gone.)
 - **With it (two frames in flight) the game runs at 49 fps and the game thread is the limit**: busy 96% of the time,
   19.5 ms of CPU a frame against 60's 16.7 ms budget. The render thread (9.95 ms a frame, 49% busy) has headroom.
