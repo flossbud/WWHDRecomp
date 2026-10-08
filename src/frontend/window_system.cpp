@@ -19,6 +19,7 @@
 #include "../os/input.h"
 #include "../os/swkbd.h"
 #include "../os/debug_menu.h"
+#include "../os/settings.h"
 #include "../os/erreula.h"
 #include "input/InputManager.h"
 #include "audio/CubebAPI.h"
@@ -257,8 +258,13 @@ static SDL_Window* OpenWindow()
 	if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
 		cemuLog_log(LogType::Force, "wwhd: no gamepads: {}", SDL_GetError());   // the keyboard still works
 	wwhd::os::input::SetRumble(Rumble);
-	SDL_Window* window = SDL_CreateWindow("The Legend of Zelda: The Wind Waker HD", 1280, 720,
-		SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+	// the window's size and fullscreen from the settings (WWHD_WINDOW_SIZE=WxH, WWHD_FULLSCREEN=1; src/os/settings.h)
+	int width = 1280, height = 720;
+	if (const char* size = getenv("WWHD_WINDOW_SIZE"); size && sscanf(size, "%dx%d", &width, &height) != 2)
+		width = 1280, height = 720;
+	const char* full = getenv("WWHD_FULLSCREEN");
+	SDL_Window* window = SDL_CreateWindow("The Legend of Zelda: The Wind Waker HD", std::max(width, 320), std::max(height, 180),
+		SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | (full && strcmp(full, "1") == 0 ? SDL_WINDOW_FULLSCREEN : 0));
 	if (!window)
 		wwhd::Fatal(fmt::format("SDL window: {}", SDL_GetError()));
 	StorePixelSize(window);
@@ -322,6 +328,17 @@ static void PrepareShaders(SDL_Window* window)
 	{
 		// the system's keyboard and dialogs come and go with the game: look at least every 50 ms
 		wwhd::UpdateOverlay();
+		// the settings page's live changes (src/os/settings.h): the display and vsync
+		if (bool full, vsync; true)
+			if (int w, h; wwhd::os::settings::TakeWindowRequest(full, w, h, vsync))
+			{
+				if (full != ((SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0))
+					SDL_SetWindowFullscreen(window, full);
+				if (!full && w > 0 && h > 0)
+					SDL_SetWindowSize(window, w, h);
+				if (vsync)
+					wwhd::gpu::RebuildSwapchain();      // its present mode reads WWHD_VSYNC
+			}
 		bool typing = wwhd::os::swkbd::Current().open;
 		if (typing != SDL_TextInputActive(window))
 			typing ? SDL_StartTextInput(window) : SDL_StopTextInput(window);
@@ -346,6 +363,8 @@ static void PrepareShaders(SDL_Window* window)
 				wwhd::sixty::FlightDump();         // the flight recorder's last frames (WWHD_FLIGHT)
 			else if (!ev.key.repeat && (ev.key.key == SDLK_F1 || (ev.key.key == SDLK_ESCAPE && wwhd::os::debug_menu::IsOpen())))
 				wwhd::os::debug_menu::Toggle();    // the debug menu, as clicking both sticks opens it
+			else if (!ev.key.repeat && ev.key.key == SDLK_F2)
+				wwhd::os::debug_menu::ToggleSettings();   // its settings page on its own
 			else if (wwhd::os::swkbd::Current().open)
 			{
 				if (ev.key.key == SDLK_BACKSPACE)

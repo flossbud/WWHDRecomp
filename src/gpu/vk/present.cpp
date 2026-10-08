@@ -8,6 +8,7 @@
 // (never waits, never tears), FIFO otherwise; WWHD_VSYNC=1 asks for FIFO. The overlay (renderer.h)
 // is blitted over it, uploaded again whenever the frontend changes it.
 #include "renderer_internal.h"
+#include <atomic>
 
 namespace wwhd::gpu
 {
@@ -15,6 +16,7 @@ namespace wwhd::gpu
 	{
 		Window s_window;
 		bool s_hasWindow = false;
+		std::atomic<bool> s_rebuild{ false };                    // RebuildSwapchain: at the next acquire
 
 		struct Swapchain
 		{
@@ -206,6 +208,8 @@ namespace wwhd::gpu
 
 	bool HasWindow() { return s_hasWindow; }
 
+	void RebuildSwapchain() { s_rebuild = true; }
+
 	std::vector<const char*> WindowInstanceExtensions()
 	{
 		return s_hasWindow ? s_window.instanceExtensions : std::vector<const char*>{};
@@ -242,7 +246,7 @@ namespace wwhd::gpu
 		s_window.size(width, height);
 		for (int attempt = 0; attempt < 2; attempt++)
 		{
-			if (!w.chain || width != w.width || height != w.height || srgb != w.srgb || attempt > 0)
+			if (!w.chain || width != w.width || height != w.height || srgb != w.srgb || attempt > 0 || s_rebuild.exchange(false))
 				if (!Build(width, height, srgb))
 					return false;
 			VkResult r = vkAcquireNextImageKHR(s.device, w.chain, UINT64_MAX, VK_NULL_HANDLE, w.acquired, &w.index);

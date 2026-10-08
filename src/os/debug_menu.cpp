@@ -2,6 +2,7 @@
 // the test aids (src/overrides/sixty.cpp). It filters the pad the game reads (KPADReadEx, input.cpp),
 // so an input script drives it as a player does.
 #include "debug_menu.h"
+#include "settings.h"
 #include <mutex>
 
 namespace
@@ -54,7 +55,7 @@ namespace
 		{ "Keese", 215, 0, 0 }, { "ReDead", 224, 0, 0 }, { "Kargaroc", 181, 0, 0 },
 	};
 
-	enum Page { kTop, kIslandPage, kDungeonPage, kBossPage, kFoePage };
+	enum Page { kTop, kIslandPage, kDungeonPage, kBossPage, kFoePage, kSettingsPage };
 	struct List { const Dest* dests; int count; const char* title; };
 	List ListOf(Page p)
 	{
@@ -64,6 +65,7 @@ namespace
 		case kDungeonPage: return { kDungeons, (int)std::size(kDungeons), "Warp: dungeons" };
 		case kBossPage: return { kBosses, (int)std::size(kBosses), "Warp: bosses (refights on)" };
 		case kFoePage: return { nullptr, (int)std::size(kFoes), "Spawn an enemy ahead of Link" };
+		case kSettingsPage: return { nullptr, 0, "Settings" };
 		default: return { nullptr, 0, "Debug menu" };
 		}
 	}
@@ -117,8 +119,15 @@ namespace
 		if (s_page == kTop)
 			return { "Islands", "Dungeons", "Bosses (refights on)", "Boss rush (all, in order)", "Spawn an enemy",
 				"Test arena (Gohma's room, no warp)", std::string("Boss refights: ") + (wwhd::debug::BossRefight() ? "ON" : "OFF"),
-				"Close" };
+				"Settings", "Close" };
 		std::vector<std::string> items;
+		if (s_page == kSettingsPage)
+		{
+			for (int i = 0; i < wwhd::os::settings::Count(); i++)
+				items.push_back(wwhd::os::settings::Line(i));
+			items.push_back("Back");
+			return items;
+		}
 		if (s_page == kFoePage)
 		{
 			for (const Foe& f : kFoes)
@@ -136,7 +145,7 @@ namespace
 	// a page's item on the top page (its cursor on the way back)
 	int TopIndex(Page p)
 	{
-		return p == kFoePage ? 4 : (int)p - 1;
+		return p == kFoePage ? 4 : p == kSettingsPage ? 7 : (int)p - 1;
 	}
 
 	// the stick as a D-pad, so that either moves the cursor
@@ -162,6 +171,7 @@ namespace
 			case 4: s_page = kFoePage; s_cursor = 0; break;
 			case 5: StartArena(); s_open = false; break;
 			case 6: wwhd::debug::SetBossRefight(!wwhd::debug::BossRefight()); break;
+			case 7: s_page = kSettingsPage; s_cursor = 0; break;
 			default: s_open = false; break;
 			}
 			return;
@@ -170,6 +180,11 @@ namespace
 		{
 			s_cursor = TopIndex(s_page);
 			s_page = kTop;
+			return;
+		}
+		if (s_page == kSettingsPage)
+		{
+			wwhd::os::settings::Cycle(s_cursor, 1);     // its next value (left and right step too)
 			return;
 		}
 		if (s_page == kFoePage)
@@ -239,6 +254,16 @@ namespace wwhd::os::debug_menu
 		s_page = kTop;
 		s_cursor = 0;
 		s_swallow = true;                        // the game sees nothing until the keys are let go
+		s_version++;
+	}
+
+	void ToggleSettings()
+	{
+		std::lock_guard lock(s_lock);
+		s_open = !(s_open && s_page == kSettingsPage);
+		s_page = kSettingsPage;
+		s_cursor = 0;
+		s_swallow = true;
 		s_version++;
 	}
 
@@ -322,7 +347,10 @@ namespace wwhd::os::debug_menu
 				s_cursor = (s_cursor + count - 1) % count;
 			if (pressed & B::DOWN)
 				s_cursor = (s_cursor + 1) % count;
-			if (pressed & (B::A | B::PLUS))            // + is Enter on the keyboard
+			const bool step = s_page == kSettingsPage && s_cursor < count - 1 && (pressed & (B::LEFT | B::RIGHT));
+			if (step)
+				wwhd::os::settings::Cycle(s_cursor, (pressed & B::RIGHT) ? 1 : -1);
+			else if (pressed & (B::A | B::PLUS))            // + is Enter on the keyboard
 				Choose();
 			else if (pressed & B::B)
 			{
@@ -334,7 +362,7 @@ namespace wwhd::os::debug_menu
 					s_page = kTop;
 				}
 			}
-			if (s_cursor != before || s_page != page || s_open != open || (pressed & B::A))
+			if (s_cursor != before || s_page != page || s_open != open || (pressed & B::A) || step)
 				s_version++;
 			if (!s_open)
 				s_swallow = true;
@@ -361,7 +389,8 @@ namespace wwhd::os::debug_menu
 		v.items = Items();
 		v.cursor = s_cursor;
 		v.hint = s_page == kTop ? "Move: D-pad/mouse   Choose: A/click   Close: B/F1"
-		                        : "Move: D-pad/mouse   Pick: A/click   Back: B/right click";
+		       : s_page == kSettingsPage ? "Move: D-pad/mouse   Change: A/click/left/right   Back: B"
+		                                 : "Move: D-pad/mouse   Pick: A/click   Back: B/right click";
 		return v;
 	}
 }

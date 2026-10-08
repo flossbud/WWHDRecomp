@@ -4096,7 +4096,20 @@ Cloud session cloud3 (tailnet mode, worker directory `/wwhd/WWHDRecomp-cloud3`, 
   global stores are each noted) or a watch is undecided (`QuietLive`, rt_internal.h). `WWHD_JOURNAL_SKIP=0`: as
   before. Exact by construction (the same stores are saved); checks all MATCH (PSNR inf), regress identical to
   a `WWHD_JOURNAL_SKIP=0` run, predeploy 51 ok, 0 FAIL, gohmatail WARN 54.0, gohmarock 4.8 as before. Desktop
-  profile, continue at 60: the journal 2.1% -> 1.1% of all samples.
+  profile, continue at 60: the journal 2.1% -> 1.1% of all samples. A/B on the worker: the game thread -2.1% a
+  frame, 49.9 -> 50.8 fps.
+- **gpu-plan item 4, the settings menu (first round), landed:** `src/os/settings.{h,cpp}`: `portable/wwhd.ini`
+  (KEY=VALUE, the switches' own names) applied at start (cemu_boot.cpp `SetupPaths`, `setenv(...,0)`: the
+  environment wins) only with a window and no virtual clock (`WWHD_SETTINGS=0`: ignored). The page: F2, or
+  "Settings" on the debug menu's top page (before "Close"); A, left and right change a value, saved at once.
+  Options: frame rate 30/60, vsync (live: `gpu::RebuildSwapchain`, present.cpp), display window/fullscreen and
+  window size (live, and at start: `WWHD_FULLSCREEN`, `WWHD_WINDOW_SIZE`, window_system.cpp), lazy DrawDone,
+  host threads 1/3 (`WWHD_CORES`). Restart-only ones say "(at the next start)" while they differ from what runs;
+  a launcher's own switch shows "(set by the launcher)" and isn't changed. Tested on the desktop worker (Xvfb,
+  lavapipe): the file's 60 applies, the environment's 0 wins, `WWHD_SETTINGS=0` ignores it, the window opens at the
+  file's size, and driven from the pad (both sticks, Settings) the window resized live and vsync turned on (the
+  swapchain rebuilt, no errors), both saved. Next: render scale (gpu-plan 3), ambient occlusion (after item 1
+  names the pass) and the shader set (5) join the page as they land.
 
 ### Session cloud2 (2026-10-08): write-watch and a present-path review, branch ww-4-cloud2
 

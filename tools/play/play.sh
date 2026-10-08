@@ -13,7 +13,9 @@
 # +=Return -=Backspace, D-pad on the arrows, left stick I/J/K/L, right stick T/F/G/H; F11 or
 # Alt+Enter toggles fullscreen. F1 (or both sticks) opens the debug menu: arrows move, X or Enter
 # chooses, Z goes back, Escape or F1 closes; the mouse too: hover, left click chooses, right click goes
-# back, the wheel moves, a click outside closes. A gamepad's buttons go by their printed labels.
+# back, the wheel moves, a click outside closes. F2 opens the settings (frame rate, vsync, display, host
+# threads...; saved in portable/wwhd.ini; a switch set here in the environment wins over it). A gamepad's
+# buttons go by their printed labels.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 export WWHD_NATIVE=${WWHD_NATIVE-on} WWHD_RENDER=${WWHD_RENDER-vk} WWHD_CEMU_DATA=$here/cemu CEMU_NO_GAMEPAD=1

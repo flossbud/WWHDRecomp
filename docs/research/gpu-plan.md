@@ -33,7 +33,7 @@ Weaker hardware (phones, the Deck in heavy scenes) needs more. The owner's order
    the optimised one switched off if it misbehaves. Checks run Cemu's set; the optimised set gets its own capture
    comparison (within tolerance where it isn't bit-exact) and A/Bs.
 
-## Item 4, the settings menu: design (session cloud3)
+## Item 4, the settings menu: design (session cloud3; the first round landed as designed: handoff.md, "Session cloud3")
 
 **What exists.** Every option on the list is a startup switch today, read once from the environment (`static const`
 getenvs): `WWHD_60FPS` (dispatch.cpp `SixtyFps`), `WWHD_LAZY_DRAWDONE` (renderer.cpp), `WWHD_VSYNC` (present.cpp's

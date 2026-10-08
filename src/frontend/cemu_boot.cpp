@@ -1,6 +1,7 @@
 // Boot helpers adapted from Cemu's wxWidgets frontend (src/gui/wxgui/CemuApp.cpp, MainWindow.cpp),
 // minus the dialogs. This file is derived from Cemu and is under the Mozilla Public License 2.0.
 #include "boot.h"
+#include "../os/settings.h"
 #include "config/ActiveSettings.h"
 #include "config/CemuConfig.h"
 #include "config/NetworkSettings.h"
@@ -33,6 +34,7 @@ namespace wwhd
 		fs::path portable = exe.parent_path() / "portable";
 		std::error_code ec;
 		fs::create_directories(portable, ec);
+		wwhd::os::settings::Load(portable.string());   // the player's settings, before anything reads a switch
 		const char* data = getenv("WWHD_CEMU_DATA");
 		fs::path dataPath = data && *data ? fs::path(data) : exe.parent_path();
 		std::set<fs::path> failed;

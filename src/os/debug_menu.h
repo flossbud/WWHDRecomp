@@ -15,6 +15,7 @@ namespace wwhd::os::debug_menu
 	// F1 on the keyboard (the owner's ask): opens or closes the menu as both sticks do; Escape closes
 	// it (window_system.cpp). On the keyboard the arrows move, X (A) or Enter (+) chooses, Z (B) goes back.
 	void Toggle();
+	void ToggleSettings();                      // F2: the settings page (src/os/settings.h) on its own
 	bool IsOpen();
 	// The mouse while the menu is open (window_system.cpp; the overlay finds the item under it):
 	// hovering an item selects it, a left click chooses it, a right click goes back, the wheel moves.
