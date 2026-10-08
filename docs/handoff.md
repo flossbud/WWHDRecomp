@@ -1732,6 +1732,23 @@ it in a window; D21 "Step 2"):**
     show its packets only initialised at creation (dCloth init f_0251CEC8 from 02483D48) and no cloth_move from them
     (the one cloth_move there is another actor's, from 02117AD4): it never moves. Nothing to step: on plan.json's
     "still" list.
+  - **B74, the title's fade to black (session top, 2026-10-08; the owner's bug)**: every frame of the fade captured
+    at 30 and at 60 from the title (scratch fade.sh: route save's A at f420, `SIXTY_FROM=60`, CEMU_SHOT_FRAMES every
+    swap; each frame's mean luminance). At 60 the fade's steps were 30's but a swap each: fade out 27 swaps (30: 27
+    frames), the black between the scenes 49 swaps (30: 12 frames: the next scene waits on ticks), fade in 26. The
+    fader is not mDoGph's calcFade (f_025F06A8: idle here, mFade never set) nor its twin (f_0252F5A0) but a colour
+    fader (f_027ECED4: state +0, delay +0x1C, frame +6 against length +4, alpha +0xB) that the game task's calc
+    (f_0203593C -> f_02728A74, held by a countdown +0x448) steps once a frame. Found by leaving calls out on half
+    ticks (a local probe: skipping f_0203593C's first call skipped the whole calc and gave 30's pacing; then
+    f_02728A74 alone). Now (sixty.cpp, `WWHD_60FPS_FADE=0` off) at 60 its length is doubled for the call and its
+    delay counts whole ticks, the hold is `whole` (tick_rules.txt), and the two calcFade-form faders get half a
+    tick's step: the phases 50/24/51 swaps against 30's 25/12/26 frames, smooth. The owner's boat: the logo's King of
+    Red Lions faded out half way through the fade at 60 (at 30 it is still there when the screen goes black): the
+    title actor's exit count (+0x278, its execute's mode 3, f_024B8670) and its draw's counts (f_024B7CFC) ran a call
+    a step (bottom's trial stopped at the A press; read the trial without --target: the actor's state is a heap
+    object): keep/late (tick_rules/actors_bottom.txt). Screen and boat now equal 30's at every tick. Not reproduced
+    in the virtual-clock runs: the boat at full visibility in single frames (the owner's real-time view; it may have
+    been the half-speed screen fade against the boat's own). Probe: `WWHD_STATE_CENSUS_HEAP=1` now works at 30.
   - **60 fps cost (session top; the work queue's "perf"; shared: sixty.cpp's journal, the runtime's
     rt_journal_store)**: real time, headless, on the desktop (`~/wwhd-test`; its `perf-top.sh` runs routes
     at 30 then 60 with `WWHD_FRAME_LOG` and each thread's CPU; `perf-ab.sh` alternates two builds at 60;
