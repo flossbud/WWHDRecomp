@@ -1,4 +1,4 @@
-# Cloud sessions: handoff (2026-10-07)
+# Cloud sessions: handoff (2026-10-07, performance pointers updated 2026-10-08)
 
 This is for Claude Code sessions that run in the cloud (claude.ai/code) on the GitHub mirror
 `flossbud/WWHDRecomp`. Local sessions work on the owner's machines, which have the game; cloud
@@ -155,6 +155,13 @@ starting anything not on this list.
   The real measure (`tools/reference/timing.sh` on a route) is local.
 - **Deliverable:** a design note (`docs/research/codegen-speed.md`) with options, expected gains
   and how each stays bit-exact, then a prototype behind a generator flag.
+- **Read first (2026-10-08):**
+  - `docs/research/perf-baseline.md`: per-thread CPU, the game thread's split, and what 60 adds to it.
+  - `docs/research/deck-plan.md`: the Steam Deck plan.
+
+  The game thread is what limits the Deck: an estimated ~19 ms a frame in a fight at 60 against a 16.7 ms
+  budget. So a codegen gain there counts directly. The deck plan's "deeper cut of the half frame" is its largest
+  lever after these items. The sound's 5-6x cost at 60 (the plan's item 1) is fixed (c9fc438).
 
 ### 4. Native graphics groundwork (after the rival study lands)
 - The owner wants graphics drawn natively and efficiently. Wait for `docs/research/rival-study.md`.
@@ -164,6 +171,42 @@ starting anything not on this list.
   Vulkan, the shader translation ahead of time, and how it's verified without the bit-exact
   command stream (captures within tolerance, as G3 does today).
 - Prototype only what can be tested without the game.
+- **Read first (2026-10-08):**
+  - `docs/research/rival-study.md` (it has landed; §4.3 and §6 cover their texture tracking and performance
+    work);
+  - `docs/research/deck-plan.md` (seven items in priority order, each with its gain, effort, risk and gate);
+  - `docs/research/texture-tracking.md` (page write-protection for textures, designed, not built);
+  - `docs/research/perf-baseline.md` (the render thread's profile per draw).
+- **Which deck-plan items need the game:** almost all of them, because their gates are the checks' captures and
+  an A/B (`perf-ab.sh`) on a route.
+  - **Local only:**
+    - item 2's open work (below);
+    - item 3: render-thread skips, each step byte-identical captures plus an A/B;
+    - item 4: static actors in the half frame, gated by the hz30 sweep;
+    - item 5: the half step's journal, regress and predeploy;
+    - item 7: Link's half step;
+    - the quick tests on the Deck.
+  - **A cloud session can prototype:**
+    - item 6's runtime half: `src/runtime/write_watch.{h,cpp}`, meaning the page stamps, protect/unprotect, the
+      `SIGSEGV` handler chained before Cemu's crash handler, `HostWrite`, and a `sigaltstack` per guest host
+      thread. All of it is unit-testable without the game: protect a buffer, write to it, check the stamp,
+      check that a fault outside the range still reaches the old handler. The `texture.cpp` integration and
+      the kernel-write audit's verify mode need the game.
+    - item 3's code changes, built but unmeasured, if they're kept small and one per commit, so they can be
+      A/B'd locally one at a time.
+  - **Either:** the Android port's platform layer (the deck plan's Android section). It's weeks of work and
+    comes before any of the plan's Android items.
+- **The lazy GX2DrawDone (deck-plan item 2) landed off by default** (7123e87, ef9fad9; `WWHD_LAZY_DRAWDONE=1`).
+  It saves 1.42 ms of the game thread's frame at 60 on the desktop. Open, all local:
+  - a run on the owner's GPU with a window;
+  - an A/B there with vsync on and off;
+  - a run under the Vulkan validation layer (not installed on the desktop worker; a cloud session could check
+    the code against the spec's present/semaphore rules: `PresentSemaphore` in `src/gpu/vk/present.cpp`,
+    `SubmitFrame` in `renderer.cpp`);
+  - then on by default.
+
+  A latent hazard found on the way: a frame that fills the 256 MB upload ring mid-frame submits early and moves
+  a few pixels. No route comes near that today.
 
 ## Reporting
 
