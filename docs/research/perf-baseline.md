@@ -154,7 +154,7 @@ So the converted processes' half-step executes are only about 13-14% of what the
 about as much again (every actor draws on every frame), and most of it is outside both. In the rest, by what 60
 adds (inclusive, continue): the sound's AX processing on the game thread (`snd_core::AXIst_ThreadEntry` 413 ->
 2,191, `PPCCore_executeCallbackInternal` 328 -> 1,770, `AXMix_process` 139 -> 744: about five times its 30 cost,
-the largest single item: worth checking why the AX frame callback runs that much more at 60), the half tick's
+the largest single item; found and fixed below), the half tick's
 frame path (`f_0274C264` 963 -> 1,830; on en-tn 637 -> 1,456) and the journal (`rt_journal_store`, en-tn 5 ->
 387).
 
@@ -184,3 +184,16 @@ types are a few tens of samples each); static or far actors (signs, bridges, pal
 draw on half frames and could reuse their whole frame's matrices; and the sound's cost at 60 is the first thing to
 look at, before any game code. (The profiles and the scratch scripts that split them, `halfsplit.py`,
 `callees.py`, `mapcallees.py`: the desktop worker's data/m6/WWHDRecomp-bottom/prof and bin.)
+
+### The sound's cost at 60: the half tick's journal on the AX thread (fixed)
+
+The AX frames are the same at both rates (one each 3 ms of host time: ~17,000 in 49 s at 30 and at 60), with the
+same voices (~2 a frame) and the same work in the game's stream mix (f_0281A540: 96 samples a call, 2 streams, the
+same calls) - probes `WWHD_AX_STATS` and a stream-mix override, not kept. But the AX thread is a guest thread on the
+same core, and the half tick's store journal (`g_rtJournalOn`, global) was on whenever an AX frame ran during a half
+tick's frame: every store of the game's audio code went through `RT_STORE`'s page check and `rt_journal_store` into
+`HalfTickStore`, whose rollback drops other threads' stores anyway. With the journal off (WWHD_60FPS_ROLLBACK=0, a
+probe) the AX thread fell from 2,191 to 333 samples. Fix (src/runtime/diff.cpp, sixty.cpp): the half tick's journal
+names its thread (`g_rtJournalThread`, the frame thread) and `rt_journal_store` passes other threads' stores over at
+once, unless a fast path's quiet watch needs them. AX on continue at 60: 2,191 -> 287 samples (30: 413). Exact: the
+stores passed over were dropped before; checks, regress, predeploy and the save route's sound hash at 60 unchanged.

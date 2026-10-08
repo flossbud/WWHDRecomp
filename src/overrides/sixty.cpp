@@ -48,6 +48,8 @@
 
 void wwhd_SetSwapInterval(uint32 interval);       // os/gx2/core/GX2_Misc.cpp
 
+extern const PPCInterpreter_t* g_rtJournalThread;   // the half tick journal's thread (runtime/diff.cpp)
+
 namespace
 {
 	bool Probe()
@@ -3130,6 +3132,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 	{
 		s_frameThread = PPCInterpreter_getCurrentInstance();
 		g_rtStoreCensus = HalfTickStore;
+		g_rtJournalThread = s_frameThread;          // only the frame thread's stores: HalfTickStore drops the rest
 		g_rtJournalOn = true;
 		if (RollbackLevel() == 2)
 		{
@@ -3146,6 +3149,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 	if (watch)
 	{
 		g_rtJournalOn = wwhd::rt::QuietWatching();   // a fast path's watch may still need it
+		g_rtJournalThread = nullptr;
 		g_rtStorePages = nullptr;
 		g_rtStoreCensus = nullptr;
 		RollbackRestore();
