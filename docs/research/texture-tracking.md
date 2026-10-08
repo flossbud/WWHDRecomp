@@ -121,7 +121,15 @@ Off unless `WWHD_WRITE_WATCH=1`; unit tests without the game or Cemu: `src/runti
   stamp-after-open variants of the handler and of `Unprotect` fail it every run); the cost of a fault: **~4.5-7 µs**
   in this sandbox (a protect plus a faulting write, less half a protect plus unprotect), as the rival's 3.7 µs.
 
-**How it plugs in (needs the game; not done):**
+**Wired in (session cloud2, uncompiled until a build with Cemu; not gated):** steps 3, 4 (the FSA read only) and 5
+below, in `texture.cpp` (`WatchMode`: `WWHD_WRITE_WATCH=1` in real time; with `WWHD_TEXTURE_HASH=verify` also on the
+virtual clock, where whole hashes still decide and `write watch: MISS` lines name a texture that changed with no write
+seen; a stats line every 600 frames) and `iosu_fsa.cpp`. `Init` is done there on the render thread's first texture
+check. Step 1 (`ThreadInit` in the scheduler thread) waits for session cloud, whose file it is. Gate: the checks with
+`WWHD_WRITE_WATCH=1 WWHD_TEXTURE_HASH=verify` (all MATCH, 0 misses, 0 chained), then a real-time headless run with the
+watch on and one with verify on.
+
+**How it plugs in:**
 1. `ThreadInit()` at the top of `OSSchedulerCoreEmulationThread` (`src/os/coreinit/coreinit_Thread.cpp`, after
    `enableFlushDenormalsToZero`): every host thread that runs guest code starts there, one or Cemu's three. Other
    threads that write guest memory without running guest code (the GX2/render thread, sound) fault on their own

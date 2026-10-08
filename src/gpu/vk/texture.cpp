@@ -16,6 +16,7 @@
 #include "Cafe/HW/Latte/ISA/LatteReg.h"
 #include "Cafe/HW/Latte/LegacyShaderDecompiler/LatteDecompiler.h"
 #include "Cafe/HW/Latte/LatteAddrLib/LatteAddrLib.h"
+#include "../../runtime/write_watch.h"
 
 Latte::E_GX2SURFFMT LatteTexture_ReconstructGX2Format(const Latte::LATTE_SQ_TEX_RESOURCE_WORD1_N& texUnitWord1,
 	const Latte::LATTE_SQ_TEX_RESOURCE_WORD4_N& texUnitWord4);  // latte_glue.cpp
@@ -338,6 +339,9 @@ namespace wwhd::gpu
 			uint32 depth = 1, layers = 1, mips = 1;
 			uint64 hash = 0, sample = 0;                               // of its memory (level 0): whole, sampled
 			uint32 checkedFrame = UINT32_MAX, hashedFrame = 0;
+			uint32 mark = 0;                                           // write-watch: its pages' stamps before the last hash
+			bool watched = false;                                      // protected after that mark
+			uint8 hot = 0;                                             // checks running that found it written
 			std::unordered_map<uint64, VkImageView> views;
 		};
 		std::unordered_map<uint64, Texture> s_textures;
@@ -388,10 +392,37 @@ namespace wwhd::gpu
 		{
 			static const bool whole = [] {
 				const char* e = getenv("WWHD_TEXTURE_HASH");
-				return PPCTimer_isVirtualClock() || (e && strcmp(e, "whole") == 0);
+				return PPCTimer_isVirtualClock() || (e && (strcmp(e, "whole") == 0 || strcmp(e, "verify") == 0));
 			}();
 			return whole;
 		}
+
+		// Write-watch (docs/research/texture-tracking.md, src/runtime/write_watch.h): WWHD_WRITE_WATCH=1 in real time
+		// replaces the sampled check: a texture's level 0 is protected right before it's hashed, and it's hashed again
+		// only when one of its pages was written since (exact, no lag, whatever the frame count). With
+		// WWHD_TEXTURE_HASH=verify (WWHD_WRITE_WATCH=1 too; the virtual clock allowed) every texture is still hashed
+		// whole every frame and decides as before, and a hash that changed while the watch saw no write is a miss:
+		// logged with its address (the writer the watch doesn't see: a kernel write without HostWrite). The checks
+		// must show 0.
+		enum class Watch { off, on, verify };
+		Watch WatchMode()
+		{
+			static const Watch mode = [] {
+				if (!write_watch::Enabled())
+					return Watch::off;
+				const char* e = getenv("WWHD_TEXTURE_HASH");
+				const bool verify = e && strcmp(e, "verify") == 0;
+				if (!verify && HashWholeAlways())
+					return Watch::off;                                 // the virtual clock: never, except to verify
+				if (!write_watch::Init(memory_base, 0x100000000ull))
+					return Watch::off;
+				Log(verify ? "write watch: textures, verify mode (whole hashes decide; misses counted)" : "write watch: textures");
+				return verify ? Watch::verify : Watch::on;
+			}();
+			return mode;
+		}
+		uint64 s_watchMisses = 0;
+		constexpr uint8 kHotFrames = 8;                                 // stamped this many checks running: hash whole instead
 
 		struct TexDesc
 		{
@@ -513,7 +544,34 @@ namespace wwhd::gpu
 				const uint8* p = memory_getPointerFromPhysicalOffset(d.phys);
 				const size_t n = (size_t)info.surfSize;
 				bool whole = HashWholeAlways() || t.img.layout == VK_IMAGE_LAYOUT_UNDEFINED;
-				if (!whole)
+				const Watch watch = WatchMode();
+				bool watchUnchanged = false;
+				if (watch != Watch::off)
+				{
+					static uint32 s_statsFrame = 0;
+					if (s.frame % 600 == 0 && s_statsFrame != s.frame)
+					{
+						s_statsFrame = s.frame;
+						const write_watch::Stats st = write_watch::GetStats();
+						Log(fmt::format("write watch: frame {}: {} faults ({} raced, {} on alt stacks), {} chained, {} protects, {} misses",
+							s.frame, st.faults, st.raced, st.onAltStack, st.chained, st.protects, s_watchMisses));
+					}
+					watchUnchanged = t.watched && !write_watch::WrittenSince(p, n, t.mark);
+					if (watchUnchanged)
+						t.hot = 0;
+					else
+					{
+						if (t.watched)
+							t.hot = (uint8)std::min<uint32>(t.hot + 1u, 255u);
+						else if (t.hot >= kHotFrames && s.frame % 64 == 0)
+							t.hot = 0;                                      // rewritten every frame: try again now and then
+						t.mark = write_watch::Mark();                       // then protect, then hash: a racing write shows next time
+						t.watched = t.hot < kHotFrames && write_watch::Protect(p, n);
+					}
+					if (watch == Watch::on)
+						whole = whole || !watchUnchanged;
+				}
+				else if (!whole)
 				{
 					static uint32 s_budgetFrame = UINT32_MAX;
 					static size_t s_budget = 0;
@@ -534,8 +592,15 @@ namespace wwhd::gpu
 					uint64 h = HashMemory(p, n);
 					if (h != t.hash || t.img.layout == VK_IMAGE_LAYOUT_UNDEFINED)
 					{
+						if (watch == Watch::verify && watchUnchanged && t.img.layout != VK_IMAGE_LAYOUT_UNDEFINED)
+						{
+							s_watchMisses++;
+							if (s_watchMisses <= 50 || s_watchMisses % 1000 == 0)
+								Log(fmt::format("write watch: MISS #{} frame {}: texture at {:08x}, {} bytes, changed with no write seen",
+									s_watchMisses, s.frame, d.phys, n));
+						}
 						t.hash = h;
-						if (!HashWholeAlways())
+						if (!HashWholeAlways() && watch == Watch::off)
 							t.sample = SampleMemory(p, n);
 						Upload(t, d, f);
 					}
