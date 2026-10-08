@@ -52,6 +52,23 @@ the worker that has the game.
     build on the worker.
   - It refuses while the game is running. If it does, wait and ask again.
   - Mark the bugs it fixes: `publish.sh bug fixed ID "fixed: deployed ww-4 SHA"`.
+- **The progress site** (http://WORKER_ADDR:8765 on the worker; `tools/progress/README.md`). Keep your part of it
+  current with `tools/progress/publish.sh` from this checkout: it writes as session `cloud` (`.session`) over SSH to
+  the worker.
+  - `publish.sh now "TEXT"` when you start something and as it changes (one line, cheap; e.g. "deck-plan item 3:
+    descriptor sets, gating").
+  - `publish.sh claim ID "note"` before a work item: its ids are plan.json's queue, e.g. `next-deck`, or
+    `publish.sh item ID NAME` for one that isn't listed. Then `publish.sh step ID DONE TOTAL` for its bar, and
+    `publish.sh done ID "result"` when it lands.
+  - Bugs: `publish.sh bug start|ready|fixed ID "note"` as their state changes ("ready" when the fix is in ww-4,
+    "fixed" once deployed); `publish.sh bug note ID "finding"` for findings; `publish.sh bug add TITLE DETAILS` for a new
+    one you find.
+  - The queue itself (plan.json `queue`, `queue_note`, `known_issues`): edit and commit it like code (docs-only, no
+    gates), push, then run `publish.sh` (no arguments) to republish the page.
+  - Don't run `publish.sh usage`: those meters are the local sessions' Claude usage, not yours.
+  - `publish.sh shot` takes a capture from the worker to the page (it stays on the worker).
+  - `publish.sh retire` when you stop for good.
+  - A web session (WW-10) also sweeps the page: if your line looks overwritten, set it again.
 - **Identity.** Commit as flossbud (the setup sets it), and never write the owner's real name or account names anywhere.
 - **Reporting.** The owner reads on a phone.
   - At each landed item, say in a few lines what changed, the measured gain, the gates, and what's next.
