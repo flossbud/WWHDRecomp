@@ -17,6 +17,7 @@
 #include "Cafe/HW/Latte/Core/LatteBufferCache.h" // also remove this dependency
 
 #include "Cafe/HW/MMU/MMU.h"
+#include "../../runtime/write_watch.h"
 
 using namespace iosu::kernel;
 
@@ -478,6 +479,10 @@ namespace iosu
 			if ((flags & FSA_CMD_FLAG_SET_POS) != 0)
 				fsc_setFileSeek(fscFile, filePos);
 			// todo: File permissions
+			// wwhd: a file read can be a kernel read() into guest memory, which fails with EFAULT on a page the
+			// texture write-watch protected instead of faulting: open and stamp the pages first (write_watch.h; nothing
+			// unless WWHD_WRITE_WATCH=1)
+			wwhd::rt::write_watch::HostWrite hostWrite(destPtr.GetPtr(), bytesToRead);
 			uint32 bytesSuccessfullyRead = fsc_readFile(fscFile, destPtr, bytesToRead);
 			if (transferElementSize == 0)
 				return FSA_RESULT::OK;
