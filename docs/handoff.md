@@ -366,6 +366,9 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   mixed, not listed. Under the hold: its knockback's speed decay moves a quarter of a decrease further a tick (its
   speed approaches once a tick, as BK's, untried), and its swoop (33 -> 34) moves in the tick it's set up at 30, which
   the hold puts half a tick later.
+  With its 12 speedF approaches (cLib_addCalc0 on +0x370, 0244BC70..0244D480) once a tick too (cLib_addCalc0 now reads
+  kOnceATick; probe WWHD_DEBUG_ONCEATICK): the Poe 63.8 / 7.8 (max / mean; unheld 600 / 108), Link's mean to f1240
+  1.2 (4.6), but at f1242 a slash bounces two ticks later and Link's whole-route mean is 32 against 22. Not listed.
 - **en-fm, the Floormaster (FM 119; session qa; RNDFIX 0.7).** Its attack (modeAttack f_02146A34, mode 8 at +0x3C8)
   slides its hand toward the grab point 40 units a tick (cLib_addCalcPosXZ2, maxStep 40) only while the distance is
   outside a window: `!(dist > HIO.0E0 && dist < HIO.0C4) && dist < HIO.0E4 + 10`. At 60 the half step sampled it

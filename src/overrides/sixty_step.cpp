@@ -258,9 +258,15 @@ void f_0200ED84(PPCInterpreter_t* __restrict ctx)
 	[[clang::musttail]] return orig_f_0200ED84(ctx);
 }
 
-// cLib_addCalc0(f32* v r3, scale f1, maxStep f2): toward 0
+// cLib_addCalc0(f32* v r3, scale f1, maxStep f2): toward 0 (its once-a-tick sites: kOnceATick, above)
 void f_0200EDC8(PPCInterpreter_t* __restrict ctx)
 {
+	if (Stepped() && OnceATick(ctx->spr.LR))
+	{
+		if (g_rtHalfTick)
+			return;
+		[[clang::musttail]] return orig_f_0200EDC8(ctx);
+	}
 	if (Stepped())
 	{
 		FPR(1).fp0 = Single(Approach(FPR(1).fp0));
