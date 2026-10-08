@@ -1197,7 +1197,7 @@ namespace wwhd::gpu
 		// room for one draw's per-draw data (a submit in the middle of a draw would free what it already allocated)
 		void Reserve()
 		{
-			if (s.ring.used + (64ull << 20) > s.ring.size || s_sets + 2 > (1u << 16) || s_imageDescriptors + 64 > (1u << 18) ||
+			if (s.ring.used + (64ull << 20) > s.ringEnd || s_sets + 2 > (1u << 16) || s_imageDescriptors + 64 > (1u << 18) ||
 				s_bufferDescriptors + 64 > (1u << 17))
 				SubmitAndWait();
 		}

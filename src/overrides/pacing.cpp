@@ -36,6 +36,7 @@ namespace wwhd::gpu
 {
 	uint64 VsyncCount();                           // src/gpu/null_gpu.cpp
 	uint64 GpuFrameCpuNs();
+	uint64 TakeFenceWaitNs();                      // src/gpu/vk/renderer.cpp
 }
 namespace GX2
 {
@@ -68,7 +69,7 @@ namespace
 	{
 		uint32 swap;
 		bool half;
-		float beganMs, workMs, drawDoneMs, cpuMs, idleMs, gpuMs, waitMs;
+		float beganMs, workMs, drawDoneMs, cpuMs, idleMs, gpuMs, waitMs, fenceMs;
 		uint32 vsyncs;
 		uint32 storesSeen, storesSaved;            // the half tick's journal (thousands)
 	};
@@ -95,10 +96,10 @@ namespace
 		FILE* f = fopen(s_logPath, "w");
 		if (!f)
 			return;
-		fprintf(f, "# swap tick began_ms work_ms drawdone_ms cpu_ms idle_ms gpu_ms vsyncs wait_ms stores_k saved_k\n");
+		fprintf(f, "# swap tick began_ms work_ms drawdone_ms cpu_ms idle_ms gpu_ms vsyncs wait_ms stores_k saved_k fence_ms\n");
 		for (const Frame& r : s_frames)
-			fprintf(f, "%u %c %.2f %.2f %.2f %.2f %.2f %.2f %u %.2f %u %u\n", r.swap, r.half ? 'h' : 'w', r.beganMs, r.workMs,
-				r.drawDoneMs, r.cpuMs, r.idleMs, r.gpuMs, r.vsyncs, r.waitMs, r.storesSeen, r.storesSaved);
+			fprintf(f, "%u %c %.2f %.2f %.2f %.2f %.2f %.2f %u %.2f %u %u %.2f\n", r.swap, r.half ? 'h' : 'w', r.beganMs, r.workMs,
+				r.drawDoneMs, r.cpuMs, r.idleMs, r.gpuMs, r.vsyncs, r.waitMs, r.storesSeen, r.storesSaved, r.fenceMs);
 		fclose(f);
 	}
 
@@ -150,6 +151,7 @@ void f_0274C874(PPCInterpreter_t* __restrict ctx)
 		r.cpuMs = (ThreadCpuNs() - s_cpuAtBegin) / 1e6f;
 		r.idleMs = (coreinit::__OSIdleNanoseconds() - s_idleAtBegin) / 1e6f;
 		r.gpuMs = wwhd::gpu::GpuFrameCpuNs() / 1e6f;
+		r.fenceMs = wwhd::gpu::TakeFenceWaitNs() / 1e6f;
 		r.vsyncs = (uint32)(vsync - s_frameVsync);
 		uint64 seen, saved;
 		wwhd::sixty::TakeJournalCounts(seen, saved);

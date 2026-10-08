@@ -56,6 +56,16 @@ namespace wwhd::gpu
 		VkFence fence = VK_NULL_HANDLE;
 		VkDescriptorPool descriptors = VK_NULL_HANDLE;           // reset after every submit
 		Ring ring;
+		// the lazy GX2DrawDone (WWHD_LAZY_DRAWDONE=1; real time without a window; WIP, docs/research/deck-plan.md
+		// item 2): two of each per-frame resource, the frame's submit (SubmitFrame) not waiting for the GPU. Slot 1's
+		// are made only when it's on; cmd, fence and descriptors are the current slot's, and the ring's
+		// [ringBase, ringEnd) its half (the whole ring when off)
+		VkCommandBuffer cmds[2]{};
+		VkFence fences[2]{};
+		VkDescriptorPool pools[2]{};
+		bool pending[2]{};                                       // submitted, its fence not yet waited for
+		uint32 slot = 0;
+		VkDeviceSize ringBase = 0, ringEnd = 0;
 		std::map<std::pair<uint32, uint32>, Image> surfaces;     // (physical address, GX2 format | depth flag)
 		uint64 writes = 0;                                       // surface writes so far (Image::written)
 		Image scan[2];                                           // TV, DRC
@@ -69,7 +79,9 @@ namespace wwhd::gpu
 	[[noreturn]] void Fail(const std::string& msg);
 	void Check(VkResult r, const char* what);
 	uint32 MemoryType(uint32 bits, VkMemoryPropertyFlags props);
-	void SubmitAndWait();                                         // ends rendering first
+	void SubmitAndWait();                                         // ends rendering first; the GPU idle after it
+	void SubmitFrame();                                           // a swap's submit (lazy: not waited for)
+	bool LazyDrawDone();                                          // WWHD_LAZY_DRAWDONE=1 in real time without a window
 	void Transition(Image& img, VkImageLayout layout);
 	Image CreateImage(VkFormat format, VkImageAspectFlags aspect, uint32 w, uint32 h, VkImageUsageFlags usage, uint32 layers = 1);
 	VkImageView LayerView(Image& img, uint32 layer);             // a 2D view of one layer (img.view for layer 0)

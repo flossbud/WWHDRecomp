@@ -8,7 +8,10 @@
 //
 // Recording. Everything goes into one command buffer that is submitted, and waited for, at each
 // swap: simple and slow, which is fine for lavapipe and for correctness first.
+#include <chrono>
+#include <atomic>
 #include "renderer_internal.h"
+bool PPCTimer_isVirtualClock();                                  // src/runtime/espresso/PPCTimer.cpp
 #include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/ISA/LatteReg.h"
 #include <cfloat>
@@ -148,7 +151,7 @@ namespace wwhd::gpu
 		Check(vkBeginCommandBuffer(s.cmd, &bi), "vkBeginCommandBuffer");
 
 		// per-frame data: one host-visible buffer for uniforms, vertices and indices
-		s.ring.size = 256ull << 20;
+		s.ring.size = LazyDrawDone() ? 512ull << 20 : 256ull << 20;   // the lazy path: a whole ring's 256 MB per slot
 		VkBufferCreateInfo rbi{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
 		rbi.size = s.ring.size;
 		rbi.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
@@ -169,6 +172,16 @@ namespace wwhd::gpu
 		dpi.poolSizeCount = 2;
 		dpi.pPoolSizes = sizes;
 		Check(vkCreateDescriptorPool(s.device, &dpi, nullptr, &s.descriptors), "vkCreateDescriptorPool");
+		s.cmds[0] = s.cmd, s.fences[0] = s.fence, s.pools[0] = s.descriptors;
+		s.ringBase = 0, s.ringEnd = s.ring.size;
+		if (LazyDrawDone())
+		{
+			Check(vkAllocateCommandBuffers(s.device, &cai, &s.cmds[1]), "vkAllocateCommandBuffers");
+			Check(vkCreateFence(s.device, &fci, nullptr, &s.fences[1]), "vkCreateFence");
+			Check(vkCreateDescriptorPool(s.device, &dpi, nullptr, &s.pools[1]), "vkCreateDescriptorPool");
+			s.ringEnd = s.ring.size / 2;                              // slot 0: the first half, slot 1 the second
+			Log("lazy GX2DrawDone: two frames in flight (WWHD_LAZY_DRAWDONE)");
+		}
 		DrawInit();
 
 		// the reference's screenshot settings (cemu-patches/0007)
@@ -192,22 +205,100 @@ namespace wwhd::gpu
 		return true;
 	}
 
+	// the render thread's waits for the GPU's fence (the frame log's fence_ms: how much of the game's GX2DrawDone
+	// wait is the GPU's, not the command processing's)
+	std::atomic<uint64> s_fenceWaitNs = 0;
+	uint64 TakeFenceWaitNs()
+	{
+		return s_fenceWaitNs.exchange(0);
+	}
+
+	namespace
+	{
+		void WaitFence(VkFence fence)
+		{
+			const auto waitFrom = std::chrono::steady_clock::now();
+			Check(vkWaitForFences(s.device, 1, &fence, VK_TRUE, UINT64_MAX), "vkWaitForFences");
+			s_fenceWaitNs += (uint64)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - waitFrom).count();
+			vkResetFences(s.device, 1, &fence);
+		}
+
+		// the current slot's resources, fresh for recording (its fence already waited for)
+		void BeginSlot()
+		{
+			vkResetCommandBuffer(s.cmd, 0);
+			s.ring.used = s.ringBase;                                 // the GPU is done with this slot's data
+			vkResetDescriptorPool(s.device, s.descriptors, 0);
+			OnSubmitted();
+			VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+			Check(vkBeginCommandBuffer(s.cmd, &bi), "vkBeginCommandBuffer");
+		}
+
+		void Submit()
+		{
+			EndRendering();
+			Check(vkEndCommandBuffer(s.cmd), "vkEndCommandBuffer");
+			VkSubmitInfo si{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
+			si.commandBufferCount = 1;
+			si.pCommandBuffers = &s.cmd;
+			Check(vkQueueSubmit(s.queue, 1, &si, s.fence), "vkQueueSubmit");
+		}
+	}
+
+	// Real time without a window only (a window's present would need a semaphore from the submit: not yet), and
+	// never under the virtual clock: the checks keep the full wait, so they stay exact by construction.
+	// WWHD_LAZY_DRAWDONE=2 (a test) also under the virtual clock: the guest's time is its cycles there, so the
+	// checks then compare the lazy path's pictures with the references (captures byte-identical: it renders the same)
+	bool LazyDrawDone()
+	{
+		static const bool on = [] {
+			const char* e = getenv("WWHD_LAZY_DRAWDONE");
+			const int v = e ? atoi(e) : 0;
+			return !HasWindow() && (v == 2 || v == 3 || (v == 1 && !PPCTimer_isVirtualClock()));
+		}();
+		return on;
+	}
+
 	void SubmitAndWait()
 	{
-		EndRendering();
-		Check(vkEndCommandBuffer(s.cmd), "vkEndCommandBuffer");
-		VkSubmitInfo si{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
-		si.commandBufferCount = 1;
-		si.pCommandBuffers = &s.cmd;
-		Check(vkQueueSubmit(s.queue, 1, &si, s.fence), "vkQueueSubmit");
-		Check(vkWaitForFences(s.device, 1, &s.fence, VK_TRUE, UINT64_MAX), "vkWaitForFences");
-		vkResetFences(s.device, 1, &s.fence);
-		vkResetCommandBuffer(s.cmd, 0);
-		s.ring.used = 0;                                            // the GPU is done with this frame's data
-		vkResetDescriptorPool(s.device, s.descriptors, 0);
-		OnSubmitted();
-		VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-		Check(vkBeginCommandBuffer(s.cmd, &bi), "vkBeginCommandBuffer");
+		Submit();
+		WaitFence(s.fence);
+		const uint32 other = s.slot ^ 1;
+		if (s.pending[other])                                       // the other slot's frame too: the GPU idle
+		{
+			WaitFence(s.fences[other]);
+			s.pending[other] = false;
+		}
+		BeginSlot();
+	}
+
+	// The swap's submit. Off: SubmitAndWait. On: submitted and not waited for; recording goes on in the other slot,
+	// which waits only for its own last frame (submitted a frame earlier), so the swap's timestamp, and with it the
+	// game's GX2DrawDone, no longer waits for the GPU to finish the frame (1.45 of its 1.58 ms a frame on the 13700K).
+	void SubmitFrame()
+	{
+		if (!s.cmds[1])
+			return SubmitAndWait();
+		Submit();
+		s.pending[s.slot] = true;
+		s.slot ^= 1;
+		s.cmd = s.cmds[s.slot], s.fence = s.fences[s.slot], s.descriptors = s.pools[s.slot];
+		s.ringBase = s.slot ? s.ring.size / 2 : 0;
+		s.ringEnd = s.slot ? s.ring.size : s.ring.size / 2;
+		if (s.pending[s.slot])
+		{
+			WaitFence(s.fence);
+			s.pending[s.slot] = false;
+		}
+		// WWHD_LAZY_DRAWDONE=3 (a test): the two slots and the ring's alternating halves, but every frame still waited
+		// for: what differs from =0 is then the layout alone (a draw reading past its ring allocation), not the timing
+		static const bool waitAll = [] { const char* e = getenv("WWHD_LAZY_DRAWDONE"); return e && atoi(e) == 3; }();
+		if (waitAll && s.pending[s.slot ^ 1])
+		{
+			WaitFence(s.fences[s.slot ^ 1]);
+			s.pending[s.slot ^ 1] = false;
+		}
+		BeginSlot();
 	}
 
 	// ---- images ------------------------------------------------------------------------------
@@ -301,15 +392,20 @@ namespace wwhd::gpu
 
 	VkDeviceSize RingAlloc(VkDeviceSize size, VkDeviceSize align)
 	{
-		VkDeviceSize at = (s.ring.used + align - 1) & ~(align - 1);
-		if (at + size + 65536 > s.ring.size)                        // 64 KB spare: uniform buffer descriptors span that much
+		VkDeviceSize at = (std::max(s.ring.used, s.ringBase) + align - 1) & ~(align - 1);
+		if (at + size + 65536 > s.ringEnd)                          // 64 KB spare: uniform buffer descriptors span that much
 		{
 			SubmitAndWait();
-			at = 0;
-			if (size + 65536 > s.ring.size)
+			at = s.ringBase;
+			if (size + 65536 > s.ringEnd - s.ringBase)
 				Fail(fmt::format("{} bytes of draw data don't fit the ring", size));
 		}
 		s.ring.used = at + size;
+		// WWHD_RING_POISON=1 (a test): the 64 KB after each allocation zeroed, so a draw that reads past its data (a
+		// uniform buffer's 64 KB range) reads zeros instead of what an earlier draw left there
+		static const bool poison = [] { const char* e = getenv("WWHD_RING_POISON"); return e && atoi(e) == 1; }();
+		if (poison)
+			memset(s.ring.data + at + size, 0, (size_t)std::min<VkDeviceSize>(65536, s.ringEnd - (at + size)));
 		return at;
 	}
 
@@ -709,7 +805,7 @@ namespace wwhd::gpu
 			WritePPM(s.scan[1], s.frame - 1, "drc");
 		ResetOverwrittenSurfaces();
 		PresentRecord(s.scan[0]);
-		SubmitAndWait();
+		SubmitFrame();
 		PresentQueue();
 		cache::SaveNowAndThen();
 	}

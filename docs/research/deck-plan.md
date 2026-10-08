@@ -46,6 +46,48 @@ thread alone doesn't fit 60 in a fight; at 30 it needs ~9 ms of a 33 ms frame. T
 | 6 | **Texture tracking by write-protection** (`texture-tracking.md`) | ~0.05 ms (the sampled check is ~1.3% of the render thread) | ~0.1-0.2 ms | ~2 days | medium (a writer the audit misses: the verify mode finds it) | the checks' verify mode, 0 missed writers; and it removes real time's up-to-a-second texture lag |
 | 7 | **Link's half step cheaper** (his execute doubles at 60; the one actor worth it) | ~0.1 ms | ~0.2 ms | 1-2 days | medium (his half step's exactness work) | predeploy |
 
+**Item 2, measured (session qa, WIP on ww-4-qa, not on ww-4):** the frame log's new `fence_ms` column (the render
+thread's `vkWaitForFences` in `SubmitAndWait`, src/gpu/vk/renderer.cpp) against `drawdone_ms`, continue and house at
+60: the game waits 1.58 ms a frame in GX2DrawDone, of which **1.45 ms is the render thread waiting for the GPU's
+fence** at the present (`SubmitAndWait` at the flip; the timestamp the game waits for retires after it). So the lazy
+DrawDone is worth up to ~1.5 ms a frame of the game thread's wall time here, more with the Deck's GPU. The change:
+two of each per-frame resource (command buffer, fence, the upload ring's half, the descriptor pool); the present
+submits without waiting and the next frame waits only on the fence of the frame whose resources it reuses; the
+places that read the GPU's results into guest memory (the readbacks at draw.cpp's 1x1 copy, renderer.cpp's surface
+and scan-buffer copies) and that destroy images (renderer.cpp's "then the old image can go") keep `SubmitAndWait`.
+Behind a flag, off by default; the virtual clock (checks) keeps today's wait, so the checks stay exact by
+construction; real time measured with perf-ab and the frame log (`drawdone_ms` should fall by about `fence_ms`).
+About a day plus gates.
+**Item 2, implemented as WIP (ww-4-qa, session qa):** `WWHD_LAZY_DRAWDONE=1` (renderer.cpp `SubmitFrame`,
+`LazyDrawDone`; renderer_internal.h's slots). First real-time run, continue at 60 on the 13700K: the game's
+GX2DrawDone wait 1.55 -> 0.11 ms a frame, the fence wait 1.44 -> 0, the render thread's CPU unchanged (2.88 / 2.87 ms).
+`WWHD_LAZY_DRAWDONE=2` is a test that turns it on under the virtual clock too (the guest's time is its cycles there),
+so the checks compare its pictures with the references. Left before it can be on by default: the checks with =2
+(captures byte-identical), predeploy and an A/B with =1, an audit of `DestroyImage` callers that don't go through
+`SubmitAndWait` (an image the other slot's frame may still use), and the windowed present (a semaphore from the
+swap's submit to `PresentQueue`, then drop the `!HasWindow()`).
+Checks with `WWHD_LAZY_DRAWDONE=2` (the lazy path on in the capture runs, its log line confirms it): traces, command
+streams, sound and diff mode all MATCH, so the guest ran identically; **the captures are not byte-identical**: frames
+360 and 420 of the 15 differ by 1-2 levels in 22 and 50 pixels (boxes 895-907 x 911-922 and 885-897 x 692-707, on
+the title and menu screens; worst PSNR 98.15 dB), the other 13 exact. Renderer-internal, then: one small moving
+element whose blend inputs differ. Suspects, in order: a texture whose guest memory the game writes while the render
+thread uploads it (the fence wait used to hold the render thread back a frame's GPU time, so it now reads earlier: a
+race that exists in real time either way, which the virtual clock's captures now expose); something carried across
+the swap that assumes the GPU finished (a surface copy, `CopyOf`'s `written` check, the ring's slot halves). Next step:
+`WWHD_RENDER_DUMP`/the draw stats on frame 420 with =0 and =2 to find the draw, then its texture's upload time. The
+image-destruction audit found nothing unsafe (surface growth's destroy follows its `SubmitAndWait`, which drains both
+slots; the overlay is windowed only; texture-cache images are never destroyed).
+**Found and fixed:** the difference was the ring's halves, not the timing. `WWHD_LAZY_DRAWDONE=3` (two slots and the
+halves, every frame still waited for) gave the same two frames; zeroing the 64 KB after each allocation in the normal
+renderer (`WWHD_RING_POISON=1`) changed nothing. The halves cut a slot to 128 MB, so heavy title-screen frames hit the
+ring-full submit mid-frame (draw.cpp's `s.ringEnd` check), which splits the frame and moves those pixels. With the
+lazy path the ring is 512 MB (256 MB a slot, as without it): the captures byte-identical with =2. (So a frame that
+fills the ring mid-way changes a few pixels in the normal renderer too: a latent exactness hazard past ~192 MB a frame.)
+Cost: 256 MB more host-visible memory with the flag on.
+**A/B** (perf-ab, the same binary with the flag on and off, alternating; game thread's work a frame at 60): continue
+9.51 -> 8.09 ms (-1.42 ms, -15%), house 8.56 -> 7.14 ms (-1.42 ms, -17%); the DrawDone wait 1.58 -> 0.12 ms; the
+render thread's CPU unchanged (3.12 / 3.14 ms, 3.61 / 3.65 ms); every run with it below every run without.
+
 Done this week (`perf-baseline.md`): ProgramHash's copy check (render thread -7 to -9%), the index cache (bottom,
 ~-0.3 ms on continue), the sampler key (SampleTexture 7.2% -> 5.6%).
 
