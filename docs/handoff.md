@@ -1701,6 +1701,13 @@ it in a window; D21 "Step 2"):**
     or at 5:58; from 17:58 across 18:00 (500 ticks) they never moved, at either rate; idle they equal 30's at every
     tick and the trial (WWHD_60FPS_TRIAL=259) finds nothing. Their open and close weren't seen (made on loading
     the island by day, it seems): converted as they are.
+    What 259 is (session bottom): not shutters but an HD-only cloth decoration, Windfall's bunting line (profile
+    101D0540, size 0x794; its create f_024837F8 loads "Cloth"; ten or eleven along y 790 by day, four with a cloth
+    packet at +0x758). Its execute (f_02483BBC) sets its model's animations to a constant frame and its matrices; its
+    draw draws. The store census's heap counts over Windfall at 60 (WWHD_STATE_CENSUS=2 WWHD_STATE_CENSUS_HEAP=1)
+    show its packets only initialised at creation (dCloth init f_0251CEC8 from 02483D48) and no cloth_move from them
+    (the one cloth_move there is another actor's, from 02117AD4): it never moves. Nothing to step: on plan.json's
+    "still" list.
   - **60 fps cost (session top; the work queue's "perf"; shared: sixty.cpp's journal, the runtime's
     rt_journal_store)**: real time, headless, on the desktop (`~/wwhd-test`; its `perf-top.sh` runs routes
     at 30 then 60 with `WWHD_FRAME_LOG` and each thread's CPU; `perf-ab.sh` alternates two builds at 60;

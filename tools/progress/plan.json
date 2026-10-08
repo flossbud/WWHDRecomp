@@ -455,6 +455,7 @@
     "201": "still where placed (MajyuE,0,0): no state change at 30 over 200 ticks (census, movers.sh)",
     "253": "kept on whole ticks (its rope solver is built into its execute) and drawn half a tick on at 60 (B68: its rope lines and its item's model matrix, sixty.cpp DrawSmoothed; tested in GanonD room 0: the tips and the item move every frame)",
     "256": "never a process: spawns the beaten boss's heart container and returns (Bitem; census-left)",
+    "259": "HD-only cloth decoration (Windfall's bunting line, ten or eleven by day; its create loads 'Cloth'): its execute pins its model's animations to a constant frame and its cloth packet is only initialised (the store census over Windfall at 60: no cloth_move call from it, only its init at creation); its actor bytes equal 30's at every tick and the trial finds nothing (session bottom)",
     "261": "still where placed (Ojhous,0,0,7): no state change at 30 over 200 ticks (census, movers.sh)",
     "263": "still where placed (MajyuE,0,0): no state change at 30 over 200 ticks (census, movers.sh)",
     "264": "still where placed (M2ganon,0,0): no state change at 30 over 200 ticks (census, movers.sh)",
