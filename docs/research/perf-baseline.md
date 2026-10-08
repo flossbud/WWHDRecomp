@@ -117,3 +117,13 @@ Candidates, by what these numbers say:
   ProgramHash 9.1% -> 3.1% of the render thread's samples (continue at 60). `perf-ab.sh` at 60, three alternating
   rounds each (render thread per frame, gameplay): continue 3.20 -> 2.98 ms (-7%), house 3.60 -> 3.28 ms (-9%);
   every run with it below every run without.
+- **Index decoding's cache** (src/gpu/vk/draw.cpp DecodeIndices, session bottom): a draw's decoded indices are kept
+  per (source address, count, index type, quads or quad strip, output width, restart index) with a copy of the
+  source's bytes; a draw whose source still holds them (memcmp) copies the entry's decoded indices into the ring
+  instead of decoding, so the result is the decode's exactly; auto-generated quads (no source) by the key alone;
+  cleared past 64 MB; `WWHD_INDEXCACHE=0` off, `WWHD_RENDER_STATS=N` counts reuses. On house 3,058,042 of 3,058,580
+  index decodes reused by frame 2,400 (538 decoded). Profile, continue at 60: `Decode<uint>` + `Decode<ushort>` 5.9%
+  self -> gone; `DecodeIndices` 1.0% self, 2.9% inclusive (its memcmp and copy). `perf-ab.sh` at 60, three
+  alternating rounds, the same binary with `WWHD_INDEXCACHE=0` against on (render thread per frame, median of each
+  run): continue 3.40 / 3.18 / 3.95 -> 2.90 / 3.33 / 2.91 ms, house 3.22 / 3.25 / 3.30 -> 3.30 / 3.12 / 3.22 ms:
+  within the runs' noise on house, about -0.3 ms on continue. Exact: checks' captures byte-identical, predeploy ok.

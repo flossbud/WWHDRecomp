@@ -912,7 +912,83 @@ namespace wwhd::gpu
 			}
 		}
 
+		// Decoded index buffers, reused (index decoding was 6% of the render thread: docs/research/perf-baseline.md).
+		// An entry is keyed by the draw's index parameters (the source's address, count, type, quads or quad strip, the
+		// output's width, the restart index) and keeps a copy of the source's bytes: a draw whose source still holds
+		// them (memcmp, vectorised) takes the entry's decoded indices, count and max, so the result is the decode's
+		// exactly; any change decodes again. Auto-generated quads have no source: their key alone decides. Cleared past
+		// 64 MB. WWHD_INDEXCACHE=0 off.
+		struct IndexKey
+		{
+			MPTR addr; uint32 count, restart; uint8 type, quads, strip, u32;
+			bool operator==(const IndexKey&) const = default;
+		};
+		struct IndexKeyHash
+		{
+			size_t operator()(const IndexKey& k) const
+			{
+				return std::hash<uint64>()(((uint64)k.addr << 32 | k.count) ^ ((uint64)k.restart << 8) ^
+					((uint64)k.type << 4 | k.quads << 2 | k.strip << 1 | k.u32) * 0x9E3779B97F4A7C15ull);
+			}
+		};
+		struct IndexEntry { std::vector<uint8> src, out; uint32 count = 0, max = 0; };
+		std::unordered_map<IndexKey, IndexEntry, IndexKeyHash> s_indexCache;
+		size_t s_indexCacheBytes = 0;
+		uint64 s_indexHits = 0, s_indexMisses = 0;            // WWHD_RENDER_STATS's line
+		bool IndexCacheOn()
+		{
+			static const bool on = [] { const char* e = getenv("WWHD_INDEXCACHE"); return !(e && atoi(e) == 0); }();
+			return on;
+		}
+
+		Indices DecodeIndicesUncached(MPTR physIndices, uint32 count, Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE prim);
+
 		Indices DecodeIndices(MPTR physIndices, uint32 count, Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE prim)
+		{
+			using P = Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE;
+			using I = Latte::LATTE_VGT_DMA_INDEX_TYPE::E_INDEX_TYPE;
+			const bool quads = prim == P::QUADS, strip = prim == P::QUAD_STRIP;
+			const I type = physIndices ? LatteGPUState.contextNew.VGT_DMA_INDEX_TYPE.get_INDEX_TYPE() : I::AUTO;
+			if (!IndexCacheOn() || (type == I::AUTO && !quads && !strip))
+				return DecodeIndicesUncached(physIndices, count, prim);
+			const bool u32 = type == I::U32_BE || type == I::U32_LE || (type == I::AUTO && count > 0xFFFF);
+			const uint32 elem = u32 ? 4 : 2;
+			const uint32 restart = LatteGPUState.contextNew.VGT_MULTI_PRIM_IB_RESET_INDX.get_RESTART_INDEX();
+			const IndexKey key{ type == I::AUTO ? 0 : physIndices, count, restart, (uint8)type, quads, strip, u32 };
+			const uint8* src = type == I::AUTO ? nullptr : memory_getPointerFromVirtualOffset(physIndices);
+			const size_t srcBytes = src ? (size_t)count * elem : 0;
+			auto it = s_indexCache.find(key);
+			if (it != s_indexCache.end() && (!src || memcmp(it->second.src.data(), src, srcBytes) == 0))
+			{
+				const IndexEntry& e = it->second;
+				Indices out;
+				out.offset = RingAlloc((VkDeviceSize)e.out.size() + 4, 4);
+				memcpy(s.ring.data + out.offset, e.out.data(), e.out.size());
+				out.count = e.count;
+				out.max = e.max;
+				out.type = u32 ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
+				s_indexHits++;
+				return out;
+			}
+			s_indexMisses++;
+			Indices out = DecodeIndicesUncached(physIndices, count, prim);
+			if (s_indexCacheBytes > (64u << 20))
+			{
+				s_indexCache.clear();
+				s_indexCacheBytes = 0;
+				it = s_indexCache.end();
+			}
+			IndexEntry& e = it != s_indexCache.end() ? it->second : s_indexCache[key];
+			s_indexCacheBytes -= e.src.size() + e.out.size();
+			e.src.assign(src, src + srcBytes);
+			e.out.assign(s.ring.data + out.offset, s.ring.data + out.offset + (size_t)out.count * elem);
+			e.count = out.count;
+			e.max = out.max;
+			s_indexCacheBytes += e.src.size() + e.out.size();
+			return out;
+		}
+
+		Indices DecodeIndicesUncached(MPTR physIndices, uint32 count, Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE prim)
 		{
 			using P = Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE;
 			using I = Latte::LATTE_VGT_DMA_INDEX_TYPE::E_INDEX_TYPE;
@@ -1331,8 +1407,8 @@ namespace wwhd::gpu
 	void DrawStats(uint32 frame)
 	{
 		if (s_statsEvery && frame % s_statsEvery == 0)
-			Log(fmt::format("frame {}: {} draws, {} skipped; {} shaders, {} pipelines", frame, s_draws, s_skipped, s_shaders.size(),
-				s_pipelines.size()));
+			Log(fmt::format("frame {}: {} draws, {} skipped; {} shaders, {} pipelines; decoded indices {} reused, {} decoded",
+				frame, s_draws, s_skipped, s_shaders.size(), s_pipelines.size(), s_indexHits, s_indexMisses));
 	}
 
 	// The first start without hitches (D20): everything the shader list (shader_list.cpp) has that the
