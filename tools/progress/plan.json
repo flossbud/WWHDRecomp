@@ -330,27 +330,23 @@
     "460": "ice block",
     "64": "table"
   },
-  "queue_note": "Round 13 (2026-10-08): the actors are converted, and the sessions fix the known bugs and drifts until 95% of the week (88% now). This round: the knockback's direction, the Stalfos, Armos, Bubble, Bokoblin, Floormaster and Magtail fights, enemies into water, Windfall's auction, Gohma's tail scene, pots. In the build on the owner's PC: everything up to e102375. After the wrap-up: performance for the Steam Deck and Android (B75), the rival's lessons, platforms (cloud sessions on the public GitHub repo), then uncapped.",
+  "queue_note": "Round 13 done (2026-10-08, the 95% stop): every actor is converted to true 60 and checked against 30; this round fixed the knockback's direction, the Stalfos, Armos, Bubble, Bokoblin, Floormaster and Magtail fights, enemies into water, Windfall's auction, Gohma's tail scene, pots, the title's fade (B74) and four renderer speedups. On the owner's PC: ww-4 9385d6d. Next, after the weekly reset: performance for the Steam Deck and Android, the rival's lessons, platforms, then uncapped.",
   "queue": [
     {
-      "id": "top-b74",
-      "name": "Now (top): B74, the title screen's fade at 60: the fade steps every frame instead of every tick (out in 0.45 s, 30's 0.9 s) and the black between waits 0.8 s (30's 0.4 s); finding the fader, then the boat's flicker. Then Windfall's shutters (259) opening and closing"
+      "id": "next-deck",
+      "name": "Next phase 1: performance for the Steam Deck and Android (B75), following docs/research/deck-plan.md: quick tests on the Deck (clocks, 30 fps, a profile), then its items in order. Done so far: the sound's 60 fps cost (8% of the game thread), the half tick's journal (4.5 -> 2.6%), four renderer caches, and the lazy DrawDone (-15% of the game thread at 60; off by default, try play-60-lazy.sh)"
     },
     {
-      "id": "bottom-pots",
-      "name": "Now (bottom): a turn while carrying a pot ended half a tick early (fixed, merging); next the lift's hand-over to carrying, a tick late (a play-once animation's end)"
+      "id": "next-rival",
+      "name": "Next phase 2: the rival recomp's lessons (docs/research/rival-study.md): texture change tracking by write-protection, a buffer cache, widescreen and resolution scaling, save states"
     },
     {
-      "id": "qa-perf",
-      "name": "Now (qa): the decision hold for more approach kinds (merging, off unless listed); then a performance baseline for the Steam Deck (B75): CPU per thread at 60, the renderer's cost per draw, what the half steps cost"
+      "id": "next-cloud",
+      "name": "Next phase 3: platforms (Linux arm64, Windows, Android) and CI through cloud sessions on github.com/flossbud/WWHDRecomp (docs/cloud-handoff.md)"
     },
     {
-      "id": "fights",
-      "name": "Enemy fights against 30 (fixed random, Link's farthest from 30's): fixed this round: Stalfos 760 -> 50, Armos 271 -> 28, Bubble 54 -> 4, the Bokoblin itself 151 -> 30, the Floormaster's hand 20 -> 1, the Magtail's rolls on 30's ticks, enemy knockback's direction (TICKVEC). Left, recorded: Floormaster 95 (a combo's parry), Kargaroc 89 (its swoops), Poe 70 (a held version mixed), Moblin (a fast knockback at a wall), the Stalfos's later blow (its club's pose in the spin)"
-    },
-    {
-      "id": "wrapup",
-      "name": "Next: a deploy with B74 and the pots fix; everyone wraps up at 95% of the week with handoff notes; then the local history moves to the rewritten one (flossbud)"
+      "id": "next-uncapped",
+      "name": "Next phase 4: uncapped frame rate on the half steps (D21 step 4), when the owner says"
     }
   ],
   "later": [
@@ -431,7 +427,12 @@
     "warns",
     "modehold",
     "water-night",
-    "gohma-rock"
+    "gohma-rock",
+    "top-b74",
+    "bottom-pots",
+    "qa-perf",
+    "fights",
+    "wrapup"
   ],
   "still": {
     "20": "still where placed (Abship,0,5): no state change at 30 over 200 ticks (census, movers.sh)",

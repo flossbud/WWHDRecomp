@@ -1,4 +1,22 @@
-# Handoff: WWHD recomp, state as of 2026-10-03 (WW-4 in progress)
+# Handoff: WWHD recomp, state as of 2026-10-08 (WW-4: true 60 done for every actor; next: performance)
+
+**Where it stands (2026-10-08, main session, at the 95% weekly stop).** Every actor type is converted to true 60
+and checked tick by tick against 30. The bugs and drifts the owner and the sessions found are fixed or recorded
+(known issues on the progress page). The build on the owner's PC is ww-4 9385d6d; `~/wwhd-play/play-60-lazy.sh`
+there tries the lazy GX2DrawDone (off by default). **The next phase, in the owner's order:**
+1. **Performance for the Steam Deck and Android (B75):** `docs/research/deck-plan.md` is the plan (quick tests on
+   the Deck first, then its items in order). Done already: the sound's half-tick journal (8% of the game thread at
+   60), the journal itself (4.5 -> 2.6%), the renderer's ProgramHash, index decode, sampler key and bind caches,
+   the lazy DrawDone (off by default: -15% game thread at 60). Baseline numbers: `docs/research/perf-baseline.md`.
+2. **The rival project's lessons:** `docs/research/rival-study.md` (ZeldaWWHDRecomp: interpolation, not true 60;
+   ahead on platforms and polish). Texture change tracking: `docs/research/texture-tracking.md`.
+3. **Platforms** through cloud sessions on the public mirror github.com/flossbud/WWHDRecomp
+   (`docs/cloud-handoff.md`; their PRs are merged here after the real checks).
+4. **Uncapped**, built on the half steps (D21 step 4), when the owner says.
+**Identity:** commit as `flossbud` <224492734+flossbud@users.noreply.github.com> (the repo's default); the owner's
+real name never goes into git. The history was rewritten to that on 2026-10-08; the desktop's login is in the
+gitignored `tools/worker/desktop.env`.
+
 
 Read this first, then `CLAUDE.md`, `docs/recompiler-design.md` (decisions D1–D21, milestones,
 status paragraphs) and the READMEs in `src/`, `tools/reference/`, `tools/recomp/`, `tools/worker/`.
