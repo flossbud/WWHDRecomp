@@ -153,6 +153,36 @@ Each step: `WWHD_RENDER_STATS` counts of hits, captures byte-identical on and of
   knowing the guest's bytes are unchanged, and a compare costs about what the copy does: not worth it without write
   tracking (item 6). A pipeline lookaside isn't worth it either (`GetPipeline` 1.4%).
 
+**Item 4, designed, built and measured: no gain, parked (session cloud3, WIP on branch ww-4-cloud3, not on ww-4).**
+- *Why a static actor's whole-frame draw can't simply be replayed.* Every process draws on every frame (the game
+  rebuilds its draw lists each frame: `f_025DE2CC`'s note), and most of a model's draw depends on the camera, which
+  moves on half frames: fopAc_Draw's cull check (`f_025D6CE8`), the entry into the draw lists (sorted by view
+  depth) and J3DModel::viewCalc (`f_027F55FC`, via `f_025E2BF4`, the HD port's mDoExt_modelUpdateDL tail). In this
+  port viewCalc fills, per model and per call, two 0x23C-byte blocks with the view matrix and the eight lights in
+  view space (`f_027F53CC`/`f_027FDA54`, from j3dSys's view at 0x104B45F8; the model's +0x70 is 2 for every model,
+  +0x60 the blocks) and moves a double buffer on (`f_027FB678`). So a replay would have to redo all of that anyway;
+  a recorded call list would also have to carry the context draws set around their models (j3dSys's draw buffers,
+  HD globals such as the palms' 0x104B4634/38, material animations entered on shared model data).
+- *What can be reused:* J3DModel::calc (`f_027F4D5C`: joints' world matrices, the material calc), from the model's
+  base scale and matrix (+0xBC to +0xF8), its animations and its joint callbacks: camera-free. Built:
+  `WWHD_60FPS_STATICDRAW=1` skips a half tick's calc of a model calculated once in the same process's whole-tick
+  draw when its base is unchanged, Link doesn't hold it and no store since the half tick began changed a byte of
+  its process or heap (the actor's heap is +0xF4, a JKRSolidHeap whose block is [heap, heap+0x5C); the stores come
+  from the half tick's page table, with a watch bit; the draw lists' links, `LiveStore`, aside). `=2` runs each
+  calc it would skip and compares what it changed (the heap whole: the calc first clears what it writes with an
+  imported memset the store hook doesn't see).
+- *Correctness:* tour3, 12,379 would-be skips checked: all exact but type 407's (unnamed, drawn like Obj_Lpalm):
+  its joints sway from something outside its own state. (Before the value compare, every converted actor counted
+  as changed: a half step stores its state every frame, mostly the same values.)
+- *Gain:* continue at 60 (desktop, real time, WWHD_PROFILE, one run each): 22% of the half ticks' calcs in draws
+  skipped (21,756 of 100,231: most actors change every half tick), J3DModel::calc 725 -> 709 samples of ~22,300 on
+  the game thread (noise), the watch +42. The static models are the cheap ones (few joints). The other
+  camera-free parts of a static actor's draw (settingTevStruct `f_025626A4`, setLightTevColorType `f_02562F5C`:
+  ~0.9% of the game thread at 60 for every actor's half-frame draw together) would gain less than the watch costs.
+- *A lead outside item 4:* viewCalc fills both of a model's blocks with the same view (~1% of the game thread at
+  60, every frame). If the second is the GamePad's (not shown in real time: WW-3 item 10), filling it only when
+  something reads it would halve that; not checked yet.
+
 ## Android
 
 The same items apply (the code is C++; the recompiled program builds for ARM64 like the rest), plus what the rival
