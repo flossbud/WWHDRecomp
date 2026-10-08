@@ -147,6 +147,10 @@ Problems, in order:
 
 Fixes 1 and 2 are a few lines each; neither can change a capture (the virtual clock never takes the lazy path,
 and =2's captures would show it if it did).
+**Done on ww-4-cloud2 (not compiled here, no Cemu in the sandbox; not yet gated):** 1 (`WaitPending()` before the overlay's `DestroyImage`), 2 (the global
+barrier in `BeginSlot` when the lazy path is on), and a sixth the other review found: the readbacks (`WritePPM`,
+`DumpSurfaces`, the render trace's pixel) had no TRANSFER-to-HOST barrier before the host read them after the fence
+(`HostReadBarrier`; it applies in both modes, and the captures (PSNR inf) must show it changes nothing).
 
 Done this week (`perf-baseline.md`): ProgramHash's copy check (render thread -7 to -9%), the index cache (bottom,
 ~-0.3 ms on continue), the sampler key (SampleTexture 7.2% -> 5.6%).

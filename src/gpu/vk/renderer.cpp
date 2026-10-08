@@ -234,6 +234,19 @@ namespace wwhd::gpu
 			VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 			Check(vkBeginCommandBuffer(s.cmd, &bi), "vkBeginCommandBuffer");
 			s.bound = {};
+			// the lazy path: the last frame's submit wasn't waited for, so its work may still run on the GPU, and
+			// barriers are recorded only where an image changes layout. An image written at the end of one frame and
+			// again at the start of the next in the same layout would be a hazard with nothing between: this orders
+			// everything here after everything submitted before, as the fence wait did (deck-plan item 2's review,
+			// problem 2). The CPU no longer waits; only the GPU keeps the order. Without the lazy path, nothing.
+			if (s.cmds[1])
+			{
+				VkMemoryBarrier b{ VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+				b.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+				b.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+				vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 1, &b, 0,
+					nullptr, 0, nullptr);
+			}
 		}
 
 		void Submit(VkSemaphore signal = VK_NULL_HANDLE)
