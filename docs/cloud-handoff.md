@@ -1,10 +1,63 @@
-# Cloud sessions: handoff (2026-10-07, performance pointers updated 2026-10-08)
+# Cloud sessions: handoff (2026-10-07; tailnet mode and performance pointers 2026-10-08)
 
 This is for Claude Code sessions that run in the cloud (claude.ai/code) on the GitHub mirror
 `flossbud/WWHDRecomp`. Local sessions work on the owner's machines, which have the game; cloud
 sessions don't. Read this first, then `CLAUDE.md`, `README.md`, `docs/handoff.md` ("What the project
 is", "Hard rules", "Known facts and gotchas") and `docs/recompiler-design.md` (D1, D2, D6, D9, D11,
 D12, D18, D19, D20, D21).
+
+## Tailnet mode (from 2026-10-08): the cloud session is a worker session
+
+This section overrides the rest of the file where they differ: the owner gave the cloud session access to the worker,
+the worker that has the game.
+
+- **Joining the tailnet.** At the start of every session, run `bash tools/cloud/tailnet-setup.sh`.
+  - The cloud environment's variables carry the keys and the logins; the script's header lists them.
+  - It joins the owner's tailnet in userspace and writes `~/.ssh/config` for `worker` and the PC.
+  - It sets up this checkout as session `cloud`: worker directory `/wwhd/WWHDRecomp-cloud`, `.session` = cloud, and the
+    `worker` remote.
+  - Set `WWHD_ON=worker` if the environment hasn't.
+  - From then on, `tools/worker/sync.sh`, `tools/worker/w` and `tools/worker/job` work exactly as for a local session.
+    Read `docs/handoff.md` ("Parallel sessions", "Infrastructure", "Hard rules").
+- **What it can reach.** Only the worker's SSH, plus the owner's PC's SSH for deploys. On the PC, the key runs nothing but a
+  receiver: `status` (is the game running), and writes of the deploy files into `~/wwhd-play`.
+  - Don't try to reach anything else on the tailnet: the rules block it, and it isn't yours to probe.
+  - The login names are the owner's own account names. They live in the environment variables and in
+    `tools/worker/desktop.env` (gitignored), never in git.
+- **Game data.** The game, its traces, dumps, captures and the recompiled output stay on the worker. That's the same rule as
+  for local sessions: don't copy them into this sandbox, into a PR, or into a message. Small numbers and verdicts are fine
+  (a position error, MATCHES, an md5).
+  - `/wwhd/data/ghidra-out` and decompiler output are the game's code in another form: read them on the worker
+    (`tools/worker/w`), and quote only what a commit needs as evidence.
+- **Your goal (the owner's): the game at full speed at 60 on the worker.** Its 6-core CPU is power-capped to 45-60 W, a
+  stand-in for the Steam Deck's CPU: if the game holds 60 there, the Deck's CPU side will.
+  - Its Intel Intel iGPU is weaker than the Deck's GPU, so treat the render thread's numbers there as pessimistic.
+  - Work through `docs/research/deck-plan.md` in order, items that need the game included.
+  - Measure on the worker with alternating A/B rounds of the same binary, flag on and off
+    (`tools/sixty/perf/perf-ab.sh` is the desktop version: your first step is a the worker variant that runs in its worker container on the Intel GPU, headless; see its README and `perf-baseline.md` for how qa measured). Report relative gains: the worker is
+    noisy, so use more rounds rather than fewer.
+  - The main session confirms absolute numbers on the owner's PC later.
+- **Landing a change.** You merge into `ww-4` yourself, with the full gates a local session uses: checks all MATCH
+  (traces, streams, sound, diff, captures PSNR inf), regress reviewed line by line, predeploy 0 FAIL, plus
+  `predeploy.sh gohmatail gohmarock`.
+  - Speed work must leave 30 bit-identical and the 60 results unchanged, unless a change is meant to move them and says
+    so.
+  - Push to `worker` first: `git push worker HEAD:ww-4`, the source of truth. Then push the same commit to `origin`
+    (GitHub); the histories are identical.
+  - A refused push means someone landed first: rebase and re-gate (code) or just rebase (docs).
+  - Local sessions may be working too. Before a long gate, claim the item: `tools/progress/publish.sh claim ID "what"`
+    from this checkout. Tell them in `docs/handoff.md` when you land something that touches shared code.
+- **Deploying to the owner's PC.** Only with the owner's OK, asked each time in this chat; say what's in the build.
+  - Then run `WWHD_DEPLOY_KEY=~/.ssh/wwhd_cloud_deploy tools/play/deploy-cloud.sh "$WWHD_DESKTOP_SSH"` after a full
+    build on the worker.
+  - It refuses while the game is running. If it does, wait and ask again.
+  - Mark the bugs it fixes: `publish.sh bug fixed ID "fixed: deployed ww-4 SHA"`.
+- **Identity.** Commit as flossbud (the setup sets it), and never write the owner's real name or account names anywhere.
+- **Reporting.** The owner reads on a phone.
+  - At each landed item, say in a few lines what changed, the measured gain, the gates, and what's next.
+  - Add your entries to `docs/handoff.md` (a "Session cloud" paragraph, like the local sessions' wrap-ups).
+  - You can't see the credit balance. When the owner says to stop, finish or park the step in hand: commit WIP on a
+    `ww-4-cloud` branch on the worker, with notes.
 
 ## Where things stand
 
