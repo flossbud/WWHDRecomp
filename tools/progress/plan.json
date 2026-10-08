@@ -153,8 +153,8 @@
       "detail": "Checked tick by tick at 30 and 60. Fixed: a thrown pot sank too fast in water (now within 0.2 units), sidling ran up to 2.3 units ahead (now on 30's ticks), sidling round a corner was stuck at 60 (now turns on 30's tick), a turn while carrying ended half a tick early (now on 30's tick), and lifting's hand-over to carrying came a tick late (fixed by Link's exact animation frame). Lifting, carrying, turning, walking and throwing a pot, and a ladder up and down, now match 30"
     },
     {
-      "title": "Windfall at night",
-      "detail": "The lights converted (night via WWHD_DEBUG_TIME=905:345). The auction's bidders and the auction (361, 382) are 30's at every tick by night but for IDs given at their creation (session bottom); the bidding ran twice as fast at 60 (each bidder's interest, the pauses and waits counted per call) and is now once a tick: the six bids and the choice on 30's ticks, the bid's call a tick early left (session top). Not tested yet: the shutters (259) opening and closing"
+      "title": "Windfall at night: the auction fixed",
+      "detail": "The lights converted (night via WWHD_DEBUG_TIME=905:345). The auction's bidders and the auction (361, 382) are 30's at every tick by night but for IDs given at their creation (session bottom); the bidding ran twice as fast at 60 and is now once a tick: the six bids and the choice on 30's ticks, the bid's call a tick early left (session top). Type 259, thought to be shutters, is Windfall's HD-only bunting line: its cloth never moves and it matches 30 every tick (session bottom)"
     },
     {
       "title": "Enemies falling into water",
