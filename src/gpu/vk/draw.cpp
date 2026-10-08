@@ -1730,17 +1730,34 @@ namespace wwhd::gpu
 		VkPipeline pipeline = GetPipeline(vs, ps, fetch, layout, t, prim);
 
 		BeginRendering(t);
-		vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+		// unchanged binds since the last draw in this command buffer are skipped (renderer_internal.h's Bound)
+		static const bool bindCache = [] { const char* e = getenv("WWHD_BINDCACHE"); return !(e && atoi(e) == 0); }();
+		auto& b = s.bound;
+		const bool known = bindCache && b.valid;
+		if (!known || b.pipeline != pipeline)
+			vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 		vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 2, sets, (uint32)dynamicOffsets.size(), dynamicOffsets.data());
 		for (auto& [binding, off] : vbufs)
 			vkCmdBindVertexBuffers(s.cmd, binding, 1, &s.ring.buffer, &off);
 		VkViewport viewport{ vpX, vpY + vpH, vpW, -vpH, std::clamp(nearZ, 0.0f, 1.0f), std::clamp(farZ, 0.0f, 1.0f) };
-		vkCmdSetViewport(s.cmd, 0, 1, &viewport);
+		if (!known || memcmp(&b.viewport, &viewport, sizeof(viewport)) != 0)
+			vkCmdSetViewport(s.cmd, 0, 1, &viewport);
 		VkRect2D scissor{ { (sint32)scissorX, (sint32)scissorY }, { scissorR - std::min(scissorX, scissorR), scissorB - std::min(scissorY, scissorB) } };
-		vkCmdSetScissor(s.cmd, 0, 1, &scissor);
-		vkCmdSetBlendConstants(s.cmd, (const float*)(regs + Latte::REGADDR::CB_BLEND_RED));
-		vkCmdSetDepthBias(s.cmd, r.PA_SU_POLY_OFFSET_FRONT_OFFSET.get_OFFSET(), r.PA_SU_POLY_OFFSET_CLAMP.get_CLAMP(),
-			r.PA_SU_POLY_OFFSET_FRONT_SCALE.get_SCALE() / 16.0f);
+		if (!known || memcmp(&b.scissor, &scissor, sizeof(scissor)) != 0)
+			vkCmdSetScissor(s.cmd, 0, 1, &scissor);
+		const float* blend = (const float*)(regs + Latte::REGADDR::CB_BLEND_RED);
+		if (!known || memcmp(b.blend, blend, sizeof(b.blend)) != 0)
+			vkCmdSetBlendConstants(s.cmd, blend);
+		const float bias[3] = { r.PA_SU_POLY_OFFSET_FRONT_OFFSET.get_OFFSET(), r.PA_SU_POLY_OFFSET_CLAMP.get_CLAMP(),
+			r.PA_SU_POLY_OFFSET_FRONT_SCALE.get_SCALE() / 16.0f };
+		if (!known || memcmp(b.bias, bias, sizeof(bias)) != 0)
+			vkCmdSetDepthBias(s.cmd, bias[0], bias[1], bias[2]);
+		b.valid = true;
+		b.pipeline = pipeline;
+		b.viewport = viewport;
+		b.scissor = scissor;
+		memcpy(b.blend, blend, sizeof(b.blend));
+		memcpy(b.bias, bias, sizeof(bias));
 		if (idx.type != VK_INDEX_TYPE_NONE_KHR)
 		{
 			vkCmdBindIndexBuffer(s.cmd, s.ring.buffer, idx.offset, idx.type);

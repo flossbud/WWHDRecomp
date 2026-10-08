@@ -55,6 +55,18 @@ namespace wwhd::gpu
 		VkCommandBuffer cmd = VK_NULL_HANDLE;
 		VkFence fence = VK_NULL_HANDLE;
 		VkDescriptorPool descriptors = VK_NULL_HANDLE;           // reset after every submit
+		// the draw path's last binds in the command buffer being recorded (draw.cpp: an unchanged pipeline, viewport,
+		// scissor, blend constants or depth bias isn't set again; every pipeline has those four dynamic, so they
+		// outlive a pipeline change); cleared when a command buffer begins. WWHD_BINDCACHE=0: off
+		struct Bound
+		{
+			bool valid = false;
+			VkPipeline pipeline = VK_NULL_HANDLE;
+			VkViewport viewport{};
+			VkRect2D scissor{};
+			float blend[4]{};
+			float bias[3]{};
+		} bound;
 		Ring ring;
 		// the lazy GX2DrawDone (WWHD_LAZY_DRAWDONE=1; real time; docs/research/deck-plan.md
 		// item 2): two of each per-frame resource, the frame's submit (SubmitFrame) not waiting for the GPU. Slot 1's

@@ -149,6 +149,7 @@ namespace wwhd::gpu
 		Check(vkCreateFence(s.device, &fci, nullptr, &s.fence), "vkCreateFence");
 		VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 		Check(vkBeginCommandBuffer(s.cmd, &bi), "vkBeginCommandBuffer");
+		s.bound = {};
 
 		// per-frame data: one host-visible buffer for uniforms, vertices and indices
 		s.ring.size = LazyDrawDone() ? 512ull << 20 : 256ull << 20;   // the lazy path: a whole ring's 256 MB per slot
@@ -232,6 +233,7 @@ namespace wwhd::gpu
 			OnSubmitted();
 			VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 			Check(vkBeginCommandBuffer(s.cmd, &bi), "vkBeginCommandBuffer");
+			s.bound = {};
 		}
 
 		void Submit(VkSemaphore signal = VK_NULL_HANDLE)

@@ -105,6 +105,34 @@ enough for 60 on the save route, likely not in the heaviest fights (~19 ms estim
   processes and the draw run again, not the frame's whole body: a design of its own, the largest lever) or a
   30 Hz game with interpolated presentation for weak CPUs. Decide after the quick tests' numbers.
 
+**Item 3, a first step (WIP on ww-4-top, session top, parked at the 95% wrap-up):** the draw path no longer sets an
+unchanged pipeline, viewport, scissor, blend constants or depth bias again within a command buffer
+(renderer_internal.h's `Bound`, draw.cpp; cleared at each vkBeginCommandBuffer; every pipeline has those four
+states dynamic, draw.cpp's one pipeline creation, so they outlive a pipeline change). `WWHD_BINDCACHE=0` turns it
+off. Exact: route tour3's captures at 13 frames (f950-2100) byte-identical with it on and off. Not yet measured
+(`perf-ab.sh` on the desktop, real time) and not on ww-4. Left for item 3: the vertex buffers and descriptor sets
+change every draw (fresh ring offsets and sets), so the bigger part is `Descriptors`/`Textures` themselves (a set
+reused when its images and uniform data equal the last one's) and a pipeline lookaside before `GetPipeline`.
+
+**Item 3, the next steps' design (session top):** two kinds of per-draw work repeat what the last draw did.
+- *Descriptor sets.* `Descriptors` (draw.cpp) allocates and writes a set per stage per draw, but its contents
+  depend only on the shader's layout (`sh.layout`), the uniform vars' range (`offset_endOfBlock`) and the images
+  (`Textures`: sampler, view, layout per binding): every buffer descriptor points at the ring at offset 0 and the
+  draw's place in the ring goes in the dynamic offsets. So a set can be reused while the descriptor pool lives (it
+  is reset at every submit, `BeginSlot`/`SubmitAndWait`): a map from (layout, vars range, the images' handles) to
+  the set, cleared with the pool; a hit skips `vkAllocateDescriptorSets` and `vkUpdateDescriptorSets` (and its
+  counts for `Reserve`). Exact: the set's contents are the same handles. Watch: an image view or sampler destroyed
+  and its handle reused within a submit (the map must be cleared where views or samplers are destroyed, or keyed on
+  their creation number).
+- *Uniform blocks.* `UniformBlock` takes 64 KB of the ring per block per draw, clears it and copies the block's
+  guest bytes (up to the shader's size). When a block's source (address, size) and bytes equal the last copy's in
+  this submit (a memcmp against a host copy, as the index cache does), the last ring offset can be returned: the
+  draw reads the same bytes at the same place. Exact by construction; it also takes far less of the ring, so fewer
+  mid-frame `SubmitAndWait`s. `UniformVars` (the registers' constants, small) the same way.
+- *A pipeline lookaside.* Before `GetPipeline`'s full key, the last draw's key and pipeline (most draws repeat the
+  state of the one before).
+Each step: `WWHD_RENDER_STATS` counts of hits, captures byte-identical on and off, `perf-ab.sh` (render thread).
+
 ## Android
 
 The same items apply (the code is C++; the recompiled program builds for ARM64 like the rest), plus what the rival

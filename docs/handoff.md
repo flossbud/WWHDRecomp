@@ -1741,8 +1741,10 @@ it in a window; D21 "Step 2"):**
     (f_0203593C -> f_02728A74, held by a countdown +0x448) steps once a frame. Found by leaving calls out on half
     ticks (a local probe: skipping f_0203593C's first call skipped the whole calc and gave 30's pacing; then
     f_02728A74 alone). Now (sixty.cpp, `WWHD_60FPS_FADE=0` off) at 60 its length is doubled for the call and its
-    delay counts whole ticks, the hold is `whole` (tick_rules.txt), and the two calcFade-form faders get half a
-    tick's step: the phases 50/24/51 swaps against 30's 25/12/26 frames, smooth. The owner's boat: the logo's King of
+    delay counts whole ticks, and its hold (+0x448) too (f_02728A74's override), while its call runs on consecutive
+    swaps: the phases 50/24/51 swaps against 30's 25/12/26 frames, smooth. (B74 first also halved the two
+    calcFade-form faders: the warp pots' fade is f_0252F5A0's, called once a tick in the warp, so route warppot's
+    transition took 26 ticks longer, farthest 46.8 -> 484.3; bottom's bisect; undone, 9385d6d.) The owner's boat: the logo's King of
     Red Lions faded out half way through the fade at 60 (at 30 it is still there when the screen goes black): the
     title actor's exit count (+0x278, its execute's mode 3, f_024B8670) and its draw's counts (f_024B7CFC) ran a call
     a step (bottom's trial stopped at the A press; read the trial without --target: the actor's state is a heap
