@@ -344,6 +344,17 @@ room change: take each by its keys). Found from the owner's 2026-10-06 recording
   the same, en-tn's end 0.4 -> 0.3 (its farthest 164 -> 181: those runs part at the blow, 2 ticks early there from
   the live random stream). Each new type measured for the mode hold gets its At check too: the atlog at both rates,
   the attack's center at 60's resolution against 30's.
+- **en-am, the Armos (AM2 203; session qa; route en-am, RNDFIX 0.7; main's fight survey's second, Link 271 units
+  at most).** Three causes. (1) Its hop is a chain of one-call set-ups (mode 4 on the ground -> mode 3 -> the jump):
+  on the mode hold's list (mAction/mMode +0x3E8/+0x3E9, one s16). (2) Its landing: it acts (reads mAcch's ground hit),
+  then moves and checks (dBgS_Acch::CrrPos f_024F08A8, flags at +0x28, 0x20 the ground): at 30 the tick's move lands
+  it and the next tick jumps; at 60 the whole step's move landed it and the half step jumped at once, each hop half
+  a tick short (4.5 ticks to 5). GroundLate (sixty.cpp, per type: 203): a landing made in a stepping process's whole
+  step is hidden from its half step's calls (its own move sets it again); a ground left isn't (that re-ran the jump).
+  The four Armos then within 0.3 units of 30's through f1280. (3) Its needle (mNeedleCyl +0x7EC, SetC at mNeedlePos,
+  a joint's place from the last calc) half a tick ahead at each resolution (the Darknut's pattern; SetC, not
+  MoveCAt): its SetC whole only (enemies_qa.txt), and Link's knockback from it on 30's heading. Link's farthest 271 ->
+  27.7, the Armos within ~12 to the end.
 - **B72, the Stalfos's blow (session qa; route en-st, RNDFIX 0.7).** Four causes. (1) Its fight starts by a chain
   of one-call set-ups, m1DD0 (HD +0x2018, s8: 1, then 10 in the joint callback once it holds its club), then
   mActionState (+0x3E2) and mFightBehavior (+0x3E4, s8): each half a tick early, its spin a tick early. On the mode

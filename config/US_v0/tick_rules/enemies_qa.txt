@@ -81,3 +81,10 @@
 02498E94    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
 02498F70    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
 024992A0    split@r0    add             st fight: m0304 (+0x420) += (s16)(5000 x m0308), the spin's angle a call
+#
+# ---- the Armos's needle (AM2 203, daAM2_Execute f_0204D3A4; session qa, route en-am). Its attack cylinder mNeedleCyl
+# (+0x7EC) is set (SetC) at mNeedlePos, a joint's place from the last call's calc: at 30 the last tick's pose, at 60's
+# half step the whole step's, half a tick on (WWHD_DEBUG_ATLOG: halfway between 30's places at each resolution), and
+# Link's knockback from it headed 11 degrees off (11063 against 30's 9056), landing 44 units apart. Set in the
+# whole step only: the tick's resolution reads 30's place (as the Darknut's sword, AtWhole in sixty_step.cpp).
+0204F8C0    whole       bl 020182e0     am2: mNeedleCyl.SetC(mNeedlePos), its attack's place

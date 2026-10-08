@@ -103,3 +103,4 @@
 0251655C    src/overrides/sixty_step.cpp       dCcD_Cyl::StartCAt: noted for the half step's move (TICKVEC)
 02516580    src/overrides/sixty_step.cpp       dCcD_Cyl::StartCTg: noted for the half step's move (TICKVEC)
 025167C0    src/overrides/sixty_step.cpp       dCcD_Sph::StartCAt: noted for the half step's move (TICKVEC)
+024F08A8    src/overrides/sixty.cpp            dBgS_Acch::CrrPos: a stepping process's whole step's landing read from its next tick (GroundLate's types)

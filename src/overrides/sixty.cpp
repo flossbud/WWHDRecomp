@@ -3276,6 +3276,9 @@ namespace
 //   joint callback once it holds its club), then mActionState (+0x3E2) 5 and mFightBehavior (+0x3E4, s8) 10, 11 in
 //   fight(): each half a tick early at 60, its attack a tick early by the first; held, each on 30's tick (route en-st,
 //   RNDFIX 0.7). The s8s are held as their s16 words (the byte after each is padding).
+//   AM2 203, the Armos (mAction +0x3E8, mMode +0x3E9, u8s held as one s16; route en-am, RNDFIX 0.7): its hop is a
+//   one-call set-up (mode 4 on the ground sets mode 3, which sets the jump), half a tick early a link; held, with its
+//   landing read a tick later (GroundLate below), its four on 30's hops (session qa).
 // WWHD_60FPS_MODEHOLD=0 turns it off; WWHD_DEBUG_MODELATE=name:off[:off...] (a probe) holds another type's fields too.
 namespace
 {
@@ -3292,6 +3295,7 @@ namespace
 				m[191] = { 0x594u, 0x596u };          // TN, the Darknut
 				m[216] = { 0x570u };                  // MT, the Magtail
 				m[190] = { 0x2018u, 0x3E2u, 0x3E4u }; // ST, the Stalfos (m1DD0, mActionState, mFightBehavior)
+				m[203] = { 0x3E8u };                  // AM2, the Armos (mAction, mMode: u8s, one s16)
 			}
 			if (const char* e = getenv("WWHD_DEBUG_MODELATE"))
 			{
@@ -3354,6 +3358,69 @@ namespace
 			s_modeLate.erase(it);
 		}
 	}
+}
+
+// The ground a stepping process's whole step landed on, seen from its next tick (session qa, route en-am): its Acch's
+// ground hit (dBgS_Acch::CrrPos f_024F08A8, the flags at +0x28, 0x20 the ground) comes from its move; at 30 the
+// tick's move lands it and the next tick's call reads it (an Armos AM2 203 lands, rests a tick on the ground, then
+// its mode 5 hop sets the next jump). At 60 the whole step's move landed it mid-tick and the half step's call jumped
+// at once: a hop half a tick short each time, 4.5 ticks to 30's 5, the four Armos of the Savage Labyrinth's room
+// drifting off 30's. A landing in the whole step is hidden from the half step's calls (the ground bit as its
+// whole step's move found it); its own move sets it again. Link has his own (GroundHold above). Per type, opt-in like
+// the mode hold: AM2 203 (with its mode hold: the Armos within 0.3 units of 30's through its hops, Link's farthest
+// 271 -> 28 on route en-am, RNDFIX 0.7). WWHD_60FPS_GROUNDLATE=0 off; WWHD_DEBUG_GROUNDLATE=name,... (a probe) adds.
+namespace
+{
+	bool GroundLate(uint16 name)
+	{
+		static const std::vector<uint16> types = [] {
+			std::vector<uint16> v;
+			const char* off = getenv("WWHD_60FPS_GROUNDLATE");
+			if (!(off && atoi(off) == 0))
+				v.push_back(203);                         // AM2, the Armos
+			if (const char* e = getenv("WWHD_DEBUG_GROUNDLATE"))
+				for (const char* p = e; *p;)
+				{
+					char* end;
+					const uint16 n = (uint16)strtoul(p, &end, 10);
+					if (end == p) break;
+					v.push_back(n);
+					p = *end == ',' ? end + 1 : end;
+				}
+			return v;
+		}();
+		return std::find(types.begin(), types.end(), name) != types.end();
+	}
+	struct AcchNote { uint32 acch, bit, swap; };
+	std::unordered_map<uint32, std::vector<AcchNote>> s_acchNotes;   // its Acchs' ground bits before its whole step's moves
+	void GroundLateBefore(uint32 proc)
+	{
+		if (!g_rtHalfTick)
+		{
+			s_acchNotes.erase(proc);
+			return;
+		}
+		const auto it = s_acchNotes.find(proc);
+		if (it == s_acchNotes.end())
+			return;
+		for (const AcchNote& n : it->second)
+			if (n.swap + 1 == wwhd::os::SwapCount() && !n.bit)   // a landing only: the ground left stays left (its
+				wr32(n.acch + 0x28, rd32(n.acch + 0x28) & ~0x20u); // jump's next call reads it so at 30 too)
+		s_acchNotes.erase(it);
+	}
+}
+
+// dBgS_Acch::CrrPos(acch r3, bgs r4): the move's ground and wall checks (above: noted in a whole step)
+void f_024F08A8(PPCInterpreter_t* __restrict ctx)
+{
+	if (g_rtSixty && !g_rtHalfTick && g_rtStep != 1.0f && g_rtActor && GroundLate(rd16(g_rtActor + 0x08)))
+	{
+		std::vector<AcchNote>& v = s_acchNotes[g_rtActor];
+		const uint32 acch = GPR(3);
+		if (std::none_of(v.begin(), v.end(), [&](const AcchNote& n) { return n.acch == acch; }))
+			v.push_back({ acch, rd32(acch + 0x28) & 0x20u, wwhd::os::SwapCount() });
+	}
+	[[clang::musttail]] return orig_f_024F08A8(ctx);
 }
 
 // fpcM_Execute: every process's execute goes through it (fpcM_Management's execute pass, f_025DE788):
@@ -3616,6 +3683,8 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 			wr32(proc + kLinkNoResetFlg1, f & ~oneShotHidden);
 	}
 	ModeLateBefore(proc);
+	if (!link)
+		GroundLateBefore(proc);
 	HudStatus hud;
 	if (g_rtHalfTick && HudHold())
 		hud.Save();
