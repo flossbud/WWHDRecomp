@@ -127,3 +127,54 @@ Candidates, by what these numbers say:
   alternating rounds, the same binary with `WWHD_INDEXCACHE=0` against on (render thread per frame, median of each
   run): continue 3.40 / 3.18 / 3.95 -> 2.90 / 3.33 / 2.91 ms, house 3.22 / 3.25 / 3.30 -> 3.30 / 3.12 / 3.22 ms:
   within the runs' noise on house, about -0.3 ms on continue. Exact: checks' captures byte-identical, predeploy ok.
+
+## The half frames' cost on the game thread, split (session bottom)
+
+`WWHD_PROFILE` on the desktop (13700K, real time, headless, the build after the index cache), continue (to f1800)
+and en-tn (the Darknut fight, to f1240) at 30 and at 60: the same game ticks over the same real time, so the game
+thread's (`OSSched`) samples at 60 less those at 30 are what the half frames add. Each sample is put under the
+actor execute it is in (fopAc_Execute f_025D475C's callee, mapped to its process type through the profile tables),
+the actor draw (fopAc_Draw f_025D4654's callee), another process's execute or draw (the scenes, the environment:
+fpcM_Execute/fpcM_Draw without an actor), or the rest. Samples at 30 -> 60 (+ added):
+
+| part | continue | en-tn |
+|---|---|---|
+| the game thread | 12,738 -> 21,980 (+9,242, +73%) | 8,125 -> 14,832 (+6,707, +83%) |
+| actor executes and other processes' executes | 1,593 -> 2,835 (+1,242) | 951 -> 1,892 (+941) |
+| actor draws and the scene's draws | 1,676 -> 3,060 (+1,384) | 998 -> 2,176 (+1,178) |
+| the rest (the frame body, the journal, sound, the fibers' runtime) | 9,469 -> 16,085 (+6,616) | 6,176 -> 10,764 (+4,588) |
+
+So the converted processes' half-step executes are only about 13-14% of what the half frames add, their draws
+about as much again (every actor draws on every frame), and most of it is outside both. In the rest, by what 60
+adds (inclusive, continue): the sound's AX processing on the game thread (`snd_core::AXIst_ThreadEntry` 413 ->
+2,191, `PPCCore_executeCallbackInternal` 328 -> 1,770, `AXMix_process` 139 -> 744: about five times its 30 cost,
+the largest single item: worth checking why the AX frame callback runs that much more at 60), the half tick's
+frame path (`f_0274C264` 963 -> 1,830; on en-tn 637 -> 1,456) and the journal (`rt_journal_store`, en-tn 5 ->
+387).
+
+The top 10 actor executes by what 60 adds (samples 30 -> 60):
+
+| continue | | en-tn | |
+|---|---|---|---|
+| 168 PLAYER (Link) | 299 -> 538 | 168 PLAYER | 169 -> 366 |
+| 200 | 45 -> 134 | 38 | 25 -> 90 |
+| 194 (the seagull) | 85 -> 171 | 194 (the seagull) | 56 -> 119 |
+| 165 SHIP | 58 -> 137 | 89 BRIDGE | 26 -> 80 |
+| 38 | 57 -> 130 | 200 | 30 -> 77 |
+| 220 KB (the pigs) | 54 -> 120 | 220 KB | 39 -> 84 |
+| 453 TSUBO (pots) | 36 -> 99 | 165 SHIP | 24 -> 57 |
+| 118 NPC_SO (the fishman) | 31 -> 88 | 191 TN (the Darknut) | 26 -> 59 |
+| 182 KANBAN (signs) | 39 -> 89 | 68 OBJ_IKADA | 37 -> 70 |
+| 89 BRIDGE | 31 -> 74 | 453 TSUBO | 43 -> 76 |
+
+The top actor draws (every actor's draw runs on every frame; the half frame's count is the whole's): continue
+PLAYER 125 -> 237, BRIDGE 86 -> 190, 38 69 -> 141, 445 39 -> 104, 439 76 -> 138, KNOB00 69 -> 125, VRBOX2 93 ->
+137, SHIP 37 -> 62; en-tn BRIDGE 80 -> 200, PLAYER 69 -> 139, 38 32 -> 87, 439 36 -> 89, VRBOX2 44 -> 91,
+Obj_Lpalm 23 -> 60, KNOB00 31 -> 65. The scene's own draw (f_025DFFB0 under fpcM_Draw: the play scene's draw, its
+collision and packets) 674 -> 1,165 on continue, 431 -> 868 on en-tn.
+
+What it suggests: Link is the one actor worth making cheaper in his half step (his execute about doubles; most
+types are a few tens of samples each); static or far actors (signs, bridges, palms, door knobs, the sky box) still
+draw on half frames and could reuse their whole frame's matrices; and the sound's cost at 60 is the first thing to
+look at, before any game code. (The profiles and the scratch scripts that split them, `halfsplit.py`,
+`callees.py`, `mapcallees.py`: the desktop worker's data/m6/WWHDRecomp-bottom/prof and bin.)
