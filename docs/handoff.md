@@ -4116,7 +4116,8 @@ A second cloud session (checkout `/wwhd/WWHDRecomp-cloud2`), kept off the worker
   0 chained (564 faults, 202 protects by frame 600). Real time headless (continue, 7200 frames at 60), watch on and
   verify on: no crash, 0 misses, 0 chained, 0 raced, ~0.13 faults a frame once loaded (1308 and 5354 faults in all;
   the early ones are the load). regress identical to ww-4's; predeploy 50 ok; gohmatail 54.0 WARN (as ww-4),
-  gohmarock ok. `ThreadInit` in the scheduler thread is still not in (0 faults on alt stacks): session cloud's file.
+  gohmarock ok. Then `ThreadInit` in `OSSchedulerCoreEmulationThread` (session cloud's OK), gated the same way: checks
+  plain and verify all MATCH, PSNR inf, 0 misses; every fault now on the alternate stacks (1308 of 1308 in real time).
 
 ## Waiting on the owner
 
