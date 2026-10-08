@@ -33,6 +33,40 @@ Weaker hardware (phones, the Deck in heavy scenes) needs more. The owner's order
    the optimised one switched off if it misbehaves. Checks run Cemu's set; the optimised set gets its own capture
    comparison (within tolerance where it isn't bit-exact) and A/Bs.
 
+## Item 4, the settings menu: design (session cloud3)
+
+**What exists.** Every option on the list is a startup switch today, read once from the environment (`static const`
+getenvs): `WWHD_60FPS` (dispatch.cpp `SixtyFps`), `WWHD_LAZY_DRAWDONE` (renderer.cpp), `WWHD_VSYNC` (present.cpp's
+present mode), `WWHD_CORES` (coreinit_Thread.cpp, session cloud's branch), fullscreen (window_system.cpp, F11 live).
+Not there yet: render scale (item 3), ambient occlusion off (needs the AO pass found: item 1's timing names the
+passes), the shader set (item 5). The debug menu (debug_menu.cpp: pages, cursor, pad/keyboard/mouse; the overlay
+draws any `View`) is the machinery.
+
+**The settings file.** `portable/wwhd.ini`, `KEY=VALUE` lines, the keys being the switches' own names
+(`WWHD_60FPS=1`, `WWHD_LAZY_DRAWDONE=1`, `WWHD_VSYNC=0`, `WWHD_CORES=3`, later `WWHD_RENDER_SCALE=0.75`...). Read at
+the very start (cemu_boot.cpp `SetupPaths`, before anything reads a switch) and applied with `setenv(key, value,
+0)`: **a switch set in the environment wins**, so tests, `play.sh`'s own and the owner's command lines are unchanged.
+Loaded only in real time with a window (`WWHD_WINDOW` not 0, no `CEMU_VIRTUAL_CLOCK`/`REF_VIRTUAL_CLOCK`): the
+checks, regress, predeploy and the A/B scripts never see it (their portable dirs are fresh anyway). So every option
+keeps one code path, its switch, and the menu only writes the file. `WWHD_SETTINGS=0` ignores the file.
+
+**The menu.** F2 (and an item on the debug menu's top page) opens a "Settings" page in the same panel: one line per
+option, `Frame rate: 60`, `Vsync: off`, ...; A/Enter/click cycles the value (left/right too), the file is written at
+once. Each option says when it applies: **live** (fullscreen and window size: SDL; vsync: a swapchain rebuild with
+the other present mode, present.cpp already rebuilds on resize) or **at the next start** (frame rate, host threads,
+lazy DrawDone, render scale, shader set: read once at start; the line shows "(restart)" while the file differs from
+what runs). No live 30/60 switch at first: SixtyFrom is fixed per run and the half-tick machinery assumes it; a live
+switch is a later item if the owner wants it.
+
+**The options, first round:** frame rate 30/60; vsync on/off; display: windowed/fullscreen and a window size
+(1280x720, 1920x1080, 2560x1440, the desktop's); host threads 1/3 (once `WWHD_CORES` lands); lazy DrawDone on/off.
+Added as their items land: render scale (0.5-1x, item 3), ambient occlusion on/off (after item 1 finds its pass),
+shader set (item 5). Defaults are today's (no file: nothing changes).
+
+**Checks.** The file is never read with the virtual clock, so checks/regress/predeploy are unchanged by construction;
+a unit-ish test: a headless real-time run with a file setting `WWHD_60FPS=1` presents at 60 (its frame log), and the
+same with `WWHD_60FPS=0` in the environment presents at 30 (the environment wins).
+
 Who (2026-10-08): session cloud finishes the three host threads (soak, gates, `WWHD_CORES=3` landed opt-in) and the
 fight scene's numbers; session cloud2 takes items 1 and 2 (the renderer) once its write-watch branch lands; session
 cloud3 continues the deck-plan's CPU items (5: the journal, 7: Link's half step), then the settings menu (4). Timing
