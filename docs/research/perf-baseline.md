@@ -208,3 +208,28 @@ drops (without a watch the page filter passes them over before the hook). Now su
 watch only (src/runtime/diff.cpp). Exact: the kept pages are all of .data/.bss and every actor's range
 (JournalPages), and a held draw's stores still all go through (its page table is cleared). Continue at 60: the
 journal 4.5% -> 2.6% of the game thread (957 -> 618 samples; `HalfTickStore` 404 -> 161).
+
+## the worker (session cloud, 2026-10-08)
+
+The owner's stand-in for the Steam Deck's CPU: the worker's 6-core CPU, power-capped to 45 W sustained (60 W bursts), its
+Intel iGPU through anv, in the worker container (10 threads), headless. `tools/sixty/perf/worker-ab.sh` (the worker's
+perf-ab: variants of one build, alternating, a warm-up round for the shader cache, one run at a time) and
+`worker_absum.py` (gameplay only, game frame 900 on; each variant paired round by round with the first). ww-4 7910acf,
+continue (1800 game frames), 5 rounds each, every run within a few % of its variant's others:
+
+| variant | fps | game thread work a frame (wall) | game thread CPU a frame | render thread CPU a frame | GX2DrawDone wait | game thread busy | render thread busy |
+|---|---|---|---|---|---|---|---|
+| 30 | 16.7 | 52.6 ms | 28.9 ms | 12.4 ms | 30.4 ms | 48% | 21% |
+| 60 | 20.8 | 48.0 ms | 25.0 ms | 9.9 ms | 28.4 ms | 52% | 21% |
+| 60, `WWHD_LAZY_DRAWDONE=1` | **49.0** | 20.4 ms | **19.5 ms** | 9.95 ms | 1.0 ms | **96%** | 49% |
+
+How to read it:
+- **Without the lazy DrawDone the worker is serialized on its GPU**: each frame the game waits ~30 ms in GX2DrawDone
+  while the render thread finishes recording and the Intel iGPU runs the frame, nothing overlapping. Even 30 runs at
+  17 fps. (Its CPU a frame includes that wait's spinning: 25-29 ms against 19.5 ms with the wait gone.)
+- **With it (two frames in flight) the game runs at 49 fps and the game thread is the limit**: busy 96% of the time,
+  19.5 ms of CPU a frame against 60's 16.7 ms budget. The render thread (9.95 ms a frame, 49% busy) has headroom.
+- So on the worker, 60 at full speed needs the lazy DrawDone (deck-plan item 2, off by default) and ~15% off the game
+  thread's frame; render-thread savings (item 3) show as its CPU a frame, and may help the game thread only through
+  the power cap (less package power on one core, higher clocks on the other).
+- A/Bs here therefore run with `WWHD_LAZY_DRAWDONE=1` in both variants, the switch under test on and off.

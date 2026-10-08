@@ -27,6 +27,7 @@ if ! command -v tailscaled >/dev/null; then
     echo "tailnet-setup: installing Tailscale"
     curl -fsSL https://tailscale.com/install.sh | $sudo sh >/dev/null
 fi
+command -v ssh >/dev/null || { $sudo apt-get install -y openssh-client >/dev/null 2>&1 || { $sudo apt-get update >/dev/null && $sudo apt-get install -y openssh-client >/dev/null; }; }
 mkdir -p "$st"
 if ! tailscale --socket="$sock" status >/dev/null 2>&1; then
     setsid nohup tailscaled --tun=userspace-networking --state="$st/tailscaled.state" --socket="$sock" \
@@ -34,7 +35,7 @@ if ! tailscale --socket="$sock" status >/dev/null 2>&1; then
     for _ in $(seq 1 30); do [ -S "$sock" ] && break; sleep 1; done
     tailscale --socket="$sock" up --authkey="$TS_AUTHKEY" --hostname="wwhd-cloud" --accept-dns=false
 fi
-tailscale --socket="$sock" status | head -3
+tailscale --socket="$sock" status | sed -n 1,3p   # sed reads it all: head would SIGPIPE under pipefail
 
 # 2. SSH: the keys and the two hosts, through the tailnet
 mkdir -p ~/.ssh && chmod 700 ~/.ssh
