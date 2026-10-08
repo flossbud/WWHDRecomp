@@ -154,7 +154,7 @@
     },
     {
       "title": "Windfall at night",
-      "detail": "The lights converted (night via WWHD_DEBUG_TIME=905:345). The auction's bidders and the auction (361, 382) and the shutters (259) are converted; by night (Orichh room 0, layer 1) the bidders and the auction are 30's at every tick but for IDs given at their creation (session bottom). Not tested: the bidding (after talking to the auctioneer) and the shutters' open and close, which by the notes and decomp run in events (B67)"
+      "detail": "The lights converted (night via WWHD_DEBUG_TIME=905:345). The auction's bidders and the auction (361, 382) are 30's at every tick by night but for IDs given at their creation (session bottom); the bidding ran twice as fast at 60 (each bidder's interest, the pauses and waits counted per call) and is now once a tick: the six bids and the choice on 30's ticks, the bid's call a tick early left (session top). Not tested yet: the shutters (259) opening and closing"
     },
     {
       "title": "Enemies falling into water",
@@ -330,24 +330,35 @@
     "460": "ice block",
     "64": "table"
   },
-  "queue_note": "Round 12 (2026-10-07): the actors are converted. All three sessions fix known bugs and known issues until 90% of the week: qa the Darknut's early blow and a per-type mode hold for enemies, bottom Gohma's tail scene (N20), top enemies falling into water and Windfall at night. Known bugs only, no new hunting. The main session routes the owner's bugs and notes and deploys in batches. Next: the owner's extensive testing and repair.",
+  "queue_note": "Round 13 (2026-10-08): the actors are converted, and the sessions fix the known bugs and drifts until 95% of the week (88% now). This round: the knockback's direction, the Stalfos, Armos, Bubble, Bokoblin, Floormaster and Magtail fights, enemies into water, Windfall's auction, Gohma's tail scene, pots. In the build on the owner's PC: everything up to e102375. After the wrap-up: performance for the Steam Deck and Android (B75), the rival's lessons, platforms (cloud sessions on the public GitHub repo), then uncapped.",
   "queue": [
     {
-      "id": "modehold",
-      "name": "Round 12 (qa's): the Darknut's blow 2 ticks early (B66's follow-up): Link's lunge and the bounce on 30's ticks, then a per-type mode hold (an enemy's mode change in a whole step held to the tick's end), the Darknut first, then other enemies measured"
+      "id": "top-b74",
+      "name": "Now (top): B74, the title screen's fade at 60: the fade steps every frame instead of every tick (out in 0.45 s, 30's 0.9 s) and the black between waits 0.8 s (30's 0.4 s); finding the fader, then the boat's flicker. Then Windfall's shutters (259) opening and closing"
     },
     {
-      "id": "water-night",
-      "name": "Round 12 (top's): the sun's shadow creep (fixed); enemies falling into water (at 30 they hang ~2 ticks at the surface); Windfall at night: the auction's bidding and the shutters opening and closing; then a share of the mode hold's enemies"
+      "id": "bottom-pots",
+      "name": "Now (bottom): a turn while carrying a pot ended half a tick early (fixed, merging); next the lift's hand-over to carrying, a tick late (a play-once animation's end)"
     },
     {
-      "id": "gohma-rock",
-      "name": "Round 12 (bottom's): N20, Gohma's tail scene: the rock shake and the grappling hook's catch on 30's ticks (fixed); the rock's fall and rise after the swing (fell twice as fast at 60)"
+      "id": "qa-perf",
+      "name": "Now (qa): the decision hold for more approach kinds (merging, off unless listed); then a performance baseline for the Steam Deck (B75): CPU per thread at 60, the renderer's cost per draw, what the half steps cost"
+    },
+    {
+      "id": "fights",
+      "name": "Enemy fights against 30 (fixed random, Link's farthest from 30's): fixed this round: Stalfos 760 -> 50, Armos 271 -> 28, Bubble 54 -> 4, the Bokoblin itself 151 -> 30, the Floormaster's hand 20 -> 1, the Magtail's rolls on 30's ticks, enemy knockback's direction (TICKVEC). Left, recorded: Floormaster 95 (a combo's parry), Kargaroc 89 (its swoops), Poe 70 (a held version mixed), Moblin (a fast knockback at a wall), the Stalfos's later blow (its club's pose in the spin)"
+    },
+    {
+      "id": "wrapup",
+      "name": "Next: a deploy with B74 and the pots fix; everyone wraps up at 95% of the week with handoff notes; then the local history moves to the rewritten one (flossbud)"
     }
   ],
   "later": [
-    "The owner's extensive testing and repair, once the actors are converted (the whole queue redistributed then)",
-    "Uncapped frame rate (D21 step 4): the owner's call when to start it"
+    "Performance for the Steam Deck and Android (B75: the game at 35-55% speed on a Deck, CPU-bound): the renderer's work per draw (texture change tracking, a buffer cache, async present), then the recompiled code (registers kept in host registers, a real-time build without the cycle counting, -O3), then more threads",
+    "The rival recomp's lessons (docs/research/rival-study.md): widescreen and resolution scaling, save states, what to adopt and do better",
+    "Platforms: Linux arm64, Windows, Android: cloud sessions on the public repo github.com/flossbud/WWHDRecomp (docs/cloud-handoff.md: CI, the ports, groundwork)",
+    "Uncapped frame rate (D21 step 4), built on the half steps: the owner's call when to start it",
+    "The owner's extensive testing and repair"
   ],
   "queue_done": [
     "windfall",
@@ -417,7 +428,10 @@
     "events",
     "hands-on",
     "bottom-next",
-    "warns"
+    "warns",
+    "modehold",
+    "water-night",
+    "gohma-rock"
   ],
   "still": {
     "20": "still where placed (Abship,0,5): no state change at 30 over 200 ticks (census, movers.sh)",
