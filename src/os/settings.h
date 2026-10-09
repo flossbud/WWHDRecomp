@@ -2,7 +2,9 @@
 // (WWHD_60FPS, WWHD_VSYNC...), kept in portable/wwhd.ini as KEY=VALUE lines of the switches' own names. Load applies
 // them to the environment before anything reads a switch, unless the environment sets one already (a launcher's or a
 // test's own wins), and only in real time with a window: the virtual clock (every check) never reads the file.
-// WWHD_SETTINGS=0: the file is ignored. The settings page (debug_menu.cpp, F2) shows and changes them.
+// WWHD_SETTINGS=0: the file is ignored. The settings page (debug_menu.cpp, F2) shows and changes them. Presets
+// (WWHD_PRESET=auto|performance|quality) set the speed options at once; Auto picks Performance on a low-powered
+// device (settings.cpp).
 #pragma once
 #include <string>
 #include <vector>
@@ -11,6 +13,7 @@ namespace wwhd::os::settings
 {
 	void Load(const std::string& portableDir);     // at start (cemu_boot.cpp SetupPaths)
 	bool Active();                                 // the file is in use (real time, a window, not WWHD_SETTINGS=0)
+	std::string StartLog();                        // the preset and its options as they started (one line), or ""
 
 	int Count();                                   // the settings page's options
 	std::string Line(int option);                  // "Frame rate: 60 (at the next start)"

@@ -1,12 +1,20 @@
-// The settings (settings.h): the options, their file and what applies live.
+// The settings (settings.h): the options, the presets, their file and what applies live.
+//
+// Presets (the owner's ask: like a modern game's, Performance turns on everything that makes it faster, Quality
+// keeps the defaults, Auto picks Performance on a low-powered device): WWHD_PRESET=auto|performance|quality. An
+// option a preset covers takes its value from, first to last: the environment, the option's own line in the file,
+// the preset, the program's default. Changing such an option in the menu writes its own line (the preset then shows
+// "Custom"); choosing a preset again drops those lines. Frame rate, vsync and the display are no preset's.
 #include "settings.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <mutex>
 #include <set>
+#include <thread>
 
 namespace
 {
@@ -17,17 +25,20 @@ namespace
 		const char* label;
 		std::vector<Value> values;                  // the first is the program's default (no file, no switch)
 		bool live;                                  // applied at once (else at the next start)
+		const char* performance;                    // its value in the Performance preset, or nullptr: no preset's
 	};
 	const std::vector<Option> kOptions = {
-		{ "WWHD_60FPS", "Frame rate", { { "0", "30" }, { "1", "60" } }, false },
-		{ "WWHD_VSYNC", "Vsync", { { "0", "off" }, { "1", "on" } }, true },
-		{ "WWHD_FULLSCREEN", "Display", { { "0", "window" }, { "1", "fullscreen" } }, true },
+		{ "WWHD_60FPS", "Frame rate", { { "0", "30" }, { "1", "60" } }, false, nullptr },
+		{ "WWHD_60FPS_KEEPSPEED", "Keep speed when frames dip", { { "0", "off" }, { "1", "on" } }, false, "1" },
+		{ "WWHD_VSYNC", "Vsync", { { "0", "off" }, { "1", "on" } }, true, nullptr },
+		{ "WWHD_FULLSCREEN", "Display", { { "0", "window" }, { "1", "fullscreen" } }, true, nullptr },
 		{ "WWHD_WINDOW_SIZE", "Window size", { { "1280x720", "1280x720" }, { "1600x900", "1600x900" },
-			{ "1920x1080", "1920x1080" }, { "2560x1440", "2560x1440" } }, true },
-		{ "WWHD_LAZY_DRAWDONE", "Lazy DrawDone (faster)", { { "0", "off" }, { "1", "on" } }, false },
-		{ "WWHD_CORES", "CPU threads", { { "1", "1" }, { "3", "3" } }, false },
-		{ "WWHD_60FPS_KEEPSPEED", "Keep game speed when frames drop", { { "0", "off" }, { "1", "on" } }, false },
+			{ "1920x1080", "1920x1080" }, { "2560x1440", "2560x1440" } }, true, nullptr },
+		{ "WWHD_CORES", "CPU threads", { { "1", "1" }, { "3", "3" } }, false, "3" },
+		{ "WWHD_LAZY_DRAWDONE", "Lazy DrawDone", { { "0", "off" }, { "1", "on" } }, false, "1" },
 	};
+	constexpr const char* kPresetKey = "WWHD_PRESET";
+	const char* const kPresets[] = { "auto", "performance", "quality" };
 
 	std::mutex s_lock;
 	bool s_active = false;
@@ -35,6 +46,10 @@ namespace
 	std::map<std::string, std::string> s_file;      // the file's lines (unknown keys kept as they are)
 	std::map<std::string, std::string> s_atStart;   // each option's value when the program started
 	std::set<std::string> s_fromEnv;                // options the environment set (a launcher's own: they win)
+	std::string s_presetAtStart;                    // "performance" or "quality", as resolved at start
+	bool s_presetFromEnv = false;
+	std::string s_autoChoice, s_autoWhy;            // what Auto picks on this machine, and why
+	std::string s_startLog;                         // the start's decision, logged once Cemu's log is up
 	bool s_windowChanged = false, s_vsyncChanged = false;
 
 	int IndexOf(const Option& o, const std::string& v)
@@ -45,17 +60,95 @@ namespace
 		return 0;
 	}
 
+	std::string ReadLine(const std::string& path)
+	{
+		std::ifstream f(path);
+		std::string s;
+		std::getline(f, s);
+		while (!s.empty() && (s.back() == '\n' || s.back() == ' '))
+			s.pop_back();
+		return s;
+	}
+
+	// a low-powered device (sysfs only: this runs before anything else): the Steam Deck, a battery, only integrated
+	// GPUs (Intel, or AMD with at most 2 GiB of VRAM: an APU), or at most 8 logical CPUs
+	bool LowPowered(std::string& why)
+	{
+		namespace fs = std::filesystem;
+		std::error_code ec;
+		const std::string product = ReadLine("/sys/class/dmi/id/product_name");
+		if (product == "Jupiter" || product == "Galileo")
+			return why = "Steam Deck", true;
+		for (const auto& e : fs::directory_iterator("/sys/class/power_supply", ec))
+			if (e.path().filename().string().rfind("BAT", 0) == 0)
+				return why = "a battery", true;
+		int gpus = 0, integrated = 0;
+		for (const auto& e : fs::directory_iterator("/sys/class/drm", ec))
+		{
+			const std::string name = e.path().filename().string();
+			if (name.rfind("card", 0) != 0 || name.find('-') != std::string::npos)
+				continue;
+			const std::string vendor = ReadLine(e.path().string() + "/device/vendor");
+			if (vendor.empty())
+				continue;
+			gpus++;
+			if (vendor == "0x8086")
+				integrated++;
+			else if (vendor == "0x1002")
+			{
+				const std::string vram = ReadLine(e.path().string() + "/device/mem_info_vram_total");
+				if (!vram.empty() && strtoull(vram.c_str(), nullptr, 10) <= (2ull << 30))
+					integrated++;
+			}
+		}
+		if (gpus > 0 && integrated == gpus)
+			return why = "integrated GPU only", true;
+		const unsigned cpus = std::thread::hardware_concurrency();
+		if (cpus > 0 && cpus <= 8)
+			return why = std::to_string(cpus) + " logical CPUs", true;
+		why = "none of: Steam Deck, battery, integrated GPU only, 8 or fewer CPUs";
+		return false;
+	}
+
+	// the preset chosen in the file (auto, performance, quality), and what a choice resolves to
+	std::string PresetChosen()
+	{
+		auto f = s_file.find(kPresetKey);
+		const std::string p = f != s_file.end() ? f->second : "auto";
+		return (p == "performance" || p == "quality") ? p : "auto";
+	}
+	std::string Resolve(const std::string& p)
+	{
+		return p == "auto" ? s_autoChoice : p;
+	}
+
+	// an option's value as the file and the preset give it (not the environment)
 	std::string Current(const Option& o)
 	{
-		auto f = s_file.find(o.key);
-		return f != s_file.end() ? f->second : o.values[0].value;
+		if (auto f = s_file.find(o.key); f != s_file.end())
+			return f->second;
+		if (o.performance && Resolve(PresetChosen()) == "performance")
+			return o.performance;
+		return o.values[0].value;
+	}
+
+	// some option the preset covers has a line of its own that differs from the preset
+	bool Custom()
+	{
+		const bool perf = Resolve(PresetChosen()) == "performance";
+		for (const Option& o : kOptions)
+			if (o.performance)
+				if (auto f = s_file.find(o.key); f != s_file.end() && f->second != (perf ? o.performance : o.values[0].value))
+					return true;
+		return false;
 	}
 
 	void Save()
 	{
 		std::ofstream out(s_path, std::ios::trunc);
 		out << "# The Wind Waker HD recompiled: settings (the settings page, F2). KEY=VALUE, the program's own switches;\n"
-		       "# a switch set in the environment wins over its line here.\n";
+		       "# WWHD_PRESET=auto|performance|quality sets those an option's own line doesn't; a switch set in the\n"
+		       "# environment wins over its line here.\n";
 		for (const auto& [k, v] : s_file)
 			out << k << "=" << v << "\n";
 	}
@@ -82,8 +175,20 @@ namespace wwhd::os::settings
 				continue;
 			s_file[line.substr(0, eq)] = line.substr(eq + 1);
 		}
+		s_autoChoice = LowPowered(s_autoWhy) ? "performance" : "quality";
+		// the preset: the environment's, else the file's, else auto
+		std::string preset = PresetChosen();
+		if (const char* e = getenv(kPresetKey); e && *e)
+		{
+			s_presetFromEnv = true;
+			preset = strcmp(e, "performance") == 0 || strcmp(e, "quality") == 0 ? e : "auto";
+		}
+		s_presetAtStart = Resolve(preset);
+		// the file's lines first (every key, unknown ones too), then the preset's values, never over the environment
 		for (const auto& [k, v] : s_file)
 		{
+			if (k == kPresetKey)
+				continue;
 			if (getenv(k.c_str()))
 				s_fromEnv.insert(k);
 			else
@@ -92,10 +197,24 @@ namespace wwhd::os::settings
 		for (const Option& o : kOptions)
 		{
 			const char* e = getenv(o.key);
-			s_atStart[o.key] = e ? e : o.values[0].value;
-			if (e && !s_file.count(o.key))
+			if (!e && o.performance && s_presetAtStart == "performance")
+				setenv(o.key, o.performance, 0);
+			else if (e && !s_file.count(o.key))
 				s_fromEnv.insert(o.key);
+			e = getenv(o.key);
+			s_atStart[o.key] = e ? e : o.values[0].value;
 		}
+		s_startLog = "wwhd settings: preset " + preset + (preset == "auto" ? " -> " + s_autoChoice + " (" + s_autoWhy + ")" : "") +
+			(s_presetFromEnv ? " (from the environment)" : "");
+		for (const Option& o : kOptions)
+			if (o.performance)
+				s_startLog += std::string(", ") + o.key + "=" + s_atStart[o.key] + (s_fromEnv.count(o.key) ? " (environment)" : "");
+	}
+
+	std::string StartLog()
+	{
+		std::lock_guard lock(s_lock);
+		return s_startLog;
 	}
 
 	bool Active()
@@ -106,12 +225,39 @@ namespace wwhd::os::settings
 
 	int Count()
 	{
-		return (int)kOptions.size();
+		return 1 + (int)kOptions.size();             // the preset, then the options
 	}
 
 	std::string Line(int option)
 	{
 		std::lock_guard lock(s_lock);
+		if (option == 0)
+		{
+			std::string chosen = PresetChosen();
+			if (s_presetFromEnv)
+			{
+				const char* e = getenv(kPresetKey);
+				chosen = e && (strcmp(e, "performance") == 0 || strcmp(e, "quality") == 0) ? e : "auto";
+			}
+			const std::string resolved = Resolve(chosen);
+			std::string line = "Preset: ";
+			if (!s_presetFromEnv && Custom())
+				line += "Custom";
+			else if (chosen == "performance")
+				line += "Performance";
+			else if (chosen == "quality")
+				line += "Quality";
+			else
+				line += std::string("Auto (") + (resolved == "performance" ? "Performance" : "Quality") + ")";
+			if (!s_active)
+				line += " (not saved: no window or a test)";
+			else if (s_presetFromEnv)
+				line += " (set by the launcher)";
+			else if (resolved != s_presetAtStart)
+				line += " (at the next start)";
+			return line;
+		}
+		option--;
 		if (option < 0 || option >= (int)kOptions.size())
 			return {};
 		const Option& o = kOptions[option];
@@ -129,7 +275,28 @@ namespace wwhd::os::settings
 	void Cycle(int option, int step)
 	{
 		std::lock_guard lock(s_lock);
-		if (!s_active || option < 0 || option >= (int)kOptions.size())
+		if (!s_active)
+			return;
+		if (option == 0)
+		{
+			if (s_presetFromEnv)
+				return;                              // the launcher's own
+			const std::string chosen = PresetChosen();
+			int i = 0;
+			while (i < 2 && chosen != kPresets[i])
+				i++;
+			// out of Custom, the first step lands on the chosen preset itself (its options' own lines dropped)
+			if (!Custom())
+				i = ((i + step) % 3 + 3) % 3;
+			s_file[kPresetKey] = kPresets[i];
+			for (const Option& o : kOptions)
+				if (o.performance)
+					s_file.erase(o.key);
+			Save();
+			return;
+		}
+		option--;
+		if (option < 0 || option >= (int)kOptions.size())
 			return;
 		const Option& o = kOptions[option];
 		if (s_fromEnv.count(o.key))
@@ -137,6 +304,9 @@ namespace wwhd::os::settings
 		const int n = (int)o.values.size();
 		const int i = ((IndexOf(o, Current(o)) + step) % n + n) % n;
 		s_file[o.key] = o.values[i].value;
+		// a preset's option back at the preset's value needs no line of its own
+		if (o.performance && s_file[o.key] == (Resolve(PresetChosen()) == "performance" ? o.performance : o.values[0].value))
+			s_file.erase(o.key);
 		Save();
 		if (o.live)
 		{

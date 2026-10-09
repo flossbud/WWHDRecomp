@@ -4108,7 +4108,15 @@ Cloud session cloud3 (tailnet mode, worker directory `/wwhd/WWHDRecomp-cloud3`, 
   a launcher's own switch shows "(set by the launcher)" and isn't changed. Tested on the desktop worker (Xvfb,
   lavapipe): the file's 60 applies, the environment's 0 wins, `WWHD_SETTINGS=0` ignores it, the window opens at the
   file's size, and driven from the pad (both sticks, Settings) the window resized live and vsync turned on (the
-  swapchain rebuilt, no errors), both saved. Next: render scale (gpu-plan 3), ambient occlusion (after item 1
+  swapchain rebuilt, no errors), both saved. **Presets** (the owner's ask): the page's first line, `WWHD_PRESET=
+  auto|performance|quality`. Performance sets `WWHD_CORES=3`, `WWHD_LAZY_DRAWDONE=1`, `WWHD_60FPS_KEEPSPEED=1`;
+  Quality the defaults; Auto picks Performance on a low-powered device (sysfs: the Steam Deck's product name, a
+  battery, only integrated GPUs (Intel, or AMD with at most 2 GiB of VRAM), or at most 8 logical CPUs; the worker
+  counts as one, the desktop worker doesn't). Precedence: the environment, the option's own line, the preset, the
+  default; changing a preset's option writes its own line ("Custom"), choosing a preset again drops them. The log's
+  `wwhd settings:` line says what was chosen and why. Tested: auto -> quality on the desktop worker, the presets from
+  the environment and the file, an option's line over the preset, the environment over both, and the menu from
+  the pad (preset, a custom option, back to the preset). Next: render scale (gpu-plan 3), ambient occlusion (after item 1
   names the pass) and the shader set (5) join the page as they land.
 
 ### Session cloud2 (2026-10-08): write-watch and a present-path review, branch ww-4-cloud2

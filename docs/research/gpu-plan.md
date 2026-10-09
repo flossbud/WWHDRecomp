@@ -58,6 +58,11 @@ lazy DrawDone, render scale, shader set: read once at start; the line shows "(re
 what runs). No live 30/60 switch at first: SixtyFrom is fixed per run and the half-tick machinery assumes it; a live
 switch is a later item if the owner wants it.
 
+**Presets (landed, the owner's ask):** Performance turns on every speed option (CPU threads 3, lazy DrawDone,
+keep speed when frames dip; later render scale or dynamic resolution, AO off), Quality keeps the defaults, Auto
+picks Performance on a low-powered device (handoff.md, "Session cloud3"). Each new speed option gets its Performance
+value in settings.cpp's table.
+
 **The options, first round:** frame rate 30/60; vsync on/off; display: windowed/fullscreen and a window size
 (1280x720, 1920x1080, 2560x1440, the desktop's); host threads 1/3 (once `WWHD_CORES` lands); lazy DrawDone on/off.
 Added as their items land: render scale (0.5-1x, item 3), ambient occlusion on/off (after item 1 finds its pass),

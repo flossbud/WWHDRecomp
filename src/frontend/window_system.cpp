@@ -453,6 +453,8 @@ void WindowSystem::Create()
 	SetThreadName("wwhd");
 	wwhd::SetupPaths();
 	wwhd::LoadConfig();
+	if (const std::string preset = wwhd::os::settings::StartLog(); !preset.empty())
+		cemuLog_log(LogType::Force, "{}", preset);
 	wwhd::CreateDefaultMLCFiles();
 	ActiveSettings::Init();
 #ifndef WWHD_NULL_GPU
