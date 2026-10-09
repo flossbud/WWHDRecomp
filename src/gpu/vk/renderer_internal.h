@@ -27,6 +27,9 @@ namespace wwhd::gpu
 		uint64 written = 0;                                      // s.writes when last drawn into or cleared (surfaces)
 		uint32 bytes = 0;                                        // guest memory it covers from its address (surfaces)
 		uint64 resetFor = 0;                                     // the overlapping write it was last reset for (surfaces)
+		uint32 readH = 0;                                        // the most rows any read of it wanted (surfaces: SurfaceRead)
+		uint32 fitH = 0;                                         // WWHD_SURFACE_FIT: the height it was fitted to (or would be)
+		bool noFit = false;                                      // a read went past fitH once: never fitted again
 	};
 
 	// host-visible memory that per-frame data (uniforms, vertices, indices) is written into; reset
@@ -105,8 +108,10 @@ namespace wwhd::gpu
 	struct Format { VkFormat vk; VkImageAspectFlags aspect; };
 	Format ColorFormat(uint32 gx2);
 	Format DepthFormat(uint32 gx2);
-	// the surface at (addr, gx2 format), at least w x h with `layers` array slices
+	// the surface at (addr, gx2 format), at least w x h with `layers` array slices (a fitted one: h at most its fitH)
 	Image& Surface(uint32 addr, uint32 gx2, bool depth, uint32 w, uint32 h, uint32 layers = 1);
+	// a read of a surface's first `rows` rows (sampled, copied, scanned out): WWHD_SURFACE_FIT's evidence
+	void SurfaceRead(Image& img, uint32 rows);
 
 	// present.cpp: the window (renderer.h), if there is one
 	bool HasWindow();

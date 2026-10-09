@@ -785,6 +785,8 @@ namespace wwhd::gpu
 				LatteAddrLib::CalculateMipAndSliceAddr(d.phys, d.physMip, d.format, d.width, d.height, d.depth, d.dim, d.tileMode, d.swizzle, 0,
 					level, 0, &addr, &size, &sub);
 				Image* src = level == 0 ? &base : SurfaceAt(addr & ~0x700u, (uint32)d.format);
+				if (src && level > 0)
+					SurfaceRead(*src, std::max(d.height >> level, 1u));
 				if (!src || src->written == c.written[level] || TexelSize(src->format) != TexelSize(format) ||
 					(src->aspect & VK_IMAGE_ASPECT_DEPTH_BIT) != (base.aspect & VK_IMAGE_ASPECT_DEPTH_BIT))
 					continue;
@@ -910,6 +912,7 @@ namespace wwhd::gpu
 			}
 			Image* img = surface;
 			VkFormat format = surface->format;
+			SurfaceRead(*surface, d.height);
 			if (!(surface->aspect & VK_IMAGE_ASPECT_DEPTH_BIT))
 			{
 				TexFormat tf = TextureFormat(d.format, false);

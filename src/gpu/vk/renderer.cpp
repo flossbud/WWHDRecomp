@@ -547,10 +547,83 @@ namespace wwhd::gpu
 	}
 
 	// ---- surfaces ----------------------------------------------------------------------------
+	// WWHD_SURFACE_FIT=1 (gpu-plan.md item 2, opt-in): a render target is often taller than anything reads of it
+	// (1920x1088, its height padded for tiling, sampled as a 1920x1080 texture), and a texture of another size than its
+	// surface is a copy (CopyOf) every frame it was drawn. At each swap a surface that every read so far wanted fewer
+	// rows of is made that many rows tall (its rows kept): it's sampled directly, and the passes into it draw only
+	// those rows (the render area is the smallest attachment). Draws into the rows cut off are lost, which is exact
+	// as long as nothing reads them: a read that wants more rows than a surface was fitted to is logged ("surface fit:
+	// read past"), and the surface goes back to its full height for good. WWHD_SURFACE_FIT=proof changes nothing and
+	// logs the same reads against the heights it would fit to: the proof that the rows cut off are never read, on
+	// any route. The checks run without it.
+	namespace
+	{
+		int SurfaceFitMode()                                      // 0 off, 1 fit, 2 proof
+		{
+			static const int mode = [] {
+				const char* e = getenv("WWHD_SURFACE_FIT");
+				return !e ? 0 : strcmp(e, "proof") == 0 ? 2 : atoi(e) != 0 ? 1 : 0;
+			}();
+			return mode;
+		}
+		uint32 s_fitReadsPast = 0;
+
+		void FitSurfaces()
+		{
+			const int mode = SurfaceFitMode();
+			if (!mode)
+				return;
+			for (auto& [key, img] : s.surfaces)
+			{
+				if (!img.image || img.fitH || img.noFit || !img.readH || img.readH >= img.height)
+					continue;
+				img.fitH = img.readH;
+				Log(fmt::format("surface fit: {:08x} fmt {:x} {}x{} {} to {} rows{}", key.first, key.second & 0x7FFFFFFF, img.width,
+					img.height, mode == 1 ? "fitted" : "would be fitted", img.readH, mode == 1 ? "" : " (proof)"));
+				if (mode != 1)
+					continue;
+				EndRendering();
+				Image fitted = CreateImage(img.format, img.aspect, img.width, img.readH, VK_IMAGE_USAGE_SAMPLED_BIT |
+					((img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT) ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT),
+					img.layers);
+				Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+				Transition(fitted, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+				VkImageCopy c{};
+				c.srcSubresource = c.dstSubresource = { img.aspect, 0, 0, img.layers };
+				c.extent = { img.width, img.readH, 1 };
+				vkCmdCopyImage(s.cmd, img.image, img.layout, fitted.image, fitted.layout, 1, &c);
+				SubmitAndWait();                                    // then the old image can go
+				const uint32 bytes = img.bytes, readH = img.readH, fitH = img.fitH;
+				const uint64 written = img.written, resetFor = img.resetFor;
+				DestroyImage(img);
+				img = fitted;
+				img.bytes = bytes, img.readH = readH, img.fitH = fitH;
+				img.written = written, img.resetFor = resetFor;
+			}
+		}
+	}
+
+	void SurfaceRead(Image& img, uint32 rows)
+	{
+		img.readH = std::max(img.readH, rows);
+		if (img.fitH && rows > img.fitH)
+		{
+			if (s_fitReadsPast++ < 50)
+				for (auto& [key, other] : s.surfaces)
+					if (&other == &img)
+						Log(fmt::format("surface fit: read past: {:08x} fmt {:x}: {} rows read, fitted to {} (frame {}){}", key.first,
+							key.second & 0x7FFFFFFF, rows, img.fitH, s.frame + 1, SurfaceFitMode() == 1 ? "; back to its full height" : " (proof)"));
+			img.fitH = 0;                                          // Surface grows it back at its next use
+			img.noFit = true;
+		}
+	}
+
 	Image& Surface(uint32 addr, uint32 gx2, bool depth, uint32 w, uint32 h, uint32 layers)
 	{
 		Image& img = s.surfaces[{ addr, gx2 | (depth ? 0x80000000u : 0) }];
 		img.bytes = std::max(img.bytes, w * h * layers * Latte::GetFormatBits((Latte::E_GX2SURFFMT)gx2) / 8);
+		if (img.fitH && SurfaceFitMode() == 1)
+			h = std::min(h, img.fitH);
 		if (img.image && img.width >= w && img.height >= h && img.layers >= layers)
 			return img;
 		EndRendering();                                             // clears and copies follow
@@ -581,14 +654,16 @@ namespace wwhd::gpu
 			vkCmdCopyImage(s.cmd, img.image, img.layout, grown.image, grown.layout, 1, &c);
 			SubmitAndWait();                                        // then the old image can go
 		}
-		uint32 bytes = img.bytes;
+		uint32 bytes = img.bytes, readH = img.readH;
 		uint64 written = img.written, resetFor = img.resetFor;
+		bool noFit = img.noFit;
 		if (img.image)
 			DestroyImage(img);
 		img = grown;
 		img.bytes = bytes;
 		img.written = written;
 		img.resetFor = resetFor;
+		img.readH = readH, img.noFit = noFit;
 		return img;
 	}
 
@@ -863,6 +938,7 @@ namespace wwhd::gpu
 		if (trace)
 			Log(fmt::format("copy to scan buffer {} in frame {}: {:08x} {}x{} fmt {:x}", target, s.frame + 1, addr, w, h, gx2));
 		Image& src = Surface(addr, gx2, false, std::max(w, pitch), h);
+		SurfaceRead(src, h);
 		Image& dst = s.scan[target == 1 ? 0 : 1];
 		// the reference's screenshot is an RGBA8 blit of this buffer, sRGB if the scan buffer is
 		VkFormat f = (target == 1 ? LatteGPUState.tvBufferUsesSRGB : LatteGPUState.drcBufferUsesSRGB)
@@ -893,6 +969,7 @@ namespace wwhd::gpu
 		static const bool shotDrc = getenv("WWHD_SHOT_DRC") && atoi(getenv("WWHD_SHOT_DRC")) != 0;
 		if (shotDrc && s.frame > 1 && s.shotFrames.count(s.frame - 1) && s.scan[1].image)
 			WritePPM(s.scan[1], s.frame - 1, "drc");
+		FitSurfaces();
 		ResetOverwrittenSurfaces();
 		{
 			timing::Scope span(timing::Kind::Present);
