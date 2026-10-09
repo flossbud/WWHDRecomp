@@ -240,6 +240,43 @@ as resolution (75% bilinear, 14.0 ms of GPU a frame, costs less than 50% with FS
 some 3-4x the worker's iGPU, so ~1-1.5 ms there. Off by default and in every check (the TV surface is never
 swapped without it).
 
+## Motion vectors and jitter for the temporal upscalers (b-motion, session bottom, 2026-10-09), opt-in
+
+**`WWHD_MOTION=1`** (`=debug`: the motion drawn over the TV image at its scan copy), **`WWHD_JITTER=1`**
+(`src/gpu/vk/motion.cpp`). From the renderer alone, no game work per actor. Off: nothing runs (checks, regress and
+predeploy unchanged).
+
+**What the traces showed** (tour3, two frames, every draw's constants and vertex buffers): the game skins in its
+vertex shaders (bone and world matrices in uniform blocks; the vertex data of every draw whose buffers stay put is
+identical frame to frame), and it writes its uniform blocks into a per-frame ring in guest memory (no block address
+recurs the next frame), so neither guest addresses nor draw order identify a draw. Block 1 is the draw's world
+matrix (3x4), blocks 2-3 are shared (camera, lights). Grass, the sea and particles have vertex data the CPU writes
+fresh every frame, at moving addresses.
+
+**Matching:** a scene draw (a depth target the TV's size; not the HUD's) is matched to the previous presented
+frame's draws of its group (vertex and pixel shader, vertex buffer addresses) by the nearest world matrix (block 1's
+first 12 floats), one to one, under a cap (200), with no other candidate as near that differs (two identical enemies
+crossing can't swap). No match (new, ambiguous, the CPU-written geometry): the camera's motion only (its own block 1
+now, the shared blocks from the last frame's draws of the same vertex shader). en-tn in gameplay: ~55% matched, the
+rest the CPU-written grass, sea and particles.
+
+**The motion itself:** a matched draw that writes depth runs variants of its shaders, made by rewriting the
+decompiled GLSL at its first scene draw (a shader from the cache is decompiled again): the vertex body again on the
+previous frame's constants (every uniform block declared again at binding + 64, members renamed `_prev`, outputs
+shadowed, writing only the previous clip position), both clip positions at varying locations 16 and 17, the pixel
+shader writing their difference (UV units) to colour slot 7, an RG16F target of the scene's own size (dynamic
+resolution: the render size). Draws without depth writes leave it alone (write mask 0).
+
+**Jitter:** the Halton (2, 3) sequence over 8 frames, a sub-pixel move of the viewport of the scene camera's draws
+only (scene draws that test depth: not shadow maps, effect buffers, full-screen post passes, the HUD); the motion
+excludes it (the debug view with and without: PSNR 52).
+
+**Checks:** the debug view on tour3 and en-tn (the Darknut's spawn mid-fight) looks right; synchronization
+validation 0 hazards. **Cost** on the worker (en-tn at 60): render thread +3.9 ms a frame, GPU +1.5 ms, 50.7 ->
+45.0 fps. To profile once FSR 3 consumes it. **Watch (main's note):** the sea and grass get the camera's motion only,
+not their waves' and sway's; judge FSR 3 on the sail route and Outset's grass, and if they ghost, keep last frame's
+CPU-written vertex data per group and run the two-pass shader on it (or mark them reactive).
+
 ## Item 4, the settings menu: design (session cloud3; the first round landed as designed: handoff.md, "Session cloud3")
 
 **What exists.** Every option on the list is a startup switch today, read once from the environment (`static const`
