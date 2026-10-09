@@ -7,7 +7,8 @@
 // the marked work. With the renderer's barriers waiting for everything (Transition), the GPU runs the spans one after
 // another, so each is that work's own time. The results of a command buffer are read when its slot is recorded again
 // (its fence waited for). Every WWHD_GPU_TIMING_EVERY (600) frames a line of milliseconds a frame by kind, every sixth
-// line the passes that took the most, and at exit both over the whole run. Off: one predictable branch a mark.
+// line the passes and copies that took the most (a copy named by its cause), and at exit both over the whole run.
+// Off: one predictable branch a mark.
 #include "renderer_internal.h"
 #include <algorithm>
 #include <cstdlib>
@@ -122,7 +123,7 @@ namespace wwhd::gpu::timing
 			std::lock_guard lock(s_mutex);
 			Log(fmt::format("gpu timing: the run, {} frames: {}{}", s_framesRun, KindsLine(s_kindRun, s_framesRun),
 				s_dropped || s_unread ? fmt::format(" ({} marks dropped, {} buffers unread)", s_dropped, s_unread) : ""));
-			Log(fmt::format("gpu timing: the run's passes, a frame: {}", TopLine(s_labelRun, s_framesRun, 30)));
+			Log(fmt::format("gpu timing: the run's most (passes, copies), a frame: {}", TopLine(s_labelRun, s_framesRun, 30)));
 		}
 	}
 
@@ -204,7 +205,7 @@ namespace wwhd::gpu::timing
 		s_framesLine = 0;
 		if (++s_lines % 6 == 0)
 		{
-			Log(fmt::format("gpu timing: passes, a frame over the last {} frames: {}", s_framesTop, TopLine(s_labelLine, s_framesTop, 12)));
+			Log(fmt::format("gpu timing: the most (passes, copies), a frame over the last {} frames: {}", s_framesTop, TopLine(s_labelLine, s_framesTop, 12)));
 			std::fill(s_labelLine.begin(), s_labelLine.end(), Sum{});
 			s_framesTop = 0;
 		}

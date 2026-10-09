@@ -656,7 +656,7 @@ namespace wwhd::gpu
 			}
 		}
 
-		Image& CopyOf(Image& surface, uint32 w, uint32 h, VkFormat format)
+		Image& CopyOf(Image& surface, uint32 w, uint32 h, VkFormat format, bool feedback = false)
 		{
 			Copy& c = s_copies[{ surface.image, w, h, format }];
 			if (!c.img.image)
@@ -667,7 +667,11 @@ namespace wwhd::gpu
 			if (c.written != surface.written)
 			{
 				EndRendering();
-				timing::Scope span(timing::Kind::Copy);
+				// the span names why the copy is made (WWHD_GPU_TIMING's top list): the draw samples its own target, or
+				// the texture is another size or format than the surface
+				timing::Scope span(timing::Kind::Copy, !timing::On() ? std::string() : fmt::format("copy {} {}x{} f{} <- {}x{} f{}",
+					feedback ? "feedback" : w != surface.width || h != surface.height ? format != surface.format ? "size+format" : "size" : "format",
+					w, h, (int)format, surface.width, surface.height, (int)surface.format));
 				Transition(c.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 				if (w > surface.width || h > surface.height)           // the part the surface doesn't cover
 				{
@@ -786,7 +790,8 @@ namespace wwhd::gpu
 				if (!copying)
 				{
 					EndRendering();
-					timing::Mark(timing::Kind::Mips);
+					timing::Mark(timing::Kind::Mips, !timing::On() ? std::string() :
+						fmt::format("mips {}x{} f{} {} levels", d.width, d.height, (int)format, c.mips));
 					barrier(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 					copying = true;
 				}
@@ -924,7 +929,7 @@ namespace wwhd::gpu
 			// and what the console's separate colour and texture caches give; the reference does the same
 			// (cemu-patches/0014; G3 status in docs/recompiler-design.md)
 			if (feedback || d.width != surface->width || d.height != surface->height || format != surface->format)
-				img = &CopyOf(*surface, d.width, d.height, format);
+				img = &CopyOf(*surface, d.width, d.height, format, feedback);
 			else if (surface->layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 			{
 				EndRendering();
