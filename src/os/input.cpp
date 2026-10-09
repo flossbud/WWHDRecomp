@@ -56,6 +56,17 @@ namespace wwhd::os::input
 					{ "A", A }, { "B", B }, { "X", X }, { "Y", Y }, { "L", L }, { "R", R }, { "ZL", ZL }, { "ZR", ZR },
 					{ "PLUS", PLUS }, { "MINUS", MINUS }, { "HOME", HOME }, { "UP", UP }, { "DOWN", DOWN },
 					{ "LEFT", LEFT }, { "RIGHT", RIGHT }, { "LCLICK", LCLICK }, { "RCLICK", RCLICK } };
+				// WWHD_INPUT_REMAP=FROM:TO,... (tests in real time): a step that starts on frame FROM starts on TO instead.
+				// tools/sixty/tests/rt_routes.sh moves the routes' menu presses later (the title can take input after the
+				// script's frame 420 in real time), keeping the last one, so play begins on the same frame.
+				std::unordered_map<uint32, uint32> remap;
+				if (const char* e = getenv("WWHD_INPUT_REMAP"))
+				{
+					std::istringstream rs(e);
+					for (std::string pair; std::getline(rs, pair, ',');)
+						if (size_t colon = pair.find(':'); colon != std::string::npos)
+							remap[(uint32)std::stoul(pair.substr(0, colon))] = (uint32)std::stoul(pair.substr(colon + 1));
+				}
 				for (std::string line; std::getline(f, line);)
 				{
 					if (size_t hash = line.find('#'); hash != std::string::npos)
@@ -67,6 +78,8 @@ namespace wwhd::os::input
 						continue;
 					if (!(ls >> st.duration))
 						st.duration = 1;
+					if (auto it = remap.find(st.frame); it != remap.end())
+						st.frame = it->second;
 					std::istringstream ns(names);
 					for (std::string n; std::getline(ns, n, '+');)
 					{
