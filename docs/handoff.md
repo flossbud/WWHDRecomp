@@ -4142,6 +4142,34 @@ A second cloud session (checkout `/wwhd/WWHDRecomp-cloud2`), kept off the worker
   gohmarock ok. Then `ThreadInit` in `OSSchedulerCoreEmulationThread` (session cloud's OK), gated the same way: checks
   plain and verify all MATCH, PSNR inf, 0 misses; every fault now on the alternate stacks (1308 of 1308 in real time).
 
+### Session cloud5 (2026-10-09): B76, the crash in the Darknut fight, fixed
+
+Cloud session cloud5 (tailnet mode, worker directory `/wwhd/WWHDRecomp-cloud5`, branch `ww-4-cloud5`), on B76 only.
+`docs/research/crash-b76.md` has the evidence round by round.
+- **The cause was our test aid, not 60 fps.** `WWHD_DEBUG_SPAWN` (`SpawnNow`, sixty.cpp) creates its actor at the start
+  of the frame body, in fpcLy_CurrentLayer (`*0x101F3AE8`). There, outside any process, that is whatever was set last:
+  usually a room scene's layer, but in about 29% of real-time runs on the worker the root layer.
+  - A Darknut created in the root layer, and the sword it creates (BOKO 463), were drawn twice a frame: by the root
+    layer's walk and by the play scene's.
+  - So their models' packets went into the opaque J3DDrawBuffer twice. entryNonSort (f_027F0DA8) and entryZSort don't
+    check for that (only entryImm asserts), so a packet's next pointed back into the list.
+  - drawHead (f_027F10CC) then looped on the main thread and the render task, their 4 MB display lists overran, and
+    the words landed on a thread's stack: the SIGSEGV in f_025C91FC.
+- **The fix**: when the frame's current layer is the root, the spawn makes Link's layer (process+0x2C) current around
+  the creation, as in his execute. Otherwise it is as before, so the gates' spawns are unchanged; the debug menu's spawn
+  shares it.
+- **Proof** (the worker, 60, real time, lazy DrawDone): en-tn 24 of 24 clean on the old base, 7 of them at a root layer
+  (each crashed before), and 24 of 24 rebased on main (14 at a root layer). New route `gantn`: Ganon's Tower's placed
+  Darknuts (GanonL room 0, spawn point 1; switch 26 forced on, or they stand still): 12 of 12 clean at 60, two
+  Darknuts walking up and fighting in each run (closest 135-245 units), `WWHD_J3D_GUARD=1` silent.
+- **`WWHD_J3D_GUARD`** (off): =1 logs a J3DDrawBuffer packet entered twice, a list that loops before it is drawn, and a
+  process drawn twice in one draw pass, each with the guest call chain; =2 also leaves the second entry out and cuts
+  the loop. Any other double draw would loop the same way (as on the GameCube); this finds it in one run.
+- **Not on main**: session cloud's `WWHD_GX2_GUARD` (display lists that fill) stays on `ww-4-cloud`.
+- **Gates** (on main 32c3631): checks all MATCH (traces, streams, sound), diff 0 mismatches, captures PSNR inf;
+  regress identical to a main build's run beside it; predeploy 50 ok, 0 FAIL, gohmatail WARN 54.0 (as on main),
+  gohmarock ok. Every route's numbers are the same as in session cloud's gate run.
+
 ## Waiting on the owner
 
 - **The sound check** of the task loop's fast path (item 1): they listen in a window when they have

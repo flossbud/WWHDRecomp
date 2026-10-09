@@ -1660,10 +1660,15 @@ namespace wwhd::debug
 // WWHD_DEBUG_SPAWN=tick:process[/subtype],param,x,y,z[,anglex[,angley[,anglez]]][;...] (a test aid): at those game
 // frames an actor of that process name (actor_names.tsv's numbers), subtype (the name table's argument, default 0:
 // the sea's Octorok "Oqw" is 227/1, the pools' "Oq" 227/0) and parameters (hex) is created at that position
-// in Link's room, as fopAcM_create does: the creation record (f_025D5678: parameters, position, room,
-// angle, scale, subtype, parent) and fpcM_Create (f_025E14A8: the layer, *0x101F3AE8, the process
-// name, no create function, the record). anglex (hex), the angle's x, is more parameters for some
-// actors (a Darknut's equipment is (anglex >> 5) & 7: 0x80 a shield and a cape); angley (hex) is its
+// in Link's room, as fopAcM_create (f_025D5834) does: the creation record (f_025D5678: parameters, position, room,
+// angle, scale, subtype, parent) and fpcM_Create (f_025E14A8: the layer, the process name, no create function, the
+// record) in the current layer (fpcLy_CurrentLayer, *0x101F3AE8). The process manager sets that to each process's
+// layer around its execute and draw; the spawn runs at the frame's start, outside any process, where it is whatever
+// was set last: a room scene's layer, or in some real-time runs the root layer. A Darknut created in the root layer
+// was drawn twice a frame (on the root layer's lists and in the play scene's layer), so its models were entered
+// twice into a J3DDrawBuffer list, which then looped (B76, docs/research/crash-b76.md): then Link's layer (his layer
+// tag's, +0x2C) is the current layer for the spawn, as in his execute. anglex (hex), the angle's x, is more
+// parameters for some actors (a Darknut's equipment is (anglex >> 5) & 7: 0x80 a shield and a cape); angley (hex) is its
 // heading (a grappling hook's stake, KUI, takes the hook only from across its axis); anglez (hex) is more
 // parameters again (a chest's item, TBOX, is anglez >> 8)
 void f_025D5678(PPCInterpreter_t* __restrict ctx);
@@ -1694,13 +1699,19 @@ namespace
 		ctx->gpr[7] = 0;
 		ctx->gpr[8] = (uint32)(sint32)w.subtype;
 		ctx->gpr[9] = ~0u;
+		// the current layer, but never the root layer (*0x101F3B18): Link's then, as in his execute
+		// (fpcLy_SetCurrentLayer, f_025DEAB4), put back after
+		const uint32 current = rd32(0x101F3AE8u), linkLayer = rd32(s_link + 0x2C);
+		const uint32 layer = current == rd32(0x101F3B18u) && linkLayer >= 0x10000000u && linkLayer < 0x50000000u ? linkLayer : current;
+		if (layer != current)
+			wr32(0x101F3AE8u, layer);
 		f_025D5678(ctx);
 		const uint32 append = ctx->gpr[3];
 		uint32 id = ~0u;
 		if (append)
 		{
 			ctx->gpr[1] = sp;
-			ctx->gpr[3] = rd32(0x101F3AE8u);
+			ctx->gpr[3] = layer;
 			ctx->gpr[4] = (uint32)w.proc;
 			ctx->gpr[5] = 0;
 			ctx->gpr[6] = 0;
@@ -1708,8 +1719,11 @@ namespace
 			f_025E14A8(ctx);
 			id = ctx->gpr[3];
 		}
+		if (layer != current)
+			wr32(0x101F3AE8u, current);
 		regs.Restore(ctx);
-		cemuLog_log(LogType::Force, "wwhd debug: spawned process {}/{} param {:08x} at {} {} {}: id {:x}", w.proc, w.subtype, w.param, w.x, w.y, w.z, id);
+		cemuLog_log(LogType::Force, "wwhd debug: spawned process {}/{} param {:08x} at {} {} {}: id {:x}{}", w.proc, w.subtype, w.param,
+			w.x, w.y, w.z, id, layer != current ? " (in Link's layer: the frame's current layer was the root layer)" : "");
 	}
 
 	// the debug menu's spawn (wwhd::debug::RequestSpawn): one waiting for the next game frame, placed
@@ -3069,6 +3083,30 @@ namespace
 	}
 }
 
+// B76 probe (WWHD_J3D_GUARD, with the J3DDrawBuffer checks at the end of this file): a process drawn twice in one draw
+// pass is logged with the current layer and the guest call chain of both draws (a process on two layers' lists: B76's
+// Darknut, spawned in the root layer, was drawn by the root layer's walk and by its scene's)
+namespace
+{
+	bool ProcGuard()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_J3D_GUARD"); return e && atoi(e) != 0; }();
+		return on;
+	}
+	uint32 s_procLogged = 0;
+	std::unordered_map<uint32, std::string> s_passDrawn;     // this pass's processes: where each was drawn first
+	void ProcPassDraw(uint32 proc)
+	{
+		std::string where = fmt::format("layer {:08x}, calls{}", rd32(0x101F3AE8u), GuestChain(14));
+		auto [it, fresh] = s_passDrawn.try_emplace(proc, std::move(where));
+		if (fresh || s_procLogged >= 20)
+			return;
+		s_procLogged++;
+		cemuLog_log(LogType::Force, "j3d guard: process {:08x} (name {}) drawn twice in one pass (swap {}, {} tick): first {}; again layer {:08x}, calls{}",
+			proc, (int)rd16(proc + 8), wwhd::os::SwapCount(), g_rtHalfTick ? "half" : "whole", it->second, rd32(0x101F3AE8u), GuestChain(14));
+	}
+}
+
 // fw_procFrame, sead's procFrame_: one whole frame (the tick, the draw, the present, the vsync wait).
 // At 60 fps it decides whether the frame is a whole or a half tick (see the top); with the store
 // census on, a half tick's frame is watched from end to end.
@@ -4068,6 +4106,8 @@ void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
 	if (s_firstDraw)
 	{
 		s_firstDraw = false;
+		if (ProcGuard())
+			s_passDrawn.clear();
 		DrawDiff();
 		// WWHD_60FPS_WATCH=addr[,addr] (a probe): those words at each frame's first draw (watch.txt)
 		if (const char* e = getenv("WWHD_60FPS_WATCH"))
@@ -4135,6 +4175,8 @@ void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
 			return;
 		}
 	}
+	if (ProcGuard())
+		ProcPassDraw(GPR(3));
 	const uint32 outer = s_drawing;
 	s_drawing = GPR(3);
 	std::vector<std::pair<uint32, uint32>> chains;   // its chains moved on for this draw (the chains, below)
@@ -4546,4 +4588,129 @@ void f_02728A74(PPCInterpreter_t* __restrict ctx)
 	orig_f_02728A74(ctx);
 	if (hold != 0 || s_fadeHoldAtWhole != 0)
 		wr32(obj + 0x448, hold);                        // the half call's - 1 put back
+}
+
+// ---- B76 probe: J3DDrawBuffer's lists (docs/research/crash-b76.md) ---------------------------------------------
+// WWHD_J3D_GUARD=1: a packet entered (entryImm f_027F0E04, entryZSort f_027F0C14, entryNonSort f_027F0DA8) while its
+// slot (+0x94) says it is on a list already (only frameInit and the removal clear it) is logged with the guest call
+// chain, and every list is checked for a loop before it is drawn (drawHead f_027F10CC, drawTail f_027F1174): the sorted
+// entries don't check, so a packet entered twice points at itself and the draw never ends (it overran the display
+// list into a thread's stack: B76). =2 also leaves the second entry out and cuts a loop. Off: one predictable branch.
+namespace
+{
+	int J3dGuard()
+	{
+		static const int on = [] { const char* e = getenv("WWHD_J3D_GUARD"); return e ? atoi(e) : 0; }();
+		return on;
+	}
+	uint32 s_j3dLogged = 0;
+
+	// whether pkt is on one of buf's lists (at most `limit` links each)
+	bool J3dListed(uint32 buf, uint32 pkt, uint32 limit = 4096)
+	{
+		const uint32 n = rd32(buf), heads = rd32(buf + 4);
+		for (uint32 i = 0; i < n && i < 4096; i++)
+			for (uint32 p = rd32(heads + i * 4), k = 0; p && k < limit; p = rd32(p + 0x10), k++)
+				if (p == pkt)
+					return true;
+		return false;
+	}
+
+	// an entry's check; true: leave it out
+	bool J3dEntryCheck(const char* what, PPCInterpreter_t* ctx)
+	{
+		const uint32 buf = GPR(3), pkt = GPR(4), slot = rd32(pkt + 0x94);
+		if (!slot)
+			return false;
+		if (s_j3dLogged++ < 60)
+			cemuLog_log(LogType::Force, "j3d guard: {} of packet {:08x} (vtable {:08x}) already entered: slot {:08x}, next {:08x}, on this buffer's lists {}, buffer {:08x} ({} lists at {:08x}), swap {}, {} tick, core {}, drawing process {}, LR {:08x}, calls{}",
+				what, pkt, rd32(pkt + 0xC), slot, rd32(pkt + 0x10), J3dListed(buf, pkt) ? "yes" : "no", buf, rd32(buf), rd32(buf + 4),
+				wwhd::os::SwapCount(), g_rtHalfTick ? "half" : "whole", PPCInterpreter_getCoreIndex(ctx), s_drawing ? (int)rd16(s_drawing + 8) : -1,
+				ctx->spr.LR, GuestChain(14));
+		return J3dGuard() >= 2;
+	}
+
+	// a loop on one of buf's lists (Brent's): logged, and with =2 cut
+	void J3dLoopCheck(PPCInterpreter_t* ctx)
+	{
+		const uint32 buf = GPR(3), n = rd32(buf), heads = rd32(buf + 4);
+		for (uint32 i = 0; i < n && i < 4096; i++)
+		{
+			uint32 power = 1, lam = 1, slow = rd32(heads + i * 4), fast = slow ? rd32(slow + 0x10) : 0;
+			while (fast && fast != slow)
+			{
+				if (power == lam)
+				{
+					slow = fast;
+					power *= 2;
+					lam = 0;
+				}
+				fast = rd32(fast + 0x10);
+				lam++;
+			}
+			if (!fast)
+				continue;
+			// the loop's length is lam; its packets
+			std::string pkts;
+			uint32 p = fast;
+			for (uint32 k = 0; k < lam && k < 8; k++, p = rd32(p + 0x10))
+				pkts += fmt::format(" {:08x}/{:08x}", p, rd32(p + 0xC));
+			if (s_j3dLogged++ < 60)
+				cemuLog_log(LogType::Force, "j3d guard: loop of {} packets on list {} of buffer {:08x}:{}, swap {}, {} tick, core {}, LR {:08x}, calls{}",
+					lam, i, buf, pkts, wwhd::os::SwapCount(), g_rtHalfTick ? "half" : "whole", PPCInterpreter_getCoreIndex(ctx),
+					ctx->spr.LR, GuestChain(14));
+			if (J3dGuard() >= 2)
+			{
+				// cut it at the link back into the loop from its last packet
+				uint32 q = fast;
+				for (uint32 k = 1; k < lam; k++)
+					q = rd32(q + 0x10);
+				wr32(q + 0x10, 0);
+			}
+		}
+	}
+}
+void orig_f_027F0C14(PPCInterpreter_t* __restrict ctx);
+void orig_f_027F0DA8(PPCInterpreter_t* __restrict ctx);
+void orig_f_027F0E04(PPCInterpreter_t* __restrict ctx);
+void orig_f_027F10CC(PPCInterpreter_t* __restrict ctx);
+void orig_f_027F1174(PPCInterpreter_t* __restrict ctx);
+void f_027F0C14(PPCInterpreter_t* __restrict ctx)
+{
+	if (J3dGuard() && J3dEntryCheck("entryZSort", ctx))
+	{
+		ctx->gpr[3] = 1;
+		return;
+	}
+	[[clang::musttail]] return orig_f_027F0C14(ctx);
+}
+void f_027F0DA8(PPCInterpreter_t* __restrict ctx)
+{
+	if (J3dGuard() && J3dEntryCheck("entryNonSort", ctx))
+	{
+		ctx->gpr[3] = 1;
+		return;
+	}
+	[[clang::musttail]] return orig_f_027F0DA8(ctx);
+}
+void f_027F0E04(PPCInterpreter_t* __restrict ctx)
+{
+	if (J3dGuard() && J3dEntryCheck("entryImm", ctx))
+	{
+		ctx->gpr[3] = 1;
+		return;
+	}
+	[[clang::musttail]] return orig_f_027F0E04(ctx);
+}
+void f_027F10CC(PPCInterpreter_t* __restrict ctx)
+{
+	if (J3dGuard())
+		J3dLoopCheck(ctx);
+	[[clang::musttail]] return orig_f_027F10CC(ctx);
+}
+void f_027F1174(PPCInterpreter_t* __restrict ctx)
+{
+	if (J3dGuard())
+		J3dLoopCheck(ctx);
+	[[clang::musttail]] return orig_f_027F1174(ctx);
 }

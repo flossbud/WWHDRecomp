@@ -109,3 +109,8 @@
 020350C4    src/overrides/pacing.cpp           game_procPresent: a dropped half frame presents nothing (frame dips without slowdown)
 0272A8C4    src/overrides/pacing.cpp           RenderDisplay_draw: not run for a dropped half frame
 0272AD80    src/overrides/pacing.cpp           RenderDisplay_calcGPU: not run for a dropped half frame
+027F0C14    src/overrides/sixty.cpp            J3DDrawBuffer::entryZSort: a packet entered twice, logged (WWHD_J3D_GUARD, off; B76)
+027F0DA8    src/overrides/sixty.cpp            J3DDrawBuffer::entryNonSort: the same (B76)
+027F0E04    src/overrides/sixty.cpp            J3DDrawBuffer::entryImm: the same (B76)
+027F10CC    src/overrides/sixty.cpp            J3DDrawBuffer::drawHead: a list that loops, logged (WWHD_J3D_GUARD, off; B76)
+027F1174    src/overrides/sixty.cpp            J3DDrawBuffer::drawTail: the same (B76)

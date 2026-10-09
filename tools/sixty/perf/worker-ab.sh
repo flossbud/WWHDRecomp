@@ -10,6 +10,8 @@
 #   PERF_WARMUP=0  no warm-up round (round 0: each variant's shader cache, left out of the summary)
 #   PERF_NOWAIT=1  don't wait for other sessions' games on the worker to end before each run (they share its
 #                  CPU and its power cap: a run beside one is noise)
+#   PERF_KEEPLOG=1 keep every run's emulator log (ab-...-N.log), not only a crashed run's
+#   PERF_CORE=1    let a crash write a core dump (off: a core holds game memory; delete it when done)
 # Out: ab-NAME-ROUTE-N.frames (WWHD_FRAME_LOG), .threads (each thread's CPU % over gameplay: game frame 900 to
 # 95% of the run), .rt (the real-time lines). Then worker_absum.py's summary of the directory.
 # Run it as a job: tools/worker/job start ab tools/sixty/perf/worker-ab.sh continue:1800 6 off:... on:...
@@ -33,6 +35,7 @@ for v in "$@"; do
     mkdir -p "$dir/bin-$name" && cp "$b" "$dir/bin-$name/wwhd-null.new" && mv "$dir/bin-$name/wwhd-null.new" "$dir/bin-$name/wwhd-null" || exit 2
     bin[$name]=$dir/bin-$name/wwhd-null
 done
+[ "${PERF_CORE:-}" = 1 ] || ulimit -c 0
 pid=; trap '[ -n "$pid" ] && kill "$pid" 2>/dev/null' EXIT    # job stop: the run's game too
 snap() { local k; for k in /proc/$1/task/*; do printf '%s\t%s\n' "$(cat $k/comm)" "$(sed 's/.*) //' $k/stat | awk '{print $12+$13}')"; done 2>/dev/null; }
 swaps() { local n; n=$(tail -c 200 "$1" 2>/dev/null | tail -1 | cut -d' ' -f1); echo "${n:-0}"; }
@@ -83,6 +86,7 @@ for n in $(seq $([ "${PERF_WARMUP:-1}" = 0 ] && echo 1 || echo 0) "$rounds"); do
         done
         # a run that ended without its frame log (a crash): keep its emulator log, the next run overwrites it
         [ -s "$log.frames" ] || cp "$port" "$log.crash.txt" 2>/dev/null
+        [ "${PERF_KEEPLOG:-}" = 1 ] && cp "$port" "$log.log" 2>/dev/null
         others=$(others x); [ "$others" = 0 ] && others=
         [ -n "$a" ] && [ -f "$dir/.b" ] && python3 - "$dir/.a" "$dir/.b" "$ta" "$tb" > "$log.threads" <<'PY'
 import sys, collections, os

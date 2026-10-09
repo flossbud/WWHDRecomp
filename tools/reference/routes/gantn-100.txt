@@ -1,0 +1,33 @@
+# Route: placed Darknuts (TN 191, not spawned): Ganon's Tower's (GanonL room 0, ACTR, params 1aff9654 at -400 and
+# 400,5852,-37000, a third at 0,3812,-28100, with Moblins), warped to with the 100% save: Link at the room's spawn
+# point 1 (0,5853,-37200, facing them, 200 units off) targets one (ZL) and slashes (B) every 15 frames, then is left to
+# them (session cloud5, B76: en-tn's crash came from its debug spawn; this is a fight with Darknuts the game places).
+# Switch 26 (0x1a, their parameters' top byte) is forced on: without it the two stand still (on the worker at 60,
+# the flight recorder: they walked 0 units; with it 381 and 179, and came within 182 and 221 units of Link).
+# FRAME BUTTONS [FRAMES_HELD]; the #env lines are exported by tools/sixty/run.sh.
+#env WWHD_DEBUG_STAGE=920:GanonL,1,0,-1
+#env WWHD_DEBUG_FLAGS=sw:26=1
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; the warp at f920
+1060 ZL 300    # target one
+1075 B 3
+1090 B 3
+1105 B 3
+1120 B 3
+1135 B 3
+1150 B 3
+1165 B 3
+1180 B 3
+1195 B 3
+1210 B 3
+1225 B 3
+1240 B 3
+1255 B 3
+1270 B 3
+1285 B 3
+1300 B 3
+1315 B 3
+1330 B 3
+1345 B 3
