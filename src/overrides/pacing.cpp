@@ -14,7 +14,8 @@
 // time only: with the virtual clock (measurement runs) a frame always fits its vsync, and the
 // game's own wait runs. WWHD_60FPS_PACING=vsync keeps the game's wait in real time too.
 //
-// Frame dips without slowdown (the owner's ask, docs/research/gpu-plan.md). WWHD_60FPS_KEEPSPEED=1, real time at 60:
+// Frame dips without slowdown (the owner's ask, docs/research/gpu-plan.md; always on in real time at 60 since t-fpscap,
+// the owner's choice: no setting; WWHD_60FPS_KEEPSPEED=0 turns it off for A/Bs and tests only, logged):
 // the game's ticks keep a schedule (one each 33.3 ms, resynced after a hitch of over 250 ms), and a half tick's frame
 // that would end after the next tick is due (its expected work, the last half frames' average, from now) is dropped:
 // its logic and its actor draws run (the converted processes' half steps, the half tick's late rules; the draws take
@@ -73,6 +74,7 @@ namespace
 	}
 
 	uint64 s_dropped = 0, s_halves = 0;            // half frames dropped, and all half frames (the real-time log)
+	bool s_capDrop = false;                        // this frame was dropped by the frame rate cap (WWHD_FPS_CAP), not late
 	Clock::time_point s_tickDue{}, s_frameStart{};
 	double s_halfWorkMs = 8.0;                     // the half frames' work, a running average
 	uint64 s_frameVsync = 0;                       // the vsync count when this frame's work began
@@ -180,7 +182,9 @@ void f_0274C874(PPCInterpreter_t* __restrict ctx)
 	}
 	if (g_rtHalfTick && !wwhd::pacing::g_dropFrame && s_frameStart != Clock::time_point{})
 		s_halfWorkMs += (std::chrono::duration<double, std::milli>(Clock::now() - s_frameStart).count() - s_halfWorkMs) / 8;
-	if (wwhd::pacing::g_dropFrame && Paced())
+	if (wwhd::pacing::g_dropFrame && Paced() && s_capDrop)
+		GX2::wwhd_WaitForVsyncCount(s_pairVsync + 2);   // dropped by the frame rate cap: on time, so its slot waits as shown
+	else if (wwhd::pacing::g_dropFrame && Paced())
 		;                                          // dropped: behind already, the next tick at once
 	else if (!Paced())
 		orig_f_0274C874(ctx);
@@ -213,10 +217,16 @@ namespace wwhd::pacing
 	void FrameStart(uint32 swap, uint32 from, bool half)
 	{
 		static const uint32 test = [] { const char* e = getenv("WWHD_60FPS_DROPTEST"); return e ? (uint32)atoi(e) : 0u; }();
-		static const bool keep = [] { const char* e = getenv("WWHD_60FPS_KEEPSPEED"); return e && atoi(e) == 1; }();
+		static const bool keep = [] {
+			const char* e = getenv("WWHD_60FPS_KEEPSPEED");
+			if (e && atoi(e) == 0)
+				cemuLog_log(LogType::Force, "wwhd pacing: WARNING: WWHD_60FPS_KEEPSPEED=0, a test override: frames that dip slow the game down");
+			return !(e && atoi(e) == 0);
+		}();
 		const Clock::time_point now = Clock::now();
 		s_frameStart = now;
 		g_dropFrame = false;
+		s_capDrop = false;
 		if (!half)
 		{
 			// the tick's whole frame: it was due at s_tickDue; the next one 33.3 ms after (resynced after a long hitch:
@@ -227,13 +237,24 @@ namespace wwhd::pacing
 			return;
 		}
 		s_halves++;
+		// WWHD_FPS_CAP=40|50 (the settings page's frame rate; t-fpscap): 60 ticks' logic, every whole frame shown, and of
+		// every three ticks' half frames one shown (40: four frames in six) or two (50: five in six), the rest dropped as
+		// keep-speed drops them (their logic runs, their render and present don't). An even pattern, not even time:
+		// motion is smoother at 30 or 60. Its frames wait as shown ones in real time (f_0274C874)
+		static const uint32 cap = [] { const char* e = getenv("WWHD_FPS_CAP"); const int v = e ? atoi(e) : 60; return v == 40 || v == 50 ? (uint32)v : 0u; }();
+		const uint32 tick = (swap - from) / 2;
 		if (test)
-			g_dropFrame = (swap - from) / 2 % test == 0;
-		else if (keep && Paced())
-			g_dropFrame = now + std::chrono::microseconds((long long)(s_halfWorkMs * 1000)) > s_tickDue;
+			g_dropFrame = tick % test == 0;
+		else
+		{
+			if (cap)                                   // (under the virtual clock too: droptest.sh; no check sets it)
+				g_dropFrame = s_capDrop = cap == 40 ? tick % 3 != 0 : tick % 3 == 0;
+			if (!g_dropFrame && keep && Paced())       // keep-speed: a half frame that would end after the next tick is due
+				g_dropFrame = now + std::chrono::microseconds((long long)(s_halfWorkMs * 1000)) > s_tickDue;
+		}
 		if (g_dropFrame)
 			s_dropped++;
-		if (s_halves % 600 == 0 && (keep || test))
+		if (s_halves % 600 == 0 && (keep || test || cap))
 			cemuLog_log(LogType::Force, "wwhd pacing: {} of the last 600 half frames dropped (half frame work ~{:.1f} ms)",
 				s_dropped, s_halfWorkMs);
 		if (s_halves % 600 == 0)
