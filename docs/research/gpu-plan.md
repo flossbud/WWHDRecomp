@@ -107,6 +107,34 @@ clears and the loads of targets (item 2) come before the shaders (item 5).
 feedback copy stays (it's a real read of the target being drawn). The half-size 960x544 RGBA8 passes (2.06 ms) are
 the ambient occlusion candidate (b-gfxopts). Clears and resets (1.5 ms) are b-clears'.
 
+## Item 2: narrow barriers and surface fit, on by default (session bottom, 2026-10-09)
+
+`WWHD_BARRIERS=narrow` (session cloud2, 243d4ae) and `WWHD_SURFACE_FIT=1` (1b97d37, 32c3631) are the defaults now;
+`WWHD_BARRIERS=all` and `WWHD_SURFACE_FIT=0` give the old behaviour. The worker's A/B (`worker-ab.sh`, one binary,
+4 rounds after a warm-up, the lazy DrawDone and three host threads in every variant, `WWHD_GPU_TIMING=1` in all):
+
+| route | variant | fps | game speed | GPU ms a frame |
+|---|---|---|---|---|
+| continue at 60 | old (all barriers, no fit) | 52.4 | 87% | 18.89 |
+| | narrow barriers | 52.8 (+0.6%, noise) | 88% | 18.76 |
+| | surface fit | **60.0 (+14.6%, every round)** | **100%** | 16.06 |
+| | both (the default) | **59.9 (+14.5%)** | **100%** | 16.09 |
+| en-tn (the Darknut fight) at 60 | old | 44.1 | 74% | 21.76 |
+| | narrow barriers | 44.2 (+0.7%, noise) | 74% | 21.77 |
+| | surface fit | 50.2 (+12.0%) | 84% | 18.38 |
+| | both (the default) | 49.1 (+11.5%) | 82% | 18.77 |
+
+**Surface fit makes the worker hold 60 at full speed on the continue route**: the CopyOf size copies (1920x1088
+surfaces sampled as 1920x1080, ~3 ms a frame on the iGPU) are gone. The Darknut fight still needs ~3 ms more
+(item 3's dynamic resolution, b-clears). **Narrow barriers buy no measurable speed** on this GPU (it runs one queue's
+work largely in order anyway), but they stay on: they are what the spec asks (the default's write-after-write orders
+by chance, 71 synchronization-validation hazards on the continue route; narrow, with surface fit: 0).
+
+Correctness: `tools/sixty/tests/fit_proof.sh` (`WWHD_SURFACE_FIT=proof` over predeploy's 50 routes and gohmatail,
+gohmarock, en-tn, route, tour: 0 reads past the fitted rows on all 55); the checks with both on: all MATCH, the
+captures byte-identical (the surfaces are fitted mid-run, before the later captures); regress identical; predeploy
+0 FAIL.
+
 ## Item 3, render scale: built (session cloud3), opt-in
 
 **`WWHD_RENDER_SCALE=0.5..2`** (renderer.cpp `RenderScale`; 1, the default and every check's, changes nothing:

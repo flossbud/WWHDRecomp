@@ -345,7 +345,8 @@ namespace wwhd::gpu
 	// ---- images ------------------------------------------------------------------------------
 	namespace
 	{
-		// WWHD_BARRIERS=narrow (gpu-plan.md item 2, an A/B for now): a transition waits only for the stages that used
+		// Narrow barriers (gpu-plan.md item 2; the default from session bottom's A/B, WWHD_BARRIERS=all: the old ones, every
+		// transition waiting for everything): a transition waits only for the stages that used
 		// the image in its old layout, and makes their writes visible to the stages of the new one, so the GPU can
 		// overlap work on other images (the next pass's vertex work with this one's fragments). Each layout here has
 		// one use: attachments (read and written in their pass), sampling, a transfer's source or destination. A
@@ -354,7 +355,7 @@ namespace wwhd::gpu
 		// Images that change outside Transition (uploads, the mip chains, the window's) keep their own barriers.
 		bool NarrowBarriers()
 		{
-			static const bool on = [] { const char* e = getenv("WWHD_BARRIERS"); return e && strcmp(e, "narrow") == 0; }();
+			static const bool on = [] { const char* e = getenv("WWHD_BARRIERS"); return !e || strcmp(e, "all") != 0; }();
 			return on;
 		}
 
@@ -383,7 +384,7 @@ namespace wwhd::gpu
 		}
 	}
 
-	// by default every transition waits for everything before it: correctness first (WWHD_BARRIERS=narrow: above)
+	// narrow by default (above); WWHD_BARRIERS=all: every transition waits for everything before it
 	void Transition(Image& img, VkImageLayout layout)
 	{
 		const bool narrow = NarrowBarriers();
@@ -574,7 +575,8 @@ namespace wwhd::gpu
 	}
 
 	// ---- surfaces ----------------------------------------------------------------------------
-	// WWHD_SURFACE_FIT=1 (gpu-plan.md item 2, opt-in): a render target is often taller than anything reads of it
+	// Surface fit (gpu-plan.md item 2; the default from session bottom's A/B and proof sweep, WWHD_SURFACE_FIT=0 turns
+	// it off): a render target is often taller than anything reads of it
 	// (1920x1088, its height padded for tiling, sampled as a 1920x1080 texture), and a texture of another size than its
 	// surface is a copy (CopyOf) every frame it was drawn. At each swap a surface that every read so far wanted fewer
 	// rows of is made that many rows tall (its rows kept): it's sampled directly, and the passes into it draw only
@@ -586,14 +588,14 @@ namespace wwhd::gpu
 	// still wants more rows than a surface was fitted to is logged ("surface fit: read past"), and the surface goes
 	// back to its full height for good: that frame may differ, the log says so. WWHD_SURFACE_FIT=proof changes
 	// nothing and logs the same reads against the heights it would fit to: the proof that the rows cut off are never
-	// read, on any route. The checks run without it.
+	// read, on any route (tools/sixty/tests/fit_proof.sh).
 	namespace
 	{
 		int SurfaceFitMode()                                      // 0 off, 1 fit, 2 proof
 		{
 			static const int mode = [] {
 				const char* e = getenv("WWHD_SURFACE_FIT");
-				return !e ? 0 : strcmp(e, "proof") == 0 ? 2 : atoi(e) != 0 ? 1 : 0;
+				return !e ? 1 : strcmp(e, "proof") == 0 ? 2 : atoi(e) != 0 ? 1 : 0;
 			}();
 			return mode;
 		}

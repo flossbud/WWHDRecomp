@@ -4,8 +4,9 @@
 // scan buffer is copied, the window's image is drawn. Each span between two timestamps is the work of the first one's
 // kind (and, for passes, its targets: "1280x720 c1 f37 d" is a pass into one colour target of VkFormat 37 and a
 // depth target), so the spans add up to the command buffer's GPU time; "other" is the barriers and the gaps between
-// the marked work. With the renderer's barriers waiting for everything (Transition), the GPU runs the spans one after
-// another, so each is that work's own time. The results of a command buffer are read when its slot is recorded again
+// the marked work. With barriers that wait for everything (WWHD_BARRIERS=all) the GPU runs the spans one after
+// another, so each is that work's own time; with the default narrow barriers work on other images may overlap a
+// span's edges, so the total stays right and the split by kind is close. The results of a command buffer are read when its slot is recorded again
 // (its fence waited for). Every WWHD_GPU_TIMING_EVERY (600) frames a line of milliseconds a frame by kind, every sixth
 // line the passes and copies that took the most (a copy named by its cause), and at exit both over the whole run.
 // Off: one predictable branch a mark.
