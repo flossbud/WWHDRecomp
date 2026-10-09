@@ -38,8 +38,10 @@ Weaker hardware (phones, the Deck in heavy scenes) needs more. The owner's order
   1.38, bandwidth-bound (below).
 - Item 2: **narrow barriers and surface fit on by default** (`b-barriers`, below): the worker holds 60.0 fps at full
   speed on the continue route (52.4 before). Left: load ops and redundant transitions (`b-clears`).
-- Item 3: **fixed scales built, off by default** (below; 75% in the Performance preset); **dynamic resolution built,
-  opt-in** (`WWHD_RENDER_SCALE=auto`, below). Left: the worker A/B on en-tn at 100/75/50% (`b-scale`).
+- Item 2's rest: **clears as load ops on by default** (`b-clears`, below; -1.9% GPU on continue). Redundant
+  transitions: not worth doing (barriers and gaps 0.05 ms a frame on the worker).
+- Item 3: **fixed scales and dynamic resolution built, off by default** (`WWHD_RENDER_SCALE=0.75|0.5|auto`; 75% in the
+  Performance preset). The worker on en-tn at 60: 100% 49.9 fps, 75% 56.6, 50% 59.7, Auto 59.2 (`b-scale`, below).
 - Item 4: **first round and presets landed** (below). Left: the AO toggle, AF, FXAA (`b-gfxopts`).
 - Item 5: not started (`b-shaders`).
 
@@ -133,6 +135,19 @@ gohmarock, en-tn, route, tour: 0 reads past the fitted rows on all 55); the chec
 captures byte-identical (the surfaces are fitted mid-run, before the later captures); regress identical; predeploy
 0 FAIL.
 
+## Item 2's rest: clears as load ops, on by default (session bottom, 2026-10-09)
+
+A clear of a whole single-layer image (the game's colour and depth clears, the depth clear's colour aliases, the
+overwritten surfaces' resets at a swap) is kept on the image (`DeferClear`) and done by the load op of the next pass
+into it when that pass covers the whole image (`VK_ATTACHMENT_LOAD_OP_CLEAR`); any other use records it first
+(`FlushClear`, from `Transition`, a sample of a surface already in its layout, a rescale). `WWHD_CLEAR_LOADOP=0`: as
+before. The worker (4 rounds): continue at 60 GPU 15.79 -> 15.49 ms a frame (-1.9%, every round; fps at 60 either
+way), en-tn +0.4% (noise). On the desktop GPU clears went 0.07 -> 0.02 ms and resets 0.05 -> 0, the passes taking
+most of it over. Checks with it: all MATCH, captures byte-identical; synchronization validation 0 hazards. The
+timing names the clear and reset spans now: the costly ones are one colour+depth clear of the 1920x1080 targets a
+frame, the 864x480 GamePad screen's clear, and a reset of a 1920x1088 target. Redundant transitions, the plan's
+other half: barriers and gaps are 0.05 ms of the worker's 18.7, nothing to win.
+
 ## Item 3, render scale: built (session cloud3), opt-in
 
 **`WWHD_RENDER_SCALE=0.5..2`** (renderer.cpp `RenderScale`; 1, the default and every check's, changes nothing:
@@ -178,6 +193,23 @@ into part of a full-size target instead (no reallocation): the game's shaders sa
 and read neither `uf_texNScale` nor `textureSize`, so a part-filled target would be sampled whole.
 Tested: a virtual-clock run stepping 1 -> 0.75 at frame 61 gives captures byte-identical to a fixed 0.75 run at
 frames 1000, 1300, 1600 (tour3); real time under synchronization validation, four steps 1 -> 0.5: 0 hazards.
+
+**The worker's A/B (session bottom, 2026-10-09; lazy DrawDone, three host threads, 3-4 rounds, every run of a
+variant above every run of 100%'s):**
+
+| en-tn (the Darknut fight) at 60 | fps | game speed | GPU clock |
+|---|---|---|---|
+| 100% | 49.9-50.0 | 83% | 1147 MHz |
+| 75% | 56.2-56.6 (+12%) | 94% | 1064-1077 MHz |
+| 50% | 59.7 (+19%) | 100% | 804 MHz |
+| Auto | 59.2 (+18%) | 99% | 816 MHz |
+
+Continue at 60 already holds 60 at 100% (60.1 fps); Auto there 59.9, stepping between 100% and 87.5% where a window
+runs slow. Two things the runs showed: **at 50% the iGPU has time to spare and clocks itself down** (804 MHz), so its
+time a frame rises again; the first controller, deciding from the GPU's time alone, kept stepping down. It now
+decides from missed frames (above). And **a pass mixes a 960x544 target with a scaled 1920x1088 one** once on en-tn
+(frame 2050, at any scale below 1, cloud3's log line): the captures around it at 75% against 100% are as close as
+before it (PSNR 37.7-37.9 upscaled, the same picture by eye), so it's left as a logged case.
 
 ## Item 4, the settings menu: design (session cloud3; the first round landed as designed: handoff.md, "Session cloud3")
 
