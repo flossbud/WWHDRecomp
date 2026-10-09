@@ -37,13 +37,15 @@ run_one() {
         # three host threads the game swaps at full rate while the title loads on the other cores, so under a busy
         # machine the title is ready a few dozen swaps later than with one (session top: the same runs with the menu
         # presses 150 frames later, 6 of 6 in play). The run then sits on the file select (no process made after the
-        # title's, tick 102): play it again, and count it.
-        python3 - "$R/$r/$v/60/hashes.txt" <<'PY' && break
+        # title's) or comes into play late, when a later press of the route's starts the game, and every input after
+        # it lands late. In play: a Link (process 168) whose track starts between ticks 800 and 900 (the title's Link
+        # is made at ~tick 100, the play scene's at ~tick 847). Otherwise play it again, and count it.
+        python3 - "$R/$r/$v/60/track.bin" <<'PY' && break
 import sys
-f = {}
-for line in open(sys.argv[1]):
-    p = line.split(); f.setdefault(p[1], int(p[0]))
-sys.exit(0 if f and max(f.values()) > 700 else 1)
+sys.path.insert(0, "tools/sixty")
+import compare
+T = compare.load_track(sys.argv[1])
+sys.exit(0 if any(k[0] == 168 and 1600 <= min(T[k]) <= 1800 for k in T if T[k]) else 1)
 PY
         echo "rt_routes: $r $v: never in play (the title's first press too early), again" | tee -a "$R/$r/retries.txt"
     done
@@ -70,6 +72,8 @@ import compare
 R, variants, routes = sys.argv[1], sys.argv[2].split(), sys.argv[3:]
 def link(path):
     T = compare.load_track(path)
+    if not any(k[0] == 168 and 1600 <= min(T[k]) <= 1800 for k in T if T[k]):
+        return "late"                                # never in play on time (the title's press): not compared
     out = {}
     for k in T:
         if k[0] == 168:
@@ -88,6 +92,8 @@ for r in routes:
     cells = []
     for a, b in pairs:
         A, B = t[a], t[b]
+        if A == "late" or B == "late":
+            cells.append(f"{'late start':>17s}"); continue
         if not A or not B:
             cells.append(f"{'no track':>17s}"); continue
         # a half tick's key is 2k+1 or 2k-1 by the run (where the 60 switch fell against the game's ticks): the
