@@ -395,6 +395,12 @@
       "name": "Round 14: [3] Frame rate cap 30/40/50/60 in the settings (the owner's ask): 30 and 60 exact as today; 40 and 50 at 60 ticks' logic with a fixed pattern of dropped half-tick frames (keep-speed's machinery: full speed, slightly uneven motion, said in the option); smooth 40/50 comes with uncapped (D21 step 4); keep full speed always on in real time, no option (the owner, 2026-10-09)"
     },
     {
+      "id": "t-frameskip",
+      "lane": "top",
+      "complexity": 5,
+      "name": "Round 14: [5] Full speed below 30 (the owner's ask): when even whole-tick frames run late, skip their rendering too (the logic and actor draws still run, as keep-speed's dropped half frames), so a slow machine shows fewer frames at full speed; never skip a frame something reads back (the picto box, queries); a floor on frames shown; helps when rendering is the bottleneck (logic slower than 30 ticks a second can't keep speed)"
+    },
+    {
       "id": "t-lazy",
       "lane": "top",
       "complexity": 7,
