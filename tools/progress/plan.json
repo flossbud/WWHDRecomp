@@ -383,6 +383,12 @@
       "name": "Round 14: [8] Three host threads by default (WWHD_CORES=3; 47 -> 54 fps on the worker): routes 3 against 1 on every predeploy route, a 1 h real-time soak, the locks list, per-core figures in the log; then on by default with full gates"
     },
     {
+      "id": "t-boot",
+      "lane": "top",
+      "complexity": 4,
+      "name": "Round 14: [4] Skip the title in test runs (the owner's ask): WWHD_DEBUG_BOOT=slot loads a save straight into play (no title, no file select), for the real-time routes, soaks and A/Bs (under load the title's fixed-frame press is missed and most runs replay); fallback: the press held until the file select shows; the deterministic checks keep the title (their reference has it)"
+    },
+    {
       "id": "t-lazy",
       "lane": "top",
       "complexity": 7,
