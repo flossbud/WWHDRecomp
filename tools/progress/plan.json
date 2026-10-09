@@ -389,6 +389,12 @@
       "name": "Round 14: [4] Skip the title in test runs (the owner's ask): WWHD_DEBUG_BOOT=slot loads a save straight into play (no title, no file select), for the real-time routes, soaks and A/Bs (under load the title's fixed-frame press is missed and most runs replay); fallback: the press held until the file select shows; the deterministic checks keep the title (their reference has it)"
     },
     {
+      "id": "t-fpscap",
+      "lane": "top",
+      "complexity": 3,
+      "name": "Round 14: [3] Frame rate cap 30/40/50/60 in the settings (the owner's ask): 30 and 60 exact as today; 40 and 50 at 60 ticks' logic with a fixed pattern of dropped half-tick frames (keep-speed's machinery: full speed, slightly uneven motion, said in the option); smooth 40/50 comes with uncapped (D21 step 4)"
+    },
+    {
       "id": "t-lazy",
       "lane": "top",
       "complexity": 7,
