@@ -4116,10 +4116,16 @@ Cloud session cloud3 (tailnet mode, worker directory `/wwhd/WWHDRecomp-cloud3`, 
   default; changing a preset's option writes its own line ("Custom"), choosing a preset again drops them. The log's
   `wwhd settings:` line says what was chosen and why. Tested: auto -> quality on the desktop worker, the presets from
   the environment and the file, an option's line over the preset, the environment over both, and the menu from
-  the pad (preset, a custom option, back to the preset). **Stopped here (2026-10-09, the owner's pause for the
-  fight crash):** render scale (gpu-plan item 3) was next for cloud3 and is not started (no code). When it lands it
-  becomes a Performance value in settings.cpp's option table. Next: render scale (gpu-plan 3), ambient occlusion (after item 1
-  names the pass) and the shader set (5) join the page as they land.
+  the pad (preset, a custom option, back to the preset). **Render scale (gpu-plan item 3), landed, opt-in:**
+  `WWHD_RENDER_SCALE=0.5..2` renders the screen-sized targets (1920x1088) at the scale, with the guest's sizes kept
+  for everything the guest sees (`Image::gw/gh`); the half-size effect buffers and the shadow maps stay the guest's
+  (scaling them weakened ambient occlusion at 0.5). Design and numbers in gpu-plan.md, "Item 3". Outset: as close
+  to 1x as resampling alone; GPU time a frame on the desktop worker 1.44 / 1.29 / 1.18 ms at 1 / 0.75 / 0.5. The
+  settings page's "Render scale" (100/75/50%), the Performance preset 75% (checked in a real-time window run).
+  Gates: checks all MATCH (15 captures PSNR inf), regress identical, predeploy 50 ok / 0 FAIL, gohmatail WARN
+  54.0, gohmarock ok 4.8. Not yet: the worker A/B in the fight scene (en-tn, 100/75/50% with three host threads
+  and the lazy DrawDone), waiting for the owner's OK to run games on the worker. Next: ambient occlusion (after
+  item 1 names the pass) and the shader set (5) join the page as they land; dynamic resolution after the A/B.
 
 ### Session cloud2 (2026-10-08): write-watch and a present-path review, branch ww-4-cloud2
 
