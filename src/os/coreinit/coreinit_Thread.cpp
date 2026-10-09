@@ -1377,6 +1377,52 @@ namespace coreinit
 		}
 	}
 
+	// wwhd: WWHD_THREAD_DUMP=path (a probe, real time): at exit, every guest thread's state, what it waits on and its
+	// guest call chain from its stack's back chain (each frame's saved LR), to see where a thread is stuck
+	namespace threaddump
+	{
+		void Write()
+		{
+			FILE* f = fopen(getenv("WWHD_THREAD_DUMP"), "w");
+			if (!f)
+				return;
+			for (sint32 i = 0; i < activeThreadCount; i++)
+			{
+				OSThread_t* t = MEMPTR<OSThread_t>(activeThread[i]).GetPtr();
+				const char* name = t->threadName.GetPtr();
+				fprintf(f, "%08x %s state %u suspend %d affinity %u priority %d waitqueue %08x mutex %08x fastmutex %08x wakeups %llu lr %08x pc %08x\n  chain",
+					activeThread[i], name ? name : "?", (uint32)t->state.value(), (sint32)t->suspendCounter, (uint32)t->context.affinity & 7,
+					(sint32)t->effectivePriority, t->currentWaitQueue.GetMPTR(), t->waitingForMutex.GetMPTR(), t->waitingForFastMutex.GetMPTR(),
+					(unsigned long long)t->wakeUpCount, t->context.lr, t->context.srr0);
+				uint32 sp = t->context.gpr[1];
+				for (int depth = 0; depth < 24 && sp && memory_isAddressRangeAccessible(sp, 8); depth++)
+				{
+					const uint32 lr = memory_readU32(sp + 4);
+					if (depth)
+						fprintf(f, " %08x", lr);
+					const uint32 next = memory_readU32(sp);
+					if (next <= sp)
+						break;
+					sp = next;
+				}
+				fprintf(f, "\n");
+			}
+			fclose(f);
+		}
+
+		bool On()
+		{
+			static const bool on = [] {
+				if (!getenv("WWHD_THREAD_DUMP"))
+					return false;
+				atexit(Write);
+				at_quick_exit(Write);
+				return true;
+			}();
+			return on;
+		}
+	}
+
 	void wwhd_CoreCensus(const char* where)
 	{
 		if (!g_isMulticoreMode || !corecensus::On())
@@ -1753,6 +1799,7 @@ namespace coreinit
 			numCPUEmulationThreads = cores && atoi(cores) == 1 ? 1 : 3;
 		}
 		g_isMulticoreMode = numCPUEmulationThreads > 1;
+		threaddump::On();
 		cemuLog_log(LogType::Force, "wwhd: guest cores on {} host thread{}", numCPUEmulationThreads, numCPUEmulationThreads > 1 ? "s" : "");
 		if (numCPUEmulationThreads == 1)
 			sSchedulerThreads.emplace_back(OSSchedulerCoreEmulationThread, (void*)0);

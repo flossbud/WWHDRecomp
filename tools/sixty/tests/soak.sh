@@ -7,7 +7,7 @@
 # environment added (default one, "cores3:WWHD_CORES=3"); every variant gets the same inputs (SOAK_SEED, default 1).
 # With SOAK_MIN unset the route ends at swap 900 + MINUTES x 3600 (60 fps), so a run below 60 fps takes longer.
 # Out ($OUT/soak/NAME): frames.txt (WWHD_FRAME_LOG), threads.txt (WWHD_THREAD_STATS), census.txt (WWHD_CORE_CENSUS),
-# the emulator's log; a verdict line per variant. SOAK_BIN: another binary than build/wwhd/wwhd-null. Run it as a job: tools/worker/job start soak tools/sixty/tests/soak.sh 60
+# the emulator's log; a verdict line per variant. Rendered (WWHD_RENDER=vk, headless on the machine's GPU). SOAK_BIN: another binary than build/wwhd/wwhd-null. Run it as a job: tools/worker/job start soak tools/sixty/tests/soak.sh 60
 set -uo pipefail
 source "$(dirname "$0")/common.sh"
 minutes=${1:-60}; shift || true
@@ -55,7 +55,7 @@ for v in "${variants[@]}"; do
     echo "soak.sh: $name: $minutes min ($frames game frames, swap $swaps), ${envs[*]}"
     start=$(date +%s)
     env "${envs[@]}" WWHD_60FPS=1 WWHD_60FPS_FROM=900 WWHD_EXIT_FRAME=$swaps WWHD_LAZY_DRAWDONE=${WWHD_LAZY_DRAWDONE:-1} \
-        WWHD_FRAME_LOG=$d/frames.txt WWHD_THREAD_STATS=$d/threads.txt WWHD_CORE_CENSUS=$d/census.txt WWHD_NATIVE=on \
+        WWHD_FRAME_LOG=$d/frames.txt WWHD_THREAD_STATS=$d/threads.txt WWHD_CORE_CENSUS=$d/census.txt WWHD_NATIVE=on WWHD_RENDER=vk \
         REF_PIDFILE=$d/pid REF_FRESH=1 REF_SAVE=/wwhd/data/saves/wwhd_100 CEMU_INPUT_SCRIPT=$script CEMU_BIN=$d/bin/wwhd-null \
         tools/reference/run.sh > "$d/run.log" 2>&1 || { echo "soak.sh: $name: the game didn't start (see $d/run.log)"; fail=1; continue; }
     pid=$(cat "$d/pid")
