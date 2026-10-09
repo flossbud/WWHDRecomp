@@ -4116,7 +4116,9 @@ Cloud session cloud3 (tailnet mode, worker directory `/wwhd/WWHDRecomp-cloud3`, 
   default; changing a preset's option writes its own line ("Custom"), choosing a preset again drops them. The log's
   `wwhd settings:` line says what was chosen and why. Tested: auto -> quality on the desktop worker, the presets from
   the environment and the file, an option's line over the preset, the environment over both, and the menu from
-  the pad (preset, a custom option, back to the preset). Next: render scale (gpu-plan 3), ambient occlusion (after item 1
+  the pad (preset, a custom option, back to the preset). **Stopped here (2026-10-09, the owner's pause for the
+  fight crash):** render scale (gpu-plan item 3) was next for cloud3 and is not started (no code). When it lands it
+  becomes a Performance value in settings.cpp's option table. Next: render scale (gpu-plan 3), ambient occlusion (after item 1
   names the pass) and the shader set (5) join the page as they land.
 
 ### Session cloud2 (2026-10-08): write-watch and a present-path review, branch ww-4-cloud2
