@@ -111,14 +111,22 @@ void main()
 )";
 		}
 
-		struct State
+		// the full-screen passes' common objects (fullscreen::, also motion.cpp's debug view)
+		struct Common
 		{
 			bool tried = false, ok = false;
-			VkShaderModule vs = VK_NULL_HANDLE, easu = VK_NULL_HANDLE, rcas = VK_NULL_HANDLE;
+			VkShaderModule vs = VK_NULL_HANDLE;
 			VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
 			VkPipelineLayout layout = VK_NULL_HANDLE;
 			VkSampler sampler = VK_NULL_HANDLE;
 			std::unordered_map<uint64, VkPipeline> pipelines;    // (fragment module, colour format)
+		};
+		Common s_common;
+
+		struct State
+		{
+			bool tried = false, ok = false;
+			VkShaderModule easu = VK_NULL_HANDLE, rcas = VK_NULL_HANDLE;
 			Image mid;                                           // EASU's output, RCAS's input (the target's format and size)
 		};
 		State s_fsr;
@@ -129,7 +137,7 @@ void main()
 			std::string log;
 			if (!CompileGlsl(glsl, (int)stage, spirv, log))
 			{
-				Log(fmt::format("fsr1: the {} shader didn't compile: {}", name, log));
+				Log(fmt::format("full-screen pass: the {} shader didn't compile: {}", name, log));
 				return VK_NULL_HANDLE;
 			}
 			VkShaderModuleCreateInfo ci{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
@@ -140,34 +148,46 @@ void main()
 			return m;
 		}
 
-		bool Init()
+		bool InitCommon()
 		{
-			if (s_fsr.tried)
-				return s_fsr.ok;
-			s_fsr.tried = true;
-			s_fsr.vs = Module(kVertex, EShLangVertex, "vertex");
-			static const bool half = [] { const char* e = getenv("WWHD_FSR_HALF"); return s.float16 && !(e && atoi(e) == 0); }();
-			s_fsr.easu = Module(EasuSource(half), EShLangFragment, "EASU");
-			s_fsr.rcas = Module(RcasSource(half), EShLangFragment, "RCAS");
-			if (!s_fsr.vs || !s_fsr.easu || !s_fsr.rcas)
+			if (s_common.tried)
+				return s_common.ok;
+			s_common.tried = true;
+			s_common.vs = Module(kVertex, EShLangVertex, "vertex");
+			if (!s_common.vs)
 				return false;
 			VkDescriptorSetLayoutBinding b{ 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr };
 			VkDescriptorSetLayoutCreateInfo li{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
 			li.bindingCount = 1;
 			li.pBindings = &b;
-			Check(vkCreateDescriptorSetLayout(s.device, &li, nullptr, &s_fsr.setLayout), "vkCreateDescriptorSetLayout");
+			Check(vkCreateDescriptorSetLayout(s.device, &li, nullptr, &s_common.setLayout), "vkCreateDescriptorSetLayout");
 			VkPushConstantRange pc{ VK_SHADER_STAGE_FRAGMENT_BIT, 0, 64 };
 			VkPipelineLayoutCreateInfo pi{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
 			pi.setLayoutCount = 1;
-			pi.pSetLayouts = &s_fsr.setLayout;
+			pi.pSetLayouts = &s_common.setLayout;
 			pi.pushConstantRangeCount = 1;
 			pi.pPushConstantRanges = &pc;
-			Check(vkCreatePipelineLayout(s.device, &pi, nullptr, &s_fsr.layout), "vkCreatePipelineLayout");
+			Check(vkCreatePipelineLayout(s.device, &pi, nullptr, &s_common.layout), "vkCreatePipelineLayout");
 			VkSamplerCreateInfo si{ VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
 			si.magFilter = si.minFilter = VK_FILTER_LINEAR;
 			si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 			si.maxLod = 0.0f;
-			Check(vkCreateSampler(s.device, &si, nullptr, &s_fsr.sampler), "vkCreateSampler");
+			Check(vkCreateSampler(s.device, &si, nullptr, &s_common.sampler), "vkCreateSampler");
+			return s_common.ok = true;
+		}
+
+		bool Init()
+		{
+			if (s_fsr.tried)
+				return s_fsr.ok;
+			s_fsr.tried = true;
+			static const bool half = [] { const char* e = getenv("WWHD_FSR_HALF"); return s.float16 && !(e && atoi(e) == 0); }();
+			if (!InitCommon())
+				return false;
+			s_fsr.easu = Module(EasuSource(half), EShLangFragment, "EASU");
+			s_fsr.rcas = Module(RcasSource(half), EShLangFragment, "RCAS");
+			if (!s_fsr.easu || !s_fsr.rcas)
+				return false;
 			s_fsr.ok = true;
 			Log(fmt::format("fsr1: AMD FidelityFX FSR 1 (EASU + RCAS, {}) where the HUD begins (WWHD_UPSCALER=fsr1)",
 				half ? "fp16" : "fp32"));
@@ -176,12 +196,12 @@ void main()
 
 		VkPipeline Pipeline(VkShaderModule fragment, VkFormat format)
 		{
-			VkPipeline& p = s_fsr.pipelines[((uint64)(uintptr_t)fragment << 8) ^ (uint64)format];
+			VkPipeline& p = s_common.pipelines[((uint64)(uintptr_t)fragment << 8) ^ (uint64)format];
 			if (p)
 				return p;
 			VkPipelineShaderStageCreateInfo stages[2]{ { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO },
 				{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO } };
-			stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT, stages[0].module = s_fsr.vs, stages[0].pName = "main";
+			stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT, stages[0].module = s_common.vs, stages[0].pName = "main";
 			stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT, stages[1].module = fragment, stages[1].pName = "main";
 			VkPipelineVertexInputStateCreateInfo vi{ VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
 			VkPipelineInputAssemblyStateCreateInfo ia{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
@@ -217,7 +237,7 @@ void main()
 			gi.pMultisampleState = &ms;
 			gi.pColorBlendState = &cb;
 			gi.pDynamicState = &ds;
-			gi.layout = s_fsr.layout;
+			gi.layout = s_common.layout;
 			Check(vkCreateGraphicsPipelines(s.device, VK_NULL_HANDLE, 1, &gi, nullptr, &p), "vkCreateGraphicsPipelines");
 			return p;
 		}
@@ -230,10 +250,10 @@ void main()
 			VkDescriptorSetAllocateInfo ai{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
 			ai.descriptorPool = s.descriptors;
 			ai.descriptorSetCount = 1;
-			ai.pSetLayouts = &s_fsr.setLayout;
+			ai.pSetLayouts = &s_common.setLayout;
 			VkDescriptorSet set;
 			Check(vkAllocateDescriptorSets(s.device, &ai, &set), "vkAllocateDescriptorSets");
-			VkDescriptorImageInfo ii{ s_fsr.sampler, src.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+			VkDescriptorImageInfo ii{ s_common.sampler, src.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
 			VkWriteDescriptorSet w{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
 			w.dstSet = set;
 			w.descriptorCount = 1;
@@ -252,8 +272,8 @@ void main()
 			ri.pColorAttachments = &a;
 			vkCmdBeginRendering(s.cmd, &ri);
 			vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, Pipeline(fragment, dst.format));
-			vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s_fsr.layout, 0, 1, &set, 0, nullptr);
-			vkCmdPushConstants(s.cmd, s_fsr.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 64, c);
+			vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s_common.layout, 0, 1, &set, 0, nullptr);
+			vkCmdPushConstants(s.cmd, s_common.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 64, c);
 			VkViewport v{ 0.0f, 0.0f, (float)dst.width, (float)dst.height, 0.0f, 1.0f };
 			VkRect2D r{ { 0, 0 }, { dst.width, dst.height } };
 			vkCmdSetViewport(s.cmd, 0, 1, &v);
@@ -279,7 +299,25 @@ void main()
 			return u;
 		}
 	}
+}
 
+namespace wwhd::gpu::fullscreen
+{
+	VkShaderModule Fragment(const std::string& glsl, const char* name)
+	{
+		return fsr1::InitCommon() ? fsr1::Module(glsl, EShLangFragment, name) : VK_NULL_HANDLE;
+	}
+
+	void Draw(VkShaderModule fragment, Image& src, Image& dst, const uint32 (&c)[16])
+	{
+		EndRendering();
+		fsr1::Pass(fragment, src, dst, c);
+		s.bound.valid = false;
+	}
+}
+
+namespace wwhd::gpu::fsr1
+{
 	bool On()
 	{
 		static const bool on = [] { const char* e = getenv("WWHD_UPSCALER"); return e && strcmp(e, "fsr1") == 0; }();

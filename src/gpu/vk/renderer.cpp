@@ -1409,6 +1409,8 @@ namespace wwhd::gpu
 			Log(fmt::format("copy to scan buffer {} in frame {}: {:08x} {}x{} fmt {:x}", target, s.frame + 1, addr, w, h, gx2));
 		Image& src = Surface(addr, gx2, false, std::max(w, pitch), h);
 		SurfaceRead(src, h);
+		if (target == 1 && motion::Debug())                         // WWHD_MOTION=debug: the motion over the TV image
+			motion::DrawDebug(src);
 		if (target == 1 && fsr1::On())                              // the TV surface (FSR 1's HUD split)
 		{
 			s_tvKey = KeyOf(src), s_tvKnown = true;
@@ -1454,6 +1456,8 @@ namespace wwhd::gpu
 		if (shotDrc && s.frame > 1 && s.shotFrames.count(s.frame - 1) && s.scan[1].image)
 			WritePPM(s.scan[1], s.frame - 1, "drc");
 		HudEnds();
+		if (motion::On())
+			motion::FrameEnd(s.frame);
 		FitSurfaces();
 		ChooseScale();
 		ResetOverwrittenSurfaces();

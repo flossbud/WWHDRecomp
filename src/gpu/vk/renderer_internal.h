@@ -227,6 +227,33 @@ namespace wwhd::gpu
 		// `src` (a scaled image) upscaled into `dst` (the guest's size, a colour attachment); false: couldn't (logged)
 		bool Upscale(Image& src, Image& dst);
 	}
+	// fsr1.cpp: a full-screen pass of a fragment shader (GLSL, "src" a sampler2D at binding 0, push constants uvec4
+	// c0..c3) from `src` into `dst` (a colour attachment); its pipelines made per target format
+	namespace fullscreen
+	{
+		VkShaderModule Fragment(const std::string& glsl, const char* name);   // null if it doesn't compile (logged)
+		void Draw(VkShaderModule fragment, Image& src, Image& dst, const uint32 (&c)[16]);
+	}
+	// motion.cpp: motion vectors (WWHD_MOTION=1|debug; b-motion)
+	namespace motion
+	{
+		constexpr uint32 kPrevBinding = 64;                       // the previous frame's uniform blocks: binding + this
+		constexpr uint32 kSlot = 7;                               // the motion target's colour slot
+		constexpr VkFormat kFormat = VK_FORMAT_R16G16_SFLOAT;
+		// a vertex shader binding's data this draw: its ring offset, the guest's bytes in it, the range the shader reads,
+		// and the block's guest address (0: the uniform vars)
+		struct UniformData { VkDeviceSize offset = 0; uint32 bytes = 0, readable = 0; MPTR phys = 0; };
+		bool On();
+		bool Debug();
+		uint32 VaryingBase();                                     // the two clip positions' locations (0: no room)
+		bool VertexVariant(const std::string& in, std::string& out);
+		bool PixelVariant(const std::string& in, std::string& out);
+		// a scene draw's constants kept, and the previous frame's for it (matched, or the camera's) pushed as offsets
+		void Remember(uint64 group, uint64 vsKey, std::span<const UniformData> data, std::vector<uint32>& prevOffsets, bool want);
+		void FrameEnd(uint32 frame);                              // a presented frame's swap
+		Image* Target(const Image& depth, bool& clear);           // the motion target for a scene pass (clear: first this frame)
+		void DrawDebug(Image& tv);                                // WWHD_MOTION=debug: the motion over the TV image
+	}
 	// renderer.cpp: where the TV image's HUD begins (a draw into the TV surface alone, sampling only textures from
 	// memory, after a full-screen pass into it that sampled surfaces): with FSR 1 the scaled image is upscaled there
 	Image* TvSurface();                                           // the TV scan buffer's source last frame, if known

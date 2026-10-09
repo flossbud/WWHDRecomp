@@ -161,6 +161,9 @@ namespace wwhd::gpu
 			VkShaderModule module = VK_NULL_HANDLE;
 			VkDescriptorSetLayout layout = VK_NULL_HANDLE;
 			std::vector<uint8> uniformBuffers;                       // uniform block indices, in binding order
+			// WWHD_MOTION (motion.cpp): this shader's variant writing motion vectors, made at its first scene draw
+			Shader* motion = nullptr;
+			bool motionTried = false, isMotion = false;            // isMotion: a variant (its bindings + kPrevBinding too)
 		};
 		std::unordered_map<uint64, Shader*> s_shaders;
 		std::unordered_map<uint64, LatteFetchShader*> s_fetchShaders;
@@ -222,6 +225,13 @@ namespace wwhd::gpu
 					b.push_back({ (uint32)sh.mapping.uniformBuffersBindingPoint[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, stage, nullptr });
 					sh.uniformBuffers.push_back((uint8)i);
 				}
+			if (sh.isMotion && stage == VK_SHADER_STAGE_VERTEX_BIT)    // the previous frame's data, the same buffers again
+			{
+				const size_t n = b.size();
+				for (size_t i = 0; i < n; i++)
+					if (b[i].descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
+						b.push_back({ b[i].binding + motion::kPrevBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, stage, nullptr });
+			}
 			VkDescriptorSetLayoutCreateInfo ci{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
 			ci.bindingCount = (uint32)b.size();
 			ci.pBindings = b.data();
@@ -440,6 +450,48 @@ namespace wwhd::gpu
 			s_sights.shaderMs += MsSince(start);
 			return sh;
 		}
+		// WWHD_MOTION: the shader's motion variant (motion.cpp), from the decompiler again (a shader from the cache has no
+		// GLSL); null if it can't be made (logged once): the draw then writes no motion
+		Shader* MotionShader(Shader* sh, bool vertex, const uint8* code, uint32 size, LatteFetchShader* fetch)
+		{
+			if (sh->motionTried)
+				return sh->motion;
+			sh->motionTried = true;
+			LatteDecompilerOptions opt;
+			opt.usesGeometryShader = false;
+			opt.useTFViaSSBO = false;
+			opt.spirvInstrinsics.hasRoundingModeRTEFloat32 = false;
+			opt.strictMul = g_current_game_profile->GetAccurateShaderMul() != AccurateShaderMulOption::False;
+			LatteDecompilerOutput_t out{};
+			if (vertex)
+				LatteDecompiler_DecompileVertexShader(sh->key, LatteGPUState.contextRegister, (uint8*)code, size, fetch, opt, &out);
+			else
+				LatteDecompiler_DecompilePixelShader(sh->key, LatteGPUState.contextRegister, (uint8*)code, size, opt, &out);
+			std::string glsl, log;
+			std::vector<uint32> spirv;
+			const bool ok = out.shader && !out.shader->hasError && out.shader->strBuf_shaderSource &&
+				(vertex ? motion::VertexVariant(out.shader->strBuf_shaderSource->c_str(), glsl) : motion::PixelVariant(out.shader->strBuf_shaderSource->c_str(), glsl)) &&
+				CompileSpirv(glsl, vertex ? EShLangVertex : EShLangFragment, spirv, log);
+			if (!ok)
+			{
+				LogOnce(fmt::format("motion{:x}", sh->key), [&] { return fmt::format("motion: no variant of {} shader {:016x}{}", vertex ? "vertex" : "pixel",
+					sh->key, log.empty() ? "" : " (" + log.substr(0, 200) + ")"); });
+				return nullptr;
+			}
+			Shader* m = new Shader;
+			m->key = sh->key ^ 0x6D6F74696F6E0000ull;
+			m->dec = out.shader;
+			m->uniforms = out.uniformOffsetsVK;
+			m->mapping = out.resourceMappingVK;
+			m->isMotion = true;
+			VkShaderModuleCreateInfo mi{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+			mi.codeSize = spirv.size() * 4;
+			mi.pCode = spirv.data();
+			Check(vkCreateShaderModule(s.device, &mi, nullptr, &m->module), "vkCreateShaderModule");
+			m->layout = CreateLayout(*m, vertex ? VK_SHADER_STAGE_VERTEX_BIT : VK_SHADER_STAGE_FRAGMENT_BIT);
+			return sh->motion = m;
+		}
+
 
 		// ---- render targets (dynamic rendering) --------------------------------------------------------
 		struct Targets
@@ -447,9 +499,11 @@ namespace wwhd::gpu
 			Image* color[8]{};
 			Image* depth = nullptr;
 			uint32 colorLayer[8]{}, depthLayer = 0;                 // array slices (CB_COLORn_VIEW, DB_DEPTH_VIEW)
+			Image* motion = nullptr;                                 // WWHD_MOTION: the motion target at colour slot motion::kSlot
+			bool motionClear = false, motionWrite = false;           // cleared at this pass's start; this draw writes it
 			bool operator==(const Targets& o) const
 			{
-				return depth == o.depth && depthLayer == o.depthLayer && std::equal(std::begin(color), std::end(color), std::begin(o.color)) &&
+				return depth == o.depth && depthLayer == o.depthLayer && motion == o.motion && std::equal(std::begin(color), std::end(color), std::begin(o.color)) &&
 					std::equal(std::begin(colorLayer), std::end(colorLayer), std::begin(o.colorLayer));
 			}
 		};
@@ -494,6 +548,16 @@ namespace wwhd::gpu
 				Transition(*t.color[i], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 				colors[i].imageView = LayerView(*t.color[i], t.colorLayer[i]);
 				colors[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+				colors[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+				count = i + 1;
+			}
+			if (t.motion)
+			{
+				const uint32 i = motion::kSlot;
+				Transition(*t.motion, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+				colors[i].imageView = t.motion->view;
+				colors[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+				colors[i].loadOp = t.motionClear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
 				colors[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 				count = i + 1;
 			}
@@ -748,6 +812,13 @@ namespace wwhd::gpu
 					b.dstAlphaBlendFactor = b.dstColorBlendFactor;
 				}
 			}
+			if (t.motion)                                           // WWHD_MOTION: written by the motion variants alone
+			{
+				d.colorFormats[motion::kSlot] = motion::kFormat;
+				d.colorCount = motion::kSlot + 1;
+				d.blends[motion::kSlot] = {};
+				d.blends[motion::kSlot].colorWriteMask = t.motionWrite ? VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT : 0;
+			}
 			auto rop = r.CB_COLOR_CONTROL.get_ROP();
 			d.logicOpEnable = rop != Latte::LATTE_CB_COLOR_CONTROL::E_LOGICOP::COPY;
 			d.logicOp = rop == Latte::LATTE_CB_COLOR_CONTROL::E_LOGICOP::SET ? VK_LOGIC_OP_SET
@@ -867,6 +938,7 @@ namespace wwhd::gpu
 			for (uint32 i = 0; i < 8; i++)
 				key = Mix(Mix(key, raw[Latte::REGADDR::CB_BLEND0_CONTROL + i]), t.color[i] ? (uint64)t.color[i]->format : 0);
 			key = Mix(key, t.depth ? (uint64)t.depth->format + 1 : 0);
+			key = Mix(key, t.motion ? 1 + t.motionWrite : 0);
 			auto it = s_pipelines.find(key);
 			if (it != s_pipelines.end())
 				return it->second;
@@ -879,8 +951,9 @@ namespace wwhd::gpu
 			auto start = std::chrono::steady_clock::now();
 			VkPipeline pipeline;
 			Check(BuildPipeline(d, vs, ps, layout, pipeline), "vkCreateGraphicsPipelines");
-			cache::AddPipeline(recipe);
-			if (shaderlist::Capturing())
+			if (!t.motion)                                          // the motion variants are no shader the cache knows
+				cache::AddPipeline(recipe);
+			if (shaderlist::Capturing() && !t.motion)
 				shaderlist::Capture("pipeline " + shaderlist::Hex(recipe));
 			s_sights.pipelines++;
 			s_sights.pipelineMs += MsSince(start);
@@ -1138,6 +1211,9 @@ namespace wwhd::gpu
 		// a dynamic index), so it reads nothing past that: only that much is filled (the block's bytes, then zeros) and
 		// taken from the ring. The descriptor's 64 KB range stays in the buffer (RingAlloc keeps 64 KB spare).
 		// WWHD_UBLOCK_FULL=1: 64 KB filled and taken per block, as before (for A/Bs)
+		motion::UniformData s_lastBlock;                        // UniformBlock's last block (WWHD_MOTION)
+		std::vector<motion::UniformData> s_vsData;               // the vertex shader's bindings this draw (Descriptors)
+
 		VkDeviceSize UniformBlock(Shader& sh, bool vertex, uint32 index)
 		{
 			uint32 blockRegs = vertex ? mmSQ_VTX_UNIFORM_BLOCK_START : mmSQ_PS_UNIFORM_BLOCK_START;
@@ -1158,6 +1234,7 @@ namespace wwhd::gpu
 			if (copy)
 				memcpy(s.ring.data + off, memory_getPointerFromPhysicalOffset(phys), copy);
 			memset(s.ring.data + off + copy, 0, readable - copy);
+			s_lastBlock = { off, copy, readable, phys ? phys : 1u };   // WWHD_MOTION's history (phys 0 marks the vars)
 			return off;
 		}
 
@@ -1217,11 +1294,25 @@ namespace wwhd::gpu
 		VkDescriptorSet Descriptors(Shader& sh, bool vertex, const std::vector<VkDescriptorImageInfo>& images,
 			std::vector<uint32>& dynamicOffsets, float vpW, float vpH)
 		{
-			// the draw's data, in binding order: the uniform vars, then the blocks
+			// the draw's data, in binding order: the uniform vars, then the blocks (the vertex shader's also in s_vsData)
+			if (vertex)
+				s_vsData.clear();
 			if (sh.mapping.uniformVarsBufferBindingPoint >= 0)
-				dynamicOffsets.push_back((uint32)UniformVars(sh, vertex, vpW, vpH));
+			{
+				const VkDeviceSize off = UniformVars(sh, vertex, vpW, vpH);
+				dynamicOffsets.push_back((uint32)off);
+				if (vertex)
+				{
+					const uint32 n = sh.uniforms.offset_endOfBlock > 0 ? (uint32)sh.uniforms.offset_endOfBlock : 16;
+					s_vsData.push_back({ off, n, n, 0 });
+				}
+			}
 			for (uint8 i : sh.uniformBuffers)
+			{
 				dynamicOffsets.push_back((uint32)UniformBlock(sh, vertex, i));
+				if (vertex)
+					s_vsData.push_back(s_lastBlock);
+			}
 			static const bool cache = [] { const char* e = getenv("WWHD_SETCACHE"); return !(e && atoi(e) == 0); }();
 			uint64 key = 0;
 			if (cache)
@@ -1277,6 +1368,18 @@ namespace wwhd::gpu
 				w.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 				w.pBufferInfo = &blocks;
 				writes.push_back(w);
+			}
+			if (sh.isMotion && vertex)                              // the previous frame's data: the same buffers again
+			{
+				const size_t n = writes.size();
+				for (size_t i = 0; i < n; i++)
+					if (writes[i].descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
+					{
+						VkWriteDescriptorSet w = writes[i];
+						w.dstBinding += motion::kPrevBinding;
+						writes.push_back(w);
+					}
+				s_bufferDescriptors += (uint32)sh.uniformBuffers.size() + 1;
 			}
 			vkUpdateDescriptorSets(s.device, (uint32)writes.size(), writes.data(), 0, nullptr);
 			if (cache)
@@ -1436,7 +1539,23 @@ namespace wwhd::gpu
 							}
 					}
 				}
-				line += fmt::format(" | data u {:08x} v {:08x} vbufs{} vs-reads {:08x}{}", (uint32)hu, (uint32)hv, vb, (uint32)hs, floats);
+				// where the vertex shader's constants come from: registers (DX9 consts) or uniform blocks at guest addresses
+				std::string ubs = r.SQ_CONFIG.get_DX9_CONSTS() ? " regs" : "";
+				static const bool ubFloats = getenv("WWHD_RENDER_TRACE_UB") != nullptr;   // block 1's first 16 floats too
+				for (uint32 i = 0; i < 16; i++)
+					if (const MPTR ub = regs[mmSQ_VTX_UNIFORM_BLOCK_START + i * 7])
+					{
+						ubs += fmt::format(" u{} {:08x}", i, ub);
+						if (ubFloats && i == 1)
+							for (uint32 k = 0; k < 16; k++)
+							{
+								const uint32 w = *(const uint32*)memory_getPointerFromPhysicalOffset(ub + 4 * k);   // the GPU reads them as stored
+								float x;
+								memcpy(&x, &w, 4);
+								ubs += fmt::format(" {:g}", x);
+							}
+					}
+				line += fmt::format(" | data u {:08x} v {:08x} vbufs{} vs-reads {:08x}{} | ublocks{}", (uint32)hu, (uint32)hv, vb, (uint32)hs, floats, ubs);
 			}
 			if (frame)
 				Log(line);
@@ -1823,6 +1942,20 @@ namespace wwhd::gpu
 					if (attachments[i] != tv)
 						HudPromote(*attachments[i]);
 		}
+		// WWHD_MOTION (motion.cpp): a scene draw (a depth target the TV's size; not the HUD's) gets the motion target;
+		// one that writes depth writes motion with its shaders' variants
+		Shader* dvs = vs, *dps = ps;
+		bool scene = false;
+		if (motion::On() && t.depth && t.depth->gw >= 1280 && t.depth->gh >= 720 && t.depth->layers == 1 && !t.color[motion::kSlot] &&
+			!HudActive())
+		{
+			scene = true;
+			t.motion = motion::Target(*t.depth, t.motionClear);
+			if (r.DB_DEPTH_CONTROL.get_Z_ENABLE() && r.DB_DEPTH_CONTROL.get_Z_WRITE_ENABLE())
+				if (Shader* mv = MotionShader(vs, true, vsCode, vsSize, fetch))
+					if (Shader* mp = MotionShader(ps, false, psCode, psSize, nullptr))
+						dvs = mv, dps = mp, t.motionWrite = true;
+		}
 		Reserve();
 
 		Indices idx = DecodeIndices(physIndices, count, prim);
@@ -1867,10 +2000,22 @@ namespace wwhd::gpu
 
 		static std::vector<uint32> dynamicOffsets;
 		dynamicOffsets.clear();
-		VkDescriptorSet sets[2] = { Descriptors(*vs, true, vsImages, dynamicOffsets, vpW, vpH), VK_NULL_HANDLE };
-		sets[1] = Descriptors(*ps, false, psImages, dynamicOffsets, vpW, vpH);
-		VkPipelineLayout layout = PipelineLayout(vs, ps);
-		VkPipeline pipeline = GetPipeline(vs, ps, fetch, layout, t, prim);
+		VkDescriptorSet sets[2] = { Descriptors(*dvs, true, vsImages, dynamicOffsets, vpW, vpH), VK_NULL_HANDLE };
+		if (scene)                                               // its constants kept; the previous frame's after this frame's
+		{
+			uint64 group = Mix(Mix(0, vsKey), psKey);
+			for (auto& g : fetch->bufferGroups)                 // the vertex buffers proper (a 1-byte one moves every frame)
+				if (regs[mmSQ_VTX_ATTRIBUTE_BLOCK_START + g.attributeBufferIndex * 7 + 1] > 0)
+					group = Mix(group, regs[mmSQ_VTX_ATTRIBUTE_BLOCK_START + g.attributeBufferIndex * 7]);
+			static std::vector<uint32> prevOffsets;
+			prevOffsets.clear();
+			motion::Remember(group, vsKey, s_vsData, prevOffsets, dvs != vs);
+			if (dvs != vs)
+				dynamicOffsets.insert(dynamicOffsets.end(), prevOffsets.begin(), prevOffsets.end());
+		}
+		sets[1] = Descriptors(*dps, false, psImages, dynamicOffsets, vpW, vpH);
+		VkPipelineLayout layout = PipelineLayout(dvs, dps);
+		VkPipeline pipeline = GetPipeline(dvs, dps, fetch, layout, t, prim);
 
 		BeginRendering(t);
 		// unchanged binds since the last draw in this command buffer are skipped (renderer_internal.h's Bound)
