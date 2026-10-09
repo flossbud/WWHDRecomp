@@ -686,6 +686,7 @@ namespace wwhd::gpu
 						VkClearColorValue v{};
 						vkCmdClearColorImage(s.cmd, c.img.image, c.img.layout, &v, 1, &all);
 					}
+					Transition(c.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);   // the copy after the clear (WWHD_BARRIERS=narrow)
 				}
 				Transition(surface, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 				VkImageCopy r{};

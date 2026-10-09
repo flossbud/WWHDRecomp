@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libsecret-1-dev libsystemd-dev libusb-1.0-0-dev wayland-protocols libwayland-dev \
       openjdk-21-jdk-headless \
       xvfb openbox x11-utils xdotool imagemagick \
-      mesa-vulkan-drivers vulkan-tools libopengl0 libgl1 libegl1 libglx-mesa0 libgtk-3-0t64 \
+      mesa-vulkan-drivers vulkan-tools vulkan-validationlayers libopengl0 libgl1 libegl1 libglx-mesa0 libgtk-3-0t64 \
       pulseaudio pulseaudio-utils \
     && rm -rf /var/lib/apt/lists/*
 
