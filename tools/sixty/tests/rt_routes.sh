@@ -8,9 +8,8 @@
 # RT_VARIANTS (default "st1 st2 mt1 mt2"): mt* runs add RT_MT_ARGS (default WWHD_CORES=3), st* runs WWHD_CORES=1.
 # RT_RENDER=1: rendered (WWHD_RENDER=vk; default the null GPU, the game's logic only).
 # RT_JOBS runs at once (default 4; real time: the desktop worker has the threads, the worker wants 1).
-# One-host-thread runs skip the title (WWHD_DEBUG_BOOT=1, tools/sixty/run.sh with WWHD_CORES=1): in real time the title
-# can take input after the routes' frame 420 (not yet with three, which crash at the play scene's create with it;
-# RT_REMAP=FROM:TO,... moves presses instead, WWHD_INPUT_REMAP).
+# The runs skip the title (WWHD_DEBUG_BOOT=1, tools/sixty/run.sh in real time): in real time the title can take input
+# after the routes' frame 420 (RT_REMAP=FROM:TO,... moves presses instead, WWHD_INPUT_REMAP).
 # A run that still never reaches play on time (below) is played again, up to RT_RETRIES (3) times.
 # Default routes: predeploy.sh's. RT_COMPARE_ONLY=1: compare the runs already there, play nothing.
 # Output: game state, it stays on the worker ($OUT/rt/ROUTE/VARIANT/60); each run's guest threads at its exit

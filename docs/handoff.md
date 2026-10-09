@@ -4224,6 +4224,39 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   and off, so the lazy path adds none. They are pre-existing, inside a frame: a blit (2101), a copy (7) and clears (32)
   into an image just cleared with no barrier between (the GPU side's, reported to main).
 
+### Session qa (week 2, WW-15): the problems top and bottom are stuck on
+
+Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecomp-qa`. Main routes the escalations.
+- **q-boot3, `WWHD_DEBUG_BOOT` with three host threads crashed at the play scene's create (fixed).** Not a bug in
+  our three-thread runtime: the debug boot skipped the scene that loads the game's permanent packs.
+  - *The crash*: the room scene's create (phase 4, f_025B3F90) asked room 44's data (+0xB0 is the room number) for
+    its file list, got none (d_s_room.cpp's assert "fileList != (0)"), and read through null. Phase 3 had found no
+    `room.dzr` in the "Room44" archive.
+  - *The archive path* (HD-only code): the room scene pushes a request into the archive manager's ring (*0x101F4F54,
+    0xa0-byte entries, f_0260D618); its per-frame node on the main thread (f_0260C74C, run by sead's method tree)
+    starts one load at a time (f_0260C4CC) on the loader (*0x101F4F7C), checks it (f_0260C67C) and finishes it. The
+    loader's busy word (+0x11248) is 1 for an archive and 2 for the permanent packs; ResMgrThread loads archives,
+    ResMgrPackLoadThread the packs (both core 2). The check calls a load done as soon as the word isn't 1.
+  - *The packs* (Pack/szs_permanent0-2.pack) are requested once, by the first play-type scene's create (f_025B1F54,
+    flag *0x101F4F28 + 0x212C). The title is such a scene (proc 8, the opening on sea_T; procs 7 and 8 share play's
+    methods), so normally they load at frames ~87-110. The boot skipped it, so they started at the real play's create
+    (f831). Room 44 was requested at f832 while the word was still 2, took the loader's busy path, and the check
+    passed at once. With one host thread the pack thread ran to its end inside f831 and hid it.
+  - *Normal play can't reach it*: the logo goes to 8 (the title), 5 (the logo again) or 0xb (a file-select-family
+    scene whose execute goes to 8), so the packs are always in before play.
+  - *The fix* (sixty.cpp `BootPacksLoaded`): under the boot the logo starts the preload as the title would and stays
+    until the loader is idle (packs in by f60-65), then asks for the file select. The tools now pass the boot with
+    three host threads too (run.sh in real time, worker-ab.sh, soak.sh, rt_routes.sh); the warning is gone.
+  - *Found with* a probe of the archive manager and the loader (push, sync, start, check, finish, the loader thread's
+    handlers, room.dzr lookups; the guest thread and host core of each), 1 against 3 host threads and boot against
+    title. Not kept (the addresses above are enough to write it again).
+  - *Gates* (on main b2c14d4): checks all MATCH (traces, streams, sound, diff 0 mismatches, 15 captures PSNR inf);
+    regress identical (da06a4ee); predeploy 50 ok, 0 FAIL, gohmatail WARN 54.0 (as on main), gohmarock ok 4.8;
+    title against boot under the virtual clock at 30 (save, tour3, slash, items): Link 0.00 apart at every key, made
+    at key 1694 in both; real time with three host threads and the boot (`RT_VARIANTS="mt1 mt2" rt_routes.sh` on slash, cuts, leaf,
+    items, talk, house, hook, ladder): 16 of 16 in play on time at the first try, no crash or panic, mt1 against mt2
+    0.0 apart on all 8 (the packs in by frame ~66 there).
+
 ## Waiting on the owner
 
 - **The sound check** of the task loop's fast path (item 1): they listen in a window when they have
@@ -4277,6 +4310,9 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
 - **`Mix(a, b)` in `draw.cpp` is `(a ^ b) * P + C`**, so a key made of two values alone depends
   only on their XOR. Keys that started from two Vulkan handles collided (fixed in e1aae8b). Start a
   key from a hash, or from `Mix(0, a)`.
+- **The title loads the game's permanent packs** (Pack/szs_permanent0-2.pack, f_025B1F54: the title is a play scene).
+  Anything that skips it must start that preload itself and wait for it (`WWHD_DEBUG_BOOT` does): an archive asked
+  for while the packs load is called done at once and isn't there (q-boot3, session qa above). One host thread hides it.
 - **When a run dies silently:**
   - `run.sh` discards stdout, so rerun the program directly with its output kept;
   - Cemu's crash handler writes the stack to `portable/log.txt`;

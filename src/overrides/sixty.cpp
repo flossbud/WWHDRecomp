@@ -51,7 +51,6 @@ void wwhd_SetSwapInterval(uint32 interval);       // os/gx2/core/GX2_Misc.cpp
 extern thread_local const PPCInterpreter_t* g_rtJournalThread;   // the half tick journal's thread (runtime/diff.cpp)
 namespace coreinit
 {
-	bool __CemuIsMulticoreMode();               // os/coreinit/coreinit_Thread.cpp: three host threads
 	void wwhd_CoreCensus(const char* where);    // os/coreinit/coreinit_Thread.cpp: WWHD_CORE_CENSUS, the other cores' threads
 }
 
@@ -1891,13 +1890,47 @@ void orig_f_025BA0C0(PPCInterpreter_t* __restrict ctx);
 // tour3, slash, items), Link's path from the start of play to the end the same as through the title (0.00 units); the
 // state differs where the random stream does (the title draws numbers: Link's idle animation). The checks never use
 // it (their reference plays the title). Found with WWHD_DEBUG_BOOT_LOG=1 (fopScnM_ChangeReq f_025DC86C's calls).
-// Not yet with three host threads (the warning below): the tools pass it only with WWHD_CORES=1.
+// The logo first starts the game's permanent packs' preload, which the title would, and waits for it (BootPacksLoaded).
 namespace
 {
 	bool BootOn()
 	{
 		static const bool on = [] { const char* e = getenv("WWHD_DEBUG_BOOT"); return e && atoi(e) != 0; }();
 		return on;
+	}
+
+	// The game's permanent packs (Pack/szs_permanent0-2.pack) are loaded once, by the first play-type scene's create
+	// (f_025B1F54, a phase of the play scene's: its flag at *0x101F4F28 + 0x212C, the request f_02612A80 on the loader
+	// *0x101F4F7C, once *0x101F7274's byte +0x20 is clear). The title is such a scene (proc 8, the opening on sea_T, with
+	// play's methods), so through it they load from about frame 87 and are in by ~110. Skipping the title moved the
+	// preload to the real play's create (frame ~831), where it overlapped the room archives' loads: the loader's busy word
+	// (+0x11248) is 2 while it loads the packs, an archive requested meanwhile takes its busy path (f_02612908), and the
+	// main thread's done check (f_0260C67C) waits only while the word is 1. So the room scene's create found no room.dzr
+	// and read through a null file list (d_s_room.cpp's "fileList != (0)", f_025B3F90). With one host thread the pack
+	// thread ran to its end within the frame and hid it; with three (ResMgrPackLoadThread on core 2) it crashed every
+	// time (q-boot3, docs/handoff.md). The game's own normal paths all pass the title first: the logo goes to 8, to 5
+	// (the logo again) or to 0xb, whose execute goes to 8. So under the boot the logo starts the preload as the title
+	// would and stays until the loader is idle (frame ~60-65). True once the packs are loaded.
+	bool BootPacksLoaded(PPCInterpreter_t* __restrict ctx)
+	{
+		const uint32 info = rd32(0x101F4F28), loader = rd32(0x101F4F7C), ui = rd32(0x101F7274);
+		if (!info || !loader)
+			return false;
+		if (!rd8(info + 0x212C))
+		{
+			if (!ui || rd8(ui + 0x20))                // f_026FBB7C: not ready yet
+				return false;
+			GPR(3) = loader;
+			f_02612A80(ctx);                          // 0 while the loader is busy with an archive: again next frame
+			if (GPR(3) != 0)
+			{
+				wr8(info + 0x212C, 1);                // what f_025B1F54 sets: the play scene's create won't start them again
+				cemuLog_log(LogType::Force, "wwhd boot: the permanent packs' preload starts at frame {} (WWHD_DEBUG_BOOT)",
+					wwhd::rt::GameFrame(wwhd::os::SwapCount()));
+			}
+			return false;
+		}
+		return rd32(loader + 0x11248) == 0;           // the loader idle: the packs are in
 	}
 }
 
@@ -1911,7 +1944,15 @@ void f_025ABF00(PPCInterpreter_t* __restrict ctx)
 		GPR(3) = 1;                                   // the logo stays until it has asked (its own execute would ask
 		return;                                       // for the title), and after, until the file select replaces it
 	}
-	const uint32 lr = ctx->spr.LR;
+	const uint32 lr = ctx->spr.LR, scene = GPR(3);
+	const bool packs = BootPacksLoaded(ctx);          // the title's preload first
+	ctx->spr.LR = lr;
+	GPR(3) = scene;
+	if (!packs)
+	{
+		GPR(3) = 1;
+		return;
+	}
 	GPR(4) = 9;                                       // the file select
 	GPR(5) = 0;
 	GPR(6) = 5;
@@ -1922,10 +1963,6 @@ void f_025ABF00(PPCInterpreter_t* __restrict ctx)
 	if (asked)
 		cemuLog_log(LogType::Force, "wwhd boot: the logo goes to the file select at frame {} (WWHD_DEBUG_BOOT)",
 			wwhd::rt::GameFrame(wwhd::os::SwapCount()));
-	if (asked && coreinit::__CemuIsMulticoreMode())
-		cemuLog_log(LogType::Force, "wwhd boot: WARNING: WWHD_DEBUG_BOOT with three host threads crashes at the play scene's create "
-			"(a null at +0xB0 of the process f_025B3F90 makes, ~27 frames after Start; with the title, or with WWHD_CORES=1, it doesn't): "
-			"use WWHD_CORES=1 with it until that is fixed");
 	GPR(3) = 1;
 }
 

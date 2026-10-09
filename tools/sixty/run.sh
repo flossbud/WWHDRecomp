@@ -32,10 +32,9 @@ export CEMU_BIN=${CEMU_BIN:-$(cd "$here/../.." && pwd)/build/wwhd/wwhd-null} WWH
 # SIXTY_REALTIME=1: real time instead of the virtual clock (no virtual speed): for comparing real-time modes
 # (tools/sixty/tests/rt_routes.sh); the checks never use it
 [ -z "${SIXTY_REALTIME:-}" ] && export WWHD_VIRTUAL_SPEED=${WWHD_VIRTUAL_SPEED:-3}
-# in real time with one host thread the logo goes straight to the file select (WWHD_DEBUG_BOOT=1, overrides/sixty.cpp):
-# the title takes input when it's ready, which the route's frame 420 may come before; play starts on the same frame.
-# Not with three host threads yet (it crashes at the play scene's create there). WWHD_DEBUG_BOOT=0: the title
-[ -n "${SIXTY_REALTIME:-}" ] && [ "${WWHD_CORES:-}" = 1 ] && export WWHD_DEBUG_BOOT=${WWHD_DEBUG_BOOT:-1}
+# in real time the logo goes straight to the file select (WWHD_DEBUG_BOOT=1, overrides/sixty.cpp): the title takes
+# input when it's ready, which the route's frame 420 may come before; play starts on the same frame. WWHD_DEBUG_BOOT=0: the title
+[ -n "${SIXTY_REALTIME:-}" ] && export WWHD_DEBUG_BOOT=${WWHD_DEBUG_BOOT:-1}
 for rate in "${rates[@]}"; do
     dir=$out/$rate
     rm -rf "$dir" && mkdir -p "$dir"
