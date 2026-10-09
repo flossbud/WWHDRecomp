@@ -17,7 +17,11 @@
 #include "debug_menu.h"
 #include "Cafe/OS/libs/padscore/padscore.h"
 #include "Cafe/OS/libs/vpad/vpad.h"
+#include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
 #include <fstream>
+#include <map>
+#include <mutex>
+#include <string>
 
 namespace wwhd::rt { uint32 GameFrame(uint32 swap); }   // runtime/dispatch.cpp
 
@@ -182,6 +186,40 @@ namespace wwhd::os::input
 using namespace wwhd::os;
 using namespace wwhd::os::input;
 
+namespace
+{
+	// WWHD_INPUT_CALLERS=path (a probe): at exit, which guest threads called KPADReadEx and VPADRead, how often, and
+	// how many samples they got
+	void NoteCaller(const char* fn, bool sample)
+	{
+		static const char* path = getenv("WWHD_INPUT_CALLERS");
+		if (!path)
+			return;
+		static std::mutex lock;
+		static std::map<std::string, std::pair<uint64, uint64>> counts;
+		static bool once = [] {
+			static void (*write)() = [] {
+				if (FILE* f = fopen(path, "w"))
+				{
+					for (auto& [k, v] : counts)
+						fprintf(f, "%s %llu calls %llu samples\n", k.c_str(), (unsigned long long)v.first, (unsigned long long)v.second);
+					fclose(f);
+				}
+			};
+			atexit(write);
+			at_quick_exit(write);
+			return true;
+		}();
+		(void)once;
+		OSThread_t* t = coreinit::OSGetCurrentThread();
+		const char* name = t ? t->threadName.GetPtr() : nullptr;
+		std::lock_guard guard(lock);
+		auto& c = counts[std::string(fn) + " " + (name ? name : "?")];
+		c.first++;
+		c.second += sample;
+	}
+}
+
 // sint32 KPADReadEx(sint32 channel, KPADStatus* samples, uint32 length, sint32* error): at most one
 // sample, and none within 1 ms of the last
 WWHD_OS_FUNCTION(padscore, KPADReadEx)
@@ -198,7 +236,11 @@ WWHD_OS_FUNCTION(padscore, KPADReadEx)
 		return fail(kKpadNoController);
 	uint64 now = Timebase() + TimebaseAt2000();
 	if (length == 0 || now - s_lastRead[channel] < kSamplePeriod)
+	{
+		NoteCaller("KPADReadEx", false);
 		return fail(kKpadNoSample);
+	}
+	NoteCaller("KPADReadEx", true);
 	s_lastRead[channel] = now;
 
 	Pad pad = debug_menu::Filter(Current());          // the debug menu takes the pad while it is open

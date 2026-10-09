@@ -64,10 +64,10 @@ for v in "${variants[@]}"; do
     last=$(grep -v '^#' "$d/frames.txt" 2>/dev/null | tail -1 | cut -d' ' -f1)
     bad=$(grep -ciE 'panic|assert|sigsegv|segmentation|crash|fatal' "$d/log.txt" 2>/dev/null)
     mins=$(( ($(date +%s) - start) / 60 ))
-    if [ "${last:-0}" -ge $((swaps - 2)) ] && [ "${bad:-0}" = 0 ]; then
-        echo "soak.sh: $name: ok, swap $last of $swaps in $mins min"
+    if grep -q "reached frame $swaps, exiting" "$d/log.txt" 2>/dev/null && [ "${bad:-0}" = 0 ]; then
+        echo "soak.sh: $name: ok, swap $swaps reached in $mins min"
     else
-        echo "soak.sh: $name: FAIL, the frame log ends at swap ${last:-none} of $swaps after $mins min; $bad suspect log lines (see $d/log.txt)"
+        echo "soak.sh: $name: FAIL, no exit at swap $swaps (the frame log ends at ${last:-none}) after $mins min; $bad suspect log lines (see $d/log.txt)"
         fail=1
     fi
     python3 - "$d/frames.txt" <<'PY'

@@ -124,7 +124,7 @@ namespace
 			s_logPath = getenv("WWHD_FRAME_LOG");
 			if (!s_logPath || !*s_logPath)
 				return false;
-			s_frames.reserve(1 << 16);
+			s_frames.reserve(1 << 18);                 // an hour at 60 (tools/sixty/tests/soak.sh)
 			atexit(LogWrite);
 			at_quick_exit(LogWrite);
 			return true;

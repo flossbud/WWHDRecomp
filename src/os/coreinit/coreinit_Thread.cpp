@@ -1393,8 +1393,8 @@ namespace coreinit
 				fprintf(f, "%08x %s state %u suspend %d affinity %u priority %d waitqueue %08x mutex %08x fastmutex %08x wakeups %llu lr %08x pc %08x\n  chain",
 					activeThread[i], name ? name : "?", (uint32)t->state.value(), (sint32)t->suspendCounter, (uint32)t->context.affinity & 7,
 					(sint32)t->effectivePriority, t->currentWaitQueue.GetMPTR(), t->waitingForMutex.GetMPTR(), t->waitingForFastMutex.GetMPTR(),
-					(unsigned long long)t->wakeUpCount, t->context.lr, t->context.srr0);
-				uint32 sp = t->context.gpr[1];
+					(unsigned long long)t->wakeUpCount, _swapEndianU32(t->context.lr), _swapEndianU32(t->context.srr0));
+				uint32 sp = _swapEndianU32(t->context.gpr[1]);                 // the saved context is big-endian
 				for (int depth = 0; depth < 24 && sp && memory_isAddressRangeAccessible(sp, 8); depth++)
 				{
 					const uint32 lr = memory_readU32(sp + 4);
