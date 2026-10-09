@@ -80,7 +80,15 @@ ready; what isn't is what this project added for real time and for 60 fps.
 - Counters (`s_nativeEntries`, `s_yields`, `g_rtStoresPassed`, ...): relaxed atomics.
 - A fiber can resume on another host thread: `thread_local` addresses cached across a switch (ThinLTO) would be
   wrong (`s_schedulerLockCount`, `t_assignedCoreIndex`, the current instance). Read them through a non-inlined
-  accessor across switches.
+  accessor across switches. **Checked (session cloud, 2026-10-09): fibers do move, the build caches no address.**
+  `WWHD_THREAD_STATS` now gives each guest thread's cores and moves: continue at 60 with three host threads
+  (desktop worker), `update_ubo` (affinity cores 0 and 2) moved 19147 times in 365k timeslices and the Alarm
+  Thread (any core) 1273 times; every other thread has one core. `tools/sixty/perf/tls_across_calls.py` reads
+  the binary's disassembly for a thread pointer (`mov %fs:0x0,%reg`) or a pointer derived from it kept in a
+  callee-saved register across a call and used after it: 1 of 79759 functions (write_watch's `ThreadInit`, which
+  runs once on a host thread's own stack, no fiber switch in it); no generated function, none of Cemu's. The
+  rest reach thread-locals as `%fs:offset` at each use (local-exec and initial-exec in the PIE executable),
+  which reads the host thread they run on. Re-run the scanner after a compiler or flag change.
 - The TCL ring (`TCL.cpp`) is single-producer: fine while only the GX2 main core flushes (it does; others are logged).
 - The real-time metrics measure one host thread (`__OSIdleNanoseconds`, the frame log's `cpu_ms`): per core.
 
@@ -120,5 +128,5 @@ GX2's per-core command buffers, AX's voice-list spinlock.
 
 **Left before it can be the default in real time:** route correctness with three host threads (Link's path on the
 scripted routes, three against one, with one against one as the noise floor); a soak; the locks list above (FSA, the
-rollback's copies against other cores, counters, `thread_local` addresses across fiber switches); a `WWHD_CORES=3`
+rollback's copies against other cores, counters; `thread_local` addresses across fiber switches: checked, fine); a `WWHD_CORES=3`
 switch instead of the Cemu flag; per-core figures in the real-time log; then the owner's PC.

@@ -1256,10 +1256,12 @@ namespace coreinit
 
 	// WWHD_THREAD_STATS=path (a probe, real time): at exit, each guest thread's host CPU time over its timeslices,
 	// with its name, entry, core affinity and priority, to see which work shares the scheduler's host thread
-	// (docs/research/threads.md). Off: one getenv at the first slice.
+	// (docs/research/threads.md); with three host threads also the cores it ran on and how often it moved between
+	// them (a fiber resumed on another host thread: threads.md, "thread_local addresses across fiber switches").
+	// Off: one getenv at the first slice.
 	namespace threadstats
 	{
-		struct Entry { uint64 ns = 0; uint32 slices = 0; };
+		struct Entry { uint64 ns = 0; uint32 slices = 0; uint32 moves = 0; uint32 cores = 0; sint32 lastCore = -1; };
 		std::unordered_map<OSThread_t*, Entry> s_entries;
 		thread_local OSThread_t* t_thread = nullptr;
 		thread_local uint64 t_start = 0;
@@ -1287,13 +1289,14 @@ namespace coreinit
 			for (auto& [t, e] : s_entries)
 				order.push_back({ e.ns, t });
 			std::sort(order.rbegin(), order.rend());
-			fprintf(f, "# thread entry affinity priority cpu_s share slices name\n");
+			fprintf(f, "# thread entry affinity priority cpu_s share slices cores moves name\n");
 			for (auto& [ns, t] : order)
 			{
 				const char* name = t->threadName.GetPtr();
-				fprintf(f, "%08x %08x %u %d %.2f %.1f%% %u %s\n", memory_getVirtualOffsetFromPointer(t), (uint32)t->entrypoint.GetMPTR(),
+				const Entry& e = s_entries[t];
+				fprintf(f, "%08x %08x %u %d %.2f %.1f%% %u %u %u %s\n", memory_getVirtualOffsetFromPointer(t), (uint32)t->entrypoint.GetMPTR(),
 					(uint32)t->context.affinity & 7, (sint32)t->effectivePriority, ns / 1e9, total ? 100.0 * ns / total : 0.0,
-					s_entries[t].slices, name ? name : "?");
+					e.slices, e.cores, e.moves, name ? name : "?");
 			}
 			fclose(f);
 		}
@@ -1310,10 +1313,15 @@ namespace coreinit
 			return on;
 		}
 
-		void Start(OSThread_t* thread)                   // under the scheduler lock
+		void Start(OSThread_t* thread, uint32 coreIndex) // under the scheduler lock
 		{
 			if (!On())
 				return;
+			Entry& e = s_entries[thread];
+			if (e.lastCore >= 0 && e.lastCore != (sint32)coreIndex)
+				e.moves++;
+			e.lastCore = (sint32)coreIndex;
+			e.cores |= 1u << coreIndex;
 			t_thread = thread;
 			t_start = CpuNs();
 		}
@@ -1342,7 +1350,7 @@ namespace coreinit
 		hCPU->remainingCycles += (s_lehmer_lcg[coreIndex] & 0x7F);
 		s_lehmer_lcg[coreIndex] = (uint32)((uint64)s_lehmer_lcg[coreIndex] * 279470273ull % 0xfffffffbull);
 		s_sliceBudget[coreIndex] = hCPU->remainingCycles;
-		threadstats::Start(thread);
+		threadstats::Start(thread, coreIndex);
 		if (PPCTimer_isVirtualClock())
 		{
 			uint64 now = PPCInterpreter_getMainCoreCycleCounter();
