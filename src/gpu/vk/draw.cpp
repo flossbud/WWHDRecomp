@@ -467,6 +467,21 @@ namespace wwhd::gpu
 				return;
 			EndRendering();
 			uint32 w = UINT32_MAX, h = UINT32_MAX;
+			for (Image* c : t.color)
+				if (c)
+					w = std::min(w, c->width), h = std::min(h, c->height);
+			if (t.depth)
+				w = std::min(w, t.depth->width), h = std::min(h, t.depth->height);
+			// a pending whole-image clear (WWHD_CLEAR_LOADOP) becomes this pass's load op when the pass covers the image;
+			// otherwise Transition records it first
+			auto loadOp = [&](Image& img, uint32 layer, VkRenderingAttachmentInfo& a) {
+				if (img.clearPending && layer == 0 && img.width == w && img.height == h)
+				{
+					img.clearPending = false;
+					a.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+					a.clearValue = img.clearValue;
+				}
+			};
 			VkRenderingAttachmentInfo colors[8]{};
 			uint32 count = 0;
 			for (uint32 i = 0; i < 8; i++)
@@ -474,25 +489,23 @@ namespace wwhd::gpu
 				colors[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
 				if (!t.color[i])
 					continue;
+				colors[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+				loadOp(*t.color[i], t.colorLayer[i], colors[i]);
 				Transition(*t.color[i], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 				colors[i].imageView = LayerView(*t.color[i], t.colorLayer[i]);
 				colors[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-				colors[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 				colors[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 				count = i + 1;
-				w = std::min(w, t.color[i]->width);
-				h = std::min(h, t.color[i]->height);
 			}
 			VkRenderingAttachmentInfo depth{ VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
 			if (t.depth)
 			{
+				depth.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+				loadOp(*t.depth, t.depthLayer, depth);
 				Transition(*t.depth, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 				depth.imageView = LayerView(*t.depth, t.depthLayer);
 				depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-				depth.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 				depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-				w = std::min(w, t.depth->width);
-				h = std::min(h, t.depth->height);
 			}
 			if (timing::On())
 			{

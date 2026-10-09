@@ -385,8 +385,38 @@ namespace wwhd::gpu
 	}
 
 	// narrow by default (above); WWHD_BARRIERS=all: every transition waits for everything before it
+	bool DeferClear(Image& img, const VkClearValue& value)
+	{
+		static const bool on = [] {
+			const char* e = getenv("WWHD_CLEAR_LOADOP");
+			const bool v = !e || atoi(e) != 0;
+			if (!v)
+				Log("clears recorded where the game makes them (WWHD_CLEAR_LOADOP=0)");
+			return v;
+		}();
+		if (!on || img.layers != 1 || !(img.aspect & (VK_IMAGE_ASPECT_COLOR_BIT | VK_IMAGE_ASPECT_DEPTH_BIT)))
+			return false;
+		img.clearPending = true;
+		img.clearValue = value;
+		return true;
+	}
+
+	void FlushClear(Image& img)
+	{
+		if (!img.clearPending)
+			return;
+		img.clearPending = false;
+		Transition(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		VkImageSubresourceRange all{ img.aspect, 0, 1, 0, 1 };
+		if (img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT)
+			vkCmdClearDepthStencilImage(s.cmd, img.image, img.layout, &img.clearValue.depthStencil, 1, &all);
+		else
+			vkCmdClearColorImage(s.cmd, img.image, img.layout, &img.clearValue.color, 1, &all);
+	}
+
 	void Transition(Image& img, VkImageLayout layout)
 	{
+		FlushClear(img);
 		const bool narrow = NarrowBarriers();
 		const LayoutUse from = UseOf(img.layout), to = UseOf(layout);
 		if (img.layout == layout && (!narrow || !to.write))
@@ -718,7 +748,12 @@ namespace wwhd::gpu
 				Transition(next, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 				VkImageSubresourceRange all{ img.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
 				const bool linear = !depth && CanBlit(img.format, true);
-				if (linear || (depth && CanBlit(img.format, false)))
+				if (img.clearPending)                                  // cleared anyway: the clear moves over
+				{
+					next.clearPending = true, next.clearValue = img.clearValue;
+					img.clearPending = false;
+				}
+				else if (linear || (depth && CanBlit(img.format, false)))
 				{
 					Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 					VkImageBlit b{};
@@ -910,7 +945,10 @@ namespace wwhd::gpu
 			if (newest <= img.written || newest <= img.resetFor)
 				continue;
 			img.resetFor = newest;
-			timing::Scope span(timing::Kind::Reset);
+			timing::Scope span(timing::Kind::Reset, !timing::On() ? std::string() : fmt::format("reset {}x{} f{}{}", img.gw, img.gh,
+				(int)img.format, img.layers > 1 ? fmt::format(" L{}", img.layers) : ""));
+			if (DeferClear(img, VkClearValue{}))
+				continue;
 			Transition(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 			VkImageSubresourceRange all{ img.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
 			if (img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT)
@@ -1099,34 +1137,49 @@ namespace wwhd::gpu
 		if (nWords < 23)
 			return;
 		EndRendering();
-		timing::Scope span(timing::Kind::Clear);
 		uint32 mask = p[0];
+		// the span names what's cleared (WWHD_GPU_TIMING's top list): colour and/or depth, the sizes and layers
+		timing::Scope span(timing::Kind::Clear, !timing::On() ? std::string() : fmt::format("clear{}{}{}",
+			(mask & 1) && (uint32)p[1] ? fmt::format(" colour {}x{} f{:x} L{}", std::max<uint32>(p[4], p[6]), (uint32)p[5], (uint32)p[2],
+				std::max<uint32>(p[8], 1)) : "",
+			(mask & 6) && (uint32)p[9] ? fmt::format(" depth{} {}x{} L{}", (mask & 4) ? "+stencil" : "", std::max<uint32>(p[12], p[14]),
+				(uint32)p[13], std::max<uint32>(p[16], 1)) : "",
+			(mask & 2) && !(mask & 4) && (uint32)p[9] ? " (+colour aliases)" : ""));
 		if ((mask & 1) && (uint32)p[1])
 		{
 			uint32 w = std::max<uint32>(p[4], p[6]), h = p[5], first = p[7], count = std::max<uint32>(p[8], 1);
 			Image& img = Surface(p[1], p[2], false, w, h, first + count);
 			img.written = ++s.writes;
-			Transition(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-			VkClearColorValue c;
+			VkClearValue cv{};
+			VkClearColorValue& c = cv.color;
 			c.float32[0] = (float)(uint32)p[17] / 255.0f;
 			c.float32[1] = (float)(uint32)p[18] / 255.0f;
 			c.float32[2] = (float)(uint32)p[19] / 255.0f;
 			c.float32[3] = (float)(uint32)p[20] / 255.0f;
-			VkImageSubresourceRange range{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, first, count };
-			vkCmdClearColorImage(s.cmd, img.image, img.layout, &c, 1, &range);
+			if (first != 0 || count != 1 || !DeferClear(img, cv))
+			{
+				Transition(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+				VkImageSubresourceRange range{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, first, count };
+				vkCmdClearColorImage(s.cmd, img.image, img.layout, &c, 1, &range);
+			}
 		}
 		if ((mask & 6) && (uint32)p[9])
 		{
 			uint32 w = std::max<uint32>(p[12], p[14]), h = p[13], first = p[15], count = std::max<uint32>(p[16], 1);
 			Image& img = Surface(p[9], p[10], true, w, h, first + count);
 			img.written = ++s.writes;
-			Transition(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 			VkClearDepthStencilValue v;
 			uint32 depthBits = p[21];
 			memcpy(&v.depth, &depthBits, 4);
 			v.stencil = p[22];
 			VkImageAspectFlags aspect = ((mask & 2) ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
 				((mask & 4) && (img.aspect & VK_IMAGE_ASPECT_STENCIL_BIT) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
+			VkClearValue dv{};
+			dv.depthStencil = v;
+			if (aspect == img.aspect && first == 0 && count == 1 && DeferClear(img, dv))
+				aspect = 0;                                        // the next pass's load op
+			else
+				Transition(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 			if (aspect)
 			{
 				VkImageSubresourceRange range{ aspect, 0, 1, first, count };
@@ -1141,10 +1194,13 @@ namespace wwhd::gpu
 					if (!c.image || (c.aspect & VK_IMAGE_ASPECT_DEPTH_BIT) || c.gw > w || first >= c.layers)
 						continue;
 					c.written = ++s.writes;
+					VkClearValue value{};
+					value.color = { { v.depth, v.depth, v.depth, v.depth } };
+					if (first == 0 && DeferClear(c, value))
+						continue;
 					Transition(c, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-					VkClearColorValue cv{ { v.depth, v.depth, v.depth, v.depth } };
 					VkImageSubresourceRange range{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, first, std::min(count, c.layers - first) };
-					vkCmdClearColorImage(s.cmd, c.image, c.layout, &cv, 1, &range);
+					vkCmdClearColorImage(s.cmd, c.image, c.layout, &value.color, 1, &range);
 				}
 		}
 	}

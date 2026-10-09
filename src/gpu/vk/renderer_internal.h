@@ -34,6 +34,8 @@ namespace wwhd::gpu
 		uint32 fitH = 0;                                         // WWHD_SURFACE_FIT: the height it was fitted to (or would be)
 		uint32 readSince = 0;                                    // the frame readH last grew (fitted only once it's stable)
 		bool noFit = false;                                      // read past fitH, or past its own height: never fitted
+		bool clearPending = false;                               // a whole-image clear not recorded yet (clears as load ops:
+		VkClearValue clearValue{};                               //   (DeferClear), done by the next pass's load op or FlushClear
 	};
 
 	// host-visible memory that per-frame data (uniforms, vertices, indices) is written into; reset
@@ -103,7 +105,12 @@ namespace wwhd::gpu
 	bool LazyDrawDone();                                          // WWHD_LAZY_DRAWDONE=1 in real time
 	void HostReadBarrier();                                       // a copy's results visible to the host after the fence
 	void WaitPending();                                           // the GPU done with every submitted frame (no submit)
-	void Transition(Image& img, VkImageLayout layout);
+	void Transition(Image& img, VkImageLayout layout);            // a pending clear first (FlushClear)
+	// Clears as load ops (gpu-plan item 2's rest; the default, WWHD_CLEAR_LOADOP=0 turns it off): a clear of a whole
+	// single-layer image (the game's clears, the overwritten surfaces' resets) is kept on the image and done by the load
+	// op of the next pass into it when that pass covers the whole image; any other use records it first
+	bool DeferClear(Image& img, const VkClearValue& value);       // false: not deferred, the caller clears
+	void FlushClear(Image& img);
 	Image CreateImage(VkFormat format, VkImageAspectFlags aspect, uint32 w, uint32 h, VkImageUsageFlags usage, uint32 layers = 1);
 	VkImageView LayerView(Image& img, uint32 layer);             // a 2D view of one layer (img.view for layer 0)
 	void DestroyImage(Image& img);
