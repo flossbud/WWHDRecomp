@@ -103,6 +103,19 @@ static void _refShotRequest(uint32 frame)
 	});
 }
 
+// wwhd: a frame dropped at 60 fps in real time (src/overrides/pacing.cpp): its swap is counted (the frame number input
+// scripts and the half ticks follow), nothing is presented and no capture is taken
+void GX2_SkipSwap()
+{
+	++s_refSwapCount;
+	static const uint32 s_exitFrame = [] { const char* e = getenv("WWHD_EXIT_FRAME"); return e ? (uint32)atoi(e) : 0u; }();
+	if (s_exitFrame && s_refSwapCount >= s_exitFrame)
+	{
+		cemuLog_log(LogType::Force, "wwhd: reached frame {}, exiting (WWHD_EXIT_FRAME)", s_refSwapCount.load());
+		std::quick_exit(0);
+	}
+}
+
 void gx2Export_GX2SwapScanBuffers(PPCInterpreter_t* hCPU)
 {
 	_refShotRequest(++s_refSwapCount);

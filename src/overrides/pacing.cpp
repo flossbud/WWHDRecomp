@@ -14,6 +14,16 @@
 // time only: with the virtual clock (measurement runs) a frame always fits its vsync, and the
 // game's own wait runs. WWHD_60FPS_PACING=vsync keeps the game's wait in real time too.
 //
+// Frame dips without slowdown (the owner's ask, docs/research/gpu-plan.md). WWHD_60FPS_KEEPSPEED=1, real time at 60:
+// the game's ticks keep a schedule (one each 33.3 ms, resynced after a hitch of over 250 ms), and a half tick's frame
+// that would end after the next tick is due (its expected work, the last half frames' average, from now) is dropped:
+// its logic and its actor draws run (the converted processes' half steps, the half tick's late rules; the draws take
+// numbers from the game's random stream, so they stay: WWHD_60FPS_DROPDRAWS=1 drops them too, a test), the game's
+// render jobs (RenderDisplay draw and calcGPU) and its present (game_procPresent) don't; its swap is still counted, so
+// the frame numbers and the whole/half rhythm stay. So a slow stretch shows fewer frames instead of slow motion.
+// WWHD_60FPS_DROPTEST=k (a test, the virtual clock too): every k-th half tick's frame dropped, so the checks can show
+// that a dropped frame changes no game state. WWHD_60FPS_DROPRENDER=0 keeps the render jobs of a dropped frame.
+//
 // WWHD_FRAME_LOG=path writes a line per frame at exit, for tools/sixty/frames.py: the swap, whole
 // (w) or half (h) tick, when its work began (ms from the first), the work until the wait (ms), of
 // which GX2DrawDone waited for the GPU, the scheduler thread's CPU time and idle time during it,
@@ -61,6 +71,9 @@ namespace
 		return paced && !PPCTimer_isVirtualClock() && wwhd::os::SwapCount() >= wwhd::rt::SixtyFrom();   // ~0 when off
 	}
 
+	uint64 s_dropped = 0, s_halves = 0;            // half frames dropped, and all half frames (the real-time log)
+	Clock::time_point s_tickDue{}, s_frameStart{};
+	double s_halfWorkMs = 8.0;                     // the half frames' work, a running average
 	uint64 s_frameVsync = 0;                       // the vsync count when this frame's work began
 	uint64 s_pairVsync = 0;                        // and when its tick's whole frame's did
 
@@ -68,7 +81,7 @@ namespace
 	struct Frame
 	{
 		uint32 swap;
-		bool half;
+		bool half, dropped = false;
 		float beganMs, workMs, drawDoneMs, cpuMs, idleMs, gpuMs, waitMs, fenceMs;
 		uint32 vsyncs;
 		uint32 storesSeen, storesSaved;            // the half tick's journal (thousands)
@@ -98,7 +111,7 @@ namespace
 			return;
 		fprintf(f, "# swap tick began_ms work_ms drawdone_ms cpu_ms idle_ms gpu_ms vsyncs wait_ms stores_k saved_k fence_ms\n");
 		for (const Frame& r : s_frames)
-			fprintf(f, "%u %c %.2f %.2f %.2f %.2f %.2f %.2f %u %.2f %u %u %.2f\n", r.swap, r.half ? 'h' : 'w', r.beganMs, r.workMs,
+			fprintf(f, "%u %c %.2f %.2f %.2f %.2f %.2f %.2f %u %.2f %u %u %.2f\n", r.swap, r.dropped ? 'd' : r.half ? 'h' : 'w', r.beganMs, r.workMs,
 				r.drawDoneMs, r.cpuMs, r.idleMs, r.gpuMs, r.vsyncs, r.waitMs, r.storesSeen, r.storesSaved, r.fenceMs);
 		fclose(f);
 	}
@@ -145,6 +158,7 @@ void f_0274C874(PPCInterpreter_t* __restrict ctx)
 	{
 		r.swap = wwhd::os::SwapCount();
 		r.half = g_rtHalfTick;
+		r.dropped = wwhd::pacing::g_dropFrame;
 		r.beganMs = Ms(s_began - s_first);
 		r.workMs = Ms(waitFrom - s_began);
 		r.drawDoneMs = GX2::wwhd_TakeDrawDoneWaitNs() / 1e6f;
@@ -158,7 +172,11 @@ void f_0274C874(PPCInterpreter_t* __restrict ctx)
 		r.storesSeen = (uint32)(seen / 1000);
 		r.storesSaved = (uint32)(saved / 1000);
 	}
-	if (!Paced())
+	if (g_rtHalfTick && !wwhd::pacing::g_dropFrame && s_frameStart != Clock::time_point{})
+		s_halfWorkMs += (std::chrono::duration<double, std::milli>(Clock::now() - s_frameStart).count() - s_halfWorkMs) / 8;
+	if (wwhd::pacing::g_dropFrame && Paced())
+		;                                          // dropped: behind already, the next tick at once
+	else if (!Paced())
 		orig_f_0274C874(ctx);
 	else if (!g_rtHalfTick)
 	{
@@ -174,4 +192,75 @@ void f_0274C874(PPCInterpreter_t* __restrict ctx)
 		s_frames.push_back(r);
 	}
 	FrameBegins();
+}
+
+namespace wwhd::pacing
+{
+	bool g_dropFrame = false;
+
+	bool DropDraws()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_DROPDRAWS"); return e && atoi(e) == 1; }();
+		return g_dropFrame && on;
+	}
+
+	void FrameStart(uint32 swap, uint32 from, bool half)
+	{
+		static const uint32 test = [] { const char* e = getenv("WWHD_60FPS_DROPTEST"); return e ? (uint32)atoi(e) : 0u; }();
+		static const bool keep = [] { const char* e = getenv("WWHD_60FPS_KEEPSPEED"); return e && atoi(e) == 1; }();
+		const Clock::time_point now = Clock::now();
+		s_frameStart = now;
+		g_dropFrame = false;
+		if (!half)
+		{
+			// the tick's whole frame: it was due at s_tickDue; the next one 33.3 ms after (resynced after a long hitch:
+			// a load or a pause plays on from where it is, it doesn't race to catch up)
+			if (s_tickDue == Clock::time_point{} || now - s_tickDue > std::chrono::milliseconds(250))
+				s_tickDue = now;
+			s_tickDue += std::chrono::microseconds(33333);
+			return;
+		}
+		s_halves++;
+		if (test)
+			g_dropFrame = (swap - from) / 2 % test == 0;
+		else if (keep && Paced())
+			g_dropFrame = now + std::chrono::microseconds((long long)(s_halfWorkMs * 1000)) > s_tickDue;
+		if (g_dropFrame)
+			s_dropped++;
+		if (s_halves % 600 == 0 && (keep || test))
+			cemuLog_log(LogType::Force, "wwhd pacing: {} of the last 600 half frames dropped (half frame work ~{:.1f} ms)",
+				s_dropped, s_halfWorkMs);
+		if (s_halves % 600 == 0)
+			s_dropped = 0;
+	}
+}
+
+// game_procPresent (gfx_EndFrame: the outputs' copies, GX2DrawDone, the swap, ProcUI): a dropped frame presents nothing
+void f_020350C4(PPCInterpreter_t* __restrict ctx)
+{
+	if (!wwhd::pacing::g_dropFrame)
+		[[clang::musttail]] return orig_f_020350C4(ctx);
+	wwhd::os::SkipSwap();
+}
+
+namespace
+{
+	bool DropRender()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_DROPRENDER"); return !(e && atoi(e) == 0); }();
+		return wwhd::pacing::g_dropFrame && on;
+	}
+}
+
+// RenderDisplay draw and calcGPU (the game's render job lists for the frame): not for a dropped frame
+void f_0272A8C4(PPCInterpreter_t* __restrict ctx)
+{
+	if (!DropRender())
+		[[clang::musttail]] return orig_f_0272A8C4(ctx);
+}
+
+void f_0272AD80(PPCInterpreter_t* __restrict ctx)
+{
+	if (!DropRender())
+		[[clang::musttail]] return orig_f_0272AD80(ctx);
 }

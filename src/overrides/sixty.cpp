@@ -3102,6 +3102,8 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		RndFlushAll();                              // the whole tick is over: a process that didn't step (the random stream)
 	g_rtHalfTick = swap >= from && (swap - from) % 2 != 0;
 	g_rtSixty = swap >= from;
+	if (g_rtSixty)
+		wwhd::pacing::FrameStart(swap, from, g_rtHalfTick);   // a late half frame is dropped (pacing.cpp)
 	RndSeedProbe(g_rtHalfTick);
 	if (!g_rtHalfTick)
 	{
@@ -4099,6 +4101,11 @@ void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
 	if (g_rtHalfTick)
 	{
 		HideConvertedGlobals();                         // the draw pass sees the whole tick's globals
+		if (wwhd::pacing::DropDraws())                  // a dropped half frame's draws (pacing.cpp: off by default)
+		{
+			GPR(3) = 1;
+			return;
+		}
 		static const std::vector<uint16> skip = [] {
 			std::vector<uint16> v;
 			const char* e = getenv("WWHD_60FPS_SKIPDRAW");

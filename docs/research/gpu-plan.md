@@ -80,3 +80,18 @@ full speed. Design: in real time, when a frame is behind its schedule, the next 
 skipped) until caught up, so the game keeps 30 ticks a second and only the in-between frames go. The first step of
 the uncapped phase (D21 step 4); 30 and the checks (virtual clock, never behind) unchanged. Session cloud, after
 `WWHD_CORES=3` lands.
+
+**Built (session cloud), opt-in: `WWHD_60FPS_KEEPSPEED=1`** (src/overrides/pacing.cpp). The ticks keep a schedule
+(33.3 ms each, resynced after a hitch of over 250 ms); a half tick's frame that would end after the next tick is due
+(the half frames' average work from now) is dropped: its logic and actor draws run, the game's render jobs
+(RenderDisplay draw and calcGPU) and its present don't; its swap is counted, so the frame numbers and the whole/half
+rhythm stay. The actor draws stay because half-tick draws take numbers from the game's random stream
+(`WWHD_60FPS_DROPDRAWS=1` drops them too: on the virtual clock the seagull's flight then parts at once).
+`WWHD_60FPS_DROPTEST=k` forces every k-th half frame dropped (a test); `tools/sixty/tests/droptest.sh` compares
+routes on the virtual clock with and without (Link 0.0 apart on tour3 and en-bo, 16 units on sail; the seagull parts:
+timing moves the shared random stream). Real time on the worker:
+- the Darknut fight with three host threads and the lazy DrawDone: 44.9 fps at 75% of the game's speed -> **39.9 fps
+  shown at 100%**; without the lazy DrawDone the worker's GPU is too slow even for whole ticks (58%);
+- routes at 60 in real time with half of all half frames dropped (DROPTEST=2, three host threads): Link's path
+  identical to plain 60 on 7 of 8 (sail: real time's own noise either way);
+- gates: checks all MATCH (PSNR inf), regress identical, predeploy 51 ok (gohmatail WARN 54.0 as on main).

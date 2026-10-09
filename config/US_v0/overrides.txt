@@ -106,3 +106,6 @@
 024F08A8    src/overrides/sixty.cpp            dBgS_Acch::CrrPos: a stepping process's whole step's landing read from its next tick (GroundLate's types)
 027ECED4    src/overrides/sixty.cpp            the screen's colour fader (the title's fade to black), every frame: 30's length at 60 (B74)
 02728A74    src/overrides/sixty.cpp            the faders' frame call: the half call after the hold ends still waits (B74, warppot)
+020350C4    src/overrides/pacing.cpp           game_procPresent: a dropped half frame presents nothing (frame dips without slowdown)
+0272A8C4    src/overrides/pacing.cpp           RenderDisplay_draw: not run for a dropped half frame
+0272AD80    src/overrides/pacing.cpp           RenderDisplay_calcGPU: not run for a dropped half frame

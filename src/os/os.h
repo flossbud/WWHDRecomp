@@ -66,6 +66,7 @@ namespace wwhd::os
 	uint64 TimebaseAt2000();    // the timer clock at boot, counted from 1 January 2000
 	uint32 CurrentThread();     // the guest OSThread running on the calling core
 	uint32 SwapCount();         // GX2SwapScanBuffers calls so far: the frame number input scripts use
+	void SkipSwap();            // a dropped frame's swap: counted, nothing presented (src/overrides/pacing.cpp)
 	void SleepTicks(uint64 ticks);                  // the calling guest thread sleeps (the scheduler's)
 	uint32 AllocSystemArea(uint32 size, uint32 alignment); // guest memory for the OS's own data (Cemu's system area)
 	// run the guest function `fn` with r3, r4 on the OS's callback thread (Cemu's async callbacks)

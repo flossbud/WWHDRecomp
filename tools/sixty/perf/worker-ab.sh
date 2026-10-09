@@ -81,6 +81,8 @@ for n in $(seq $([ "${PERF_WARMUP:-1}" = 0 ] && echo 1 || echo 0) "$rounds"); do
             fi
             [ $((t % 60)) = 0 ] && echo "worker-ab.sh: $name $n running ${t}s"
         done
+        # a run that ended without its frame log (a crash): keep its emulator log, the next run overwrites it
+        [ -s "$log.frames" ] || cp "$port" "$log.crash.txt" 2>/dev/null
         others=$(others x); [ "$others" = 0 ] && others=
         [ -n "$a" ] && [ -f "$dir/.b" ] && python3 - "$dir/.a" "$dir/.b" "$ta" "$tb" > "$log.threads" <<'PY'
 import sys, collections, os
