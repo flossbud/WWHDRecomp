@@ -4171,7 +4171,7 @@ Cloud session cloud5 (tailnet mode, worker directory `/wwhd/WWHDRecomp-cloud5`, 
 - **`WWHD_J3D_GUARD`** (off): =1 logs a J3DDrawBuffer packet entered twice, a list that loops before it is drawn, and a
   process drawn twice in one draw pass, each with the guest call chain; =2 also leaves the second entry out and cuts
   the loop. Any other double draw would loop the same way (as on the GameCube); this finds it in one run.
-- **Not on main**: session cloud's `WWHD_GX2_GUARD` (display lists that fill) stays on `ww-4-cloud`.
+- **Not on main**: session cloud's `WWHD_GX2_GUARD` (display lists that fill) stays on `ww-4-cloud-gx2guard` (the worker remote).
 - **Gates** (on main 32c3631): checks all MATCH (traces, streams, sound), diff 0 mismatches, captures PSNR inf;
   regress identical to a main build's run beside it; predeploy 50 ok, 0 FAIL, gohmatail WARN 54.0 (as on main),
   gohmarock ok. Every route's numbers are the same as in session cloud's gate run.

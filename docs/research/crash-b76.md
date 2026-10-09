@@ -2,7 +2,7 @@
 
 Session cloud found and probed it (2026-10-09); session cloud5 found the cause and fixed it the same day. The probe
 `WWHD_J3D_GUARD` stays in `src/overrides/sixty.cpp`, off by default (below). Session cloud's display-list probe
-(`WWHD_GX2_GUARD`, src/os/gx2/core/GX2_Command.cpp) stays on the worker remote's branch `ww-4-cloud`, not on main.
+(`WWHD_GX2_GUARD`, src/os/gx2/core/GX2_Command.cpp) stays on the worker remote's branch `ww-4-cloud-gx2guard`, not on main.
 
 ## The symptom
 
