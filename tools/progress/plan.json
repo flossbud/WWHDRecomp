@@ -374,7 +374,7 @@
     "460": "ice block",
     "64": "table"
   },
-  "queue_note": "Round 14 (week 2, from 2026-10-09): performance for the Steam Deck and Android (B75), then the rival's lessons. Goal: full speed at 60 on the worker (power-capped, the Deck's stand-in); it reaches ~54 fps there with 3 CPU threads, GPU-bound. Two lanes, each worked from its top down: top (CPU side and turning the speed flags on by default) and bottom (GPU side and graphics options); main routes, deploys and keeps the docs; qa takes only problems the others are stuck on. Complexity 1-10 in brackets. On the owner's PC: ww-4 9385d6d.",
+  "queue_note": "Round 14 (week 2, from 2026-10-09): performance for the Steam Deck and Android (B75), then the rival's lessons. Goal: full speed at 60 on the worker (power-capped, the Deck's stand-in); it reaches ~54 fps there with 3 CPU threads, GPU-bound. Two lanes, each worked from its top down: top (CPU side and turning the speed flags on by default) and bottom (GPU side, upscalers (FSR 1, then FSR 3.1/4, XeSS, DLSS: the owner's ask) and graphics options); main routes, deploys and keeps the docs; qa takes only problems the others are stuck on. Complexity 1-10 in brackets. On the owner's PC: ww-4 9385d6d.",
   "queue": [
     {
       "id": "t-cores3",
@@ -435,6 +435,42 @@
       "lane": "bottom",
       "complexity": 7,
       "name": "Round 14: [7] Render scale: worker A/B on en-tn at 100/75/50%, then dynamic resolution that holds 60 (gpu-plan item 3)"
+    },
+    {
+      "id": "b-fsr1",
+      "lane": "bottom",
+      "complexity": 5,
+      "name": "Round 14: [5] FSR 1 upscaling (EASU + RCAS sharpening, MIT, any GPU) on top of render scale and dynamic resolution, between the 3D scene and the HUD so text stays native; a settings option; A/B quality at 75/50% on the worker"
+    },
+    {
+      "id": "b-motion",
+      "lane": "bottom",
+      "complexity": 9,
+      "name": "Round 14: [9] The temporal upscalers' inputs, from the recomp: per-model motion vectors (each draw's previous and current transforms), a sub-pixel camera jitter in the projection, depth, a reactive mask for effects; the game's own bloom, depth of field and AO kept right; 30 and the checks unchanged when off"
+    },
+    {
+      "id": "b-fsr3",
+      "lane": "bottom",
+      "complexity": 7,
+      "name": "Round 14: [7] FSR 3.1 upscaling (open, Vulkan, any GPU) on b-motion's inputs; a settings option (quality, balanced, performance); no frame generation (true 60)"
+    },
+    {
+      "id": "b-fsr4",
+      "lane": "bottom",
+      "complexity": 8,
+      "name": "Round 14: [8] FSR 4 (ML; RX 7000/9000 class): AMD's SDK ships it for DirectX 12 only (2026-10), so evaluate a native Vulkan path (community ports) or wait for AMD's; desktop AMD option"
+    },
+    {
+      "id": "b-xess",
+      "lane": "bottom",
+      "complexity": 6,
+      "name": "Round 14: [6] XeSS upscaling (Intel; Vulkan; most GPUs) on b-motion's inputs; a settings option"
+    },
+    {
+      "id": "b-dlss",
+      "lane": "bottom",
+      "complexity": 6,
+      "name": "Round 14: [6] DLSS upscaling (NVIDIA only; Vulkan; the SDK's licence checked against MPL-2.0 and redistribution) on b-motion's inputs; a desktop NVIDIA option"
     },
     {
       "id": "b-clears",
