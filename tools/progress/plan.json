@@ -1,6 +1,6 @@
 {
   "title": "WWHD Recomp",
-  "ticket": "WW-4: native 60 fps, then uncapped",
+  "ticket": "Week 2: speed for the Deck, then the rival's lessons",
   "milestones": [
     {
       "name": "Link, camera, the sea and sailing at 60",
@@ -330,30 +330,122 @@
     "460": "ice block",
     "64": "table"
   },
-  "queue_note": "Round 13 done (2026-10-08, the 95% stop): every actor is converted to true 60 and checked against 30; this round fixed the knockback's direction, the Stalfos, Armos, Bubble, Bokoblin, Floormaster and Magtail fights, enemies into water, Windfall's auction, Gohma's tail scene, pots, the title's fade (B74) and four renderer speedups. On the owner's PC: ww-4 9385d6d. Next, after the weekly reset: performance for the Steam Deck and Android, the rival's lessons, platforms, then uncapped.",
+  "queue_note": "Round 14 (week 2, from 2026-10-09): performance for the Steam Deck and Android (B75), then the rival's lessons. Goal: full speed at 60 on the worker (power-capped, the Deck's stand-in); it reaches ~54 fps there with 3 CPU threads, GPU-bound. Two lanes, each worked from its top down: top (CPU side and turning the speed flags on by default) and bottom (GPU side and graphics options); main routes, deploys and keeps the docs; qa takes only problems the others are stuck on. Complexity 1-10 in brackets. On the owner's PC: ww-4 9385d6d.",
   "queue": [
     {
-      "id": "next-deck",
-      "name": "Next phase 1: performance for the Steam Deck and Android (B75), following docs/research/deck-plan.md: quick tests on the Deck (clocks, 30 fps, a profile), then its items in order. Done so far: the sound's 60 fps cost (8% of the game thread), the half tick's journal (4.5 -> 2.6%), four renderer caches, and the lazy DrawDone (-15% of the game thread at 60; off by default, try play-60-lazy.sh)"
+      "id": "t-cores3",
+      "lane": "top",
+      "complexity": 8,
+      "name": "Round 14: [8] Three host threads by default (WWHD_CORES=3; 47 -> 54 fps on the worker): routes 3 against 1 on every predeploy route, a 1 h real-time soak, the locks list, per-core figures in the log; then on by default with full gates"
     },
     {
-      "id": "next-rival",
-      "name": "Next phase 2: the rival recomp's lessons (docs/research/rival-study.md): texture change tracking by write-protection, a buffer cache, widescreen and resolution scaling, save states"
+      "id": "t-lazy",
+      "lane": "top",
+      "complexity": 7,
+      "name": "Round 14: [7] The lazy GX2DrawDone by default (deck-plan item 2; -15% game thread): A/B on the desktop worker with a window, vsync on and off; a sync-validation run with it; then on by default with full gates"
     },
     {
-      "id": "next-cloud",
-      "name": "Next phase 3: platforms (Linux arm64, Windows, Android) and CI through cloud sessions on github.com/flossbud/WWHDRecomp (docs/cloud-handoff.md)"
+      "id": "t-writewatch",
+      "lane": "top",
+      "complexity": 6,
+      "name": "Round 14: [6] Texture write-watch in real time (WWHD_WRITE_WATCH=1, deck-plan item 6): worker A/B of its gain, a soak with verify mode (0 misses), then on by default"
     },
     {
-      "id": "next-uncapped",
-      "name": "Next phase 4: uncapped frame rate on the half steps (D21 step 4), when the owner says"
+      "id": "t-bufcache",
+      "lane": "top",
+      "complexity": 9,
+      "name": "Round 14: [9] A guest buffer cache (rival-study 9.3 #3): skip the per-frame vertex copy (~16% of the render thread) for buffers write-watch saw unchanged"
+    },
+    {
+      "id": "t-rtstore",
+      "lane": "top",
+      "complexity": 5,
+      "name": "Round 14: [5] The half step's journal: the inline check in RT_STORE (deck-plan item 5's rest, ~1% of the game thread)"
+    },
+    {
+      "id": "t-30fps",
+      "lane": "top",
+      "complexity": 6,
+      "name": "Round 14: [6] 30 fps on the worker reaches only 27-28.7 fps: find where the time goes and fix it"
+    },
+    {
+      "id": "t-codegen",
+      "lane": "top",
+      "complexity": 9,
+      "name": "Round 14: [9] The recompiled code itself (82% of the game thread, flat): registers kept in host registers, a real-time build without the cycle counting, -O3; measure each on the worker"
+    },
+    {
+      "id": "b-gpumeasure",
+      "lane": "bottom",
+      "complexity": 5,
+      "name": "Round 14: [5] Measure the GPU on the worker (gpu-plan item 1): WWHD_GPU_TIMING and gpu-clock.sh on its iGPU under the power cap; reconcile the ~18.7 ms a frame with the desktop's 1.38 ms; the per-pass table into gpu-plan.md"
+    },
+    {
+      "id": "b-barriers",
+      "lane": "bottom",
+      "complexity": 6,
+      "name": "Round 14: [6] Narrow barriers and surface fit by default (gpu-plan item 2): the worker A/Bs the cloud sessions left, then on by default with full gates (narrow also removes the default's 71 sync hazards)"
+    },
+    {
+      "id": "b-scale",
+      "lane": "bottom",
+      "complexity": 7,
+      "name": "Round 14: [7] Render scale: worker A/B on en-tn at 100/75/50%, then dynamic resolution that holds 60 (gpu-plan item 3)"
+    },
+    {
+      "id": "b-clears",
+      "lane": "bottom",
+      "complexity": 6,
+      "name": "Round 14: [6] The GPU's other exact wins (gpu-plan item 2's rest): load ops instead of clears, redundant transitions"
+    },
+    {
+      "id": "b-shaders",
+      "lane": "bottom",
+      "complexity": 8,
+      "name": "Round 14: [8] Shaders optimised offline (gpu-plan item 5) from the D20 shader list"
+    },
+    {
+      "id": "b-wide",
+      "lane": "bottom",
+      "complexity": 7,
+      "name": "Round 14: [7] Widescreen (Hor+) and HUD anchoring (rival-study 9.3 #7)"
+    },
+    {
+      "id": "b-gfxopts",
+      "lane": "bottom",
+      "complexity": 5,
+      "name": "Round 14: [5] Graphics options: the ambient occlusion toggle (find the pass), anisotropic filtering, FXAA (gpu-plan item 4's rest, rival-study #8)"
+    },
+    {
+      "id": "m-setup",
+      "lane": "main",
+      "complexity": 2,
+      "name": "Round 14: [2] Week 2's setup: GitHub's only branch is main, the worktrees on main with their worker settings, the two-lane queue on this page"
+    },
+    {
+      "id": "m-docs",
+      "lane": "main",
+      "complexity": 2,
+      "name": "Round 14: [2] The docs current: deck-plan's item table, gpu-plan's landed items, the handoff's head (three threads, render scale, presets)"
+    },
+    {
+      "id": "m-deploy",
+      "lane": "main",
+      "complexity": 4,
+      "name": "Round 14: [4] A batched deploy of main to the owner's PC (predeploy 0 FAIL plus gohmatail gohmarock), then after each lane's landings"
+    },
+    {
+      "id": "m-deck",
+      "lane": "main",
+      "complexity": 3,
+      "name": "Round 14: [3] With the owner: the Deck's quick tests (deck-plan tests 1-4: clocks, 30 fps, a profile, thread placement) on the newest deploy"
     }
   ],
   "later": [
-    "Performance for the Steam Deck and Android (B75: the game at 35-55% speed on a Deck, CPU-bound): the renderer's work per draw (texture change tracking, a buffer cache, async present), then the recompiled code (registers kept in host registers, a real-time build without the cycle counting, -O3), then more threads",
-    "The rival recomp's lessons (docs/research/rival-study.md): widescreen and resolution scaling, save states, what to adopt and do better",
-    "Platforms: Linux arm64, Windows, Android: cloud sessions on the public repo github.com/flossbud/WWHDRecomp (docs/cloud-handoff.md: CI, the ports, groundwork)",
-    "Uncapped frame rate (D21 step 4), built on the half steps: the owner's call when to start it",
+    "Platforms: Linux arm64, Windows, Android and CI through cloud sessions on github.com/flossbud/WWHDRecomp (docs/cloud-handoff.md)",
+    "Android-specific speed: ADPF hints, core pinning, thermal (deck-plan), once the port runs",
+    "More of the rival's lessons (rival-study 9.3): save states, a constant guest memory base, draw batching, interpolation as a low-power mode",
+    "Uncapped frame rate (D21 step 4), built on the half steps: when the owner says",
     "The owner's extensive testing and repair"
   ],
   "queue_done": [
@@ -432,7 +524,11 @@
     "bottom-pots",
     "qa-perf",
     "fights",
-    "wrapup"
+    "wrapup",
+    "next-deck",
+    "next-rival",
+    "next-cloud",
+    "next-uncapped"
   ],
   "still": {
     "20": "still where placed (Abship,0,5): no state change at 30 over 200 ticks (census, movers.sh)",
