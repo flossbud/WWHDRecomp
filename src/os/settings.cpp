@@ -25,7 +25,8 @@ namespace
 		{ "WWHD_WINDOW_SIZE", "Window size", { { "1280x720", "1280x720" }, { "1600x900", "1600x900" },
 			{ "1920x1080", "1920x1080" }, { "2560x1440", "2560x1440" } }, true },
 		{ "WWHD_LAZY_DRAWDONE", "Lazy DrawDone (faster)", { { "0", "off" }, { "1", "on" } }, false },
-		{ "WWHD_CORES", "Host threads", { { "1", "1" }, { "3", "3" } }, false },
+		{ "WWHD_CORES", "CPU threads", { { "1", "1" }, { "3", "3" } }, false },
+		{ "WWHD_60FPS_KEEPSPEED", "Keep game speed when frames drop", { { "0", "off" }, { "1", "on" } }, false },
 	};
 
 	std::mutex s_lock;

@@ -4104,7 +4104,7 @@ Cloud session cloud3 (tailnet mode, worker directory `/wwhd/WWHDRecomp-cloud3`, 
   "Settings" on the debug menu's top page (before "Close"); A, left and right change a value, saved at once.
   Options: frame rate 30/60, vsync (live: `gpu::RebuildSwapchain`, present.cpp), display window/fullscreen and
   window size (live, and at start: `WWHD_FULLSCREEN`, `WWHD_WINDOW_SIZE`, window_system.cpp), lazy DrawDone,
-  host threads 1/3 (`WWHD_CORES`). Restart-only ones say "(at the next start)" while they differ from what runs;
+  CPU threads 1/3 (`WWHD_CORES`), keep game speed when frames drop (`WWHD_60FPS_KEEPSPEED`). Restart-only ones say "(at the next start)" while they differ from what runs;
   a launcher's own switch shows "(set by the launcher)" and isn't changed. Tested on the desktop worker (Xvfb,
   lavapipe): the file's 60 applies, the environment's 0 wins, `WWHD_SETTINGS=0` ignores it, the window opens at the
   file's size, and driven from the pad (both sticks, Settings) the window resized live and vsync turned on (the

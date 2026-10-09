@@ -13,7 +13,7 @@
 # +=Return -=Backspace, D-pad on the arrows, left stick I/J/K/L, right stick T/F/G/H; F11 or
 # Alt+Enter toggles fullscreen. F1 (or both sticks) opens the debug menu: arrows move, X or Enter
 # chooses, Z goes back, Escape or F1 closes; the mouse too: hover, left click chooses, right click goes
-# back, the wheel moves, a click outside closes. F2 opens the settings (frame rate, vsync, display, host
+# back, the wheel moves, a click outside closes. F2 opens the settings (frame rate, vsync, display, CPU
 # threads...; saved in portable/wwhd.ini; a switch set here in the environment wins over it). A gamepad's
 # buttons go by their printed labels.
 set -euo pipefail
