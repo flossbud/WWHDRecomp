@@ -33,15 +33,13 @@ Weaker hardware (phones, the Deck in heavy scenes) needs more. The owner's order
    the optimised one switched off if it misbehaves. Checks run Cemu's set; the optimised set gets its own capture
    comparison (within tolerance where it isn't bit-exact) and A/Bs.
 
-**Status (2026-10-09, week 2's start; queue ids in brackets):**
-- Item 1: **built** (`WWHD_GPU_TIMING=1`, `tools/sixty/perf/gpu-clock.sh`; b2b9f24). Measured on the desktop worker
-  only (1.38 ms a frame); not yet on the worker, where threads.md has the GPU at ~18.7 ms a frame (`b-gpumeasure`).
-- Item 2: **built, off by default**: `WWHD_BARRIERS=narrow` (GPU 1.33 -> 1.28 ms on the desktop; removes the default's
-  71 write-after-write hazards under sync validation) and `WWHD_SURFACE_FIT=1` (drops the 1920x1088 -> 1080 crop
-  copy each frame). Left: the worker A/Bs and on by default (`b-barriers`); load ops and redundant transitions
-  (`b-clears`).
-- Item 3: **built, off by default** (below; 75% in the Performance preset). Left: the worker A/B, dynamic resolution
-  (`b-scale`).
+**Status (2026-10-09; queue ids in brackets):**
+- Item 1: **done**: measured on the worker too (`b-gpumeasure`): its iGPU 18.7 ms a frame, 13.5x the desktop's
+  1.38, bandwidth-bound (below).
+- Item 2: **narrow barriers and surface fit on by default** (`b-barriers`, below): the worker holds 60.0 fps at full
+  speed on the continue route (52.4 before). Left: load ops and redundant transitions (`b-clears`).
+- Item 3: **fixed scales built, off by default** (below; 75% in the Performance preset); **dynamic resolution built,
+  opt-in** (`WWHD_RENDER_SCALE=auto`, below). Left: the worker A/B on en-tn at 100/75/50% (`b-scale`).
 - Item 4: **first round and presets landed** (below). Left: the AO toggle, AF, FXAA (`b-gfxopts`).
 - Item 5: not started (`b-shaders`).
 
@@ -165,6 +163,21 @@ sizes; they cost little next to the full-size passes, and a pass mixing scaled a
 (WWHD_GPU_TIMING, the same 2400 frames): 1.44 ms at 1, 1.29 at 0.75 (-10%), 1.18 at 0.5 (-18%); that GPU isn't
 fill-bound here (the 1024x1024 shadow pass, 0.15 ms, and the fixed costs stay). The settings page's "Render scale"
 (100/75/50%, at the next start); the Performance preset sets 75%.
+
+**Dynamic resolution (session bottom, 2026-10-09), opt-in: `WWHD_RENDER_SCALE=auto`** (the settings page's Render
+scale "Auto"). The scale moves between `WWHD_RENDER_SCALE_MIN` (0.5) and `_MAX` (1) in steps of 1/8 from the GPU's
+time a frame against a budget (`WWHD_RENDER_SCALE_BUDGET` ms, default 92% of a frame at the frame rate): down at once
+when a half-second window runs over it (the step from the estimate that all the time scales with the area), up one
+step when that estimate at the next step stays under 85% of the budget for two seconds. The GPU's time comes from
+gpu_timing's light mode (a timestamp at each command buffer's start and end; no lines unless `WWHD_GPU_TIMING=1`).
+A change rescales every scaled surface at the swap (`RescaleSurfaces`: blitted, linear; depth and formats that can't
+be blitted start from zero, as a grown surface does); mip chains are made again at their surface's scale, the scan
+image follows its surface's. Every image keeps the scale it was made at (`Image::scale`), and copies, chains,
+blits, viewports and scissors use the image's own, so surfaces at two scales can meet for a frame. Why not render
+into part of a full-size target instead (no reallocation): the game's shaders sample with normalised coordinates
+and read neither `uf_texNScale` nor `textureSize`, so a part-filled target would be sampled whole.
+Tested: a virtual-clock run stepping 1 -> 0.75 at frame 61 gives captures byte-identical to a fixed 0.75 run at
+frames 1000, 1300, 1600 (tour3); real time under synchronization validation, four steps 1 -> 0.5: 0 hazards.
 
 ## Item 4, the settings menu: design (session cloud3; the first round landed as designed: handoff.md, "Session cloud3")
 
