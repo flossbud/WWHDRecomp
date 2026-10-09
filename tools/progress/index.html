@@ -40,6 +40,18 @@ a:hover { color: var(--link-hover); }
 .ring div { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 800; }
 .stats { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--side); }
 .stats b { color: #fff; font-weight: 600; font-size: 13px; }
+/* the roadmap's phases under the ring (plan.json "roadmap"): on the navy of the sidebar and the phone's Now hero */
+.phases { display: flex; flex-direction: column; gap: 9px; }
+.phase { display: flex; flex-direction: column; gap: 4px; }
+.phaseHead { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--side); line-height: 1.3; }
+.phaseHead span { min-width: 0; overflow-wrap: anywhere; }
+.phaseHead b { margin-left: auto; color: #fff; font-size: 12px; }
+.phaseBar { height: 5px; border-radius: 3px; background: #17304a; overflow: hidden; }
+.phaseBar div { height: 100%; background: #1fb8a6; border-radius: 3px; }
+.phase small { font-size: 10.5px; color: var(--side2); }
+.mPhases { padding: 0 16px; }
+.mPhases .phaseHead { font-size: 13px; }
+.mPhases .phase small { display: none; }   /* the phone: the bars only; the share is in the hover text */
 /* Claude usage (usage.json): on the navy of the sidebar and of the phone's Now hero */
 .usage { display: flex; flex-direction: column; gap: 10px; }
 .usage .eyebrow { display: flex; align-items: baseline; gap: 8px; }
@@ -335,6 +347,7 @@ a.earlier { color: var(--link); font-weight: 600; }
       </div>
       <div class="stats" id="stats"></div>
     </div>
+    <div class="phases" id="phases" hidden></div>
     <div class="usage" id="usage" hidden></div>
     <div class="agents">
       <div class="eyebrow">On deck</div>
@@ -404,6 +417,7 @@ a.earlier { color: var(--link); font-weight: 600; }
           </div>
           <div class="mStats" id="mStats"></div>
         </div>
+        <div class="phases mPhases" id="mPhases" hidden></div>
         <div class="usage mUsage" id="mUsage" hidden></div>
         <div class="mDeck"><div class="mDeckHead">On deck<span>swipe ›</span></div><div class="mCarousel" id="mAgents"></div></div>
       </div>
@@ -472,27 +486,43 @@ async function get(name) {
 }
 
 // --- the sidebar: overall progress, the sessions, the numbers ---
-// actor types converted, work queue items done (with the earlier rounds), bugs closed (fixed, verified or
-// won't fix), each weighted by the hours one took so far (collect.py's effort, from the commits; one each without it)
-function overall() {
-  const all = data.groups.flatMap(g => g.actors), ef = data.effort || {};
-  const queue = (data.queue || []).map(q => claims[q.id] ? claims[q.id].state : "open"), earlier = (data.queue_done || []).length;
-  const parts = [
-    ["actor", all.length, all.filter(a => a.status === "converted" || a.status === "still").length, ef.actor],
-    ["queue", queue.length + earlier, queue.filter(x => x === "done").length + earlier, ef.queue],
-    ["bug", bugList.length, bugList.filter(x => ["fixed", "verified", "wontfix"].includes(x.state)).length, ef.bug],
-  ].filter(x => x[1]);
-  const weighted = parts.every(x => x[3] > 0), w = x => weighted ? x[3] : 1;
-  const n = parts.reduce((t, x) => t + x[1] * w(x), 0), done = parts.reduce((t, x) => t + x[2] * w(x), 0);
-  const by = Object.fromEntries(parts.map(x => [x[0], x]));
-  return {n, done, weighted, by};
+// the ring is the whole roadmap (plan.json "roadmap", the owner's phases and weights): each phase's progress is
+// set by hand (0-1) or computed ("from": "actors", the types converted or needing nothing; "lanes", the round's
+// top and bottom lane items done), and the ring is their weighted mean. The counts (types, queue, bugs) are stats.
+function phaseProgress(ph) {
+  if (ph.from === "actors") { const k = data.counts || {}; return k.types ? ((k.converted || 0) + (k.still || 0)) / k.types : 0; }
+  if (ph.from === "lanes") {
+    const items = (data.queue || []).filter(q => q.lane === "top" || q.lane === "bottom");
+    return items.length ? items.filter(q => claims[q.id] && claims[q.id].state === "done").length / items.length : 0;
+  }
+  return Math.max(0, Math.min(1, Number(ph.progress) || 0));
 }
-// the ring's stats: the hours (or units) done, then the milestones and the three kinds counted
+function overall() {
+  const phases = (data.roadmap || []).map(ph => ({...ph, frac: phaseProgress(ph), weight: Number(ph.weight) || 0}));
+  const all = data.groups.flatMap(g => g.actors);
+  const queue = (data.queue || []).map(q => claims[q.id] ? claims[q.id].state : "open"), earlier = (data.queue_done || []).length;
+  const by = {
+    actor: [0, all.length, all.filter(a => a.status === "converted" || a.status === "still").length],
+    queue: [0, queue.length + earlier, queue.filter(x => x === "done").length + earlier],
+    bug: [0, bugList.length, bugList.filter(x => ["fixed", "verified", "wontfix"].includes(x.state)).length],
+  };
+  const n = phases.reduce((t, x) => t + x.weight, 0), done = phases.reduce((t, x) => t + x.weight * x.frac, 0);
+  return {n, done, phases, by};
+}
+// the ring's stats: the milestones and the counts; then each roadmap phase with its own bar (why the ring is at X%)
 function statsHtml(o) {
-  const ms = data.milestones || [], f = x => x ? `${x[2]}/${x[1]}` : "–";
-  return (o.weighted ? `<b>~${Math.round(o.done)} of ~${Math.round(o.n)} h</b>` : `<b>${Math.round(o.done)} of ${o.n} done</b>`) +
-    `<span>Milestones ${ms.filter(m => m.done).length}/${ms.length}</span><span>Actor types ${f(o.by.actor)}</span>` +
+  const ms = data.milestones || [], f = x => x && x[1] ? `${x[2]}/${x[1]}` : "–";
+  return `<b>The whole roadmap</b><span>Milestones ${ms.filter(m => m.done).length}/${ms.length}</span><span>Actor types ${f(o.by.actor)}</span>` +
     `<span>Queue ${f(o.by.queue)} · Bugs ${f(o.by.bug)}</span>`;
+}
+function phasesHtml(o) {
+  if (!o.phases.length) return "";
+  return `<div class="eyebrow">Roadmap</div>` + o.phases.map(ph => {
+    const p = Math.round(100 * ph.frac), share = o.n ? Math.round(100 * ph.weight / o.n) : 0;
+    return `<div class="phase" title="${esc(ph.name)}: ${p}% done, ${share}% of the whole">
+      <div class="phaseHead"><span>${esc(ph.name)}</span><b>${p}%</b></div>
+      <div class="phaseBar"><div style="width:${p}%"></div></div><small>${share}% of the whole${ph.from ? " · counted" : ""}</small></div>`;
+  }).join("");
 }
 // the types that need nothing at 60 (plan.json "still"), each with the reason: the hover text of their numbers
 const stillTypes = () => data.groups.flatMap(g => g.actors).filter(a => a.status === "still");
@@ -523,6 +553,7 @@ function renderSide() {
   $("ringPct").textContent = p + "%";
   $("ringArc").setAttribute("stroke-dasharray", `${(o.n ? o.done / o.n : 0) * 301.6} 302`);
   $("stats").innerHTML = statsHtml(o);
+  $("phases").innerHTML = phasesHtml(o); $("phases").hidden = !o.phases.length;
   $("nums").innerHTML = `<div class="eyebrow">Numbers</div>` + numList().map(([l, v, t]) => `<div class="num"${t ? ` title="${esc(t)}"` : ""}>${l}<span>${v}</span></div>`).join("");
 }
 // each session: its latest activity (its status line or its latest commit, "session NAME" in the subject),
@@ -764,7 +795,7 @@ const segHtml = (list, cur) => list.map(([id, label, dot, n]) =>
   `<button data-id="${id}" class="${id === cur ? "on" : ""}">${dot ? `<i style="background:${dot}"></i>` : ""}${label}${n !== "" ? `<span>${n}</span>` : ""}</button>`).join("");
 function renderMobile() {
   if (!data) return;
-  const o = overall(), frac = o.n ? o.done / o.n : 0, p = Math.round(100 * frac) + "%";
+  const o = overall(), frac = o.n ? o.done / o.n : 0, p = (o.n ? pct(o.done, o.n) : 0) + "%";
   for (const b of $("mTabs").children) b.classList.toggle("on", b.dataset.tab === mTab);
   for (const [t, id] of [["now", "mNow"], ["shots", "mShots"], ["queue", "mQueue"], ["log", "mLogPane"]]) $(id).classList.toggle("on", t === mTab);
   $("mTitle").textContent = data.title || "WWHD Recomp";
@@ -776,6 +807,7 @@ function renderMobile() {
   if (mTab === "now") {
     ringArc("mRingArc", frac, 257.6); $("mRingPct").textContent = p;
     $("mStats").innerHTML = statsHtml(o);
+    $("mPhases").innerHTML = phasesHtml(o); $("mPhases").hidden = !o.phases.length;
     $("mAgents").innerHTML = agentList().map(a => `<div class="mAgent"><i style="background:${color(a.name)}"></i><div>
       <div class="mAgentHead"><b>${esc(a.name)}</b><span class="${a.live ? "live" : ""}">${agoText(a.last)}</span></div>
       ${a.task ? `<span class="task">${esc(a.task)}</span>` : ""}<p>${esc(a.text)}</p></div></div>`).join("") ||

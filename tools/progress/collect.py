@@ -141,6 +141,7 @@ def main():
                        still=sum(1 for i in q["ids"] if i in still and i not in converted)) if q.get("ids") else q
                   for q in plan.get("queue", [])],
         "queue_done": plan.get("queue_done", []),
+        "roadmap": plan.get("roadmap", []),
         "known_issues": plan["known_issues"],
         "groups": groups,
         "counts": {

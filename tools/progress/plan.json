@@ -1,6 +1,50 @@
 {
   "title": "WWHD Recomp",
   "ticket": "Week 2: speed for the Deck, then the rival's lessons",
+  "roadmap": [
+    {
+      "id": "foundation",
+      "name": "Recompiler, runtime and renderer, exact against Cemu at 30",
+      "weight": 30,
+      "progress": 1
+    },
+    {
+      "id": "sixty",
+      "name": "True 60 for every actor",
+      "weight": 25,
+      "from": "actors"
+    },
+    {
+      "id": "perf",
+      "name": "Full speed at 60 on the Deck stand-in (and Android)",
+      "weight": 12,
+      "from": "lanes"
+    },
+    {
+      "id": "rival",
+      "name": "The rival's lessons: graphics options, widescreen, polish",
+      "weight": 8,
+      "progress": 0.25
+    },
+    {
+      "id": "platforms",
+      "name": "Linux arm64, Windows, Android, CI",
+      "weight": 12,
+      "progress": 0
+    },
+    {
+      "id": "uncapped",
+      "name": "Uncapped frame rate",
+      "weight": 8,
+      "progress": 0
+    },
+    {
+      "id": "release",
+      "name": "The owner's testing, repair and a release",
+      "weight": 5,
+      "progress": 0.1
+    }
+  ],
   "milestones": [
     {
       "name": "Link, camera, the sea and sailing at 60",
