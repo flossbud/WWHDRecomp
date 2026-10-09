@@ -251,8 +251,11 @@ namespace wwhd::gpu
 		// a scene draw's constants kept, and the previous frame's for it (matched, or the camera's) pushed as offsets
 		void Remember(uint64 group, uint64 vsKey, std::span<const UniformData> data, std::vector<uint32>& prevOffsets, bool want);
 		void FrameEnd(uint32 frame);                              // a presented frame's swap
+		void OnSubmitted();                                       // the ring was handed back (its offsets are gone)
 		Image* Target(const Image& depth, bool& clear);           // the motion target for a scene pass (clear: first this frame)
 		void DrawDebug(Image& tv);                                // WWHD_MOTION=debug: the motion over the TV image
+		bool JitterOn();                                          // WWHD_JITTER=1 (with WWHD_MOTION)
+		void Jitter(uint32 frame, float& x, float& y);            // this frame's offset, target pixels (-0.5..0.5)
 	}
 	// renderer.cpp: where the TV image's HUD begins (a draw into the TV surface alone, sampling only textures from
 	// memory, after a full-screen pass into it that sampled surfaces): with FSR 1 the scaled image is upscaled there

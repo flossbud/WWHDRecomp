@@ -1627,6 +1627,8 @@ namespace wwhd::gpu
 
 	void OnSubmitted()
 	{
+		if (motion::On())
+			motion::OnSubmitted();
 		s_sets = s_imageDescriptors = s_bufferDescriptors = 0;
 		s_setCache.clear();
 	}
@@ -2030,6 +2032,14 @@ namespace wwhd::gpu
 		VkViewport viewport{ vpX, vpY + vpH, vpW, -vpH, std::clamp(nearZ, 0.0f, 1.0f), std::clamp(farZ, 0.0f, 1.0f) };
 		if (fx != 1.0f || fy != 1.0f)
 			viewport.x *= fx, viewport.y *= fy, viewport.width *= fx, viewport.height *= fy;
+		// WWHD_JITTER: the scene camera's draws only (a scene draw that tests depth: not the shadow maps, the effect
+		// buffers, full-screen post passes or the HUD), a sub-pixel move of the whole viewport
+		if (scene && motion::JitterOn() && r.DB_DEPTH_CONTROL.get_Z_ENABLE())
+		{
+			float jx, jy;
+			motion::Jitter(s.frame, jx, jy);
+			viewport.x += jx, viewport.y += jy;
+		}
 		if (!known || memcmp(&b.viewport, &viewport, sizeof(viewport)) != 0)
 			vkCmdSetViewport(s.cmd, 0, 1, &viewport);
 		if (fx != 1.0f || fy != 1.0f)                           // the pixels whose centres the guest's would cover, at least

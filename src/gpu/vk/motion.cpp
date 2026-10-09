@@ -51,6 +51,9 @@ namespace wwhd::gpu::motion
 		};
 		Frame s_frames[2];
 		uint32 s_cur = 0;
+		// the previous frame's data already in the ring this command buffer, by its place in that frame's arena (a shared
+		// block, the camera's or the lights', is copied once, not once per draw); cleared at each submit (OnSubmitted)
+		std::unordered_map<uint32, VkDeviceSize> s_inRing;
 		Image s_target;                                         // the motion target, the scene's own size
 		uint32 s_targetFrame = UINT32_MAX;                      // the frame it was last cleared in
 		struct { uint32 draws = 0, matched = 0, camera = 0, plain = 0, noId = 0, noGroup = 0, far = 0, ambiguous = 0, taken = 0; } s_stats;
@@ -255,16 +258,30 @@ namespace wwhd::gpu::motion
 				continue;
 			}
 			const Binding& b = from->bindings[j];
+			if (b.phys)                                           // a block: once a command buffer
+				if (auto it = s_inRing.find(b.arena); it != s_inRing.end())
+				{
+					prevOffsets.push_back((uint32)it->second);
+					continue;
+				}
+			// the range the shader may read, but only the guest's bytes copied: past them nothing the game indexes
+			// (the current data's zeros there are for the guest's view; the previous position needs none)
 			const VkDeviceSize off = RingAlloc(d.readable, s.props.limits.minUniformBufferOffsetAlignment);
-			const uint32 n = std::min(b.bytes, d.readable);
-			memcpy(s.ring.data + off, prev.arena.data() + b.arena, n);
-			memset(s.ring.data + off + n, 0, d.readable - n);
+			memcpy(s.ring.data + off, prev.arena.data() + b.arena, std::min(b.bytes, d.readable));
+			if (b.phys)
+				s_inRing[b.arena] = off;
 			prevOffsets.push_back((uint32)off);
 		}
 	}
 
+	void OnSubmitted()
+	{
+		s_inRing.clear();
+	}
+
 	void FrameEnd(uint32 frame)
 	{
+		s_inRing.clear();                                       // the arena it points into is about to change
 		Frame& cur = s_frames[s_cur];
 		if (frame % 600 == 0 && s_stats.draws)
 		{
@@ -280,6 +297,29 @@ namespace wwhd::gpu::motion
 		s_frames[s_cur].Clear();
 		Frame& prev = s_frames[s_cur ^ 1];
 		prev.claimed.assign(prev.records.size(), false);
+	}
+
+	// ---- the camera's jitter --------------------------------------------------------------------------
+	// WWHD_JITTER=1 (with a temporal upscaler: alone it only makes the picture shimmer): a sub-pixel offset of the
+	// scene camera's draws, the Halton (2, 3) sequence over 8 frames, in the target's pixels (-0.5..0.5). Applied to
+	// their viewport (draw.cpp), so the clip positions, and with them the motion vectors, don't contain it.
+	bool JitterOn()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_JITTER"); return On() && e && atoi(e) != 0; }();
+		return on;
+	}
+
+	void Jitter(uint32 frame, float& x, float& y)
+	{
+		auto halton = [](uint32 i, uint32 base) {
+			float f = 1.0f, r = 0.0f;
+			for (; i; i /= base)
+				f /= (float)base, r += f * (float)(i % base);
+			return r;
+		};
+		const uint32 i = frame % 8 + 1;
+		x = halton(i, 2) - 0.5f;
+		y = halton(i, 3) - 0.5f;
 	}
 
 	// ---- the target -----------------------------------------------------------------------------------
