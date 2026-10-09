@@ -13,7 +13,8 @@ groups the open items by lane. **Where speed stands:** the worker (the Deck's st
 `WWHD_CORES=3` (47 with one thread), GPU-bound; most speed work is in but off by default (deck-plan.md and
 gpu-plan.md have status blocks). **Usage: wrap up at 95%** of the week (the owner's rule since 2026-10-07; older
 text below says 75%). Each new worktree needs the gitignored `tools/worker/hosts.env` (and `desktop.env`),
-`.session` and `.worker-dir`.
+`.session` and `.worker-dir`. **Captures (the owner, 2026-10-09):** at least one capture on the page per assigned
+queue task (a plan.json item, not each step), at its end at the latest: `publish.sh shot PPM "ID: outcome" [PLACE]`.
 
 **Where it stands (2026-10-08, main session, at the 95% weekly stop).** Every actor type is converted to true 60
 and checked tick by tick against 30. The bugs and drifts the owner and the sessions found are fixed or recorded
