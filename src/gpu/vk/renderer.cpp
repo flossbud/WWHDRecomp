@@ -552,13 +552,14 @@ namespace wwhd::gpu
 	// surface is a copy (CopyOf) every frame it was drawn. At each swap a surface that every read so far wanted fewer
 	// rows of is made that many rows tall (its rows kept): it's sampled directly, and the passes into it draw only
 	// those rows (the render area is the smallest attachment). Draws into the rows cut off are lost, which is exact
-	// as long as nothing reads them. So a surface is fitted only once its reads have wanted the same rows for
-	// kFitStable frames, and never when a read wanted more rows than it has (another, taller texture at its address:
-	// the start's loading reads one, frame 902 on every route from the 100% save). A read that still wants more rows
-	// than a surface was fitted to is logged ("surface fit: read past"), and the surface goes back to its full height
-	// for good: that frame may differ, the log says so. WWHD_SURFACE_FIT=proof changes nothing and
-	// logs the same reads against the heights it would fit to: the proof that the rows cut off are never read, on
-	// any route. The checks run without it.
+	// as long as nothing reads them. So only targets the size of the screen (the TV's scan buffer: 1920x1080 read
+	// from 1920x1088, the copies that cost) are fitted, once their reads have wanted the same rows for kFitStable
+	// frames, and never one a taller texture was read from. (Smaller ones are left: the start's loading, frame 902 on
+	// every route from the 100% save, reads a 960x544 target as 1080 rows, after 900 frames of 540.) A read that
+	// still wants more rows than a surface was fitted to is logged ("surface fit: read past"), and the surface goes
+	// back to its full height for good: that frame may differ, the log says so. WWHD_SURFACE_FIT=proof changes
+	// nothing and logs the same reads against the heights it would fit to: the proof that the rows cut off are never
+	// read, on any route. The checks run without it.
 	namespace
 	{
 		int SurfaceFitMode()                                      // 0 off, 1 fit, 2 proof
@@ -581,6 +582,8 @@ namespace wwhd::gpu
 			{
 				if (!img.image || img.fitH || img.noFit || !img.readH || img.readH >= img.height || s.frame - img.readSince < kFitStable)
 					continue;
+				if (img.width != s.scan[0].width || img.readH != s.scan[0].height)
+					continue;                                       // only the screen's size (the copies that cost)
 				img.fitH = img.readH;
 				Log(fmt::format("surface fit: {:08x} fmt {:x} {}x{} {} to {} rows{}", key.first, key.second & 0x7FFFFFFF, img.width,
 					img.height, mode == 1 ? "fitted" : "would be fitted", img.readH, mode == 1 ? "" : " (proof)"));
