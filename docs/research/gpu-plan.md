@@ -40,8 +40,8 @@ Weaker hardware (phones, the Deck in heavy scenes) needs more. The owner's order
   speed on the continue route (52.4 before). Left: load ops and redundant transitions (`b-clears`).
 - Item 2's rest: **clears as load ops on by default** (`b-clears`, below; -1.9% GPU on continue). Redundant
   transitions: not worth doing (barriers and gaps 0.05 ms a frame on the worker).
-- Item 3: **fixed scales and dynamic resolution built, off by default** (`WWHD_RENDER_SCALE=0.75|0.5|auto`; 75% in the
-  Performance preset). The worker on en-tn at 60: 100% 49.9 fps, 75% 56.6, 50% 59.7, Auto 59.2 (`b-scale`, below).
+- Item 3: **fixed scales and dynamic resolution built, off by default** (`WWHD_RENDER_SCALE=0.75|0.5|auto`; Auto in the
+  Performance preset, the owner's choice of 2026-10-09). The worker on en-tn at 60: 100% 49.9 fps, 75% 56.6, 50% 59.7, Auto 59.2 (`b-scale`, below).
 - Item 4: **first round and presets landed** (below). Left: the AO toggle, AF, FXAA (`b-gfxopts`).
 - Item 5: not started (`b-shaders`).
 
@@ -177,7 +177,8 @@ sizes; they cost little next to the full-size passes, and a pass mixing scaled a
 32.0), the mean brightness within 0.2; by eye only softer. GPU time a frame on the desktop worker's GPU
 (WWHD_GPU_TIMING, the same 2400 frames): 1.44 ms at 1, 1.29 at 0.75 (-10%), 1.18 at 0.5 (-18%); that GPU isn't
 fill-bound here (the 1024x1024 shadow pass, 0.15 ms, and the fixed costs stay). The settings page's "Render scale"
-(100/75/50%, at the next start); the Performance preset sets 75%.
+(100/75/50%, Auto: dynamic resolution, at the next start); the Performance preset sets Auto (it was 75% until
+2026-10-09: Auto keeps 100% where the GPU keeps up and holds 60 where it doesn't).
 
 **Dynamic resolution (session bottom, 2026-10-09), opt-in: `WWHD_RENDER_SCALE=auto`** (the settings page's Render
 scale "Auto"). The scale moves between `WWHD_RENDER_SCALE_MIN` (0.5) and `_MAX` (1) in steps of 1/8 from the GPU's
@@ -237,7 +238,7 @@ what runs). No live 30/60 switch at first: SixtyFrom is fixed per run and the ha
 switch is a later item if the owner wants it.
 
 **Presets (landed, the owner's ask):** Performance turns on every speed option (CPU threads 3, lazy DrawDone,
-keep speed when frames dip; later render scale or dynamic resolution, AO off), Quality keeps the defaults, Auto
+keep speed when frames dip, render scale Auto (dynamic resolution); later AO off), Quality keeps the defaults, Auto
 picks Performance on a low-powered device (handoff.md, "Session cloud3"). Each new speed option gets its Performance
 value in settings.cpp's table.
 
