@@ -4206,6 +4206,24 @@ Cloud session cloud5 (tailnet mode, worker directory `/wwhd/WWHDRecomp-cloud5`, 
   regress identical to a main build's run beside it; predeploy 50 ok, 0 FAIL, gohmatail WARN 54.0 (as on main),
   gohmarock ok. Every route's numbers are the same as in session cloud's gate run.
 
+### Session top (week 2, WW-13): the CPU side, the speed flags on by default
+
+Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecomp-top`; the "top" lane of plan.json.
+- **t-cores3, three host threads on by default in real time** (`WWHD_CORES=1`: one; the virtual clock keeps one).
+  Evidence in threads.md, "On by default": the locks list, per-core figures (frame log `core0_ms`/`core2_ms`, the
+  real-time line), three against one on predeploy's routes (`rt_routes.sh`), hour soaks on both workers (`soak.sh`),
+  the worker at 60 on continue 48.1 -> 53.5 fps. Probes added: `WWHD_CORE_CENSUS`, `WWHD_THREAD_DUMP`,
+  `WWHD_INPUT_CALLERS`. Tools: `soak.sh`, `rt_routes.sh` (parallel, retries, `RT_COMPARE_ONLY`, `RT_RENDER`),
+  `WWHD_INPUT_REMAP`. Three against one on time: 92% of route pairs exact, as one against one (95%) and three against three (91%): three host threads add no nondeterminism beyond real time's own.
+- **Real-time scripted routes and the title:** in real time the title can take input after the routes' frame 420, and
+  the run then sits on the file select or comes into play late (every input after it late). Not the threads' doing
+  (one-thread runs too), cause not found; see threads.md. Next item t-boot (`WWHD_DEBUG_BOOT`) removes the title from
+  real-time tests.
+- **Sync validation of the lazy DrawDone** (t-lazy's first step, the desktop worker, a window on Xvfb, RADV,
+  `VK_KHRONOS_VALIDATION_VALIDATE_SYNC`, continue to frame 1500): the same 2140 write-after-write hazards with it on
+  and off, so the lazy path adds none. They are pre-existing, inside a frame: a blit (2101), a copy (7) and clears (32)
+  into an image just cleared with no barrier between (the GPU side's, reported to main).
+
 ## Waiting on the owner
 
 - **The sound check** of the task loop's fast path (item 1): they listen in a window when they have

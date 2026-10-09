@@ -126,7 +126,48 @@ GX2's per-core command buffers, AX's voice-list spinlock.
   now waits for its fences), weaker than the Deck's GPU. (the worker misses even 30 by a little: 27 fps with one host
   thread, its GPU and the 30 fps pacing; not looked into yet.)
 
-**Left before it can be the default in real time:** route correctness with three host threads (Link's path on the
-scripted routes, three against one, with one against one as the noise floor); a soak; the locks list above (FSA, the
-rollback's copies against other cores, counters; `thread_local` addresses across fiber switches: checked, fine); a `WWHD_CORES=3`
-switch instead of the Cemu flag; per-core figures in the real-time log; then the owner's PC.
+**On by default in real time (session top, 2026-10-09, WW-13 t-cores3).** `OSSchedulerBegin` runs three host threads
+unless `WWHD_CORES=1`; the virtual clock (every check) keeps one; the settings page's "CPU threads" defaults to 3. What
+was left, done:
+- *Locks.* FSA: served under a host mutex already (`coreinit_FS.cpp`). Counters: dispatch.cpp's native counters are
+  relaxed atomics bumped with a load and a store (no locked add on the hot path; a lost count is fine for a report);
+  `g_rtStoresPassed` is per host thread (the frame thread's, which its frame log reads). The rollback's copies: probe
+  `WWHD_CORE_CENSUS=path` notes which guest threads run on the other host threads at the frame thread's copies (the
+  half tick's rollback, the converted globals hidden and shown). tour3 at 60 on the desktop worker: of 1289 rollbacks,
+  29 had core 0's sound threads running (JASThread 25, nw::snd::SoundThread 1, an OS thread 3), and none had anything
+  on core 2: the job lists (RenderDisplay's) are joined before the frame ends. The copies only put back bytes the
+  frame thread itself stored in that half frame, so a sound thread storing the same bytes at that moment is the lost
+  update one host thread has too (a timeslice switch there), not a new hazard.
+- *Per-core figures.* The frame log's `core0_ms` and `core2_ms` (cores 0 and 2's host threads' CPU over the frame;
+  `worker_absum.py`'s core0/core2 %), and the real-time log line's "cores 0 and 2's threads N% and M%"
+  (`__OSCoreCpuNanoseconds`). The scheduler thread's "busy" is core 1's (the main thread's) host thread.
+- *Routes, three against one* (`rt_routes.sh`: predeploy's 52 routes in real time at 60 with the null GPU, twice each
+  way, 4 at once on the desktop worker; Link's path compared pair by pair, runs that came into play late left out).
+  Of the pairs that played on time, exact (0.0 units all the way): one against one 40 of 42, three against one 141 of
+  154 (92%), three against three 32 of 35. 27 routes are exact in all six pairs. The rest: warp (both three-thread runs
+  6.1 units from both one-thread runs at the end, 38 on the way), sail 7.3/9.0, gtgrapple 30-36/55-64 (one against one
+  6.4/17.7 there), and en-ph's fight, apart in every pairing, one against one too (391-545 units: its random stream).
+  So three host threads keep the routes as one does, within real time's own noise.
+- *Speed* (`worker-ab.sh`, the worker, continue at 60, the lazy DrawDone, one binary, 4 rounds paired): 48.1 -> 53.5
+  fps (+11.7%, every run above every run), the game thread's CPU a frame 20.2 -> 15.1 ms (-25.4%), core 1's host thread
+  97% -> 81% busy, cores 0 and 2 21.5% and 14.5%; the render thread's fence wait 0.7 -> 3.8 ms (the iGPU is the limit).
+- *A run that never reaches play* (found here, a harness effect): in real time the routes' first scripted A (the
+  title, frame 420) can come before the title takes input on a busy machine. The run then sits on the file select
+  (no process made after the title's), one A behind at each menu. It happened in about half of the three-thread runs
+  6 at once on the busy desktop worker, and with one too (later on the desktop worker nearly every run, either way:
+  not load alone, the cause not found). The same runs with the menu presses 150 frames later: 6 of 6 in play.
+  `WWHD_INPUT_CALLERS` (a probe) showed the pad read only by the main thread, once a frame, every sample taken; the
+  thread dumps (`WWHD_THREAD_DUMP`: each guest thread's state, wait objects and guest call chain at exit) were the
+  same in a stuck run and a good one. `rt_routes.sh` now moves the first three menu presses later
+  (`WWHD_INPUT_REMAP`: 420, 540, 660 -> 530, 620, 700; Start stays at 780, so play begins on the same frame) and still
+  plays a late run again (`RT_RETRIES`, 3). A player presses A when the title is up, so play doesn't see it. Next
+  (t-boot, the owner's ask): `WWHD_DEBUG_BOOT`, straight into a save's play without the title.
+- *Soaks* (`soak.sh`: an hour of seeded random play on Outset at 60, rendered, the lazy DrawDone: walking, camera,
+  sword, items, the pause menu): the worker 216,900 swaps in 73 min, 49.7 fps over the first 21 min (game thread 80%
+  of a core, cores 0 and 2 26% and 14%); the desktop worker in 61 min at 59.8 fps (55%, 12%, 9%). No crash, panic or
+  assert. Not the continue route: the 53.5-53.8 fps here are continue's gameplay window (worker-ab.sh).
+- *Gates* (the default build, on main 1b4ef02): checks all MATCH (traces, command streams, sound, diff 0 mismatches, 15 captures PSNR
+  inf); regress identical to main's (md5 da06a4ee); predeploy 50 ok, 0 FAIL, gohmatail WARN 54.0 (as on main), gohmarock ok 4.8.
+
+(Session cloud's list of what was left before the default: route correctness, a soak, the locks list, a `WWHD_CORES`
+switch, per-core figures in the real-time log: all done above. Still open: the owner's PC with a window.)
