@@ -5,7 +5,7 @@
 # is the noise floor the three-host-thread runs are judged against.
 # Each run: tools/sixty/run.sh with SIXTY_REALTIME=1, WWHD_STATE_TRACK=168, the lazy DrawDone; a binary copy per slot
 # (its portable folder: one game per folder).
-# RT_VARIANTS (default "st1 st2 mt1 mt2"): mt* runs add RT_MT_ARGS (default WWHD_CORES=3).
+# RT_VARIANTS (default "st1 st2 mt1 mt2"): mt* runs add RT_MT_ARGS (default WWHD_CORES=3), st* runs WWHD_CORES=1.
 # RT_JOBS runs at once (default 4; real time: the desktop worker has the threads, the worker wants 1).
 # Default routes: predeploy.sh's.
 # Output: game state, it stays on the worker ($OUT/rt/ROUTE/VARIANT/60).
@@ -21,7 +21,7 @@ done
 run_one() {
     local r=$1 v=$2 slot=$3 w= n= extra=()
     case $r in back) w=M_NewD2,5,14,-1 ;; talk) w=sea,0,11,-1 ;; house) w=sea,9,11,-1 ;; warp) n=2460 ;; esac
-    [[ $v == mt* ]] && extra=(${RT_MT_ARGS:-WWHD_CORES=3})
+    if [[ $v == mt* ]]; then extra=(${RT_MT_ARGS:-WWHD_CORES=3}); else extra=(WWHD_CORES=1); fi
     rm -rf "$R/$r/$v"; mkdir -p "$R/$r/$v"
     env ${w:+WWHD_DEBUG_STAGE=920:$w} ${n:+SIXTY_FRAMES=$n} "${extra[@]}" SIXTY_REALTIME=1 WWHD_LAZY_DRAWDONE=1 WWHD_STATE_TRACK=168 \
         CEMU_BIN="$R/bin.$$.$slot/wwhd-null" SIXTY_OUT="$R/slot.$$.$r.$v" tools/sixty/run.sh "$r" "$R/$r/$v" 60 > "$R/$r/$v.log" 2>&1 \

@@ -126,6 +126,7 @@ static std::chrono::microseconds untilTimedVsync()
 namespace coreinit
 {
 	uint64 __OSIdleNanoseconds();   // os/coreinit/coreinit_Thread.cpp
+	uint64 __OSCoreCpuNanoseconds(uint32 core);   // (three host threads; 0 with one)
 }
 namespace wwhd::rt
 {
@@ -134,13 +135,14 @@ namespace wwhd::rt
 
 // Real time: every 10 s the log (portable/log.txt) gets the frame rate, frame times (from swap to
 // swap) and how much of the time the scheduler thread had work, to see how the game plays and how
-// much headroom it has (design D19, requirement 4).
+// much headroom it has (design D19, requirement 4). With three host threads the scheduler thread is core 1's (the
+// game's main thread's), and cores 0 and 2's host threads get their CPU over the period.
 namespace frametimes
 {
 	using Clock = std::chrono::steady_clock;
 	std::vector<float> s_ms;                       // this period's frame times
 	Clock::time_point s_last, s_periodStart;
-	uint64 s_idleAtStart = 0;
+	uint64 s_idleAtStart = 0, s_core0AtStart = 0, s_core2AtStart = 0;
 
 	void Swap()
 	{
@@ -149,6 +151,8 @@ namespace frametimes
 		{
 			s_last = s_periodStart = now;
 			s_idleAtStart = coreinit::__OSIdleNanoseconds();
+			s_core0AtStart = coreinit::__OSCoreCpuNanoseconds(0);
+			s_core2AtStart = coreinit::__OSCoreCpuNanoseconds(2);
 			return;
 		}
 		s_ms.push_back(std::chrono::duration<float, std::milli>(now - s_last).count());
@@ -164,11 +168,18 @@ namespace frametimes
 		wwhd::gpu::FirstSights f = wwhd::gpu::RendererOn() ? wwhd::gpu::TakeFirstSights() : wwhd::gpu::FirstSights{};
 		uint64 idleWaits, idleWaitsByMessage;
 		wwhd::rt::TakeIdleWaits(idleWaits, idleWaitsByMessage);
+		const uint64 core0 = coreinit::__OSCoreCpuNanoseconds(0), core2 = coreinit::__OSCoreCpuNanoseconds(2);
+		std::string cores;
+		if (core0 || core2)
+			cores = fmt::format(", cores 0 and 2's threads {:.0f}% and {:.0f}%", (core0 - s_core0AtStart) / 1e7 / period,
+				(core2 - s_core2AtStart) / 1e7 / period);
 		cemuLog_log(LogType::Force, "wwhd real time: {:.1f} fps over {:.0f} s, frame time median {:.1f} ms, 99th {:.1f} ms, "
-			"worst {:.1f} ms, {} over 50 ms; scheduler thread busy {:.0f}%, the task loop slept {} times ({} woken by a message); "
+			"worst {:.1f} ms, {} over 50 ms; scheduler thread busy {:.0f}%{}, the task loop slept {} times ({} woken by a message); "
 			"first sights {} shaders ({:.0f} ms), {} pipelines ({:.0f} ms)",
-			s_ms.size() / period, period, at(0.5), at(0.99), s_ms.back(), slow, busy, idleWaits, idleWaitsByMessage,
+			s_ms.size() / period, period, at(0.5), at(0.99), s_ms.back(), slow, busy, cores, idleWaits, idleWaitsByMessage,
 			f.shaders, f.shaderMs, f.pipelines, f.pipelineMs);
+		s_core0AtStart = core0;
+		s_core2AtStart = core2;
 		s_ms.clear();
 		s_periodStart = now;
 		s_idleAtStart = idle;

@@ -35,7 +35,7 @@ namespace
 		{ "WWHD_WINDOW_SIZE", "Window size", { { "1280x720", "1280x720" }, { "1600x900", "1600x900" },
 			{ "1920x1080", "1920x1080" }, { "2560x1440", "2560x1440" } }, true, nullptr },
 		{ "WWHD_RENDER_SCALE", "Render scale", { { "1", "100%" }, { "0.75", "75%" }, { "0.5", "50%" }, { "auto", "Auto" } }, false, "0.75" },
-		{ "WWHD_CORES", "CPU threads", { { "1", "1" }, { "3", "3" } }, false, "3" },
+		{ "WWHD_CORES", "CPU threads", { { "3", "3" }, { "1", "1" } }, false, "3" },
 		{ "WWHD_LAZY_DRAWDONE", "Lazy DrawDone", { { "0", "off" }, { "1", "on" } }, false, "1" },
 	};
 	constexpr const char* kPresetKey = "WWHD_PRESET";

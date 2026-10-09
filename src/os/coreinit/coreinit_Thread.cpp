@@ -1744,11 +1744,14 @@ namespace coreinit
 		if (sSchedulerActive.exchange(true))
 			return;
 		cemu_assert_debug(numCPUEmulationThreads == 1 || numCPUEmulationThreads == 3);
-		// wwhd: WWHD_CORES=3 runs the three emulated cores on three host threads, in real time only (the virtual clock,
-		// every check, keeps one); the game profile's CPU mode stays the interpreter, so Cemu's JIT stays off and our
-		// hook runs everything (docs/research/threads.md). WWHD_CORES=1: one host thread (the default for now).
-		if (const char* cores = getenv("WWHD_CORES"); cores && !PPCTimer_isVirtualClock())
-			numCPUEmulationThreads = atoi(cores) == 3 ? 3 : 1;
+		// wwhd: in real time the three emulated cores run on three host threads by default (the virtual clock, every
+		// check, keeps one); the game profile's CPU mode stays the interpreter, so Cemu's JIT stays off and our hook
+		// runs everything (docs/research/threads.md). WWHD_CORES=1: one host thread.
+		if (!PPCTimer_isVirtualClock())
+		{
+			const char* cores = getenv("WWHD_CORES");
+			numCPUEmulationThreads = cores && atoi(cores) == 1 ? 1 : 3;
+		}
 		g_isMulticoreMode = numCPUEmulationThreads > 1;
 		cemuLog_log(LogType::Force, "wwhd: guest cores on {} host thread{}", numCPUEmulationThreads, numCPUEmulationThreads > 1 ? "s" : "");
 		if (numCPUEmulationThreads == 1)
