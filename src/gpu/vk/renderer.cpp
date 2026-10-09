@@ -554,11 +554,10 @@ namespace wwhd::gpu
 	// offsets sized in their own texels (ambient occlusion at half scale lost half its strength, the edges a light
 	// halo), and the shadow maps' resolution is their own; both cost little next to the full-size passes.
 	// WWHD_RENDER_SCALE=auto: dynamic resolution (session bottom): the scale moves between WWHD_RENDER_SCALE_MIN (0.5)
-	// and WWHD_RENDER_SCALE_MAX (1) in steps of 1/8 (whole pixels: 1920 and 1088 are multiples of 16), from the GPU's
-	// time a frame (gpu_timing's light mode) against a budget (WWHD_RENDER_SCALE_BUDGET ms, default 92% of a frame at the
-	// frame rate, WWHD_60FPS):
-	// down at once when a half-second window runs over it, up when the estimate at the next step stays under 85% of
-	// it for two seconds. A change rescales every scaled surface at the swap (RescaleSurfaces).
+	// and WWHD_RENDER_SCALE_MAX (1) in steps of 1/8 (whole pixels: 1920 and 1088 are multiples of 16): down while
+	// frames miss the frame rate and the GPU's time a frame (gpu_timing's light mode) is near a budget
+	// (WWHD_RENDER_SCALE_BUDGET ms, default 92% of a frame at the frame rate, WWHD_60FPS), up by trying (ChooseScale).
+	// A change rescales every scaled surface at the swap (RescaleSurfaces).
 	namespace
 	{
 		struct ScaleConfig { bool dynamic = false; float start = 1.0f, min = 0.5f, max = 1.0f, budget = 0.0f; };
@@ -751,43 +750,63 @@ namespace wwhd::gpu
 			}
 		}
 
-		// the controller: a window of frames' GPU time against the budget (Config's comment, above)
+		// the controller (Config's comment, above). The GPU's time alone can't decide: an iGPU with time to spare clocks
+		// itself down, so its time a frame rises again at a lower scale (the worker at 50%: 804 MHz instead of 1150).
+		// So it goes down only while frames miss the frame rate and the GPU's time is near the budget (the GPU, not
+		// the CPU, is behind), and up by trying: after two seconds of frames on time one step up; if frames then miss,
+		// back down, and the next try waits twice as long (up to 32 s; back to 2 s once a step up held 10 s)
 		void ChooseScale()
 		{
 			if (!DynamicScale())
 				return;
 			constexpr uint32 kWindow = 30;                        // half a second at 60
 			constexpr float kStep = 0.125f;
-			static uint32 s_under = 0, s_lastChange = 0;
+			using Clock = std::chrono::steady_clock;
+			static Clock::time_point s_since = Clock::now();
+			static uint32 s_onTime = 0, s_wait = 4, s_heldUp = 0;
+			static bool s_tried = false;                          // the last change was a try upwards
 			double ms;
 			if (!timing::TakeWindow(kWindow, ms))
 				return;
+			const auto now = Clock::now();
+			const double period = std::chrono::duration<double, std::milli>(now - s_since).count() / kWindow;
+			s_since = now;
 			const ScaleConfig& c = Config();
+			const double target = c.budget / 0.92;                // a frame at the frame rate
+			const bool missing = period > target * 1.04;
 			const float scale = RenderScale();
 			float next = scale;
-			if (ms > c.budget && scale > c.min && s.frame - s_lastChange >= kWindow * 2)
+			if (missing)
 			{
-				// the pixels' share of the time is unknown: assume all of it scales with the area, so the step taken is the
-				// smallest the estimate allows; the next window corrects it
-				const float want = scale * (float)std::sqrt(c.budget / ms);
-				next = std::max(c.min, std::floor(want / kStep + 0.001f) * kStep);
-				next = std::min(next, scale - kStep);
-				s_under = 0;
+				s_onTime = 0;
+				if (s_tried)                                          // the try failed: back, and wait longer next time
+				{
+					next = std::max(c.min, scale - kStep);
+					s_wait = std::min(s_wait * 2, 64u);
+				}
+				else if (ms > c.budget * 0.8 && scale > c.min)
+				{
+					// the step from the estimate that all of the GPU's time scales with the area (at least one step)
+					const float want = scale * (float)std::sqrt(c.budget / ms);
+					next = std::min(scale - kStep, std::max(c.min, std::floor(want / kStep + 0.001f) * kStep));
+				}
+				s_tried = false, s_heldUp = 0;
 			}
-			else if (scale < c.max)
+			else
 			{
-				const float up = std::min(c.max, scale + kStep);
-				const double estimate = ms * (up * up) / (scale * scale);
-				s_under = estimate < c.budget * 0.85 ? s_under + 1 : 0;
-				if (s_under >= 4)                                     // two seconds of headroom
-					next = up, s_under = 0;
+				s_onTime++;
+				if (s_tried && ++s_heldUp >= 20)                     // a try held ten seconds: tries come quickly again
+					s_tried = false, s_wait = 4;
+				if (scale < c.max && s_onTime >= s_wait)
+					next = std::min(c.max, scale + kStep), s_tried = true, s_heldUp = 0;
 			}
 			if (next == scale)
 				return;
-			Log(fmt::format("render scale: {:.3f} -> {:.3f} at frame {} (the GPU {:.2f} ms a frame, budget {:.2f})", scale, next,
-				s.frame, ms, c.budget));
+			s_onTime = 0;
+			Log(fmt::format("render scale: {:.3f} -> {:.3f} at frame {} (frames {:.2f} ms apart, the GPU {:.2f} ms a frame, budget {:.2f})",
+				scale, next, s.frame, period, ms, c.budget));
 			RescaleSurfaces(next);
-			s_lastChange = s.frame;
+			s_since = Clock::now();                                   // the rescale's own time not counted
 		}
 	}
 
