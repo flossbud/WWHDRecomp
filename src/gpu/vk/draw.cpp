@@ -1819,7 +1819,9 @@ namespace wwhd::gpu
 			else if (alone && s_postFrame == s.frame)
 				HudBegins();
 			else if (!alone && HudActive() && std::find(attachments, attachments + nAttachments, tv) != attachments + nAttachments)
-				HudMisjudged();
+				for (uint32 i = 0; i < nAttachments; i++)       // the targets drawn with it get full-size stand-ins
+					if (attachments[i] != tv)
+						HudPromote(*attachments[i]);
 		}
 		Reserve();
 

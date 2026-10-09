@@ -2,10 +2,12 @@
 // render scale (docs/research/gpu-plan.md, b-fsr1; session bottom). WWHD_UPSCALER=fsr1 (or the settings page's
 // Upscaler): the TV image drawn at a render scale under 1 is upscaled to the guest's size where the game's HUD begins
 // (renderer.cpp, HudBegins), so the HUD is drawn at full resolution over it. Two full-screen fragment passes, the
-// way AMD's sample uses them: EASU from the scaled image into an RGBA16F image of the full size, then RCAS from that
-// into the target (any colour format the game renders to). The headers come in as strings (CMake writes
-// fsr1_headers.inc); glslang compiles the shaders at the first use. WWHD_FSR_SHARPNESS (stops, default 0.2, AMD's):
-// 0 is the sharpest. Off (the default, and with no render scale) nothing here runs.
+// way AMD's sample uses them: EASU from the scaled image into an image of the full size and the target's format,
+// then RCAS from that into the target (any colour format the game renders to). The headers come in as strings (CMake
+// writes fsr1_headers.inc); glslang compiles the shaders at the first use. WWHD_FSR_SHARPNESS (stops, default 0.2,
+// AMD's): 0 is the sharpest; off: EASU alone, straight into the target. AMD's fp16 path where the device has
+// shaderFloat16 (WWHD_FSR_HALF=0: fp32). The worker's iGPU (en-tn at 75%): EASU 3.2 ms, RCAS 1.1 ms with fp16 (fp32
+// 5.6 and 1.4). Off (the default, and with no render scale) nothing here runs.
 #include "renderer_internal.h"
 #include <algorithm>
 #include <cmath>
@@ -27,9 +29,34 @@ void main()
 )";
 
 		// EASU: c0-c3 FsrEasuCon's; c3.zw (unused by EASU) one over the output's size, for the alpha's bilinear sample
-		std::string EasuSource()
+		// half: AMD's fp16 path (A_HALF, FsrEasuH and FsrRcasH), with the device's shaderFloat16
+		std::string Prologue(bool half)
 		{
-			return std::string("#version 450\n#define A_GPU 1\n#define A_GLSL 1\n") + kFfxA + R"(
+			return std::string("#version 450\n#define A_GPU 1\n#define A_GLSL 1\n") + (half ? "#define A_HALF 1\n" : "") + kFfxA;
+		}
+
+		std::string EasuSource(bool half)
+		{
+			if (half)
+				return Prologue(true) + R"(
+layout(set = 0, binding = 0) uniform sampler2D src;
+layout(push_constant) uniform Constants { uvec4 c0, c1, c2, c3; } p;
+layout(location = 0) out vec4 outColor;
+#define FSR_EASU_H 1
+)" + kFfxFsr1 + R"(
+AH4 FsrEasuRH(AF2 q) { return AH4(textureGather(src, q, 0)); }
+AH4 FsrEasuGH(AF2 q) { return AH4(textureGather(src, q, 1)); }
+AH4 FsrEasuBH(AF2 q) { return AH4(textureGather(src, q, 2)); }
+void main()
+{
+	AU2 ip = AU2(gl_FragCoord.xy);
+	AH3 c;
+	FsrEasuH(c, ip, p.c0, p.c1, p.c2, p.c3);
+	float a = texture(src, (vec2(ip) + 0.5) * uintBitsToFloat(p.c3.zw)).a;
+	outColor = vec4(vec3(c), a);
+}
+)";
+			return Prologue(false) + R"(
 layout(set = 0, binding = 0) uniform sampler2D src;
 layout(push_constant) uniform Constants { uvec4 c0, c1, c2, c3; } p;
 layout(location = 0) out vec4 outColor;
@@ -49,9 +76,26 @@ void main()
 )";
 		}
 
-		std::string RcasSource()
+		std::string RcasSource(bool half)
 		{
-			return std::string("#version 450\n#define A_GPU 1\n#define A_GLSL 1\n") + kFfxA + R"(
+			if (half)
+				return Prologue(true) + R"(
+layout(set = 0, binding = 0) uniform sampler2D src;
+layout(push_constant) uniform Constants { uvec4 c0, c1, c2, c3; } p;
+layout(location = 0) out vec4 outColor;
+#define FSR_RCAS_H 1
+#define FSR_RCAS_PASSTHROUGH_ALPHA 1
+)" + kFfxFsr1 + R"(
+AH4 FsrRcasLoadH(ASW2 q) { return AH4(texelFetch(src, clamp(ASU2(q), ASU2(0), textureSize(src, 0) - 1), 0)); }
+void FsrRcasInputH(inout AH1 r, inout AH1 g, inout AH1 b) {}
+void main()
+{
+	AH1 r, g, b, a;
+	FsrRcasH(r, g, b, a, AU2(gl_FragCoord.xy), p.c0);
+	outColor = vec4(r, g, b, a);
+}
+)";
+			return Prologue(false) + R"(
 layout(set = 0, binding = 0) uniform sampler2D src;
 layout(push_constant) uniform Constants { uvec4 c0, c1, c2, c3; } p;
 layout(location = 0) out vec4 outColor;
@@ -75,7 +119,7 @@ void main()
 			VkPipelineLayout layout = VK_NULL_HANDLE;
 			VkSampler sampler = VK_NULL_HANDLE;
 			std::unordered_map<uint64, VkPipeline> pipelines;    // (fragment module, colour format)
-			Image mid;                                           // EASU's output, RCAS's input (RGBA16F, the full size)
+			Image mid;                                           // EASU's output, RCAS's input (the target's format and size)
 		};
 		State s_fsr;
 
@@ -102,8 +146,9 @@ void main()
 				return s_fsr.ok;
 			s_fsr.tried = true;
 			s_fsr.vs = Module(kVertex, EShLangVertex, "vertex");
-			s_fsr.easu = Module(EasuSource(), EShLangFragment, "EASU");
-			s_fsr.rcas = Module(RcasSource(), EShLangFragment, "RCAS");
+			static const bool half = [] { const char* e = getenv("WWHD_FSR_HALF"); return s.float16 && !(e && atoi(e) == 0); }();
+			s_fsr.easu = Module(EasuSource(half), EShLangFragment, "EASU");
+			s_fsr.rcas = Module(RcasSource(half), EShLangFragment, "RCAS");
 			if (!s_fsr.vs || !s_fsr.easu || !s_fsr.rcas)
 				return false;
 			VkDescriptorSetLayoutBinding b{ 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr };
@@ -124,7 +169,8 @@ void main()
 			si.maxLod = 0.0f;
 			Check(vkCreateSampler(s.device, &si, nullptr, &s_fsr.sampler), "vkCreateSampler");
 			s_fsr.ok = true;
-			Log("fsr1: AMD FidelityFX FSR 1 (EASU + RCAS) where the HUD begins (WWHD_UPSCALER=fsr1)");
+			Log(fmt::format("fsr1: AMD FidelityFX FSR 1 (EASU + RCAS, {}) where the HUD begins (WWHD_UPSCALER=fsr1)",
+				half ? "fp16" : "fp32"));
 			return true;
 		}
 
@@ -216,6 +262,16 @@ void main()
 			vkCmdEndRendering(s.cmd);
 		}
 
+		// two copies of f as IEEE halves (AU1_AH2_AF2 of FsrRcasCon); f in (0, 1]: normal halves, rounded down
+		uint32 PackHalf2(float f)
+		{
+			uint32 u;
+			memcpy(&u, &f, 4);
+			const uint32 exp = ((u >> 23) & 0xFF) - 127 + 15, mant = (u >> 13) & 0x3FF;
+			const uint32 h = (exp << 10) | mant;
+			return h | (h << 16);
+		}
+
 		uint32 Bits(float f)
 		{
 			uint32 u;
@@ -235,16 +291,19 @@ void main()
 		if (!Init())
 			return false;
 		EndRendering();
-		timing::Scope span(timing::Kind::Upscale, !timing::On() ? std::string() : fmt::format("fsr1 {}x{} -> {}x{}", src.width,
-			src.height, dst.width, dst.height));
-		if (!s_fsr.mid.image || s_fsr.mid.width != dst.width || s_fsr.mid.height != dst.height)
+		timing::Scope span(timing::Kind::Upscale);
+		// WWHD_FSR_SHARPNESS=off: EASU straight into the target, no RCAS (a pass and an image's traffic fewer)
+		static const char* sharpEnv = getenv("WWHD_FSR_SHARPNESS");
+		static const bool rcasOn = !(sharpEnv && strcmp(sharpEnv, "off") == 0);
+		// EASU's output, RCAS's input: the target's own format (the game's 8-bit targets: half the traffic of RGBA16F)
+		if (rcasOn && (!s_fsr.mid.image || s_fsr.mid.width != dst.width || s_fsr.mid.height != dst.height || s_fsr.mid.format != dst.format))
 		{
 			if (s_fsr.mid.image)
 			{
 				WaitPending();
 				DestroyImage(s_fsr.mid);
 			}
-			s_fsr.mid = CreateImage(VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT, dst.width, dst.height,
+			s_fsr.mid = CreateImage(dst.format, VK_IMAGE_ASPECT_COLOR_BIT, dst.width, dst.height,
 				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
 		}
 		// FsrEasuCon: the whole source image (its rows are all the guest's, at the scale) onto the whole target
@@ -254,10 +313,19 @@ void main()
 			Bits(1.0f / inW), Bits(1.0f / inH), Bits(1.0f / inW), Bits(-1.0f / inH),
 			Bits(-1.0f / inW), Bits(2.0f / inH), Bits(1.0f / inW), Bits(2.0f / inH),
 			Bits(0.0f / inW), Bits(4.0f / inH), Bits(1.0f / outW), Bits(1.0f / outH) };
-		Pass(s_fsr.easu, src, s_fsr.mid, easu);
+		timing::Mark(timing::Kind::Upscale, !timing::On() ? std::string() : fmt::format("fsr1 EASU {}x{} -> {}x{}", src.width,
+			src.height, dst.width, dst.height));
+		Pass(s_fsr.easu, src, rcasOn ? s_fsr.mid : dst, easu);
+		if (!rcasOn)
+		{
+			s.bound.valid = false;
+			return true;
+		}
 		// FsrRcasCon: the sharpness in stops, as a linear factor
-		static const float sharpness = [] { const char* e = getenv("WWHD_FSR_SHARPNESS"); return e ? std::max(0.0f, (float)atof(e)) : 0.2f; }();
-		uint32 rcas[16]{ Bits(std::exp2(-sharpness)) };
+		static const float sharpness = sharpEnv ? std::max(0.0f, (float)atof(sharpEnv)) : 0.2f;
+		// con[1]: the factor twice as halves (the fp16 path's)
+		uint32 rcas[16]{ Bits(std::exp2(-sharpness)), PackHalf2(std::exp2(-sharpness)) };
+		timing::Mark(timing::Kind::Upscale, !timing::On() ? std::string() : fmt::format("fsr1 RCAS {}x{}", dst.width, dst.height));
 		Pass(s_fsr.rcas, s_fsr.mid, dst, rcas);
 		s.bound.valid = false;                                    // the game's next draw binds everything again
 		return true;

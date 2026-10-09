@@ -212,6 +212,34 @@ decides from missed frames (above). And **a pass mixes a 960x544 target with a s
 (frame 2050, at any scale below 1, cloud3's log line): the captures around it at 75% against 100% are as close as
 before it (PSNR 37.7-37.9 upscaled, the same picture by eye), so it's left as a logged case.
 
+## FSR 1 over the render scale (b-fsr1, session bottom, 2026-10-09), opt-in
+
+**`WWHD_UPSCALER=fsr1`** (the settings page's Upscaler; no preset sets it): AMD FidelityFX FSR 1, EASU then RCAS
+(`src/gpu/vk/fsr1.cpp`; AMD's headers in `src/third_party/fsr1`, MIT), two full-screen fragment passes, AMD's fp16
+path where the device has `shaderFloat16` (`WWHD_FSR_HALF=0`: fp32), `WWHD_FSR_SHARPNESS` in stops (0.2, AMD's
+default; `off`: EASU alone, straight into the target).
+
+**The HUD stays at full resolution.** The game draws the scene, then post effects (full-screen passes into the TV
+surface sampling other render targets), then its HUD (2D layouts sampling fonts and icons from memory) into the TV
+surface it copies to the TV scan buffer. At the HUD's first draw (a draw into the TV surface alone, sampling only
+memory textures, after a pass into it alone that sampled render targets) the scaled scene is upscaled into an image
+of the guest's size, which stands in for the TV surface for the rest of the frame (renderer.cpp `HudBegins`). A
+later draw pairing the TV surface with other scaled targets (the lock-on cursor's 3D draws with the scene's depth,
+among the HUD's on en-tn) gets full-size stand-ins for those, blitted up (`HudPromote`); the swap puts every scaled
+image back, the stand-ins' pictures blitted down. Frames without that order (the title, loading screens) are
+upscaled at the TV scan copy, HUD included. A line every 600 frames counts both: in gameplay on tour3 and en-tn every
+frame splits at the HUD.
+
+**Quality** (tour3 at 60, 50%, the TV image against 100%'s): bilinear PSNR 33.2, FSR 1 35.9; the HUD as sharp as at
+100%, the scene's edges visibly crisper than bilinear's.
+
+**Cost on the worker's iGPU** (en-tn at 60, 75%, 3 rounds): EASU 3.0 ms a frame (fp32 5.6), RCAS 1.1 (fp32 1.4);
+an 8-bit intermediate instead of RGBA16F changes nothing (EASU is arithmetic-bound). 75% bilinear 58.7 fps, FSR 1
+51.3, FSR 1 without RCAS 53.1. On this iGPU FSR 1 is a quality option, not a speed one: the time it takes buys more
+as resolution (75% bilinear, 14.0 ms of GPU a frame, costs less than 50% with FSR 1, ~17.5). On the desktop worker's GPU it's 0.15 ms; the Deck's GPU is
+some 3-4x the worker's iGPU, so ~1-1.5 ms there. Off by default and in every check (the TV surface is never
+swapped without it).
+
 ## Item 4, the settings menu: design (session cloud3; the first round landed as designed: handoff.md, "Session cloud3")
 
 **What exists.** Every option on the list is a startup switch today, read once from the environment (`static const`

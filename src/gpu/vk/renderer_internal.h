@@ -60,6 +60,7 @@ namespace wwhd::gpu
 		bool depthClip = false;                                  // VK_EXT_depth_clip_enable
 		bool customBorder = false;                               // VK_EXT_custom_border_color, without format
 		bool anisotropy = false;
+		bool float16 = false;                                    // shaderFloat16 and 16-bit storage (FSR 1's fp16 path)
 		VkCommandPool pool = VK_NULL_HANDLE;
 		VkCommandBuffer cmd = VK_NULL_HANDLE;
 		VkFence fence = VK_NULL_HANDLE;
@@ -231,7 +232,7 @@ namespace wwhd::gpu
 	Image* TvSurface();                                           // the TV scan buffer's source last frame, if known
 	void HudBegins(bool atScanCopy = false);
 	bool HudActive();                                             // the TV surface is the full-size image (this frame)
-	void HudMisjudged();                                          // a pass into it with other targets after the split
+	void HudPromote(Image& img);                                  // a scaled target drawn with the TV after the split: full size
 	// draw.cpp: GLSL to SPIR-V with glslang (the game's shaders' compiler)
 	bool CompileGlsl(const std::string& glsl, int stage, std::vector<uint32>& spirv, std::string& log);
 }

@@ -97,15 +97,20 @@ namespace wwhd::gpu
 		VkPhysicalDeviceDepthClipEnableFeaturesEXT clip{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_ENABLE_FEATURES_EXT };
 		VkPhysicalDeviceCustomBorderColorFeaturesEXT border{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CUSTOM_BORDER_COLOR_FEATURES_EXT };
 		VkPhysicalDeviceVulkan13Features v13{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
+		// of 1.1 and 1.2 only half-precision arithmetic and 16-bit storage (FSR 1's fp16 path), when the device has them
+		VkPhysicalDeviceVulkan12Features v12{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+		VkPhysicalDeviceVulkan11Features v11{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
 		VkPhysicalDeviceFeatures2 features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
 		features.pNext = &v13;
+		v13.pNext = &v12;
+		v12.pNext = &v11;
 		vkEnumerateDeviceExtensionProperties(s.physical, nullptr, &n, nullptr);
 		std::vector<VkExtensionProperties> exts(n);
 		vkEnumerateDeviceExtensionProperties(s.physical, nullptr, &n, exts.data());
 		std::vector<const char*> enable;
 		if (HasWindow())
 			enable.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-		void** chain = &v13.pNext;
+		void** chain = &v11.pNext;
 		for (auto& e : exts)
 		{
 			if (!strcmp(e.extensionName, VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME))
@@ -124,6 +129,15 @@ namespace wwhd::gpu
 		vkGetPhysicalDeviceFeatures2(s.physical, &features);
 		if (!v13.dynamicRendering)
 			Fail("no dynamic rendering");
+		{
+			const VkBool32 f16 = v12.shaderFloat16, s16 = v11.storageBuffer16BitAccess;
+			void* next12 = v12.pNext, *next11 = v11.pNext;
+			v12 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, next12 };
+			v11 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES, next11 };
+			v12.shaderFloat16 = f16;
+			v11.storageBuffer16BitAccess = s16;
+			s.float16 = f16 && s16;
+		}
 		s.depthClip = clip.depthClipEnable;
 		s.customBorder = border.customBorderColors && border.customBorderColorWithoutFormat;
 		s.anisotropy = features.features.samplerAnisotropy;
@@ -717,123 +731,173 @@ namespace wwhd::gpu
 	// render scale the TV surface is scaled, the HUD with it. HudBegins, at the HUD's first draw (draw.cpp: a draw into
 	// the TV surface alone, sampling only memory textures, after a pass into it alone that sampled surfaces), upscales
 	// the scene with FSR 1 into an image of the guest's size and makes that the TV surface for the rest of the frame,
-	// so the HUD is drawn at full resolution; the swap puts the scaled image back for the next frame's scene. A frame
-	// without that order (no post pass: the title, some menus) gets FSR 1 at the scan copy instead, HUD included. A
-	// pass into the TV surface with other targets after the split (3D after it: a misjudged boundary, seen while loading)
-	// blits the full-size picture back down into the scaled image, which takes over again; that frame is upscaled at its
-	// scan copy (HudMisjudged).
+	// so the HUD is drawn at full resolution. A later pass into it with other scaled targets (the lock-on cursor's 3D
+	// draws with the scene's depth, among the HUD's on en-tn) gets full-size stand-ins for those, blitted up
+	// (HudPromote). The swap puts the scaled images back (the stand-ins' pictures blitted down). A frame without that
+	// order (no post pass: the title, loading) gets FSR 1 at the scan copy instead, HUD included.
 	namespace
 	{
-		struct HudSplit
+		bool CanBlit(VkFormat f, bool linear);                    // below (dynamic resolution's)
+
+		struct Promoted
 		{
-			std::pair<uint32, uint32> key{};                     // the TV surface's (address, format), from the scan copy
-			bool known = false, active = false, off = false;
-			Image scaled, full;                                   // the image not in the map at the time
+			Image scaled;                                         // the map's image while the full one stands in
+			Image full;                                           // kept from frame to frame
+			bool active = false;
 		};
-		HudSplit s_hud;
+		std::map<std::pair<uint32, uint32>, Promoted> s_promoted;  // by surface key; the TV surface's among them
+		std::pair<uint32, uint32> s_tvKey{};
+		bool s_tvKnown = false, s_hudActive = false;
+		struct { uint32 split = 0, atScan = 0, promoted = 0; } s_hudStats;   // a line every 600 frames (HudEnds)
+
+		std::pair<uint32, uint32> KeyOf(const Image& img)
+		{
+			for (auto& [key, other] : s.surfaces)
+				if (&other == &img)
+					return key;
+			return {};
+		}
+
+		// the full-size image for `img` (made or kept), its picture by FSR 1 (the TV) or a blit, swapped into the map
+		bool Promote(const std::pair<uint32, uint32>& key, Image& img, bool fsr)
+		{
+			if (img.scale >= 1.0f || img.layers != 1)
+				return false;
+			Promoted& p = s_promoted[key];
+			if (p.active)
+				return true;
+			const bool depth = img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT;
+			if (!p.full.image || p.full.width != img.gw || p.full.height != img.gh || p.full.format != img.format)
+			{
+				if (p.full.image)
+				{
+					WaitPending();
+					DestroyImage(p.full);
+				}
+				p.full = CreateImage(img.format, img.aspect, img.gw, img.gh, VK_IMAGE_USAGE_SAMPLED_BIT |
+					(depth ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+			}
+			EndRendering();
+			if (fsr)
+			{
+				if (!fsr1::Upscale(img, p.full))
+					return false;
+			}
+			else
+			{
+				Transition(p.full, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+				if (CanBlit(img.format, !depth))
+				{
+					Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+					VkImageBlit b{};
+					b.srcSubresource = b.dstSubresource = { img.aspect, 0, 0, 1 };
+					b.srcOffsets[1] = { (sint32)img.width, (sint32)img.height, 1 };
+					b.dstOffsets[1] = { (sint32)p.full.width, (sint32)p.full.height, 1 };
+					vkCmdBlitImage(s.cmd, img.image, img.layout, p.full.image, p.full.layout, 1, &b, depth ? VK_FILTER_NEAREST : VK_FILTER_LINEAR);
+				}
+				else
+				{
+					VkImageSubresourceRange all{ img.aspect, 0, 1, 0, 1 };
+					VkClearDepthStencilValue zd{};
+					VkClearColorValue zc{};
+					if (depth)
+						vkCmdClearDepthStencilImage(s.cmd, p.full.image, p.full.layout, &zd, 1, &all);
+					else
+						vkCmdClearColorImage(s.cmd, p.full.image, p.full.layout, &zc, 1, &all);
+				}
+			}
+			Image full = p.full;
+			full.gw = img.gw, full.gh = img.gh, full.scaled = img.scaled, full.scale = 1.0f;
+			full.bytes = img.bytes, full.written = img.written, full.resetFor = img.resetFor;
+			full.readH = img.readH, full.fitH = img.fitH, full.readSince = img.readSince, full.noFit = img.noFit;
+			p.scaled = img;
+			img = full;
+			p.active = true;
+			return true;
+		}
+
+		// at the swap: every stand-in out of the map, its picture blitted down (not the TV's: the next frame draws it
+		// again), the scaled image back in
+		void Demote()
+		{
+			for (auto& [key, p] : s_promoted)
+			{
+				if (!p.active)
+					continue;
+				p.active = false;
+				auto it = s.surfaces.find(key);
+				if (it == s.surfaces.end() || it->second.image != p.full.image)
+				{
+					WaitPending();
+					DestroyImage(p.scaled);                           // the surface was made again meanwhile
+					p.full = Image{};
+					continue;
+				}
+				Image& img = it->second;
+				Image scaled = p.scaled;
+				const bool depth = img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT;
+				if (!(s_tvKnown && key == s_tvKey) && CanBlit(img.format, !depth))
+				{
+					EndRendering();
+					Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+					Transition(scaled, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+					VkImageBlit b{};
+					b.srcSubresource = b.dstSubresource = { img.aspect, 0, 0, 1 };
+					b.srcOffsets[1] = { (sint32)img.width, (sint32)img.height, 1 };
+					b.dstOffsets[1] = { (sint32)scaled.width, (sint32)scaled.height, 1 };
+					vkCmdBlitImage(s.cmd, img.image, img.layout, scaled.image, scaled.layout, 1, &b, depth ? VK_FILTER_NEAREST : VK_FILTER_LINEAR);
+				}
+				scaled.bytes = img.bytes, scaled.written = img.written, scaled.resetFor = img.resetFor;
+				scaled.readH = img.readH, scaled.readSince = img.readSince, scaled.noFit = img.noFit;
+				p.full = img;                                         // its layout as it was left
+				img = scaled;
+			}
+		}
 	}
 
 	Image* TvSurface()
 	{
-		if (!s_hud.known || !fsr1::On())
+		if (!s_tvKnown || !fsr1::On())
 			return nullptr;
-		auto it = s.surfaces.find(s_hud.key);
+		auto it = s.surfaces.find(s_tvKey);
 		return it == s.surfaces.end() || !it->second.image ? nullptr : &it->second;
 	}
 
 	bool HudActive()
 	{
-		return s_hud.active;
-	}
-
-	namespace
-	{
-		uint32 s_hudAbortFrame = UINT32_MAX;                      // a frame whose split was misjudged: no other this frame
-		struct { uint32 split = 0, atScan = 0, misjudged = 0; } s_hudStats;   // a line every 600 frames (HudEnds)
-
-		// the full-size image back out of the map: its picture blitted down into the scaled one, which goes back in
-		void HudSwapBack(bool keepPicture)
-		{
-			auto it = s.surfaces.find(s_hud.key);
-			if (it == s.surfaces.end() || it->second.image != s_hud.full.image)
-			{
-				WaitPending();
-				DestroyImage(s_hud.scaled);                           // the surface was made again meanwhile
-				s_hud.full = Image{};
-				return;
-			}
-			Image& img = it->second;
-			Image scaled = s_hud.scaled;
-			if (keepPicture)
-			{
-				EndRendering();
-				Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-				Transition(scaled, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-				VkImageBlit b{};
-				b.srcSubresource = b.dstSubresource = { img.aspect, 0, 0, 1 };
-				b.srcOffsets[1] = { (sint32)img.width, (sint32)img.height, 1 };
-				b.dstOffsets[1] = { (sint32)scaled.width, (sint32)scaled.height, 1 };
-				vkCmdBlitImage(s.cmd, img.image, img.layout, scaled.image, scaled.layout, 1, &b, VK_FILTER_LINEAR);
-			}
-			scaled.bytes = img.bytes, scaled.written = img.written, scaled.resetFor = img.resetFor;
-			scaled.readH = img.readH, scaled.readSince = img.readSince, scaled.noFit = img.noFit;
-			s_hud.full = img;                                         // its layout as it was left
-			img = scaled;
-		}
-	}
-
-	void HudMisjudged()
-	{
-		if (!s_hud.active)
-			return;
-		s_hudStats.misjudged++;
-		s_hud.active = false;
-		s_hudAbortFrame = s.frame;
-		HudSwapBack(true);
+		return s_hudActive;
 	}
 
 	void HudBegins(bool atScanCopy)
 	{
 		Image* tv = TvSurface();
-		if (!tv || s_hud.active || tv->scale >= 1.0f || tv->layers != 1 || (!atScanCopy && s_hudAbortFrame == s.frame))
+		if (!tv || s_hudActive)
 			return;
-		Image& img = *tv;
-		if (!s_hud.full.image || s_hud.full.width != img.gw || s_hud.full.height != img.gh || s_hud.full.format != img.format)
-		{
-			if (s_hud.full.image)
-			{
-				WaitPending();
-				DestroyImage(s_hud.full);
-			}
-			s_hud.full = CreateImage(img.format, img.aspect, img.gw, img.gh, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
-		}
-		if (!fsr1::Upscale(img, s_hud.full))
+		if (!Promote(s_tvKey, *tv, true))
 			return;
+		s_hudActive = true;
 		(atScanCopy ? s_hudStats.atScan : s_hudStats.split)++;
-		Image full = s_hud.full;
-		full.gw = img.gw, full.gh = img.gh, full.scaled = img.scaled, full.scale = 1.0f;
-		full.bytes = img.bytes, full.written = img.written, full.resetFor = img.resetFor;
-		full.readH = img.readH, full.fitH = img.fitH, full.readSince = img.readSince, full.noFit = img.noFit;
-		s_hud.scaled = img;
-		img = full;
-		s_hud.active = true;
+	}
+
+	void HudPromote(Image& img)
+	{
+		if (s_hudActive && Promote(KeyOf(img), img, false))
+			s_hudStats.promoted++;
 	}
 
 	namespace
 	{
-		// at the swap: the scaled image back into the map for the next frame's scene, the full one kept for the next HUD
 		void HudEnds()
 		{
 			if (fsr1::On() && s.frame % 600 == 0 && (s_hudStats.split || s_hudStats.atScan))
 			{
-				Log(fmt::format("fsr1: frames {}-{}: {} upscaled where the HUD begins, {} at the scan copy (HUD included), {} of "
-					"them misjudged splits", s.frame - 599, s.frame, s_hudStats.split, s_hudStats.atScan, s_hudStats.misjudged));
+				Log(fmt::format("fsr1: frames {}-{}: {} upscaled where the HUD begins, {} at the scan copy (HUD included); {} "
+					"targets given full-size stand-ins after the split", s.frame - 599, s.frame, s_hudStats.split, s_hudStats.atScan,
+					s_hudStats.promoted));
 				s_hudStats = {};
 			}
-			if (!s_hud.active)
-				return;
-			s_hud.active = false;
-			HudSwapBack(false);
+			s_hudActive = false;
+			Demote();
 		}
 	}
 
@@ -1347,10 +1411,8 @@ namespace wwhd::gpu
 		SurfaceRead(src, h);
 		if (target == 1 && fsr1::On())                              // the TV surface (FSR 1's HUD split)
 		{
-			for (auto& [key, img] : s.surfaces)
-				if (&img == &src)
-					s_hud.key = key, s_hud.known = true;
-			if (!s_hud.active)
+			s_tvKey = KeyOf(src), s_tvKnown = true;
+			if (!s_hudActive)
 				HudBegins(true);                                    // no HUD split this frame: upscaled here
 		}
 		Image& dst = s.scan[target == 1 ? 0 : 1];
