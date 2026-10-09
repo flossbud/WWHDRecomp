@@ -4080,6 +4080,20 @@ toward the owner's goal: full speed at 60 there (its power-capped CPU standing i
 - **Landed, shared renderer code** (draw.cpp, renderer.cpp, texture.cpp): deck-plan item 3's uniform-block trim and
   descriptor-set reuse (`WWHD_UBLOCK_FULL=1` / `WWHD_SETCACHE=0` turn them off): the render thread -12.9% a frame on
   the worker; checks, regress and predeploy unchanged.
+- **Landed, opt-in: three host threads** (`WWHD_CORES=3`, real time only; design and surveys in threads.md): Cemu's
+  three per-core scheduler threads with our hook running all guest code; the store journal's switches, the quiet
+  watch and the 60 fps per-step values per host thread. Worker at 60: continue 47.3 -> 53.8 fps, the Darknut fight
+  35.9 -> 45.0 fps (then GPU-bound). In the Performance preset. Before it can be the default: the locks list in
+  threads.md (the rollback's copies against other cores, counters), per-core figures in the real-time log, the
+  owner's PC. `thread_local` across fiber switches: checked 2026-10-09, fine (threads.md; fibers do move between
+  host threads, the build caches no thread-local address: `tools/sixty/perf/tls_across_calls.py` after a compiler
+  change).
+- **Landed, opt-in: frame dips without slowdown** (`WWHD_60FPS_KEEPSPEED=1`, gpu-plan.md): a half frame that would
+  end after the next tick is due is dropped (its logic and actor draws run; render jobs and present don't), so a
+  slow stretch shows fewer frames instead of slow motion. The fight on the worker: 39.9 fps shown at full speed
+  (was 44.9 at 75% speed). In the Performance preset.
+- **B76** (the 60 fps fight crash on the worker): found with the `WWHD_GX2_GUARD` probe (display lists that fill;
+  branch `ww-4-cloud-gx2guard`), fixed by session cloud5: the debug spawn's layer (crash-b76.md).
 
 ### Session cloud3 (from 2026-10-08): deck-plan items 4, 5
 
