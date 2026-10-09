@@ -189,7 +189,7 @@ namespace wwhd::gpu
 	// gpu_timing.cpp: WWHD_GPU_TIMING=1, GPU time by kind of work (docs/research/gpu-plan.md item 1)
 	namespace timing
 	{
-		enum class Kind : uint8 { Other, Pass, Upload, Copy, Mips, Grow, Reset, Clear, Scan, Present, Count };
+		enum class Kind : uint8 { Other, Pass, Upload, Copy, Mips, Grow, Reset, Clear, Scan, Present, Upscale, Count };
 		bool On();                                                // WWHD_GPU_TIMING (every mark; not the light mode)
 		void Init(bool light);                                    // after the device and the first command buffer; light:
 		                                                          // the start and end of each command buffer only
@@ -211,10 +211,27 @@ namespace wwhd::gpu
 
 	// texture.cpp
 	// scale: the image's size over the guest's (a surface's under WWHD_RENDER_SCALE), for the shader's uf_texNScale
-	struct Sampled { VkImageView view; VkSampler sampler; VkImageLayout layout; float scaleX = 1.0f, scaleY = 1.0f; };
+	// surface: from a render target (not guest memory): what tells the game's post passes from its HUD (HudBegins)
+	struct Sampled { VkImageView view; VkSampler sampler; VkImageLayout layout; float scaleX = 1.0f, scaleY = 1.0f; bool surface = false; };
 	void TextureInit();
 	// texture unit `unit` of a stage as the draw samples it; outside rendering (it may upload or
 	// transition). A surface among the draw's attachments is never sampled (a placeholder is).
 	Sampled SampleTexture(const LatteDecompilerShader* dec, bool vertex, uint32 unit, std::span<Image* const> attachments);
 	void ForgetImage(VkImage image);                              // before a surface's image is destroyed
+
+	// fsr1.cpp: AMD FSR 1 for the render scale (WWHD_UPSCALER=fsr1)
+	namespace fsr1
+	{
+		bool On();
+		// `src` (a scaled image) upscaled into `dst` (the guest's size, a colour attachment); false: couldn't (logged)
+		bool Upscale(Image& src, Image& dst);
+	}
+	// renderer.cpp: where the TV image's HUD begins (a draw into the TV surface alone, sampling only textures from
+	// memory, after a full-screen pass into it that sampled surfaces): with FSR 1 the scaled image is upscaled there
+	Image* TvSurface();                                           // the TV scan buffer's source last frame, if known
+	void HudBegins(bool atScanCopy = false);
+	bool HudActive();                                             // the TV surface is the full-size image (this frame)
+	void HudMisjudged();                                          // a pass into it with other targets after the split
+	// draw.cpp: GLSL to SPIR-V with glslang (the game's shaders' compiler)
+	bool CompileGlsl(const std::string& glsl, int stage, std::vector<uint32>& spirv, std::string& log);
 }

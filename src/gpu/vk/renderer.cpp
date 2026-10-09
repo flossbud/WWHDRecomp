@@ -711,6 +711,132 @@ namespace wwhd::gpu
 		}
 	}
 
+	// ---- the HUD over an upscaled image (WWHD_UPSCALER=fsr1, fsr1.cpp) --------------------------------------
+	// The game draws its 3D scene, then its post effects (full-screen passes sampling other targets), then its HUD (2D
+	// layouts sampling fonts and icons from memory) into the TV surface, which it copies to the TV scan buffer. With a
+	// render scale the TV surface is scaled, the HUD with it. HudBegins, at the HUD's first draw (draw.cpp: a draw into
+	// the TV surface alone, sampling only memory textures, after a pass into it alone that sampled surfaces), upscales
+	// the scene with FSR 1 into an image of the guest's size and makes that the TV surface for the rest of the frame,
+	// so the HUD is drawn at full resolution; the swap puts the scaled image back for the next frame's scene. A frame
+	// without that order (no post pass: the title, some menus) gets FSR 1 at the scan copy instead, HUD included. A
+	// pass into the TV surface with other targets after the split (3D after it: a misjudged boundary, seen while loading)
+	// blits the full-size picture back down into the scaled image, which takes over again; that frame is upscaled at its
+	// scan copy (HudMisjudged).
+	namespace
+	{
+		struct HudSplit
+		{
+			std::pair<uint32, uint32> key{};                     // the TV surface's (address, format), from the scan copy
+			bool known = false, active = false, off = false;
+			Image scaled, full;                                   // the image not in the map at the time
+		};
+		HudSplit s_hud;
+	}
+
+	Image* TvSurface()
+	{
+		if (!s_hud.known || !fsr1::On())
+			return nullptr;
+		auto it = s.surfaces.find(s_hud.key);
+		return it == s.surfaces.end() || !it->second.image ? nullptr : &it->second;
+	}
+
+	bool HudActive()
+	{
+		return s_hud.active;
+	}
+
+	namespace
+	{
+		uint32 s_hudAbortFrame = UINT32_MAX;                      // a frame whose split was misjudged: no other this frame
+		struct { uint32 split = 0, atScan = 0, misjudged = 0; } s_hudStats;   // a line every 600 frames (HudEnds)
+
+		// the full-size image back out of the map: its picture blitted down into the scaled one, which goes back in
+		void HudSwapBack(bool keepPicture)
+		{
+			auto it = s.surfaces.find(s_hud.key);
+			if (it == s.surfaces.end() || it->second.image != s_hud.full.image)
+			{
+				WaitPending();
+				DestroyImage(s_hud.scaled);                           // the surface was made again meanwhile
+				s_hud.full = Image{};
+				return;
+			}
+			Image& img = it->second;
+			Image scaled = s_hud.scaled;
+			if (keepPicture)
+			{
+				EndRendering();
+				Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+				Transition(scaled, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+				VkImageBlit b{};
+				b.srcSubresource = b.dstSubresource = { img.aspect, 0, 0, 1 };
+				b.srcOffsets[1] = { (sint32)img.width, (sint32)img.height, 1 };
+				b.dstOffsets[1] = { (sint32)scaled.width, (sint32)scaled.height, 1 };
+				vkCmdBlitImage(s.cmd, img.image, img.layout, scaled.image, scaled.layout, 1, &b, VK_FILTER_LINEAR);
+			}
+			scaled.bytes = img.bytes, scaled.written = img.written, scaled.resetFor = img.resetFor;
+			scaled.readH = img.readH, scaled.readSince = img.readSince, scaled.noFit = img.noFit;
+			s_hud.full = img;                                         // its layout as it was left
+			img = scaled;
+		}
+	}
+
+	void HudMisjudged()
+	{
+		if (!s_hud.active)
+			return;
+		s_hudStats.misjudged++;
+		s_hud.active = false;
+		s_hudAbortFrame = s.frame;
+		HudSwapBack(true);
+	}
+
+	void HudBegins(bool atScanCopy)
+	{
+		Image* tv = TvSurface();
+		if (!tv || s_hud.active || tv->scale >= 1.0f || tv->layers != 1 || (!atScanCopy && s_hudAbortFrame == s.frame))
+			return;
+		Image& img = *tv;
+		if (!s_hud.full.image || s_hud.full.width != img.gw || s_hud.full.height != img.gh || s_hud.full.format != img.format)
+		{
+			if (s_hud.full.image)
+			{
+				WaitPending();
+				DestroyImage(s_hud.full);
+			}
+			s_hud.full = CreateImage(img.format, img.aspect, img.gw, img.gh, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+		}
+		if (!fsr1::Upscale(img, s_hud.full))
+			return;
+		(atScanCopy ? s_hudStats.atScan : s_hudStats.split)++;
+		Image full = s_hud.full;
+		full.gw = img.gw, full.gh = img.gh, full.scaled = img.scaled, full.scale = 1.0f;
+		full.bytes = img.bytes, full.written = img.written, full.resetFor = img.resetFor;
+		full.readH = img.readH, full.fitH = img.fitH, full.readSince = img.readSince, full.noFit = img.noFit;
+		s_hud.scaled = img;
+		img = full;
+		s_hud.active = true;
+	}
+
+	namespace
+	{
+		// at the swap: the scaled image back into the map for the next frame's scene, the full one kept for the next HUD
+		void HudEnds()
+		{
+			if (fsr1::On() && s.frame % 600 == 0 && (s_hudStats.split || s_hudStats.atScan))
+			{
+				Log(fmt::format("fsr1: frames {}-{}: {} upscaled where the HUD begins, {} at the scan copy (HUD included), {} of "
+					"them misjudged splits", s.frame - 599, s.frame, s_hudStats.split, s_hudStats.atScan, s_hudStats.misjudged));
+				s_hudStats = {};
+			}
+			if (!s_hud.active)
+				return;
+			s_hud.active = false;
+			HudSwapBack(false);
+		}
+	}
+
 	// ---- dynamic resolution (WWHD_RENDER_SCALE=auto, above) ---------------------------------------
 	namespace
 	{
@@ -1219,6 +1345,14 @@ namespace wwhd::gpu
 			Log(fmt::format("copy to scan buffer {} in frame {}: {:08x} {}x{} fmt {:x}", target, s.frame + 1, addr, w, h, gx2));
 		Image& src = Surface(addr, gx2, false, std::max(w, pitch), h);
 		SurfaceRead(src, h);
+		if (target == 1 && fsr1::On())                              // the TV surface (FSR 1's HUD split)
+		{
+			for (auto& [key, img] : s.surfaces)
+				if (&img == &src)
+					s_hud.key = key, s_hud.known = true;
+			if (!s_hud.active)
+				HudBegins(true);                                    // no HUD split this frame: upscaled here
+		}
 		Image& dst = s.scan[target == 1 ? 0 : 1];
 		// the reference's screenshot is an RGBA8 blit of this buffer, sRGB if the scan buffer is
 		VkFormat f = (target == 1 ? LatteGPUState.tvBufferUsesSRGB : LatteGPUState.drcBufferUsesSRGB)
@@ -1257,6 +1391,7 @@ namespace wwhd::gpu
 		static const bool shotDrc = getenv("WWHD_SHOT_DRC") && atoi(getenv("WWHD_SHOT_DRC")) != 0;
 		if (shotDrc && s.frame > 1 && s.shotFrames.count(s.frame - 1) && s.scan[1].image)
 			WritePPM(s.scan[1], s.frame - 1, "drc");
+		HudEnds();
 		FitSurfaces();
 		ChooseScale();
 		ResetOverwrittenSurfaces();

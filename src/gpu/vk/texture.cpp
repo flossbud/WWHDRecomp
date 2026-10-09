@@ -957,7 +957,7 @@ namespace wwhd::gpu
 				firstMip = std::min(firstMip, c->mips - 1);
 				uint32 mips = std::min(lastMip, c->mips - 1) + 1 - firstMip;
 				VkImageView v = View(c->img.image, c->img.format, c->img.aspect, viewType, firstMip, mips, 0, 1, comp, c->views);
-				return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, (float)c->img.width / c->img.gw, (float)c->img.height / c->img.gh };
+				return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, (float)c->img.width / c->img.gw, (float)c->img.height / c->img.gh, true };
 			}
 			// a draw that samples its own target reads it as it was before the draw (a copy): what Vulkan defines,
 			// and what the console's separate colour and texture caches give; the reference does the same
@@ -973,7 +973,7 @@ namespace wwhd::gpu
 			uint32 baseLayer = std::min(firstSlice, img->layers - 1);
 			uint32 layers = viewType == VK_IMAGE_VIEW_TYPE_2D_ARRAY ? std::clamp(numSlices, 1u, img->layers - baseLayer) : 1;
 			VkImageView v = View(img->image, img->format, img->aspect, viewType, 0, 1, baseLayer, layers, comp, s_surfaceViewCache[img->image]);
-			return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, (float)img->width / img->gw, (float)img->height / img->gh };
+			return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, (float)img->width / img->gw, (float)img->height / img->gh, true };
 		}
 
 		// from guest memory

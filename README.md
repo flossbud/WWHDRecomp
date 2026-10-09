@@ -134,3 +134,5 @@ Developer tools, for those working on the recompiler itself:
 [MPL-2.0](LICENSE), the same license as Cemu, which much of the runtime derives from. It covers this project's code
 and tools only. The game itself, and everything generated from your copy of it, is not part of this repository and
 not covered by it.
+`src/third_party/fsr1/` is AMD's FidelityFX Super Resolution 1 (`ffx_a.h`, `ffx_fsr1.h`), under the MIT license in
+`src/third_party/fsr1/LICENSE.txt`.

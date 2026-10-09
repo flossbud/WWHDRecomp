@@ -23,7 +23,7 @@ namespace wwhd::gpu::timing
 	{
 		constexpr uint32 kQueries = 8192;                        // per command buffer; marks past it are dropped
 		constexpr const char* kKindNames[] = { "other", "pass", "upload", "copy", "mips", "grow", "reset", "clear", "scan",
-			"present" };
+			"present", "upscale" };
 		static_assert(std::size(kKindNames) == (size_t)Kind::Count);
 
 		struct Rec { Kind kind; uint32 label; };

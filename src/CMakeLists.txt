@@ -119,10 +119,20 @@ wwhd_like_cemu(wwhd_frontend)
 target_link_libraries(wwhd_frontend PRIVATE SDL3::SDL3 CemuAudio)   # SDL3 for the window, sound and gamepad; CemuAudio: cubeb, to close it
 set_source_files_properties(frontend/window_system.cpp PROPERTIES COMPILE_DEFINITIONS WWHD_NULL_GPU)
 
+# AMD's FidelityFX FSR 1 headers (MIT, third_party/fsr1/LICENSE.txt) as strings for gpu/vk/fsr1.cpp's shaders
+set(fsr1_dir "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fsr1")
+file(READ "${fsr1_dir}/ffx_a.h" ffx_a)
+file(READ "${fsr1_dir}/ffx_fsr1.h" ffx_fsr1)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/gen/fsr1_headers.inc.new"
+	"static const char* const kFfxA = R\"FFX(${ffx_a})FFX\";\nstatic const char* const kFfxFsr1 = R\"FFX(${ffx_fsr1})FFX\";\n")
+configure_file("${CMAKE_CURRENT_BINARY_DIR}/gen/fsr1_headers.inc.new" "${CMAKE_CURRENT_BINARY_DIR}/gen/fsr1_headers.inc" COPYONLY)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${fsr1_dir}/ffx_a.h" "${fsr1_dir}/ffx_fsr1.h")
+
 add_library(wwhd_gpu OBJECT gpu/null_gpu.cpp gpu/vk/vk.cpp gpu/vk/renderer.cpp gpu/vk/present.cpp
-	gpu/vk/shader_cache.cpp gpu/vk/shader_list.cpp gpu/vk/draw.cpp gpu/vk/texture.cpp gpu/vk/latte_glue.cpp gpu/vk/gpu_timing.cpp)
+	gpu/vk/shader_cache.cpp gpu/vk/shader_list.cpp gpu/vk/draw.cpp gpu/vk/texture.cpp gpu/vk/latte_glue.cpp gpu/vk/gpu_timing.cpp
+	gpu/vk/fsr1.cpp)
 wwhd_like_cemu(wwhd_gpu)
-target_include_directories(wwhd_gpu PRIVATE gpu)
+target_include_directories(wwhd_gpu PRIVATE gpu "${CMAKE_CURRENT_BINARY_DIR}/gen")
 
 add_library(wwhd_runtime OBJECT runtime/dispatch.cpp runtime/imports.cpp runtime/diff.cpp runtime/profile.cpp
 	runtime/without_forks.cpp runtime/write_watch.cpp)

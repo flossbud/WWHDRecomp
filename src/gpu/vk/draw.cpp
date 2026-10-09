@@ -1061,6 +1061,7 @@ namespace wwhd::gpu
 		// WWHD_RENDER_SCALE: the draw's textures' sizes over the guest's, per stage and unit (Textures), and the guest's
 		// over its target's (uf_fragCoordScale: gl_FragCoord in the guest's pixels); all 1 when off
 		float s_texScale[2][LATTE_NUM_MAX_TEX_UNITS][2];
+		bool s_samplesSurface = false;                          // the draw samples a render target (Textures; HudBegins)
 		float s_fragScale[2] = { 1.0f, 1.0f };
 
 		// uniform variables (uniformData_updateUniformVars, LatteBufferCache_LoadRemappedUniforms)
@@ -1171,6 +1172,7 @@ namespace wwhd::gpu
 				const sint32 unit = sh.mapping.getRelativeTextureUnitFromRelativeBindingPoint(i);
 				Sampled t = SampleTexture(sh.dec, vertex, unit, attachments);
 				images[i] = { t.sampler, t.view, t.layout };
+				s_samplesSurface |= t.surface;
 				if (unit >= 0 && unit < LATTE_NUM_MAX_TEX_UNITS)
 					s_texScale[vertex][unit][0] = t.scaleX, s_texScale[vertex][unit][1] = t.scaleY;
 			}
@@ -1477,6 +1479,11 @@ namespace wwhd::gpu
 				}
 			}
 		}
+	}
+
+	bool CompileGlsl(const std::string& glsl, int stage, std::vector<uint32>& spirv, std::string& log)
+	{
+		return CompileSpirv(glsl, (EShLanguage)stage, spirv, log);
 	}
 
 	void DrawInit()
@@ -1798,8 +1805,22 @@ namespace wwhd::gpu
 		if (t.depth)
 			attachments[nAttachments++] = t.depth;
 		static std::vector<VkDescriptorImageInfo> vsImages, psImages;   // per-draw lists, kept (not allocated per draw)
+		s_samplesSurface = false;
 		Textures(*vs, true, { attachments, nAttachments }, vsImages);
 		Textures(*ps, false, { attachments, nAttachments }, psImages);
+		// FSR 1's HUD split (renderer.cpp, HudBegins): a pass into the TV surface alone that samples render targets is a
+		// post effect; the first draw into it alone after one that samples only memory textures begins the HUD
+		if (Image* tv = TvSurface())
+		{
+			static uint32 s_postFrame = UINT32_MAX;
+			const bool alone = nAttachments == 1 && t.color[0] == tv;
+			if (alone && s_samplesSurface)
+				s_postFrame = s.frame;
+			else if (alone && s_postFrame == s.frame)
+				HudBegins();
+			else if (!alone && HudActive() && std::find(attachments, attachments + nAttachments, tv) != attachments + nAttachments)
+				HudMisjudged();
+		}
 		Reserve();
 
 		Indices idx = DecodeIndices(physIndices, count, prim);

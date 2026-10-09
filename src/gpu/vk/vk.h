@@ -32,7 +32,7 @@ namespace wwhd::vk
 	X(vkCreateDescriptorPool) X(vkResetDescriptorPool) X(vkAllocateDescriptorSets) X(vkUpdateDescriptorSets) \
 	X(vkCreateSampler) X(vkCmdBeginRendering) X(vkCmdEndRendering) X(vkCmdBindPipeline) X(vkCmdBindDescriptorSets) \
 	X(vkCmdBindVertexBuffers) X(vkCmdBindIndexBuffer) X(vkCmdDraw) X(vkCmdDrawIndexed) X(vkCmdSetViewport) \
-	X(vkCmdSetScissor) X(vkCmdSetBlendConstants) X(vkCmdSetDepthBias) \
+	X(vkCmdSetScissor) X(vkCmdPushConstants) X(vkCmdSetBlendConstants) X(vkCmdSetDepthBias) \
 	X(vkCreateSwapchainKHR) X(vkDestroySwapchainKHR) X(vkGetSwapchainImagesKHR) X(vkAcquireNextImageKHR) \
 	X(vkQueuePresentKHR) X(vkCreateSemaphore) X(vkDestroySemaphore) \
 	X(vkCreateQueryPool) X(vkCmdResetQueryPool) X(vkCmdWriteTimestamp) X(vkGetQueryPoolResults)

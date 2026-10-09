@@ -35,6 +35,8 @@ namespace
 		{ "WWHD_WINDOW_SIZE", "Window size", { { "1280x720", "1280x720" }, { "1600x900", "1600x900" },
 			{ "1920x1080", "1920x1080" }, { "2560x1440", "2560x1440" } }, true, nullptr },
 		{ "WWHD_RENDER_SCALE", "Render scale", { { "1", "100%" }, { "0.75", "75%" }, { "0.5", "50%" }, { "auto", "Auto" } }, false, "auto" },
+		{ "WWHD_RENDER_SCALE", "Render scale", { { "1", "100%" }, { "0.75", "75%" }, { "0.5", "50%" }, { "auto", "Auto" } }, false, "auto" },
+		{ "WWHD_UPSCALER", "Upscaler (render scale under 100%)", { { "none", "bilinear" }, { "fsr1", "FSR 1" } }, false, "fsr1" },
 		{ "WWHD_CORES", "CPU threads", { { "3", "3" }, { "1", "1" } }, false, "3" },
 		{ "WWHD_LAZY_DRAWDONE", "Lazy DrawDone", { { "0", "off" }, { "1", "on" } }, false, "1" },
 	};
