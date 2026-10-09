@@ -10,6 +10,13 @@ namespace coreinit
 	{
 		return 0;
 	}
+	__attribute__((weak)) uint64 __OSCoreCpuNanoseconds(uint32)  // one host thread
+	{
+		return 0;
+	}
+	__attribute__((weak)) void wwhd_CoreCensus(const char*)
+	{
+	}
 }
 
 namespace TCL

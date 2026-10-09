@@ -51,7 +51,7 @@ thread_local void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc) = nullpt
 thread_local const uint32* g_rtStorePages = nullptr;
 thread_local const PPCInterpreter_t* g_rtJournalThread = nullptr;
 thread_local bool g_rtStoreAll = false;
-uint64 g_rtStoresPassed = 0;
+thread_local uint64 g_rtStoresPassed = 0;
 const uint64* g_rtStoreBits = nullptr;
 const int* g_rtStoreHold = nullptr;
 

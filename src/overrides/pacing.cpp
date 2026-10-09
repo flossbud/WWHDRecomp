@@ -41,6 +41,7 @@ bool PPCTimer_isVirtualClock();                    // src/runtime/espresso/PPCTi
 namespace coreinit
 {
 	uint64 __OSIdleNanoseconds();                  // src/os/coreinit/coreinit_Thread.cpp
+	uint64 __OSCoreCpuNanoseconds(uint32 core);    // (three host threads: cores 0 and 2's host threads)
 }
 namespace wwhd::gpu
 {
@@ -83,13 +84,14 @@ namespace
 		uint32 swap;
 		bool half, dropped = false;
 		float beganMs, workMs, drawDoneMs, cpuMs, idleMs, gpuMs, waitMs, fenceMs;
+		float core0Ms, core2Ms;                    // three host threads: cores 0 and 2's host CPU over the frame (0 with one)
 		uint32 vsyncs;
 		uint32 storesSeen, storesSaved;            // the half tick's journal (thousands)
 	};
 	std::vector<Frame> s_frames;
 	const char* s_logPath = nullptr;
 	Clock::time_point s_first, s_began;
-	uint64 s_cpuAtBegin = 0, s_idleAtBegin = 0;
+	uint64 s_cpuAtBegin = 0, s_idleAtBegin = 0, s_core0AtBegin = 0, s_core2AtBegin = 0;
 
 	uint64 ThreadCpuNs()
 	{
@@ -109,10 +111,10 @@ namespace
 		FILE* f = fopen(s_logPath, "w");
 		if (!f)
 			return;
-		fprintf(f, "# swap tick began_ms work_ms drawdone_ms cpu_ms idle_ms gpu_ms vsyncs wait_ms stores_k saved_k fence_ms\n");
+		fprintf(f, "# swap tick began_ms work_ms drawdone_ms cpu_ms idle_ms gpu_ms vsyncs wait_ms stores_k saved_k fence_ms core0_ms core2_ms\n");
 		for (const Frame& r : s_frames)
-			fprintf(f, "%u %c %.2f %.2f %.2f %.2f %.2f %.2f %u %.2f %u %u %.2f\n", r.swap, r.dropped ? 'd' : r.half ? 'h' : 'w', r.beganMs, r.workMs,
-				r.drawDoneMs, r.cpuMs, r.idleMs, r.gpuMs, r.vsyncs, r.waitMs, r.storesSeen, r.storesSaved, r.fenceMs);
+			fprintf(f, "%u %c %.2f %.2f %.2f %.2f %.2f %.2f %u %.2f %u %u %.2f %.2f %.2f\n", r.swap, r.dropped ? 'd' : r.half ? 'h' : 'w', r.beganMs, r.workMs,
+				r.drawDoneMs, r.cpuMs, r.idleMs, r.gpuMs, r.vsyncs, r.waitMs, r.storesSeen, r.storesSaved, r.fenceMs, r.core0Ms, r.core2Ms);
 		fclose(f);
 	}
 
@@ -140,6 +142,8 @@ namespace
 			s_first = s_began;
 		s_cpuAtBegin = ThreadCpuNs();
 		s_idleAtBegin = coreinit::__OSIdleNanoseconds();
+		s_core0AtBegin = coreinit::__OSCoreCpuNanoseconds(0);
+		s_core2AtBegin = coreinit::__OSCoreCpuNanoseconds(2);
 		GX2::wwhd_TakeDrawDoneWaitNs();
 	}
 }
@@ -166,6 +170,8 @@ void f_0274C874(PPCInterpreter_t* __restrict ctx)
 		r.idleMs = (coreinit::__OSIdleNanoseconds() - s_idleAtBegin) / 1e6f;
 		r.gpuMs = wwhd::gpu::GpuFrameCpuNs() / 1e6f;
 		r.fenceMs = wwhd::gpu::TakeFenceWaitNs() / 1e6f;
+		r.core0Ms = (coreinit::__OSCoreCpuNanoseconds(0) - s_core0AtBegin) / 1e6f;
+		r.core2Ms = (coreinit::__OSCoreCpuNanoseconds(2) - s_core2AtBegin) / 1e6f;
 		r.vsyncs = (uint32)(vsync - s_frameVsync);
 		uint64 seen, saved;
 		wwhd::sixty::TakeJournalCounts(seen, saved);

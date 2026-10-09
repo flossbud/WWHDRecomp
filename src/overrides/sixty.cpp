@@ -49,6 +49,10 @@
 void wwhd_SetSwapInterval(uint32 interval);       // os/gx2/core/GX2_Misc.cpp
 
 extern thread_local const PPCInterpreter_t* g_rtJournalThread;   // the half tick journal's thread (runtime/diff.cpp)
+namespace coreinit
+{
+	void wwhd_CoreCensus(const char* where);    // os/coreinit/coreinit_Thread.cpp: WWHD_CORE_CENSUS, the other cores' threads
+}
 
 namespace
 {
@@ -758,6 +762,7 @@ namespace
 
 	void RollbackRestore()
 	{
+		coreinit::wwhd_CoreCensus("rollback");
 		for (auto it = s_saved.rbegin(); it != s_saved.rend(); ++it)
 			memcpy(memory_base + it->ea, it->bytes, it->size);
 		s_saved.clear();
@@ -904,6 +909,7 @@ namespace
 		if (s_convGlobalsHidden || s_convGlobals.empty() || !hide)
 			return;
 		s_convGlobalsHidden = true;
+		coreinit::wwhd_CoreCensus("hide");
 		if (Probe())
 		{
 			static bool once = [] { atexit(HiddenWrite); at_quick_exit(HiddenWrite); return true; }();
@@ -929,8 +935,11 @@ namespace
 	void ShowConvertedGlobals()
 	{
 		if (s_convGlobalsHidden)
+		{
+			coreinit::wwhd_CoreCensus("show");
 			for (const Saved& n : s_convGlobalsNew)
 				memcpy(memory_base + n.ea, n.bytes, n.size);
+		}
 		s_convGlobals.clear();
 		s_convGlobalsNew.clear();
 		s_convGlobalsHidden = false;

@@ -23,6 +23,10 @@ void LatteTiming_signalVsync();
 #include "../../runtime/write_watch.h"
 
 #include "util/helpers/helpers.h"
+#include <map>
+#include <pthread.h>
+#include <string>
+#include <tuple>
 
 #ifdef __arm64__
 #if defined(__clang__)
@@ -1337,6 +1341,74 @@ namespace coreinit
 		}
 	}
 
+	// wwhd: WWHD_CORE_CENSUS=path (a probe, three host threads; docs/research/threads.md, "the rollback's copies"): at
+	// the frame thread's copies of guest memory (sixty.cpp: the half tick's rollback, the converted globals hidden and
+	// shown), which guest threads run on the other host threads right then; at exit, the counts per place and thread.
+	// Only the frame thread calls it; it reads the other cores' current threads without the scheduler lock (a census).
+	namespace corecensus
+	{
+		std::map<std::tuple<std::string, uint32, std::string>, uint64> s_counts;
+		std::map<std::string, uint64> s_calls;
+
+		void Write()
+		{
+			FILE* f = fopen(getenv("WWHD_CORE_CENSUS"), "w");
+			if (!f)
+				return;
+			fprintf(f, "# place calls\n");
+			for (auto& [w, n] : s_calls)
+				fprintf(f, "%s %llu\n", w.c_str(), (unsigned long long)n);
+			fprintf(f, "# place core count name (a guest thread running on another core at that place)\n");
+			for (auto& [k, n] : s_counts)
+				fprintf(f, "%s %u %llu %s\n", std::get<0>(k).c_str(), std::get<1>(k), (unsigned long long)n, std::get<2>(k).c_str());
+			fclose(f);
+		}
+
+		bool On()
+		{
+			static const bool on = [] {
+				if (!getenv("WWHD_CORE_CENSUS"))
+					return false;
+				atexit(Write);
+				at_quick_exit(Write);
+				return true;
+			}();
+			return on;
+		}
+	}
+
+	void wwhd_CoreCensus(const char* where)
+	{
+		if (!g_isMulticoreMode || !corecensus::On())
+			return;
+		corecensus::s_calls[where]++;
+		for (uint32 c = 0; c < 3; c++)
+		{
+			if (c == t_assignedCoreIndex)
+				continue;
+			OSThread_t* t = __currentCoreThread[c];
+			if (!t)
+				continue;
+			const char* name = t->threadName.GetPtr();
+			corecensus::s_counts[{ where, c, name ? name : "?" }]++;
+		}
+	}
+
+	// wwhd: the host CPU time of the host thread that runs core `core`'s guest threads (real time, three host threads;
+	// the frame log's per-core columns, pacing.cpp); 0 with one host thread
+	static clockid_t s_coreClock[3];
+	static std::atomic<bool> s_coreClocks{ false };
+
+	uint64 __OSCoreCpuNanoseconds(uint32 core)
+	{
+		if (core >= 3 || !s_coreClocks.load(std::memory_order_acquire))
+			return 0;
+		timespec ts;
+		if (clock_gettime(s_coreClock[core], &ts) != 0)
+			return 0;
+		return (uint64)ts.tv_sec * 1000000000ull + (uint64)ts.tv_nsec;
+	}
+
 	void __OSThreadStartTimeslice(OSThread_t* thread, PPCInterpreter_t* hCPU)
 	{
 		uint32 coreIndex = PPCInterpreter_getCoreIndex(hCPU);
@@ -1690,6 +1762,13 @@ namespace coreinit
 			cemu_assert_debug(false);
 		for (auto& it : sSchedulerThreads)
 			g_schedulerThreadHandles.emplace_back(it.native_handle());
+		if (numCPUEmulationThreads == 3)
+		{
+			bool ok = true;
+			for (size_t i = 0; i < 3; i++)
+				ok = ok && pthread_getcpuclockid(sSchedulerThreads[i].native_handle(), &s_coreClock[i]) == 0;
+			s_coreClocks.store(ok, std::memory_order_release);
+		}
 	}
 
     // shuts down all scheduler host threads and deletes all fibers and ppc threads

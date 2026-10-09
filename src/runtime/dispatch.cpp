@@ -34,6 +34,7 @@
 #include "../os/os.h"
 #include "Cafe/HW/Espresso/Interpreter/PPCInterpreterInternal.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
+#include <atomic>
 #include <chrono>
 #include <cstdarg>
 #include <mutex>
@@ -63,12 +64,26 @@ namespace wwhd::rt
 	enum class Mode { Interpret, Diff, Native };
 	static Mode s_mode = Mode::Interpret;
 
-	// native mode's counters (M4 wants the fallbacks at 0)
-	static uint64 s_interpretedCalls = 0;     // calls from native code that fell back to the interpreter
-	static uint64 s_nativeEntries = 0;        // generated functions the hook called
-	static uint64 s_fallbackInsns = 0;        // game instructions the hook interpreted in native mode
-	static uint64 s_yields = 0;               // timeslices that ended inside native code
-	static std::chrono::steady_clock::time_point s_lastReport;
+	// native mode's counters (M4 wants the fallbacks at 0). With three host threads (WWHD_CORES=3) several threads
+	// count: relaxed atomics, bumped with a load and a store (no locked add on the hot path; a count lost to a race
+	// is fine for a report)
+	static std::atomic<uint64> s_interpretedCalls{ 0 };   // calls from native code that fell back to the interpreter
+	static std::atomic<uint64> s_nativeEntries{ 0 };      // generated functions the hook called
+	static std::atomic<uint64> s_fallbackInsns{ 0 };      // game instructions the hook interpreted in native mode
+	static std::atomic<uint64> s_yields{ 0 };             // timeslices that ended inside native code
+	static std::atomic<std::chrono::steady_clock::rep> s_lastReport{ 0 };
+
+	static uint64 Bump(std::atomic<uint64>& n)            // n++, the old value
+	{
+		const uint64 v = n.load(std::memory_order_relaxed);
+		n.store(v + 1, std::memory_order_relaxed);
+		return v;
+	}
+
+	static std::chrono::steady_clock::rep Now()
+	{
+		return std::chrono::steady_clock::now().time_since_epoch().count();
+	}
 
 	// per guest thread: how many callback loops (PPCCore_executeCallbackInternal) are running it
 	static std::unordered_map<PPCInterpreter_t*, sint32> s_callbackDepth;
@@ -233,7 +248,7 @@ namespace wwhd::rt
 				Log("native: real-time fast paths on (WWHD_FAST_PATHS=0 turns them off)");
 			if (const char* debug = getenv("WWHD_QUIET_DEBUG"))
 				s_quietDebug = atoi(debug);
-			s_lastReport = std::chrono::steady_clock::now();
+			s_lastReport = Now();
 			at_quick_exit([] { NativeReport(true); });   // the trace's exit-at-frame (patch 0011)
 			atexit([] { NativeReport(true); });
 			Log("native: the recompiled program runs; functions patched in memory stay interpreted");
@@ -246,22 +261,22 @@ namespace wwhd::rt
 	{
 		Log("native%s: %llu function entries from the loop, %llu timeslices ended in native code, %llu game "
 			"instructions interpreted, %llu calls from native code interpreted", final ? " (final)" : "",
-			(unsigned long long)s_nativeEntries, (unsigned long long)s_yields, (unsigned long long)s_fallbackInsns,
-			(unsigned long long)s_interpretedCalls);
-		s_lastReport = std::chrono::steady_clock::now();
+			(unsigned long long)s_nativeEntries.load(), (unsigned long long)s_yields.load(), (unsigned long long)s_fallbackInsns.load(),
+			(unsigned long long)s_interpretedCalls.load());
+		s_lastReport = Now();
 	}
 
 	// the loop in native mode: generated functions at their entries, anything else interpreted
 	static void ExecuteNative(PPCInterpreter_t* hCPU)
 	{
-		if (std::chrono::steady_clock::now() - s_lastReport > std::chrono::seconds(30))
+		if (Now() - s_lastReport.load(std::memory_order_relaxed) > std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::seconds(30)).count())
 			NativeReport(false);
 		for (;;)
 		{
 			uint32 ip = hCPU->instructionPointer;
 			if (sint32 i = FuncIndexAt(ip); i >= 0 && !g_patched[i])
 			{
-				s_nativeEntries++;
+				Bump(s_nativeEntries);
 				g_funcTable[i].fn(hCPU);                 // ticks and yields itself
 				hCPU->instructionPointer = hCPU->spr.LR & ~3u;   // where its blr went
 				continue;
@@ -270,7 +285,7 @@ namespace wwhd::rt
 				break;
 			if (((ip - g_codeBase) >> 2) < g_codeWords) [[unlikely]]
 			{
-				if (s_fallbackInsns++ < 20)
+				if (Bump(s_fallbackInsns) < 20)
 					Log("native: interpreting game code at %08X (LR %08X)", ip, hCPU->spr.LR);
 			}
 			PPCInterpreterSlim_executeInstruction(hCPU);
@@ -340,7 +355,7 @@ namespace wwhd::rt
 	void Yield(PPCInterpreter_t* ctx, uint32 pc)
 	{
 		ctx->instructionPointer = pc;                // the thread's saved context shows where it stopped
-		s_yields++;
+		Bump(s_yields);
 		do
 			EndTimeslice(ctx);
 		while (--ctx->remainingCycles < 0);          // the new slice pays for the instruction at pc
@@ -356,7 +371,7 @@ namespace wwhd::rt
 		const uint32 ret = ctx->spr.LR & ~3u, sp = ctx->gpr[1];
 		if (g_quiet.token) [[unlikely]]
 			QuietVisible("interpreted", target);  // the interpreter's stores go unseen
-		if (s_interpretedCalls++ < 20)
+		if (Bump(s_interpretedCalls) < 20)
 			Log("native code calls %08X (LR %08X, words %08X %08X): interpreted up to the next function entry", target,
 				ret, memory_readU32(target), memory_readU32(target + 4));
 		ctx->instructionPointer = target;
@@ -376,7 +391,7 @@ namespace wwhd::rt
 			}
 			if (((ip - g_codeBase) >> 2) < g_codeWords) [[unlikely]]
 			{
-				if (s_fallbackInsns++ < 20)
+				if (Bump(s_fallbackInsns) < 20)
 					Log("native: interpreting game code at %08X (LR %08X)", ip, ctx->spr.LR);
 			}
 			PPCInterpreterSlim_executeInstruction(ctx);

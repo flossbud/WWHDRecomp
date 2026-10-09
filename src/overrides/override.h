@@ -55,8 +55,8 @@ extern thread_local bool g_rtJournalOn;
 extern thread_local void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc);
 // With it, a table of the 4 KB pages it wants (an entry per page: 0 for none; g_rtStorePages, ppc_ops.h):
 // stores into other pages don't reach it (unless a fast path's watch runs); g_rtStoresPassed counts
-// those that called rt_journal_store directly
-extern uint64 g_rtStoresPassed;
+// those that called rt_journal_store directly (per host thread: the frame thread's, read by its frame log)
+extern thread_local uint64 g_rtStoresPassed;
 // With them, per page of the table (its entry's low 30 bits - 1) 64 words, a bit per byte: a store into bytes all
 // set returns at once (saved already this frame, or not kept), unless *g_rtStoreHold or a fast path's watch
 extern const uint64* g_rtStoreBits;
