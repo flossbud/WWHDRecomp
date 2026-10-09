@@ -33,6 +33,18 @@ Weaker hardware (phones, the Deck in heavy scenes) needs more. The owner's order
    the optimised one switched off if it misbehaves. Checks run Cemu's set; the optimised set gets its own capture
    comparison (within tolerance where it isn't bit-exact) and A/Bs.
 
+**Status (2026-10-09, week 2's start; queue ids in brackets):**
+- Item 1: **built** (`WWHD_GPU_TIMING=1`, `tools/sixty/perf/gpu-clock.sh`; b2b9f24). Measured on the desktop worker
+  only (1.38 ms a frame); not yet on the worker, where threads.md has the GPU at ~18.7 ms a frame (`b-gpumeasure`).
+- Item 2: **built, off by default**: `WWHD_BARRIERS=narrow` (GPU 1.33 -> 1.28 ms on the desktop; removes the default's
+  71 write-after-write hazards under sync validation) and `WWHD_SURFACE_FIT=1` (drops the 1920x1088 -> 1080 crop
+  copy each frame). Left: the worker A/Bs and on by default (`b-barriers`); load ops and redundant transitions
+  (`b-clears`).
+- Item 3: **built, off by default** (below; 75% in the Performance preset). Left: the worker A/B, dynamic resolution
+  (`b-scale`).
+- Item 4: **first round and presets landed** (below). Left: the AO toggle, AF, FXAA (`b-gfxopts`).
+- Item 5: not started (`b-shaders`).
+
 ## Item 3, render scale: built (session cloud3), opt-in
 
 **`WWHD_RENDER_SCALE=0.5..2`** (renderer.cpp `RenderScale`; 1, the default and every check's, changes nothing:

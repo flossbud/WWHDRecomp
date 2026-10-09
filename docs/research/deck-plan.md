@@ -46,6 +46,24 @@ thread alone doesn't fit 60 in a fight; at 30 it needs ~9 ms of a 33 ms frame. T
 | 6 | **Texture tracking by write-protection** (`texture-tracking.md`) | ~0.05 ms (the sampled check is ~1.3% of the render thread) | ~0.1-0.2 ms | ~2 days | medium (a writer the audit misses: the verify mode finds it) | the checks' verify mode, 0 missed writers; and it removes real time's up-to-a-second texture lag |
 | 7 | **Link's half step cheaper** (his execute doubles at 60; the one actor worth it) | ~0.1 ms | ~0.2 ms | 1-2 days | medium (his half step's exactness work) | predeploy |
 
+**Status (2026-10-09, week 2's start; the table above is the plan as written, the commits have the details):**
+- 1, the sound at 60: **done** (AX 2,191 -> 287 samples).
+- 2, the lazy DrawDone: **landed, off by default** (`WWHD_LAZY_DRAWDONE=1`; cloud2's review fixes and the readback barrier
+  in). Left: an A/B on the owner's GPU with a window, vsync on and off, and a sync-validation run; then on by default
+  (queue item `t-lazy`).
+- 3, the render thread's per-draw work: **done** (ProgramHash, index cache, sampler key, bind cache, uniform blocks
+  filled as far as read, descriptor sets reused: -12.9% of the render thread on the worker). The pipeline lookaside
+  wasn't worth it. Left: the vertex copy, which needs a buffer cache (`t-bufcache`).
+- 4, static actors' half frames: **parked, no gain** (`ww-4-cloud3`, `WWHD_60FPS_STATICDRAW`).
+- 5, the half step's journal: **done** (-2.1% a frame on the worker). Left: an inline check in `RT_STORE`, ~1% (`t-rtstore`).
+- 6, texture write-watch: **landed, off by default** (`WWHD_WRITE_WATCH=1`; verify mode 0 misses). Left: a real-time
+  A/B and on by default (`t-writewatch`).
+- 7, Link's half step: **skipped** (the owner's choice).
+- Not in the table: three host threads (`WWHD_CORES=3`, threads.md): **landed, off by default**; the worker at 60
+  goes 47 -> 53.8 fps with it, GPU-bound there (`t-cores3`). The quick tests on the Deck: not run yet (`m-deck`).
+- The settings' Performance preset (and Auto on a low-powered device) already turns on 3 threads, the lazy DrawDone
+  and keep-speed.
+
 **Item 2, measured (session qa, WIP on ww-4-qa, not on ww-4):** the frame log's new `fence_ms` column (the render
 thread's `vkWaitForFences` in `SubmitAndWait`, src/gpu/vk/renderer.cpp) against `drawdone_ms`, continue and house at
 60: the game waits 1.58 ms a frame in GX2DrawDone, of which **1.45 ms is the render thread waiting for the GPU's

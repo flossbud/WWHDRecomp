@@ -1,5 +1,20 @@
 # Handoff: WWHD recomp, state as of 2026-10-08 (WW-4: true 60 done for every actor; next: performance)
 
+**Week 2 (from 2026-10-09; main session WW-12 on ww-2-1, the router).** Sessions: `top` (ww-2-2, WW-13), `bottom`
+(ww-2-3, WW-14), `qa` (ww-2-4, WW-15: only problems the others are stuck on, routed by main), `web` (ww-10: the
+progress page). Main routes, grants the merge slot (ask before any push to `main`), runs the batched deploys and keeps
+the docs. **Branches:** `main` is the only branch on GitHub and its default (`qa-rushmusic` deleted there: its old
+messages had a machine name); ww-4 and the session branches stay on the worker remote only. **The queue** is two
+lanes in `tools/progress/plan.json` (round 14; each item has `lane` and a complexity 1-10), each worked from its top
+down: top = the CPU side and turning the speed flags on by default (three threads, the lazy DrawDone, write-watch,
+a buffer cache, the recompiled code); bottom = the GPU side and graphics options (GPU timing on the worker, narrow
+barriers and surface fit, render scale and dynamic resolution, clears, shaders, widescreen, AO/AF/FXAA). The page
+groups the open items by lane. **Where speed stands:** the worker (the Deck's stand-in) at 60 does ~54 fps with
+`WWHD_CORES=3` (47 with one thread), GPU-bound; most speed work is in but off by default (deck-plan.md and
+gpu-plan.md have status blocks). **Usage: wrap up at 95%** of the week (the owner's rule since 2026-10-07; older
+text below says 75%). Each new worktree needs the gitignored `tools/worker/hosts.env` (and `desktop.env`),
+`.session` and `.worker-dir`.
+
 **Where it stands (2026-10-08, main session, at the 95% weekly stop).** Every actor type is converted to true 60
 and checked tick by tick against 30. The bugs and drifts the owner and the sessions found are fixed or recorded
 (known issues on the progress page). The build on the owner's PC is ww-4 9385d6d; `~/wwhd-play/play-60-lazy.sh`
@@ -68,7 +83,7 @@ WW-4's actor conversion is split between two sessions working side by side:
   `publish.sh bug show ID` (every note and image link; images are game data: look in a scratchpad, then
   delete), `publish.sh notes` (general notes; answer with `notes reply|done ID "TEXT"`). Main triages:
   a reopened or new bug gets `bug start` by whoever takes it, as before.
-- **Usage: wrap up at 75% of the week** (the owner's rule from 2026-10-06; it replaces "stop at 50%").
+- **Usage: wrap up at 95% of the week** (the owner's rule from 2026-10-07; 75% from 2026-10-06, 50% before; the 75s below are history).
   The Claude account's usage is on the progress page (the sidebar; the phone's Now tab) and in
   `curl -s $WWHD_PROGRESS_URL/usage.json` (`weekly_all`'s `percent`, every 5 minutes). Below
   75% work as usual. At 75% wrap up, don't stop dead: finish or park the step in hand (integrate what
