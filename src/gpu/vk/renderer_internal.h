@@ -24,6 +24,7 @@ namespace wwhd::gpu
 		uint32 width = 0, height = 0, layers = 1;
 		uint32 gw = 0, gh = 0;                                   // the guest's size it stands for (width x height but for
 		bool scaled = false;                                     // WWHD_RENDER_SCALE's surfaces and their copies: Scaled)
+		float scale = 1.0f;                                      // the scale it was made at (dynamic resolution: one of several)
 		VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;         // of every subresource
 		std::vector<VkImageView> layerViews;                     // 2D views of layers 1.. (LayerView)
 		uint64 written = 0;                                      // s.writes when last drawn into or cleared (surfaces)
@@ -112,9 +113,12 @@ namespace wwhd::gpu
 	// their copies, mip chains and the scan images taken from them; everything the guest sees stays in its sizes:
 	// surface lookups, aliasing and reads by size use gw/gh, viewports and scissors are scaled by the target's width/gw,
 	// the shaders' uf_fragCoordScale and uf_texNScale undo it. Off (1): every image the guest's size
-	float RenderScale();
+	// WWHD_RENDER_SCALE=auto: dynamic resolution, the scale chosen at each swap from the GPU's time a frame (DynamicScale)
+	float RenderScale();                                          // the current scale
+	bool DynamicScale();
 	bool ScaledSurface(uint32 gw, uint32 gh);
-	uint32 Scaled(uint32 guest, bool scaled = true);            // an image's size for a guest size (scaled or not)
+	uint32 Scaled(uint32 guest, bool scaled = true);            // an image's size for a guest size (scaled or not), now
+	uint32 ScaledBy(uint32 guest, float scale);                 // at a given scale (an existing image's: Image::scale)
 
 	struct Format { VkFormat vk; VkImageAspectFlags aspect; };
 	Format ColorFormat(uint32 gx2);
@@ -179,11 +183,17 @@ namespace wwhd::gpu
 	namespace timing
 	{
 		enum class Kind : uint8 { Other, Pass, Upload, Copy, Mips, Grow, Reset, Clear, Scan, Present, Count };
-		bool On();
-		void Init();                                              // after the device and the first command buffer
+		bool On();                                                // WWHD_GPU_TIMING (every mark; not the light mode)
+		void Init(bool light);                                    // after the device and the first command buffer; light:
+		                                                          // the start and end of each command buffer only
 		void Begin();                                             // a command buffer begins (its slot's fence waited for)
+		void End();                                               // it ends (before vkEndCommandBuffer)
 		void Mark(Kind kind, std::string_view label = {});        // from here on the GPU does `kind` work
+		void Write(Kind kind, std::string_view label);            // the timestamp itself (Mark's, Begin's, End's)
 		void Frame();                                             // a swap
+		// the GPU's mean ms a frame over the frames since the last call, once at least `frames` swaps were counted (the
+		// timestamps are read a frame or two late; over a window that's the same rate)
+		bool TakeWindow(uint32 frames, double& msPerFrame);
 		// a span of one kind of work, "other" after it
 		struct Scope
 		{

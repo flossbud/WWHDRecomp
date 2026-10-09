@@ -9,7 +9,8 @@
 // span's edges, so the total stays right and the split by kind is close. The results of a command buffer are read when its slot is recorded again
 // (its fence waited for). Every WWHD_GPU_TIMING_EVERY (600) frames a line of milliseconds a frame by kind, every sixth
 // line the passes and copies that took the most (a copy named by its cause), and at exit both over the whole run.
-// Off: one predictable branch a mark.
+// Off: one predictable branch a mark. Dynamic resolution (WWHD_RENDER_SCALE=auto) needs only the GPU's time a frame:
+// without WWHD_GPU_TIMING it turns on a light mode, a timestamp at each command buffer's start and end and no lines.
 #include "renderer_internal.h"
 #include <algorithm>
 #include <cstdlib>
@@ -32,7 +33,10 @@ namespace wwhd::gpu::timing
 			std::vector<Rec> recs;
 		};
 		Slot s_slots[2];
-		bool s_on = false;
+		bool s_on = false;                                        // timestamps at all (full or light)
+		bool s_full = false;                                      // WWHD_GPU_TIMING: every mark, the lines
+		double s_windowNs = 0;                                    // GPU time collected since TakeWindow, and the swaps
+		uint32 s_windowFrames = 0;
 		double s_period = 1.0;                                    // nanoseconds a tick
 		uint64 s_mask = ~0ull;                                    // the queue's valid timestamp bits
 		uint32 s_every = 600;
@@ -81,6 +85,7 @@ namespace wwhd::gpu::timing
 			{
 				const double ns = (double)((s_results[i + 1] - s_results[i]) & s_mask) * s_period;
 				const Rec& r = slot.recs[i];
+				s_windowNs += ns;
 				s_kindLine[(size_t)r.kind] += ns;
 				s_kindRun[(size_t)r.kind] += ns;
 				if (r.label)
@@ -119,7 +124,7 @@ namespace wwhd::gpu::timing
 
 		void Summary()
 		{
-			if (!s_on || !s_framesRun)
+			if (!s_full || !s_framesRun)
 				return;
 			std::lock_guard lock(s_mutex);
 			Log(fmt::format("gpu timing: the run, {} frames: {}{}", s_framesRun, KindsLine(s_kindRun, s_framesRun),
@@ -130,13 +135,14 @@ namespace wwhd::gpu::timing
 
 	bool On()
 	{
-		return s_on;
+		return s_full;
 	}
 
-	void Init()
+	void Init(bool light)
 	{
 		const char* e = getenv("WWHD_GPU_TIMING");
-		if (!e || atoi(e) == 0)
+		s_full = e && atoi(e) != 0;
+		if (!s_full && !light)
 			return;
 		uint32 count = 0;
 		vkGetPhysicalDeviceQueueFamilyProperties(s.physical, &count, nullptr);
@@ -146,6 +152,7 @@ namespace wwhd::gpu::timing
 		if (!bits)
 		{
 			Log("gpu timing: the queue has no timestamps (WWHD_GPU_TIMING ignored)");
+			s_full = false;
 			return;
 		}
 		s_mask = bits >= 64 ? ~0ull : (1ull << bits) - 1;
@@ -161,10 +168,13 @@ namespace wwhd::gpu::timing
 			s_slots[i].recs.reserve(kQueries);
 		}
 		s_on = true;
-		atexit(Summary);
-		at_quick_exit(Summary);                                   // WWHD_EXIT_FRAME's runs
-		Log(fmt::format("gpu timing: on ({} timestamp bits, {} ns a tick), a line every {} frames (WWHD_GPU_TIMING)", bits,
-			s_period, s_every));
+		if (s_full)
+		{
+			atexit(Summary);
+			at_quick_exit(Summary);                               // WWHD_EXIT_FRAME's runs
+			Log(fmt::format("gpu timing: on ({} timestamp bits, {} ns a tick), a line every {} frames (WWHD_GPU_TIMING)", bits,
+				s_period, s_every));
+		}
 		Begin();                                                  // the first command buffer is already recording
 	}
 
@@ -176,13 +186,23 @@ namespace wwhd::gpu::timing
 		Collect(slot);
 		slot.recs.clear();
 		vkCmdResetQueryPool(s.cmd, slot.pool, 0, kQueries);
-		Mark(Kind::Other);
+		Write(Kind::Other, {});
+	}
+
+	void End()
+	{
+		if (s_on)
+			Write(Kind::Other, {});
 	}
 
 	void Mark(Kind kind, std::string_view label)
 	{
-		if (!s_on)
-			return;
+		if (s_full)
+			Write(kind, label);
+	}
+
+	void Write(Kind kind, std::string_view label)
+	{
 		Slot& slot = s_slots[s.slot];
 		if (slot.recs.size() >= kQueries)
 		{
@@ -193,9 +213,22 @@ namespace wwhd::gpu::timing
 		slot.recs.push_back({ kind, LabelId(label) });
 	}
 
+	bool TakeWindow(uint32 frames, double& msPerFrame)
+	{
+		if (s_windowFrames < frames)
+			return false;
+		std::lock_guard lock(s_mutex);
+		msPerFrame = s_windowNs / 1e6 / s_windowFrames;
+		s_windowNs = 0, s_windowFrames = 0;
+		return true;
+	}
+
 	void Frame()
 	{
 		if (!s_on)
+			return;
+		s_windowFrames++;
+		if (!s_full)
 			return;
 		s_framesRun++, s_framesTop++;
 		if (++s_framesLine < s_every)

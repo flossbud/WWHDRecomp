@@ -184,7 +184,7 @@ namespace wwhd::gpu
 			Log("lazy GX2DrawDone: two frames in flight (WWHD_LAZY_DRAWDONE)");
 		}
 		DrawInit();
-		timing::Init();
+		timing::Init(DynamicScale());
 
 		// the reference's screenshot settings (cemu-patches/0007)
 		if (const char* spec = getenv("CEMU_SHOT_FRAMES"))
@@ -254,7 +254,7 @@ namespace wwhd::gpu
 		void Submit(VkSemaphore signal = VK_NULL_HANDLE)
 		{
 			EndRendering();
-			timing::Mark(timing::Kind::Other);                        // the last span's end
+			timing::End();                                            // the last span's end
 			Check(vkEndCommandBuffer(s.cmd), "vkEndCommandBuffer");
 			VkSubmitInfo si{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
 			si.commandBufferCount = 1;
@@ -552,26 +552,68 @@ namespace wwhd::gpu
 	// the guest's sizes, nothing changes). Read once at start. Only the targets the TV's size (1920x1088, the scene's and
 	// its full-screen passes': nearly all the pixels drawn) are scaled: the half-size ones are its effects, sampled with
 	// offsets sized in their own texels (ambient occlusion at half scale lost half its strength, the edges a light
-	// halo), and the shadow maps' resolution is their own; both cost little next to the full-size passes
+	// halo), and the shadow maps' resolution is their own; both cost little next to the full-size passes.
+	// WWHD_RENDER_SCALE=auto: dynamic resolution (session bottom): the scale moves between WWHD_RENDER_SCALE_MIN (0.5)
+	// and WWHD_RENDER_SCALE_MAX (1) in steps of 1/8 (whole pixels: 1920 and 1088 are multiples of 16), from the GPU's
+	// time a frame (gpu_timing's light mode) against a budget (WWHD_RENDER_SCALE_BUDGET ms, default 92% of a frame at the
+	// frame rate, WWHD_60FPS):
+	// down at once when a half-second window runs over it, up when the estimate at the next step stays under 85% of
+	// it for two seconds. A change rescales every scaled surface at the swap (RescaleSurfaces).
+	namespace
+	{
+		struct ScaleConfig { bool dynamic = false; float start = 1.0f, min = 0.5f, max = 1.0f, budget = 0.0f; };
+		const ScaleConfig& Config()
+		{
+			static const ScaleConfig c = [] {
+				ScaleConfig c;
+				const char* e = getenv("WWHD_RENDER_SCALE");
+				auto num = [](const char* name, float def) { const char* v = getenv(name); return v && atof(v) > 0 ? (float)atof(v) : def; };
+				if (e && strcmp(e, "auto") == 0)
+				{
+					c.dynamic = true;
+					c.max = std::clamp(num("WWHD_RENDER_SCALE_MAX", 1.0f), 0.5f, 2.0f);
+					c.min = std::clamp(num("WWHD_RENDER_SCALE_MIN", 0.5f), 0.5f, c.max);
+					const char* sixty = getenv("WWHD_60FPS");
+					c.budget = num("WWHD_RENDER_SCALE_BUDGET", (sixty && atoi(sixty) != 0 ? 1000.0f / 60.0f : 1000.0f / 30.0f) * 0.92f);
+					c.start = c.max;
+				}
+				else
+				{
+					const float v = e ? (float)atof(e) : 1.0f;
+					c.start = v > 0.0f ? std::clamp(v, 0.5f, 2.0f) : 1.0f;
+				}
+				return c;
+			}();
+			return c;
+		}
+		float s_scale = 0.0f;                                     // 0: not read yet
+	}
+
 	float RenderScale()
 	{
-		static const float scale = [] {
-			const char* e = getenv("WWHD_RENDER_SCALE");
-			float v = e ? (float)atof(e) : 1.0f;
-			return v > 0.0f ? std::clamp(v, 0.5f, 2.0f) : 1.0f;
-		}();
-		return scale;
+		if (s_scale == 0.0f)
+			s_scale = Config().start;
+		return s_scale;
+	}
+
+	bool DynamicScale()
+	{
+		return Config().dynamic;
 	}
 
 	bool ScaledSurface(uint32 gw, uint32 gh)
 	{
-		return RenderScale() != 1.0f && gw >= 1280 && gh >= 720;
+		return (DynamicScale() || RenderScale() != 1.0f) && gw >= 1280 && gh >= 720;
+	}
+
+	uint32 ScaledBy(uint32 guest, float scale)
+	{
+		return scale == 1.0f ? guest : std::max(1u, (uint32)std::ceil(guest * scale - 0.001f));
 	}
 
 	uint32 Scaled(uint32 guest, bool scaled)
 	{
-		const float scale = RenderScale();
-		return !scaled || scale == 1.0f ? guest : std::max(1u, (uint32)std::ceil(guest * scale - 0.001f));
+		return scaled ? ScaledBy(guest, RenderScale()) : guest;
 	}
 
 	// ---- surfaces ----------------------------------------------------------------------------
@@ -619,7 +661,7 @@ namespace wwhd::gpu
 				if (mode != 1)
 					continue;
 				EndRendering();
-				Image fitted = CreateImage(img.format, img.aspect, img.width, Scaled(img.readH, img.scaled), VK_IMAGE_USAGE_SAMPLED_BIT |
+				Image fitted = CreateImage(img.format, img.aspect, img.width, ScaledBy(img.readH, img.scale), VK_IMAGE_USAGE_SAMPLED_BIT |
 					((img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT) ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT),
 					img.layers);
 				Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -628,7 +670,7 @@ namespace wwhd::gpu
 				c.srcSubresource = c.dstSubresource = { img.aspect, 0, 0, img.layers };
 				c.extent = { img.width, fitted.height, 1 };
 				vkCmdCopyImage(s.cmd, img.image, img.layout, fitted.image, fitted.layout, 1, &c);
-				fitted.gw = img.gw, fitted.gh = img.readH, fitted.scaled = img.scaled;
+				fitted.gw = img.gw, fitted.gh = img.readH, fitted.scaled = img.scaled, fitted.scale = img.scale;
 				SubmitAndWait();                                    // then the old image can go
 				const uint32 bytes = img.bytes, readH = img.readH, readSince = img.readSince, fitH = img.fitH;
 				const uint64 written = img.written, resetFor = img.resetFor;
@@ -637,6 +679,115 @@ namespace wwhd::gpu
 				img.bytes = bytes, img.readH = readH, img.readSince = readSince, img.fitH = fitH;
 				img.written = written, img.resetFor = resetFor;
 			}
+		}
+	}
+
+	// ---- dynamic resolution (WWHD_RENDER_SCALE=auto, above) ---------------------------------------
+	namespace
+	{
+		bool CanBlit(VkFormat f, bool linear)
+		{
+			VkFormatProperties fp;
+			vkGetPhysicalDeviceFormatProperties(s.physical, f, &fp);
+			const VkFormatFeatureFlags need = VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT |
+				(linear ? VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT : 0);
+			return (fp.optimalTilingFeatures & need) == need;
+		}
+
+		// every scaled surface made again at `scale`, its picture blitted over (depth, and formats that can't be blitted,
+		// start from zero, as a grown surface does: the next frame draws them again); its copies, views and descriptor
+		// sets go with the old image (DestroyImage), mip chains are made again at their next use (ChainOf)
+		void RescaleSurfaces(float scale)
+		{
+			s_scale = scale;                                          // surfaces made from now on
+			bool any = false;
+			for (auto& [key, img] : s.surfaces)
+				any |= img.image && img.scaled && img.scale != scale;
+			if (!any)
+				return;
+			EndRendering();
+			WaitPending();                                            // the other frame in flight may still use them
+			std::vector<std::pair<Image*, Image>> made;
+			for (auto& [key, img] : s.surfaces)
+			{
+				if (!img.image || !img.scaled || img.scale == scale)
+					continue;
+				const bool depth = img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT;
+				Image next = CreateImage(img.format, img.aspect, ScaledBy(img.gw, scale), ScaledBy(img.gh, scale), VK_IMAGE_USAGE_SAMPLED_BIT |
+					(depth ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT), img.layers);
+				next.gw = img.gw, next.gh = img.gh, next.scaled = true, next.scale = scale;
+				Transition(next, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+				VkImageSubresourceRange all{ img.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
+				const bool linear = !depth && CanBlit(img.format, true);
+				if (linear || (depth && CanBlit(img.format, false)))
+				{
+					Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+					VkImageBlit b{};
+					b.srcSubresource = b.dstSubresource = { img.aspect, 0, 0, img.layers };
+					b.srcOffsets[1] = { (sint32)img.width, (sint32)img.height, 1 };
+					b.dstOffsets[1] = { (sint32)next.width, (sint32)next.height, 1 };
+					vkCmdBlitImage(s.cmd, img.image, img.layout, next.image, next.layout, 1, &b, linear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST);
+				}
+				else if (depth)
+				{
+					VkClearDepthStencilValue zero{};
+					vkCmdClearDepthStencilImage(s.cmd, next.image, next.layout, &zero, 1, &all);
+				}
+				else
+				{
+					VkClearColorValue zero{};
+					vkCmdClearColorImage(s.cmd, next.image, next.layout, &zero, 1, &all);
+				}
+				made.emplace_back(&img, next);
+			}
+			SubmitAndWait();                                          // then the old images can go
+			for (auto& [img, next] : made)
+			{
+				Image& old = *img;
+				next.bytes = old.bytes, next.written = old.written, next.resetFor = old.resetFor;
+				next.readH = old.readH, next.fitH = old.fitH, next.readSince = old.readSince, next.noFit = old.noFit;
+				DestroyImage(old);
+				old = next;
+			}
+		}
+
+		// the controller: a window of frames' GPU time against the budget (Config's comment, above)
+		void ChooseScale()
+		{
+			if (!DynamicScale())
+				return;
+			constexpr uint32 kWindow = 30;                        // half a second at 60
+			constexpr float kStep = 0.125f;
+			static uint32 s_under = 0, s_lastChange = 0;
+			double ms;
+			if (!timing::TakeWindow(kWindow, ms))
+				return;
+			const ScaleConfig& c = Config();
+			const float scale = RenderScale();
+			float next = scale;
+			if (ms > c.budget && scale > c.min && s.frame - s_lastChange >= kWindow * 2)
+			{
+				// the pixels' share of the time is unknown: assume all of it scales with the area, so the step taken is the
+				// smallest the estimate allows; the next window corrects it
+				const float want = scale * (float)std::sqrt(c.budget / ms);
+				next = std::max(c.min, std::floor(want / kStep + 0.001f) * kStep);
+				next = std::min(next, scale - kStep);
+				s_under = 0;
+			}
+			else if (scale < c.max)
+			{
+				const float up = std::min(c.max, scale + kStep);
+				const double estimate = ms * (up * up) / (scale * scale);
+				s_under = estimate < c.budget * 0.85 ? s_under + 1 : 0;
+				if (s_under >= 4)                                     // two seconds of headroom
+					next = up, s_under = 0;
+			}
+			if (next == scale)
+				return;
+			Log(fmt::format("render scale: {:.3f} -> {:.3f} at frame {} (the GPU {:.2f} ms a frame, budget {:.2f})", scale, next,
+				s.frame, ms, c.budget));
+			RescaleSurfaces(next);
+			s_lastChange = s.frame;
 		}
 	}
 
@@ -674,7 +825,7 @@ namespace wwhd::gpu
 		const uint32 gw = std::max(w, img.gw), gh = std::max(h, img.gh);
 		const bool scaled = ScaledSurface(gw, gh);
 		Image grown = CreateImage(f.vk, f.aspect, Scaled(gw, scaled), Scaled(gh, scaled), usage, std::max(layers, img.layers));
-		grown.gw = gw, grown.gh = gh, grown.scaled = scaled;
+		grown.gw = gw, grown.gh = gh, grown.scaled = scaled, grown.scale = scaled ? RenderScale() : 1.0f;
 		Transition(grown, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);   // start from zero, not undefined contents
 		VkImageSubresourceRange all{ f.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
 		if (depth)
@@ -691,19 +842,19 @@ namespace wwhd::gpu
 		{
 			Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 			Transition(grown, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-			if (img.scaled == grown.scaled)
+			if (img.scale == grown.scale)
 			{
 				VkImageCopy c{};
 				c.srcSubresource = c.dstSubresource = { img.aspect, 0, 0, img.layers };
 				c.extent = { img.width, img.height, 1 };
 				vkCmdCopyImage(s.cmd, img.image, img.layout, grown.image, grown.layout, 1, &c);
 			}
-			else                                                    // grown to the screen's size: now scaled
+			else                                                    // grown to the screen's size (now scaled), or another scale
 			{
 				VkImageBlit b{};
 				b.srcSubresource = b.dstSubresource = { img.aspect, 0, 0, img.layers };
 				b.srcOffsets[1] = { (sint32)img.width, (sint32)img.height, 1 };
-				b.dstOffsets[1] = { (sint32)Scaled(img.gw), (sint32)Scaled(img.gh), 1 };
+				b.dstOffsets[1] = { (sint32)ScaledBy(img.gw, grown.scale), (sint32)ScaledBy(img.gh, grown.scale), 1 };
 				vkCmdBlitImage(s.cmd, img.image, img.layout, grown.image, grown.layout, 1, &b, VK_FILTER_NEAREST);
 			}
 			SubmitAndWait();                                        // then the old image can go
@@ -997,10 +1148,15 @@ namespace wwhd::gpu
 		// the reference's screenshot is an RGBA8 blit of this buffer, sRGB if the scan buffer is
 		VkFormat f = (target == 1 ? LatteGPUState.tvBufferUsesSRGB : LatteGPUState.drcBufferUsesSRGB)
 			? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
-		if (!dst.image || dst.gw != w || dst.gh != h || dst.format != f)   // the scan image at the render scale too
+		if (!dst.image || dst.gw != w || dst.gh != h || dst.format != f || dst.scale != src.scale)   // at its surface's scale too
 		{
-			dst = CreateImage(f, VK_IMAGE_ASPECT_COLOR_BIT, Scaled(w, src.scaled), Scaled(h, src.scaled), 0);
-			dst.gw = w, dst.gh = h, dst.scaled = src.scaled;
+			if (dst.image)
+			{
+				WaitPending();                                      // the other frame may still present from it
+				DestroyImage(dst);
+			}
+			dst = CreateImage(f, VK_IMAGE_ASPECT_COLOR_BIT, ScaledBy(w, src.scale), ScaledBy(h, src.scale), 0);
+			dst.gw = w, dst.gh = h, dst.scaled = src.scaled, dst.scale = src.scale;
 		}
 		Transition(src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 		Transition(dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -1027,6 +1183,7 @@ namespace wwhd::gpu
 		if (shotDrc && s.frame > 1 && s.shotFrames.count(s.frame - 1) && s.scan[1].image)
 			WritePPM(s.scan[1], s.frame - 1, "drc");
 		FitSurfaces();
+		ChooseScale();
 		ResetOverwrittenSurfaces();
 		{
 			timing::Scope span(timing::Kind::Present);

@@ -1824,7 +1824,7 @@ namespace wwhd::gpu
 		const Image* first = attachments[0];
 		const float fx = (float)first->width / (float)first->gw, fy = (float)first->height / (float)first->gh;
 		for (uint32 i = 1; i < nAttachments; i++)
-			if (attachments[i]->scaled != first->scaled)
+			if (attachments[i]->scale != first->scale)
 				LogOnce("scalemix", [&] { return fmt::format("render scale: a pass into {}x{} and {}x{}: one scaled, one not (frame {})",
 					first->gw, first->gh, attachments[i]->gw, attachments[i]->gh, s.frame + 1); });
 		s_fragScale[0] = 1.0f / fx, s_fragScale[1] = 1.0f / fy;
@@ -1847,11 +1847,11 @@ namespace wwhd::gpu
 		for (auto& [binding, off] : vbufs)
 			vkCmdBindVertexBuffers(s.cmd, binding, 1, &s.ring.buffer, &off);
 		VkViewport viewport{ vpX, vpY + vpH, vpW, -vpH, std::clamp(nearZ, 0.0f, 1.0f), std::clamp(farZ, 0.0f, 1.0f) };
-		if (RenderScale() != 1.0f)
+		if (fx != 1.0f || fy != 1.0f)
 			viewport.x *= fx, viewport.y *= fy, viewport.width *= fx, viewport.height *= fy;
 		if (!known || memcmp(&b.viewport, &viewport, sizeof(viewport)) != 0)
 			vkCmdSetViewport(s.cmd, 0, 1, &viewport);
-		if (RenderScale() != 1.0f)                              // the pixels whose centres the guest's would cover, at least
+		if (fx != 1.0f || fy != 1.0f)                           // the pixels whose centres the guest's would cover, at least
 		{
 			scissorX = (uint32)std::floor(scissorX * fx), scissorY = (uint32)std::floor(scissorY * fy);
 			scissorR = (uint32)std::ceil(scissorR * fx), scissorB = (uint32)std::ceil(scissorB * fy);

@@ -661,9 +661,9 @@ namespace wwhd::gpu
 			Copy& c = s_copies[{ surface.image, w, h, format }];
 			if (!c.img.image)
 			{
-				c.img = CreateImage(format, surface.aspect, Scaled(w, surface.scaled), Scaled(h, surface.scaled), VK_IMAGE_USAGE_SAMPLED_BIT,
+				c.img = CreateImage(format, surface.aspect, ScaledBy(w, surface.scale), ScaledBy(h, surface.scale), VK_IMAGE_USAGE_SAMPLED_BIT,
 					surface.layers);
-				c.img.gw = w, c.img.gh = h, c.img.scaled = surface.scaled;   // at the surface's scale (WWHD_RENDER_SCALE)
+				c.img.gw = w, c.img.gh = h, c.img.scaled = surface.scaled, c.img.scale = surface.scale;   // at the surface's scale (WWHD_RENDER_SCALE)
 				ForgetImage(c.img.image);                              // a reused handle's stale views
 			}
 			if (c.written != surface.written)
@@ -728,7 +728,7 @@ namespace wwhd::gpu
 
 		Chain* ChainOf(const TexDesc& d, Image& base, VkFormat format)
 		{
-			const uint32 w = Scaled(d.width, base.scaled), h = Scaled(d.height, base.scaled);   // at its surface's scale (WWHD_RENDER_SCALE)
+			const uint32 w = ScaledBy(d.width, base.scale), h = ScaledBy(d.height, base.scale);   // at its surface's scale (WWHD_RENDER_SCALE)
 			uint32 maxMips = 1;
 			for (uint32 m = std::max(w, h); m > 1; m >>= 1)
 				maxMips++;
@@ -737,6 +737,15 @@ namespace wwhd::gpu
 			for (uint64 v : { (uint64)d.phys, (uint64)d.physMip, (uint64)d.format, (uint64)d.width, (uint64)d.height, (uint64)mips, (uint64)format })
 				key = (key ^ v) * 0x100000001B3ull + 0x9E3779B97F4A7C15ull;
 			Chain& c = s_chains[key];
+			if (c.img.image && c.img.scale != base.scale)          // its surface rescaled (dynamic resolution): made again
+			{
+				ForgetSets();
+				for (auto& [k, v] : c.views)
+					vkDestroyImageView(s.device, v, nullptr);
+				vkDestroyImage(s.device, c.img.image, nullptr);
+				vkFreeMemory(s.device, c.img.memory, nullptr);
+				c = Chain{};
+			}
 			VkImageSubresourceRange all{ base.aspect, 0, mips, 0, 1 };
 			auto barrier = [&](VkImageLayout from, VkImageLayout to) {
 				VkImageMemoryBarrier b{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
@@ -773,7 +782,7 @@ namespace wwhd::gpu
 				c.img.height = h;
 				c.img.gw = d.width;
 				c.img.gh = d.height;
-				c.img.scaled = base.scaled;
+				c.img.scaled = base.scaled, c.img.scale = base.scale;
 				c.mips = mips;
 				c.written.assign(mips, UINT64_MAX);
 				EndRendering();
@@ -806,7 +815,7 @@ namespace wwhd::gpu
 				}
 				Transition(*src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 				const uint32 lw = std::max(w >> level, 1u), lh = std::max(h >> level, 1u);
-				if (src->scaled == c.img.scaled)
+				if (src->scale == c.img.scale)
 				{
 					VkImageCopy r{};
 					r.srcSubresource = { src->aspect, 0, 0, 1 };
@@ -820,7 +829,7 @@ namespace wwhd::gpu
 					VkImageBlit b{};
 					b.srcSubresource = { src->aspect, 0, 0, 1 };
 					b.dstSubresource = { base.aspect, level, 0, 1 };
-					b.srcOffsets[1] = { (sint32)std::min(Scaled(gw, src->scaled), src->width), (sint32)std::min(Scaled(gh, src->scaled), src->height), 1 };
+					b.srcOffsets[1] = { (sint32)std::min(ScaledBy(gw, src->scale), src->width), (sint32)std::min(ScaledBy(gh, src->scale), src->height), 1 };
 					b.dstOffsets[1] = { (sint32)lw, (sint32)lh, 1 };
 					vkCmdBlitImage(s.cmd, src->image, src->layout, c.img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b,
 						(base.aspect & VK_IMAGE_ASPECT_DEPTH_BIT) ? VK_FILTER_NEAREST : VK_FILTER_LINEAR);
