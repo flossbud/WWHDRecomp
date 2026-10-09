@@ -1045,6 +1045,11 @@ namespace wwhd::gpu
 			return out;
 		}
 
+		// WWHD_RENDER_SCALE: the draw's textures' sizes over the guest's, per stage and unit (Textures), and the guest's
+		// over its target's (uf_fragCoordScale: gl_FragCoord in the guest's pixels); all 1 when off
+		float s_texScale[2][LATTE_NUM_MAX_TEX_UNITS][2];
+		float s_fragScale[2] = { 1.0f, 1.0f };
+
 		// uniform variables (uniformData_updateUniformVars, LatteBufferCache_LoadRemappedUniforms)
 		VkDeviceSize UniformVars(Shader& sh, bool vertex, float viewportW, float viewportH)
 		{
@@ -1059,8 +1064,7 @@ namespace wwhd::gpu
 			for (sint32 t = 0; t < LATTE_NUM_MAX_TEX_UNITS; t++)
 				if (sh.uniforms.offset_texScale[t] >= 0)
 				{
-					float one[2] = { 1.0f, 1.0f };                     // textures are never resized here
-					memcpy(at(sh.uniforms.offset_texScale[t]), one, 8);
+					memcpy(at(sh.uniforms.offset_texScale[t]), s_texScale[vertex][t], 8);   // 1 but WWHD_RENDER_SCALE's surfaces
 				}
 			if (sh.uniforms.offset_alphaTestRef >= 0)
 			{
@@ -1109,7 +1113,7 @@ namespace wwhd::gpu
 			}
 			if (sh.uniforms.offset_fragCoordScale >= 0)
 			{
-				float v[4] = { 1.0f, 1.0f, (float)(sint32)viewportW, (float)(sint32)viewportH };
+				float v[4] = { s_fragScale[0], s_fragScale[1], (float)(sint32)viewportW, (float)(sint32)viewportH };
 				memcpy(at(sh.uniforms.offset_fragCoordScale), v, 16);
 			}
 			return off;
@@ -1147,10 +1151,15 @@ namespace wwhd::gpu
 		void Textures(Shader& sh, bool vertex, std::span<Image* const> attachments, std::vector<VkDescriptorImageInfo>& images)
 		{
 			images.resize(sh.mapping.getTextureCount());
+			for (auto& unit : s_texScale[vertex])
+				unit[0] = unit[1] = 1.0f;
 			for (sint32 i = 0; i < sh.mapping.getTextureCount(); i++)
 			{
-				Sampled t = SampleTexture(sh.dec, vertex, sh.mapping.getRelativeTextureUnitFromRelativeBindingPoint(i), attachments);
+				const sint32 unit = sh.mapping.getRelativeTextureUnitFromRelativeBindingPoint(i);
+				Sampled t = SampleTexture(sh.dec, vertex, unit, attachments);
 				images[i] = { t.sampler, t.view, t.layout };
+				if (unit >= 0 && unit < LATTE_NUM_MAX_TEX_UNITS)
+					s_texScale[vertex][unit][0] = t.scaleX, s_texScale[vertex][unit][1] = t.scaleY;
 			}
 		}
 
@@ -1811,6 +1820,15 @@ namespace wwhd::gpu
 				return fmt::format("depth range {}..{} outside 0..1 (depth target {}x{}, halfZ {})", nearZ, farZ,
 					t.depth ? t.depth->width : 0, t.depth ? t.depth->height : 0, halfZ); });
 
+		// WWHD_RENDER_SCALE: the target's own size over the guest's (the first attachment's; all share the scale)
+		const Image* first = attachments[0];
+		const float fx = (float)first->width / (float)first->gw, fy = (float)first->height / (float)first->gh;
+		for (uint32 i = 1; i < nAttachments; i++)
+			if (attachments[i]->scaled != first->scaled)
+				LogOnce("scalemix", [&] { return fmt::format("render scale: a pass into {}x{} and {}x{}: one scaled, one not (frame {})",
+					first->gw, first->gh, attachments[i]->gw, attachments[i]->gh, s.frame + 1); });
+		s_fragScale[0] = 1.0f / fx, s_fragScale[1] = 1.0f / fy;
+
 		static std::vector<uint32> dynamicOffsets;
 		dynamicOffsets.clear();
 		VkDescriptorSet sets[2] = { Descriptors(*vs, true, vsImages, dynamicOffsets, vpW, vpH), VK_NULL_HANDLE };
@@ -1829,8 +1847,15 @@ namespace wwhd::gpu
 		for (auto& [binding, off] : vbufs)
 			vkCmdBindVertexBuffers(s.cmd, binding, 1, &s.ring.buffer, &off);
 		VkViewport viewport{ vpX, vpY + vpH, vpW, -vpH, std::clamp(nearZ, 0.0f, 1.0f), std::clamp(farZ, 0.0f, 1.0f) };
+		if (RenderScale() != 1.0f)
+			viewport.x *= fx, viewport.y *= fy, viewport.width *= fx, viewport.height *= fy;
 		if (!known || memcmp(&b.viewport, &viewport, sizeof(viewport)) != 0)
 			vkCmdSetViewport(s.cmd, 0, 1, &viewport);
+		if (RenderScale() != 1.0f)                              // the pixels whose centres the guest's would cover, at least
+		{
+			scissorX = (uint32)std::floor(scissorX * fx), scissorY = (uint32)std::floor(scissorY * fy);
+			scissorR = (uint32)std::ceil(scissorR * fx), scissorB = (uint32)std::ceil(scissorB * fy);
+		}
 		VkRect2D scissor{ { (sint32)scissorX, (sint32)scissorY }, { scissorR - std::min(scissorX, scissorR), scissorB - std::min(scissorY, scissorB) } };
 		if (!known || memcmp(&b.scissor, &scissor, sizeof(scissor)) != 0)
 			vkCmdSetScissor(s.cmd, 0, 1, &scissor);

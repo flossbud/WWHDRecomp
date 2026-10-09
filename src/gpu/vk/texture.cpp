@@ -661,7 +661,9 @@ namespace wwhd::gpu
 			Copy& c = s_copies[{ surface.image, w, h, format }];
 			if (!c.img.image)
 			{
-				c.img = CreateImage(format, surface.aspect, w, h, VK_IMAGE_USAGE_SAMPLED_BIT, surface.layers);
+				c.img = CreateImage(format, surface.aspect, Scaled(w, surface.scaled), Scaled(h, surface.scaled), VK_IMAGE_USAGE_SAMPLED_BIT,
+					surface.layers);
+				c.img.gw = w, c.img.gh = h, c.img.scaled = surface.scaled;   // at the surface's scale (WWHD_RENDER_SCALE)
 				ForgetImage(c.img.image);                              // a reused handle's stale views
 			}
 			if (c.written != surface.written)
@@ -670,10 +672,10 @@ namespace wwhd::gpu
 				// the span names why the copy is made (WWHD_GPU_TIMING's top list): the draw samples its own target, or
 				// the texture is another size or format than the surface
 				timing::Scope span(timing::Kind::Copy, !timing::On() ? std::string() : fmt::format("copy {} {}x{} f{} <- {}x{} f{}",
-					feedback ? "feedback" : w != surface.width || h != surface.height ? format != surface.format ? "size+format" : "size" : "format",
-					w, h, (int)format, surface.width, surface.height, (int)surface.format));
+					feedback ? "feedback" : w != surface.gw || h != surface.gh ? format != surface.format ? "size+format" : "size" : "format",
+					w, h, (int)format, surface.gw, surface.gh, (int)surface.format));
 				Transition(c.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-				if (w > surface.width || h > surface.height)           // the part the surface doesn't cover
+				if (w > surface.gw || h > surface.gh)                  // the part the surface doesn't cover
 				{
 					VkImageSubresourceRange all{ c.img.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
 					if (c.img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT)
@@ -691,7 +693,7 @@ namespace wwhd::gpu
 				Transition(surface, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 				VkImageCopy r{};
 				r.srcSubresource = r.dstSubresource = { surface.aspect, 0, 0, surface.layers };
-				r.extent = { std::min(w, surface.width), std::min(h, surface.height), 1 };
+				r.extent = { std::min(c.img.width, surface.width), std::min(c.img.height, surface.height), 1 };
 				vkCmdCopyImage(s.cmd, surface.image, surface.layout, c.img.image, c.img.layout, 1, &r);
 				Transition(c.img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 				c.written = surface.written;
@@ -726,8 +728,9 @@ namespace wwhd::gpu
 
 		Chain* ChainOf(const TexDesc& d, Image& base, VkFormat format)
 		{
+			const uint32 w = Scaled(d.width, base.scaled), h = Scaled(d.height, base.scaled);   // at its surface's scale (WWHD_RENDER_SCALE)
 			uint32 maxMips = 1;
-			for (uint32 m = std::max(d.width, d.height); m > 1; m >>= 1)
+			for (uint32 m = std::max(w, h); m > 1; m >>= 1)
 				maxMips++;
 			uint32 mips = std::clamp(d.mips, 1u, maxMips);
 			uint64 key = 0xCBF29CE484222325ull;
@@ -751,7 +754,7 @@ namespace wwhd::gpu
 				VkImageCreateInfo ci{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
 				ci.imageType = VK_IMAGE_TYPE_2D;
 				ci.format = format;
-				ci.extent = { d.width, d.height, 1 };
+				ci.extent = { w, h, 1 };
 				ci.mipLevels = mips;
 				ci.arrayLayers = 1;
 				ci.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -766,8 +769,11 @@ namespace wwhd::gpu
 				Check(vkBindImageMemory(s.device, c.img.image, c.img.memory, 0), "vkBindImageMemory");
 				c.img.format = format;
 				c.img.aspect = base.aspect;
-				c.img.width = d.width;
-				c.img.height = d.height;
+				c.img.width = w;
+				c.img.height = h;
+				c.img.gw = d.width;
+				c.img.gh = d.height;
+				c.img.scaled = base.scaled;
 				c.mips = mips;
 				c.written.assign(mips, UINT64_MAX);
 				EndRendering();
@@ -799,11 +805,26 @@ namespace wwhd::gpu
 					copying = true;
 				}
 				Transition(*src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-				VkImageCopy r{};
-				r.srcSubresource = { src->aspect, 0, 0, 1 };
-				r.dstSubresource = { base.aspect, level, 0, 1 };
-				r.extent = { std::min(std::max(d.width >> level, 1u), src->width), std::min(std::max(d.height >> level, 1u), src->height), 1 };
-				vkCmdCopyImage(s.cmd, src->image, src->layout, c.img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &r);
+				const uint32 lw = std::max(w >> level, 1u), lh = std::max(h >> level, 1u);
+				if (src->scaled == c.img.scaled)
+				{
+					VkImageCopy r{};
+					r.srcSubresource = { src->aspect, 0, 0, 1 };
+					r.dstSubresource = { base.aspect, level, 0, 1 };
+					r.extent = { std::min(lw, src->width), std::min(lh, src->height), 1 };
+					vkCmdCopyImage(s.cmd, src->image, src->layout, c.img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &r);
+				}
+				else                                                   // a level at another scale (WWHD_RENDER_SCALE)
+				{
+					const uint32 gw = std::max(d.width >> level, 1u), gh = std::max(d.height >> level, 1u);
+					VkImageBlit b{};
+					b.srcSubresource = { src->aspect, 0, 0, 1 };
+					b.dstSubresource = { base.aspect, level, 0, 1 };
+					b.srcOffsets[1] = { (sint32)std::min(Scaled(gw, src->scaled), src->width), (sint32)std::min(Scaled(gh, src->scaled), src->height), 1 };
+					b.dstOffsets[1] = { (sint32)lw, (sint32)lh, 1 };
+					vkCmdBlitImage(s.cmd, src->image, src->layout, c.img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b,
+						(base.aspect & VK_IMAGE_ASPECT_DEPTH_BIT) ? VK_FILTER_NEAREST : VK_FILTER_LINEAR);
+				}
 				c.written[level] = src->written;
 			}
 			if (copying)
@@ -927,12 +948,12 @@ namespace wwhd::gpu
 				firstMip = std::min(firstMip, c->mips - 1);
 				uint32 mips = std::min(lastMip, c->mips - 1) + 1 - firstMip;
 				VkImageView v = View(c->img.image, c->img.format, c->img.aspect, viewType, firstMip, mips, 0, 1, comp, c->views);
-				return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+				return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, (float)c->img.width / c->img.gw, (float)c->img.height / c->img.gh };
 			}
 			// a draw that samples its own target reads it as it was before the draw (a copy): what Vulkan defines,
 			// and what the console's separate colour and texture caches give; the reference does the same
 			// (cemu-patches/0014; G3 status in docs/recompiler-design.md)
-			if (feedback || d.width != surface->width || d.height != surface->height || format != surface->format)
+			if (feedback || d.width != surface->gw || d.height != surface->gh || format != surface->format)
 				img = &CopyOf(*surface, d.width, d.height, format, feedback);
 			else if (surface->layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 			{
@@ -943,7 +964,7 @@ namespace wwhd::gpu
 			uint32 baseLayer = std::min(firstSlice, img->layers - 1);
 			uint32 layers = viewType == VK_IMAGE_VIEW_TYPE_2D_ARRAY ? std::clamp(numSlices, 1u, img->layers - baseLayer) : 1;
 			VkImageView v = View(img->image, img->format, img->aspect, viewType, 0, 1, baseLayer, layers, comp, s_surfaceViewCache[img->image]);
-			return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+			return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, (float)img->width / img->gw, (float)img->height / img->gh };
 		}
 
 		// from guest memory
@@ -992,7 +1013,7 @@ namespace wwhd::gpu
 			for (auto it = s.surfaces.lower_bound({ addr, 0 }); it != s.surfaces.end() && it->first.first == addr; ++it)
 				if (!found || it->second.written > found->written)
 					found = &it->second, fmt = it->first.second;
-			return found ? fmt::format("surface {:x} {}x{}", fmt, found->width, found->height) : std::string("memory");
+			return found ? fmt::format("surface {:x} {}x{}", fmt, found->gw, found->gh) : std::string("memory");
 		};
 		Log(fmt::format("copy frame {} rect {},{} {}x{}: src {:08x} fmt {:x} pitch {} h {} slice {} dim {} tm {} ({}) -> dst {:08x} fmt {:x} pitch {} h {} slice {} dim {} tm {} ({})",
 			s.frame, (uint32)p[0], (uint32)p[1], (uint32)p[2], (uint32)p[3],

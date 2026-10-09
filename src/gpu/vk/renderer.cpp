@@ -408,8 +408,8 @@ namespace wwhd::gpu
 		Image img;
 		img.format = format;
 		img.aspect = aspect;
-		img.width = w;
-		img.height = h;
+		img.width = img.gw = w;
+		img.height = img.gh = h;
 		img.layers = layers;
 		VkImageCreateInfo ci{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
 		ci.imageType = VK_IMAGE_TYPE_2D;
@@ -546,6 +546,33 @@ namespace wwhd::gpu
 		Fail(fmt::format("depth format {:#x} not mapped yet", gx2));
 	}
 
+	// ---- render scale (gpu-plan.md item 3) ----------------------------------------------------
+	// WWHD_RENDER_SCALE=0.5..2: the game's screen-sized render targets at that scale (1, the default and every check's:
+	// the guest's sizes, nothing changes). Read once at start. Only the targets the TV's size (1920x1088, the scene's and
+	// its full-screen passes': nearly all the pixels drawn) are scaled: the half-size ones are its effects, sampled with
+	// offsets sized in their own texels (ambient occlusion at half scale lost half its strength, the edges a light
+	// halo), and the shadow maps' resolution is their own; both cost little next to the full-size passes
+	float RenderScale()
+	{
+		static const float scale = [] {
+			const char* e = getenv("WWHD_RENDER_SCALE");
+			float v = e ? (float)atof(e) : 1.0f;
+			return v > 0.0f ? std::clamp(v, 0.5f, 2.0f) : 1.0f;
+		}();
+		return scale;
+	}
+
+	bool ScaledSurface(uint32 gw, uint32 gh)
+	{
+		return RenderScale() != 1.0f && gw >= 1280 && gh >= 720;
+	}
+
+	uint32 Scaled(uint32 guest, bool scaled)
+	{
+		const float scale = RenderScale();
+		return !scaled || scale == 1.0f ? guest : std::max(1u, (uint32)std::ceil(guest * scale - 0.001f));
+	}
+
 	// ---- surfaces ----------------------------------------------------------------------------
 	// WWHD_SURFACE_FIT=1 (gpu-plan.md item 2, opt-in): a render target is often taller than anything reads of it
 	// (1920x1088, its height padded for tiling, sampled as a 1920x1080 texture), and a texture of another size than its
@@ -580,9 +607,9 @@ namespace wwhd::gpu
 				return;
 			for (auto& [key, img] : s.surfaces)
 			{
-				if (!img.image || img.fitH || img.noFit || !img.readH || img.readH >= img.height || s.frame - img.readSince < kFitStable)
+				if (!img.image || img.fitH || img.noFit || !img.readH || img.readH >= img.gh || s.frame - img.readSince < kFitStable)
 					continue;
-				if (img.width != s.scan[0].width || img.readH != s.scan[0].height)
+				if (img.gw != s.scan[0].gw || img.readH != s.scan[0].gh)
 					continue;                                       // only the screen's size (the copies that cost)
 				img.fitH = img.readH;
 				Log(fmt::format("surface fit: {:08x} fmt {:x} {}x{} {} to {} rows{}", key.first, key.second & 0x7FFFFFFF, img.width,
@@ -590,15 +617,16 @@ namespace wwhd::gpu
 				if (mode != 1)
 					continue;
 				EndRendering();
-				Image fitted = CreateImage(img.format, img.aspect, img.width, img.readH, VK_IMAGE_USAGE_SAMPLED_BIT |
+				Image fitted = CreateImage(img.format, img.aspect, img.width, Scaled(img.readH, img.scaled), VK_IMAGE_USAGE_SAMPLED_BIT |
 					((img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT) ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT),
 					img.layers);
 				Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 				Transition(fitted, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 				VkImageCopy c{};
 				c.srcSubresource = c.dstSubresource = { img.aspect, 0, 0, img.layers };
-				c.extent = { img.width, img.readH, 1 };
+				c.extent = { img.width, fitted.height, 1 };
 				vkCmdCopyImage(s.cmd, img.image, img.layout, fitted.image, fitted.layout, 1, &c);
+				fitted.gw = img.gw, fitted.gh = img.readH, fitted.scaled = img.scaled;
 				SubmitAndWait();                                    // then the old image can go
 				const uint32 bytes = img.bytes, readH = img.readH, readSince = img.readSince, fitH = img.fitH;
 				const uint64 written = img.written, resetFor = img.resetFor;
@@ -614,7 +642,7 @@ namespace wwhd::gpu
 	{
 		if (rows > img.readH)
 			img.readH = rows, img.readSince = s.frame;
-		if (rows > img.height && !img.fitH)
+		if (rows > img.gh && !img.fitH)
 			img.noFit = true;                                       // a taller texture at its address
 		if (img.fitH && rows > img.fitH)
 		{
@@ -634,14 +662,17 @@ namespace wwhd::gpu
 		img.bytes = std::max(img.bytes, w * h * layers * Latte::GetFormatBits((Latte::E_GX2SURFFMT)gx2) / 8);
 		if (img.fitH && SurfaceFitMode() == 1)
 			h = std::min(h, img.fitH);
-		if (img.image && img.width >= w && img.height >= h && img.layers >= layers)
+		if (img.image && img.gw >= w && img.gh >= h && img.layers >= layers)
 			return img;
 		EndRendering();                                             // clears and copies follow
 		timing::Scope span(timing::Kind::Grow);
 		Format f = depth ? DepthFormat(gx2) : ColorFormat(gx2);
 		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT |
 			(depth ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
-		Image grown = CreateImage(f.vk, f.aspect, std::max(w, img.width), std::max(h, img.height), usage, std::max(layers, img.layers));
+		const uint32 gw = std::max(w, img.gw), gh = std::max(h, img.gh);
+		const bool scaled = ScaledSurface(gw, gh);
+		Image grown = CreateImage(f.vk, f.aspect, Scaled(gw, scaled), Scaled(gh, scaled), usage, std::max(layers, img.layers));
+		grown.gw = gw, grown.gh = gh, grown.scaled = scaled;
 		Transition(grown, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);   // start from zero, not undefined contents
 		VkImageSubresourceRange all{ f.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
 		if (depth)
@@ -658,10 +689,21 @@ namespace wwhd::gpu
 		{
 			Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 			Transition(grown, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-			VkImageCopy c{};
-			c.srcSubresource = c.dstSubresource = { img.aspect, 0, 0, img.layers };
-			c.extent = { img.width, img.height, 1 };
-			vkCmdCopyImage(s.cmd, img.image, img.layout, grown.image, grown.layout, 1, &c);
+			if (img.scaled == grown.scaled)
+			{
+				VkImageCopy c{};
+				c.srcSubresource = c.dstSubresource = { img.aspect, 0, 0, img.layers };
+				c.extent = { img.width, img.height, 1 };
+				vkCmdCopyImage(s.cmd, img.image, img.layout, grown.image, grown.layout, 1, &c);
+			}
+			else                                                    // grown to the screen's size: now scaled
+			{
+				VkImageBlit b{};
+				b.srcSubresource = b.dstSubresource = { img.aspect, 0, 0, img.layers };
+				b.srcOffsets[1] = { (sint32)img.width, (sint32)img.height, 1 };
+				b.dstOffsets[1] = { (sint32)Scaled(img.gw), (sint32)Scaled(img.gh), 1 };
+				vkCmdBlitImage(s.cmd, img.image, img.layout, grown.image, grown.layout, 1, &b, VK_FILTER_NEAREST);
+			}
 			SubmitAndWait();                                        // then the old image can go
 		}
 		uint32 bytes = img.bytes, readH = img.readH, readSince = img.readSince;
@@ -924,7 +966,7 @@ namespace wwhd::gpu
 				for (auto it = s.surfaces.lower_bound({ (uint32)p[9], 0 }); it != s.surfaces.end() && it->first.first == (uint32)p[9]; ++it)
 				{
 					Image& c = it->second;
-					if (!c.image || (c.aspect & VK_IMAGE_ASPECT_DEPTH_BIT) || c.width > w || first >= c.layers)
+					if (!c.image || (c.aspect & VK_IMAGE_ASPECT_DEPTH_BIT) || c.gw > w || first >= c.layers)
 						continue;
 					c.written = ++s.writes;
 					Transition(c, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -953,14 +995,17 @@ namespace wwhd::gpu
 		// the reference's screenshot is an RGBA8 blit of this buffer, sRGB if the scan buffer is
 		VkFormat f = (target == 1 ? LatteGPUState.tvBufferUsesSRGB : LatteGPUState.drcBufferUsesSRGB)
 			? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
-		if (!dst.image || dst.width != w || dst.height != h || dst.format != f)
-			dst = CreateImage(f, VK_IMAGE_ASPECT_COLOR_BIT, w, h, 0);
+		if (!dst.image || dst.gw != w || dst.gh != h || dst.format != f)   // the scan image at the render scale too
+		{
+			dst = CreateImage(f, VK_IMAGE_ASPECT_COLOR_BIT, Scaled(w, src.scaled), Scaled(h, src.scaled), 0);
+			dst.gw = w, dst.gh = h, dst.scaled = src.scaled;
+		}
 		Transition(src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 		Transition(dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 		VkImageBlit b{};
 		b.srcSubresource = b.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
-		b.srcOffsets[1] = { (sint32)w, (sint32)h, 1 };
-		b.dstOffsets[1] = { (sint32)w, (sint32)h, 1 };
+		b.srcOffsets[1] = { (sint32)dst.width, (sint32)dst.height, 1 };
+		b.dstOffsets[1] = { (sint32)dst.width, (sint32)dst.height, 1 };
 		vkCmdBlitImage(s.cmd, src.image, src.layout, dst.image, dst.layout, 1, &b, VK_FILTER_NEAREST);
 	}
 

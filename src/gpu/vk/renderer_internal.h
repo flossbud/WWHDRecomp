@@ -22,6 +22,8 @@ namespace wwhd::gpu
 		VkFormat format = VK_FORMAT_UNDEFINED;
 		VkImageAspectFlags aspect = 0;
 		uint32 width = 0, height = 0, layers = 1;
+		uint32 gw = 0, gh = 0;                                   // the guest's size it stands for (width x height but for
+		bool scaled = false;                                     // WWHD_RENDER_SCALE's surfaces and their copies: Scaled)
 		VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;         // of every subresource
 		std::vector<VkImageView> layerViews;                     // 2D views of layers 1.. (LayerView)
 		uint64 written = 0;                                      // s.writes when last drawn into or cleared (surfaces)
@@ -106,6 +108,14 @@ namespace wwhd::gpu
 	void DestroyImage(Image& img);
 	VkDeviceSize RingAlloc(VkDeviceSize size, VkDeviceSize align); // offset into s.ring (submits when full)
 
+	// WWHD_RENDER_SCALE (gpu-plan.md item 3): the screen-sized surfaces (ScaledSurface) are made Scaled(guest size), with
+	// their copies, mip chains and the scan images taken from them; everything the guest sees stays in its sizes:
+	// surface lookups, aliasing and reads by size use gw/gh, viewports and scissors are scaled by the target's width/gw,
+	// the shaders' uf_fragCoordScale and uf_texNScale undo it. Off (1): every image the guest's size
+	float RenderScale();
+	bool ScaledSurface(uint32 gw, uint32 gh);
+	uint32 Scaled(uint32 guest, bool scaled = true);            // an image's size for a guest size (scaled or not)
+
 	struct Format { VkFormat vk; VkImageAspectFlags aspect; };
 	Format ColorFormat(uint32 gx2);
 	Format DepthFormat(uint32 gx2);
@@ -183,7 +193,8 @@ namespace wwhd::gpu
 	}
 
 	// texture.cpp
-	struct Sampled { VkImageView view; VkSampler sampler; VkImageLayout layout; };
+	// scale: the image's size over the guest's (a surface's under WWHD_RENDER_SCALE), for the shader's uf_texNScale
+	struct Sampled { VkImageView view; VkSampler sampler; VkImageLayout layout; float scaleX = 1.0f, scaleY = 1.0f; };
 	void TextureInit();
 	// texture unit `unit` of a stage as the draw samples it; outside rendering (it may upload or
 	// transition). A surface among the draw's attachments is never sampled (a placeholder is).

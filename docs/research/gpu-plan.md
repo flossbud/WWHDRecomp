@@ -33,6 +33,37 @@ Weaker hardware (phones, the Deck in heavy scenes) needs more. The owner's order
    the optimised one switched off if it misbehaves. Checks run Cemu's set; the optimised set gets its own capture
    comparison (within tolerance where it isn't bit-exact) and A/Bs.
 
+## Item 3, render scale: built (session cloud3), opt-in
+
+**`WWHD_RENDER_SCALE=0.5..2`** (renderer.cpp `RenderScale`; 1, the default and every check's, changes nothing:
+every image is the guest's size, the code below multiplies by 1). The screen-sized render targets (guest size at
+least 1280x720: the scene's 1920x1088 targets and their full-screen passes, nearly all the pixels drawn) are made
+at the scale; everything the guest sees stays in its sizes:
+- `Image::gw/gh` (renderer_internal.h): the guest's size an image stands for, `width/height` its own; surface
+  lookups and growth, aliasing (the depth clear's colour textures), WWHD_SURFACE_FIT's rows and the texture-against-
+  surface size checks use gw/gh, and the Vulkan copies the images' own sizes;
+- viewports and scissors (draw.cpp) are scaled by the target's width/gw (the scissor outward to whole pixels), the
+  render area is the attachments' own;
+- copies of a surface (CopyOf), mip chains taken from surfaces (ChainOf) and the scan images are made at their
+  surface's scale (a chain level at another scale is blitted); the window's present scales the scan image as before;
+- the shaders' `uf_fragCoordScale` (guest over own size) and `uf_texNScale` (own over guest, per texture unit) are
+  filled as Cemu's resolution packs fill them. None of the 632 shaders the Outset captures meet reads either, nor
+  `textureSize`: they sample with coordinates from their vertices, so the scale is invisible to them.
+
+**Why only the screen-sized targets.** Scaling every surface (the first try) weakened ambient occlusion at 0.5:
+its half-size buffers (960x544) are sampled with offsets sized in their own texels, half a texel apart once
+halved, and the objects got a light halo (the TV image 1.9 brighter on average; the dumped AO buffer at PSNR 22
+against 1x's). The half-size effect buffers and the shadow maps (1024x1024, three slices) now keep the guest's
+sizes; they cost little next to the full-size passes, and a pass mixing scaled and unscaled targets is logged
+("render scale: a pass into ...", never seen on the routes tried).
+
+**Results (Outset, the continue route's dock):** the TV image upscaled back to 1080p against 1x is as close as
+1x resampled down and up again: 0.75 PSNR 36.8 / 34.5 (resampling alone 36.9 / 35.5), 0.5 33.1 / 31.3 (33.4 /
+32.0), the mean brightness within 0.2; by eye only softer. GPU time a frame on the desktop worker's GPU
+(WWHD_GPU_TIMING, the same 2400 frames): 1.44 ms at 1, 1.29 at 0.75 (-10%), 1.18 at 0.5 (-18%); that GPU isn't
+fill-bound here (the 1024x1024 shadow pass, 0.15 ms, and the fixed costs stay). The settings page's "Render scale"
+(100/75/50%, at the next start); the Performance preset sets 75%.
+
 ## Item 4, the settings menu: design (session cloud3; the first round landed as designed: handoff.md, "Session cloud3")
 
 **What exists.** Every option on the list is a startup switch today, read once from the environment (`static const`
