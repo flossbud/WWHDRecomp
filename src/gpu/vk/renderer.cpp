@@ -552,8 +552,11 @@ namespace wwhd::gpu
 	// surface is a copy (CopyOf) every frame it was drawn. At each swap a surface that every read so far wanted fewer
 	// rows of is made that many rows tall (its rows kept): it's sampled directly, and the passes into it draw only
 	// those rows (the render area is the smallest attachment). Draws into the rows cut off are lost, which is exact
-	// as long as nothing reads them: a read that wants more rows than a surface was fitted to is logged ("surface fit:
-	// read past"), and the surface goes back to its full height for good. WWHD_SURFACE_FIT=proof changes nothing and
+	// as long as nothing reads them. So a surface is fitted only once its reads have wanted the same rows for
+	// kFitStable frames, and never when a read wanted more rows than it has (another, taller texture at its address:
+	// the start's loading reads one, frame 902 on every route from the 100% save). A read that still wants more rows
+	// than a surface was fitted to is logged ("surface fit: read past"), and the surface goes back to its full height
+	// for good: that frame may differ, the log says so. WWHD_SURFACE_FIT=proof changes nothing and
 	// logs the same reads against the heights it would fit to: the proof that the rows cut off are never read, on
 	// any route. The checks run without it.
 	namespace
@@ -567,6 +570,7 @@ namespace wwhd::gpu
 			return mode;
 		}
 		uint32 s_fitReadsPast = 0;
+		constexpr uint32 kFitStable = 300;
 
 		void FitSurfaces()
 		{
@@ -575,7 +579,7 @@ namespace wwhd::gpu
 				return;
 			for (auto& [key, img] : s.surfaces)
 			{
-				if (!img.image || img.fitH || img.noFit || !img.readH || img.readH >= img.height)
+				if (!img.image || img.fitH || img.noFit || !img.readH || img.readH >= img.height || s.frame - img.readSince < kFitStable)
 					continue;
 				img.fitH = img.readH;
 				Log(fmt::format("surface fit: {:08x} fmt {:x} {}x{} {} to {} rows{}", key.first, key.second & 0x7FFFFFFF, img.width,
@@ -593,11 +597,11 @@ namespace wwhd::gpu
 				c.extent = { img.width, img.readH, 1 };
 				vkCmdCopyImage(s.cmd, img.image, img.layout, fitted.image, fitted.layout, 1, &c);
 				SubmitAndWait();                                    // then the old image can go
-				const uint32 bytes = img.bytes, readH = img.readH, fitH = img.fitH;
+				const uint32 bytes = img.bytes, readH = img.readH, readSince = img.readSince, fitH = img.fitH;
 				const uint64 written = img.written, resetFor = img.resetFor;
 				DestroyImage(img);
 				img = fitted;
-				img.bytes = bytes, img.readH = readH, img.fitH = fitH;
+				img.bytes = bytes, img.readH = readH, img.readSince = readSince, img.fitH = fitH;
 				img.written = written, img.resetFor = resetFor;
 			}
 		}
@@ -605,7 +609,10 @@ namespace wwhd::gpu
 
 	void SurfaceRead(Image& img, uint32 rows)
 	{
-		img.readH = std::max(img.readH, rows);
+		if (rows > img.readH)
+			img.readH = rows, img.readSince = s.frame;
+		if (rows > img.height && !img.fitH)
+			img.noFit = true;                                       // a taller texture at its address
 		if (img.fitH && rows > img.fitH)
 		{
 			if (s_fitReadsPast++ < 50)
@@ -654,7 +661,7 @@ namespace wwhd::gpu
 			vkCmdCopyImage(s.cmd, img.image, img.layout, grown.image, grown.layout, 1, &c);
 			SubmitAndWait();                                        // then the old image can go
 		}
-		uint32 bytes = img.bytes, readH = img.readH;
+		uint32 bytes = img.bytes, readH = img.readH, readSince = img.readSince;
 		uint64 written = img.written, resetFor = img.resetFor;
 		bool noFit = img.noFit;
 		if (img.image)
@@ -663,7 +670,7 @@ namespace wwhd::gpu
 		img.bytes = bytes;
 		img.written = written;
 		img.resetFor = resetFor;
-		img.readH = readH, img.noFit = noFit;
+		img.readH = readH, img.readSince = readSince, img.noFit = noFit;
 		return img;
 	}
 

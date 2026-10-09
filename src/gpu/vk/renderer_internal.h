@@ -29,7 +29,8 @@ namespace wwhd::gpu
 		uint64 resetFor = 0;                                     // the overlapping write it was last reset for (surfaces)
 		uint32 readH = 0;                                        // the most rows any read of it wanted (surfaces: SurfaceRead)
 		uint32 fitH = 0;                                         // WWHD_SURFACE_FIT: the height it was fitted to (or would be)
-		bool noFit = false;                                      // a read went past fitH once: never fitted again
+		uint32 readSince = 0;                                    // the frame readH last grew (fitted only once it's stable)
+		bool noFit = false;                                      // read past fitH, or past its own height: never fitted
 	};
 
 	// host-visible memory that per-frame data (uniforms, vertices, indices) is written into; reset
