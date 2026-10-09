@@ -12,6 +12,10 @@
 #                  CPU and its power cap: a run beside one is noise)
 #   PERF_KEEPLOG=1 keep every run's emulator log (ab-...-N.log), not only a crashed run's
 #   PERF_CORE=1    let a crash write a core dump (off: a core holds game memory; delete it when done)
+#   PERF_CLOCK=1   sample the GPU's clock every 0.5 s during each run (gpu-clock.sh's sysfs file: the worker's iGPU
+#                  shares the package's power cap with the CPU) into ab-...-N.clock, the gameplay window in .window;
+#                  worker_absum.py gives each run's mean. With WWHD_GPU_TIMING=1 in a variant, PERF_KEEPLOG=1 keeps the
+#                  logs whose gameplay lines worker_absum.py sums (GPU ms a frame by kind)
 # Out: ab-NAME-ROUTE-N.frames (WWHD_FRAME_LOG), .threads (each thread's CPU % over gameplay: game frame 900 to
 # 95% of the run), .rt (the real-time lines). Then worker_absum.py's summary of the directory.
 # Run it as a job: tools/worker/job start ab tools/sixty/perf/worker-ab.sh continue:1800 6 off:... on:...
@@ -36,6 +40,11 @@ for v in "$@"; do
     bin[$name]=$dir/bin-$name/wwhd-null
 done
 [ "${PERF_CORE:-}" = 1 ] || ulimit -c 0
+clockf=
+if [ "${PERF_CLOCK:-}" = 1 ]; then
+    for f in ${GPU_CLOCK_FILE:-/sys/class/drm/card*/gt_act_freq_mhz}; do [ -r "$f" ] && { clockf=$f; break; }; done
+    [ -n "$clockf" ] || echo "worker-ab.sh: PERF_CLOCK: no Intel GPU clock in sysfs (GPU_CLOCK_FILE=...)"
+fi
 pid=; trap '[ -n "$pid" ] && kill "$pid" 2>/dev/null' EXIT    # job stop: the run's game too
 snap() { local k; for k in /proc/$1/task/*; do printf '%s\t%s\n' "$(cat $k/comm)" "$(sed 's/.*) //' $k/stat | awk '{print $12+$13}')"; done 2>/dev/null; }
 swaps() { local n; n=$(tail -c 200 "$1" 2>/dev/null | tail -1 | cut -d' ' -f1); echo "${n:-0}"; }
@@ -54,8 +63,8 @@ for n in $(seq $([ "${PERF_WARMUP:-1}" = 0 ] && echo 1 || echo 0) "$rounds"); do
             [ $((waited % 12)) = 0 ] && echo "worker-ab.sh: waiting for $(others x) other game(s) on the worker ($((waited / 12)) min)"
             waited=$((waited + 1)); sleep 5
         done
-        log=$dir/ab-$name-$route-$n
-        rm -f "$log.frames" "$log.threads" "$dir/.a" "$dir/.b"
+        log=$dir/ab-$name-$route-$n; tb=
+        rm -f "$log.frames" "$log.threads" "$log.clock" "$log.window" "$dir/.a" "$dir/.b"
         # the route's own setup: its "#env NAME=VALUE" lines (stage warps, spawns), as tools/sixty/run.sh applies them
         while IFS= read -r line; do envs+=("${line#\#env }"); done < <(grep '^#env [A-Z_0-9]*=' "$script" || true)
         if [ "$rate" = 60 ]; then sixty=1 exit=$((frames * 2)) start=1800; else sixty= exit=$frames start=900; fi
@@ -63,7 +72,11 @@ for n in $(seq $([ "${PERF_WARMUP:-1}" = 0 ] && echo 1 || echo 0) "$rounds"); do
         env WWHD_NATIVE=on WWHD_RENDER=vk "${envs[@]}" WWHD_60FPS=$sixty WWHD_AUDIO_HASH=/dev/null WWHD_FRAME_LOG=$log.frames WWHD_EXIT_FRAME=$exit \
             CEMU_BIN="${bin[$name]}" REF_FRESH=1 REF_SAVE=/wwhd/data/saves/wwhd_100 REF_PIDFILE=$pidf \
             CEMU_INPUT_SCRIPT=$script tools/reference/run.sh > "$log.out" 2>&1 || { echo "worker-ab.sh: $name $n: no start"; continue; }
-        pid=$(cat "$pidf"); t0=$(date +%s.%N); a=; t=0
+        pid=$(cat "$pidf"); t0=$(date +%s.%N); a=; t=0; clk=
+        if [ "${PERF_CLOCK:-}" = 1 ] && [ -n "$clockf" ]; then
+            while kill -0 "$pid" 2>/dev/null; do echo "$(date +%s.%N) $(cat "$clockf")"; sleep 0.5; done > "$log.clock" &
+            clk=$!
+        fi
         port=$(dirname "${bin[$name]}")/portable/log.txt
         # the frame log is written at exit: gameplay (game frame 900 on) is found from the real-time lines (one each 10 s:
         # the fps over the period, so their sum is the swaps so far); the window runs from the first line past it to the
@@ -84,6 +97,8 @@ for n in $(seq $([ "${PERF_WARMUP:-1}" = 0 ] && echo 1 || echo 0) "$rounds"); do
             fi
             [ $((t % 60)) = 0 ] && echo "worker-ab.sh: $name $n running ${t}s"
         done
+        [ -n "$clk" ] && wait "$clk" 2>/dev/null
+        [ -n "$a" ] && [ -n "${tb:-}" ] && echo "$ta $tb" > "$log.window"
         # a run that ended without its frame log (a crash): keep its emulator log, the next run overwrites it
         [ -s "$log.frames" ] || cp "$port" "$log.crash.txt" 2>/dev/null
         [ "${PERF_KEEPLOG:-}" = 1 ] && cp "$port" "$log.log" 2>/dev/null

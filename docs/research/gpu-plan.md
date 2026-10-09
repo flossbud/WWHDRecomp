@@ -45,6 +45,68 @@ Weaker hardware (phones, the Deck in heavy scenes) needs more. The owner's order
 - Item 4: **first round and presets landed** (below). Left: the AO toggle, AF, FXAA (`b-gfxopts`).
 - Item 5: not started (`b-shaders`).
 
+## Item 1 on the worker: where its iGPU's 18.7 ms go (session bottom, 2026-10-09)
+
+`worker-ab.sh continue:1800 3`, main 2d10fe1, the lazy DrawDone in every variant, `PERF_CLOCK=1` (the iGPU's
+clock, `gt_act_freq_mhz`, every 0.5 s: readable inside the container) and `PERF_KEEPLOG=1` (the timing lines;
+`worker_absum.py` sums the ones in gameplay, presented frame 1800 on at 60). Medians of 3 rounds after a warm-up:
+
+| variant | fps | game speed | GPU ms a frame (timing) | GPU clock | game thread CPU a frame | render thread fence wait |
+|---|---|---|---|---|---|---|
+| three host threads, timing on | 53.1 | 88% | **18.70** | 1149 MHz | 15.1 ms | 4.1 ms |
+| one host thread, timing on | 48.2 | 80% | 18.33 | 1142 MHz | 20.1 ms | 0.75 ms |
+| three host threads, timing off | 53.7 | 89% | - | 1150 MHz | 15.3 ms | 3.7 ms |
+| three host threads at 30, timing on | 28.0 | 93% | 21.7 | 859 MHz | 18.0 ms | 1.45 ms |
+
+**The ~18.7 ms is measured now, not inferred:** the GPU takes 18.7 ms a frame, and with three host threads 53.1 fps
+is 18.8 ms a frame: the GPU is busy all the time, the game thread waits on it (the fence wait 4.1 ms). The timing
+itself costs ~1% (53.7 fps without). **The power cap doesn't slow the GPU**: its clock holds 1150 MHz, its top,
+with one host thread or three (one busier CPU core more changes nothing measurable). At 30 it's idle part of each
+frame and clocks down (859 MHz), so each frame's work takes longer (21.7 ms) at a lower clock: 30's numbers are no
+guide to 60's.
+
+**By kind, ms a frame (gameplay, three rounds' lines), against the desktop worker's (b2b9f24, 3800 frames):**
+
+| kind | worker iGPU | desktop GPU | ratio |
+|---|---|---|---|
+| passes | 11.4 | 0.84 | 14x |
+| copies (CopyOf) | 4.5 | 0.20 | 22x |
+| clears | 0.98 | 0.07 | 14x |
+| scan copy | 0.63 | 0.02 | 30x |
+| mips (ChainOf) | 0.58 | 0.10 | 6x |
+| resets | 0.53 | 0.04 | 13x |
+| other (barriers, gaps) | 0.05 | 0.11 | |
+| **total** | **18.7** | **1.38** | **13.5x** |
+
+**Reconciled:** the desktop worker's discrete GPU is simply ~13.5x the worker's iGPU on this frame, and the gap
+is widest on the work that only moves memory (copies 22x, the scan copy 30x): the iGPU shares the CPU's system
+memory. The 1920x1080 copies run at ~28 GB/s (8.3 MB read and 8.3 MB written a copy, 0.59 ms each), about what
+that memory gives. So on the iGPU a byte not moved is worth more than a shader instruction saved: the copies, the
+clears and the loads of targets (item 2) come before the shaders (item 5).
+
+**The passes and copies that cost most (ms a frame, times a frame), the run on one round:**
+
+| work | ms | per frame |
+|---|---|---|
+| pass 1920x1088, one colour target f64 (A2B10G10R10) | 2.52 | 4.2x |
+| pass 960x544, one colour target f37 (RGBA8): half-size effect buffers (ambient occlusion's size) | 2.06 | 3.7x |
+| **copy 1920x1080 <- 1920x1088 f64 (CopyOf: the height padded for tiling)** | **2.02** | 3.4x |
+| pass 1920x1088 f64 with depth (the scene) | 1.66 | 5.0x |
+| pass 1920x1088, two colour targets f64 with depth | 1.40 | 2.2x |
+| **copy 1920x1080 <- 1920x1088 f126 (D32, the depth sampled)** | **0.77** | 0.9x |
+| **copy 1920x1080 <- 1920x1088 f9 (R8)** | **0.68** | 1.9x |
+| pass 960x544 f64 | 0.66 | 1.9x |
+| pass 1920x1088 f9 | 0.57 | 1.0x |
+| pass 480x272 f122 (B10G11R11) | 0.56 | 1.0x |
+| copy feedback 1920x1080 <- 1920x1088 f126 (a draw samples its own depth) | 0.54 | 0.7x |
+| pass 960x544 two colour targets f64 with depth | 0.49 | 0.9x |
+| pass 1024x1024 depth, 3 layers (the shadow maps) | 0.41 | 2.2x |
+
+**What it says for 60 here** (16.7 ms, 2 ms under today's 18.7): the size copies of 1920x1088 surfaces sampled as
+1920x1080 are 3.5 ms a frame by themselves; `WWHD_SURFACE_FIT` removes them (item 2: b-barriers' A/B), the
+feedback copy stays (it's a real read of the target being drawn). The half-size 960x544 RGBA8 passes (2.06 ms) are
+the ambient occlusion candidate (b-gfxopts). Clears and resets (1.5 ms) are b-clears'.
+
 ## Item 3, render scale: built (session cloud3), opt-in
 
 **`WWHD_RENDER_SCALE=0.5..2`** (renderer.cpp `RenderScale`; 1, the default and every check's, changes nothing:
