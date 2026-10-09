@@ -8,9 +8,10 @@
 # RT_VARIANTS (default "st1 st2 mt1 mt2"): mt* runs add RT_MT_ARGS (default WWHD_CORES=3), st* runs WWHD_CORES=1.
 # RT_RENDER=1: rendered (WWHD_RENDER=vk; default the null GPU, the game's logic only).
 # RT_JOBS runs at once (default 4; real time: the desktop worker has the threads, the worker wants 1).
-# The routes' first three menu presses come later (WWHD_INPUT_REMAP, RT_REMAP: 420, 540, 660 -> 530, 620, 700; Start
-# stays at 780, so play begins on the same frame): in real time the title can take input after frame 420. A run that
-# still never reaches play on time (below) is played again, up to RT_RETRIES (3) times.
+# One-host-thread runs skip the title (WWHD_DEBUG_BOOT=1, tools/sixty/run.sh with WWHD_CORES=1): in real time the title
+# can take input after the routes' frame 420 (not yet with three, which crash at the play scene's create with it;
+# RT_REMAP=FROM:TO,... moves presses instead, WWHD_INPUT_REMAP).
+# A run that still never reaches play on time (below) is played again, up to RT_RETRIES (3) times.
 # Default routes: predeploy.sh's. RT_COMPARE_ONLY=1: compare the runs already there, play nothing.
 # Output: game state, it stays on the worker ($OUT/rt/ROUTE/VARIANT/60); each run's guest threads at its exit
 # (WWHD_THREAD_DUMP: VARIANT.threads) and the emulator's log (VARIANT.emu.log).
@@ -30,7 +31,7 @@ run_one() {
     local try
     for try in $(seq 0 "${RT_RETRIES:-3}"); do
         rm -rf "$R/$r/$v"; mkdir -p "$R/$r/$v"
-        env ${w:+WWHD_DEBUG_STAGE=920:$w} ${n:+SIXTY_FRAMES=$n} "${extra[@]}" WWHD_THREAD_DUMP="$R/$r/$v.threads" WWHD_INPUT_REMAP=${RT_REMAP-420:530,540:620,660:700} SIXTY_REALTIME=1 ${RT_RENDER:+WWHD_RENDER=vk} WWHD_LAZY_DRAWDONE=1 WWHD_STATE_TRACK=168 \
+        env ${w:+WWHD_DEBUG_STAGE=920:$w} ${n:+SIXTY_FRAMES=$n} "${extra[@]}" WWHD_THREAD_DUMP="$R/$r/$v.threads" ${RT_REMAP:+WWHD_INPUT_REMAP=$RT_REMAP} SIXTY_REALTIME=1 ${RT_RENDER:+WWHD_RENDER=vk} WWHD_LAZY_DRAWDONE=1 WWHD_STATE_TRACK=168 \
             CEMU_BIN="$R/bin.$$.$slot/wwhd-null" SIXTY_OUT="$R/slot.$$.$r.$v" tools/sixty/run.sh "$r" "$R/$r/$v" 60 > "$R/$r/$v.log" 2>&1 \
             || echo "rt_routes: $r $v: the run failed (see $R/$r/$v.log)"
         cp "$R/bin.$$.$slot/portable/log.txt" "$R/$r/$v.emu.log" 2>/dev/null   # the emulator's log (a crash's last words)

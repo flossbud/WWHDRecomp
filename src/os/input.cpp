@@ -59,6 +59,11 @@ namespace wwhd::os::input
 				// WWHD_INPUT_REMAP=FROM:TO,... (tests in real time): a step that starts on frame FROM starts on TO instead.
 				// tools/sixty/tests/rt_routes.sh moves the routes' menu presses later (the title can take input after the
 				// script's frame 420 in real time), keeping the last one, so play begins on the same frame.
+				// WWHD_DEBUG_BOOT=1 (overrides/sixty.cpp): the logo goes to the file select scene (its controller selection
+				// first), so the title's press (the routes' 420) goes; =1:FRAME drops the steps before FRAME instead of 500
+				uint32 bootFrame = 0;
+				if (const char* e = getenv("WWHD_DEBUG_BOOT"); e && atoi(e) != 0)
+					bootFrame = strchr(e, ':') ? (uint32)atoi(strchr(e, ':') + 1) : 500;
 				std::unordered_map<uint32, uint32> remap;
 				if (const char* e = getenv("WWHD_INPUT_REMAP"))
 				{
@@ -80,6 +85,8 @@ namespace wwhd::os::input
 						st.duration = 1;
 					if (auto it = remap.find(st.frame); it != remap.end())
 						st.frame = it->second;
+					if (st.frame < bootFrame)                // WWHD_DEBUG_BOOT: no title
+						continue;
 					std::istringstream ns(names);
 					for (std::string n; std::getline(ns, n, '+');)
 					{

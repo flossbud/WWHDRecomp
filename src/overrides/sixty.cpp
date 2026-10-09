@@ -51,6 +51,7 @@ void wwhd_SetSwapInterval(uint32 interval);       // os/gx2/core/GX2_Misc.cpp
 extern thread_local const PPCInterpreter_t* g_rtJournalThread;   // the half tick journal's thread (runtime/diff.cpp)
 namespace coreinit
 {
+	bool __CemuIsMulticoreMode();               // os/coreinit/coreinit_Thread.cpp: three host threads
 	void wwhd_CoreCensus(const char* where);    // os/coreinit/coreinit_Thread.cpp: WWHD_CORE_CENSUS, the other cores' threads
 }
 
@@ -1879,6 +1880,65 @@ void f_025B8BB0(PPCInterpreter_t* __restrict ctx)
 void orig_f_025BA0C0(PPCInterpreter_t* __restrict ctx);
 // dSv_event_c::isEventBit(event r3, number r4) -> r3: forced under WWHD_DEBUG_FLAGS (above); 3F10 (Puppet
 // Ganon beaten) "no" under the refights as a dungeon's boss bit is (f_025B9100)
+// WWHD_DEBUG_BOOT=1 (a test aid, t-boot; the owner's ask): from the logo straight to the file select, without the
+// title, for the real-time routes, soaks and A/Bs: in real time the title takes input when it's ready, which a scripted
+// route's frame 420 may come before (the run then sits on the file select, or comes into play late). The logo scene's
+// execute (f_025ABF00, its method table at 0x101EA5F0, run from frame ~38) asks for the file select (scene 9, as the
+// title does when A is pressed, 024B8894) where it would ask for the title (scene 8, dComIfG_changeOpeningScene,
+// frame 54). The input script then drops the title's press (steps before frame 500: os/input.cpp), and the file
+// select scene takes the routes' own (540 the controller selection, 660 Quest Log 1, 780 Start): the slot's load and
+// the start come on frame 794 as through the title. Checked: four routes at 30 under the virtual clock (continue,
+// tour3, slash, items), Link's path from the start of play to the end the same as through the title (0.00 units); the
+// state differs where the random stream does (the title draws numbers: Link's idle animation). The checks never use
+// it (their reference plays the title). Found with WWHD_DEBUG_BOOT_LOG=1 (fopScnM_ChangeReq f_025DC86C's calls).
+// Not yet with three host threads (the warning below): the tools pass it only with WWHD_CORES=1.
+namespace
+{
+	bool BootOn()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_DEBUG_BOOT"); return e && atoi(e) != 0; }();
+		return on;
+	}
+}
+
+void f_025ABF00(PPCInterpreter_t* __restrict ctx)
+{
+	static bool asked = false;
+	if (!BootOn() || asked || wwhd::rt::GameFrame(wwhd::os::SwapCount()) < 54)
+	{
+		if (!BootOn())
+			[[clang::musttail]] return orig_f_025ABF00(ctx);
+		GPR(3) = 1;                                   // the logo stays until it has asked (its own execute would ask
+		return;                                       // for the title), and after, until the file select replaces it
+	}
+	const uint32 lr = ctx->spr.LR;
+	GPR(4) = 9;                                       // the file select
+	GPR(5) = 0;
+	GPR(6) = 5;
+	GPR(7) = 1;
+	f_025DC86C(ctx);                                  // fopScnM_ChangeReq(scene, 9, 0, 5, 1)
+	ctx->spr.LR = lr;
+	asked = GPR(3) != 0;
+	if (asked)
+		cemuLog_log(LogType::Force, "wwhd boot: the logo goes to the file select at frame {} (WWHD_DEBUG_BOOT)",
+			wwhd::rt::GameFrame(wwhd::os::SwapCount()));
+	if (asked && coreinit::__CemuIsMulticoreMode())
+		cemuLog_log(LogType::Force, "wwhd boot: WARNING: WWHD_DEBUG_BOOT with three host threads crashes at the play scene's create "
+			"(a null at +0xB0 of the process f_025B3F90 makes, ~27 frames after Start; with the title, or with WWHD_CORES=1, it doesn't): "
+			"use WWHD_CORES=1 with it until that is fixed");
+	GPR(3) = 1;
+}
+
+// fopScnM_ChangeReq(scene, proc, ?, fade, ?) (f_025DC86C): WWHD_DEBUG_BOOT_LOG=1 logs each (a probe: logo -> 8 the
+// title at frame 54, the title -> 9 the file select at A, the file select -> 7 play at Start)
+void f_025DC86C(PPCInterpreter_t* __restrict ctx)
+{
+	if (static const bool log = getenv("WWHD_DEBUG_BOOT_LOG") != nullptr; log)
+		cemuLog_log(LogType::Force, "wwhd boot: ChangeReq({:08x}, {:x}, {:x}, {:x}, {:x}) at frame {}, lr {:08x}", GPR(3), GPR(4), GPR(5), GPR(6), GPR(7),
+			wwhd::rt::GameFrame(wwhd::os::SwapCount()), ctx->spr.LR);
+	[[clang::musttail]] return orig_f_025DC86C(ctx);
+}
+
 void f_025B8B94(PPCInterpreter_t* __restrict ctx)
 {
 	const ForcedFlags& f = Forced();
@@ -3125,8 +3185,10 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 	if (from == ~0u)
 	{
 		RndSeedProbe(false);
-		// WWHD_STATE_CENSUS=2 at 30 fps: every frame watched (the census trace of a store the 30 Hz game makes)
-		static const bool census30 = [] { const char* e = getenv("WWHD_STATE_CENSUS"); return Probe() && e && atoi(e) == 2; }();
+		// WWHD_STATE_CENSUS=2 at 30 fps: every frame watched (the census trace of a store the 30 Hz game makes);
+		// =3 also between frames, every guest thread on the frame's host thread (one host thread: the virtual clock)
+		static const int census = [] { const char* e = getenv("WWHD_STATE_CENSUS"); return Probe() && e ? atoi(e) : 0; }();
+		const bool census30 = census == 2 || census == 3;
 		if (!census30)
 			[[clang::musttail]] return orig_f_0274C264(ctx);
 		static bool once = [] { atexit(CensusWrite); at_quick_exit(CensusWrite); return true; }();
@@ -3135,6 +3197,8 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		g_rtStoreCensus = CensusStore;
 		g_rtJournalOn = true;
 		orig_f_0274C264(ctx);
+		if (census == 3)
+			return;
 		g_rtJournalOn = wwhd::rt::QuietWatching();
 		g_rtStoreCensus = nullptr;
 		return;

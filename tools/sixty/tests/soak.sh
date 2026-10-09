@@ -54,7 +54,8 @@ for v in "${variants[@]}"; do
     cp "${SOAK_BIN:-build/wwhd/wwhd-null}" "$d/bin/wwhd-null" || exit 2
     echo "soak.sh: $name: $minutes min ($frames game frames, swap $swaps), ${envs[*]}"
     start=$(date +%s)
-    env "${envs[@]}" WWHD_60FPS=1 WWHD_60FPS_FROM=900 WWHD_EXIT_FRAME=$swaps WWHD_LAZY_DRAWDONE=${WWHD_LAZY_DRAWDONE:-1} \
+    boot=(); [[ " ${envs[*]} " == *" WWHD_CORES=1 "* ]] && boot=(WWHD_DEBUG_BOOT=1)   # the title skipped (one host thread only)
+    env "${boot[@]}" "${envs[@]}" WWHD_60FPS=1 WWHD_60FPS_FROM=900 WWHD_EXIT_FRAME=$swaps WWHD_LAZY_DRAWDONE=${WWHD_LAZY_DRAWDONE:-1} \
         WWHD_FRAME_LOG=$d/frames.txt WWHD_THREAD_STATS=$d/threads.txt WWHD_CORE_CENSUS=$d/census.txt WWHD_NATIVE=on WWHD_RENDER=vk \
         REF_PIDFILE=$d/pid REF_FRESH=1 REF_SAVE=/wwhd/data/saves/wwhd_100 CEMU_INPUT_SCRIPT=$script CEMU_BIN=$d/bin/wwhd-null \
         tools/reference/run.sh > "$d/run.log" 2>&1 || { echo "soak.sh: $name: the game didn't start (see $d/run.log)"; fail=1; continue; }

@@ -18,6 +18,8 @@
 #                  logs whose gameplay lines worker_absum.py sums (GPU ms a frame by kind)
 # Out: ab-NAME-ROUTE-N.frames (WWHD_FRAME_LOG), .threads (each thread's CPU % over gameplay: game frame 900 to
 # 95% of the run), .rt (the real-time lines). Then worker_absum.py's summary of the directory.
+# A variant with WWHD_CORES=1 skips the title (WWHD_DEBUG_BOOT=1: the title's readiness in real time; not yet with three
+# host threads, where it crashes at the play scene's create; a variant's WWHD_DEBUG_BOOT=0 keeps the title).
 # Run it as a job: tools/worker/job start ab tools/sixty/perf/worker-ab.sh continue:1800 6 off:... on:...
 set -uo pipefail
 source "$(dirname "$0")/../tests/common.sh"
@@ -69,7 +71,8 @@ for n in $(seq $([ "${PERF_WARMUP:-1}" = 0 ] && echo 1 || echo 0) "$rounds"); do
         while IFS= read -r line; do envs+=("${line#\#env }"); done < <(grep '^#env [A-Z_0-9]*=' "$script" || true)
         if [ "$rate" = 60 ]; then sixty=1 exit=$((frames * 2)) start=1800; else sixty= exit=$frames start=900; fi
         pidf=$dir/pid-$name
-        env WWHD_NATIVE=on WWHD_RENDER=vk "${envs[@]}" WWHD_60FPS=$sixty WWHD_AUDIO_HASH=/dev/null WWHD_FRAME_LOG=$log.frames WWHD_EXIT_FRAME=$exit \
+        boot=(); [[ " ${envs[*]} " == *" WWHD_CORES=1 "* ]] && boot=(WWHD_DEBUG_BOOT=1)
+        env WWHD_NATIVE=on WWHD_RENDER=vk "${boot[@]}" "${envs[@]}" WWHD_60FPS=$sixty WWHD_AUDIO_HASH=/dev/null WWHD_FRAME_LOG=$log.frames WWHD_EXIT_FRAME=$exit \
             CEMU_BIN="${bin[$name]}" REF_FRESH=1 REF_SAVE=/wwhd/data/saves/wwhd_100 REF_PIDFILE=$pidf \
             CEMU_INPUT_SCRIPT=$script tools/reference/run.sh > "$log.out" 2>&1 || { echo "worker-ab.sh: $name $n: no start"; continue; }
         pid=$(cat "$pidf"); t0=$(date +%s.%N); a=; t=0; clk=
