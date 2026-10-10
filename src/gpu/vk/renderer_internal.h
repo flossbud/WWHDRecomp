@@ -46,6 +46,7 @@ namespace wwhd::gpu
 		VkDeviceMemory memory = VK_NULL_HANDLE;
 		uint8* data = nullptr;
 		VkDeviceSize size = 0, used = 0;
+		uint64 epoch = 0;                                        // + 1 at each reset of its space (BeginSlot): draw.cpp's vertex reuse
 	};
 
 	struct State

@@ -20,6 +20,7 @@
 // Derived in part from Cemu (the files above, Core/LatteIndices.cpp, Core/LatteBufferData.cpp,
 // Core/LatteRenderTarget.cpp, Core/LatteShader.cpp); Mozilla Public License 2.0.
 #include "renderer_internal.h"
+#include <unordered_set>
 #include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/Core/LattePM4.h"
 #include "Cafe/HW/Latte/Core/LatteShader.h"
@@ -2011,7 +2012,61 @@ namespace wwhd::gpu
 			uint32 stride = (b[2] >> 11) & 0xFFFF;
 			uint32 maxIndex = std::max(g.hasVtxIndexAccess ? idx.max + baseVertex : 0, g.hasInstanceIndexAccess ? baseInstance + instances - 1 : 0);
 			uint32 bytes = ((stride * maxIndex + g.totalAttribRangeSize) + 127) & ~127u;
+			// a vertex buffer (guest address, size) copied for an earlier draw since the ring's space was last reset is
+			// bound where that copy is (t-bufcache: 61-66% of the vertex bytes a frame on tour3 repeat a buffer copied
+			// earlier that frame: a model drawn several times). The game can't rewrite a buffer the GPU still reads
+			// without a sync, and this copies at the same point the first draw did. WWHD_VTX_DEDUPE=0: copied every draw
+			// A guard against a scratch area the CPU fills anew between two draws (particles, effects): the buffer's first
+			// 64 bytes must still be what was copied, or it's copied again
+			static const bool dedupe = [] { const char* e = getenv("WWHD_VTX_DEDUPE"); return !(e && atoi(e) == 0); }();
+			struct VtxCopy { VkDeviceSize off; uint8 head[64]; };
+			static std::unordered_map<uint64, VtxCopy> s_vtxCopies;
+			static uint64 s_vtxEpoch = ~0ull;
+			const uint32 headBytes = std::min(bytes, 64u);
+			if (dedupe && b[0])
+			{
+				if (s_vtxEpoch != s.ring.epoch)
+				{
+					s_vtxCopies.clear();
+					s_vtxEpoch = s.ring.epoch;
+				}
+				if (auto hit = s_vtxCopies.find(((uint64)b[0] << 32) | bytes);
+					hit != s_vtxCopies.end() && memcmp(hit->second.head, memory_getPointerFromPhysicalOffset(b[0]), headBytes) == 0)
+				{
+					vbufs.push_back({ g.attributeBufferIndex, hit->second.off });
+					continue;
+				}
+			}
 			VkDeviceSize off = RingAlloc(std::max(bytes, 128u), 16);
+			if (dedupe && b[0])
+			{
+				VtxCopy& c = s_vtxCopies[((uint64)b[0] << 32) | bytes];
+				c.off = off;
+				memcpy(c.head, memory_getPointerFromPhysicalOffset(b[0]), headBytes);
+			}
+			// WWHD_VTX_STATS=1 (a probe, t-bufcache): each 600 frames the vertex bytes copied, and how many of them a
+			// buffer (address, size) copied before in the same frame (with WWHD_VTX_DEDUPE=0: what the reuse above saves)
+			if (static const bool vstats = getenv("WWHD_VTX_STATS") != nullptr; vstats && b[0])
+			{
+				static uint32 frame = ~0u;
+				static uint64 total = 0, repeat = 0, copies = 0, frames = 0;
+				static std::unordered_set<uint64> seen;
+				if (s.frame != frame)
+				{
+					frame = s.frame;
+					seen.clear();
+					if (++frames % 600 == 0)
+					{
+						Log(fmt::format("vertex stats: {:.2f} MB a frame copied in {:.0f} copies, {:.0f}% of the bytes a repeat of a buffer copied earlier that frame",
+							total / 1048576.0 / 600, copies / 600.0, total ? 100.0 * repeat / total : 0.0));
+						total = repeat = copies = 0;
+					}
+				}
+				copies++;
+				total += bytes;
+				if (!seen.insert(((uint64)b[0] << 32) | bytes).second)
+					repeat += bytes;
+			}
 			if (b[0])
 				memcpy(s.ring.data + off, memory_getPointerFromPhysicalOffset(b[0]), bytes);
 			else

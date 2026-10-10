@@ -246,6 +246,7 @@ namespace wwhd::gpu
 		{
 			vkResetCommandBuffer(s.cmd, 0);
 			s.ring.used = s.ringBase;                                 // the GPU is done with this slot's data
+			s.ring.epoch++;
 			vkResetDescriptorPool(s.device, s.descriptors, 0);
 			OnSubmitted();
 			VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
