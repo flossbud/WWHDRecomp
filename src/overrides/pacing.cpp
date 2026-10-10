@@ -154,6 +154,8 @@ namespace
 // above in real time at 60 fps, the game's wait otherwise; and the frame log
 void f_0274C874(PPCInterpreter_t* __restrict ctx)
 {
+	if (wwhd::pacing::g_dropFrame && !Paced())
+		wwhd::os::SuppressNextSwap();                  // a frame dropped at 30: the game's wait, not its swap (gx2)
 	const bool logging = Logging();
 	if (!logging && !Paced())
 		[[clang::musttail]] return orig_f_0274C874(ctx);
@@ -214,6 +216,118 @@ namespace wwhd::pacing
 		return g_dropFrame && on;
 	}
 
+	// ---- frame skip below 30 (t-frameskip, the owner's ask): a whole tick's frame that starts more than a tick behind
+	// its schedule is dropped as keep-speed drops half frames (its logic and actor draws run; render jobs and present
+	// don't; its swap counted), so a machine that renders 20 frames a second still plays at full speed, only choppier.
+	// A floor: never more than 100 ms without a shown frame. A hitch over 250 ms (a load) resyncs instead. Nothing here
+	// renders into guest memory (renderer.cpp: rendering stays in host images; no gameplay GX2CopySurface on the routes),
+	// so a dropped frame leaves no read-back value behind. It only helps when rendering is what's slow: when the logic
+	// itself can't make 30 ticks a second the game slows as before, and the log says which. Real time only (the virtual
+	// clock is never behind). WWHD_FRAMESKIP=0 turns it off (A/Bs and tests); WWHD_FRAMESKIP_LATE=ms the lateness (a
+	// tick); WWHD_FRAMESKIP_TEST=k drops every k-th whole frame, -k all but every k-th (a test, the virtual clock too:
+	// droptest.sh). Only in play (scene 7, from fopScnM_ChangeReq): with the title's frames dropped its own Link came 5
+	// ticks later (its opening progresses on its rendering). At 30 the game's own wait (f_0274C874) swaps: a dropped
+	// frame's swap is left out there (gx2's GX2_SuppressNextSwap), or the frame counted twice and the TV image became
+	// the GamePad's
+	Clock::time_point s_lastShown{}, s_skipPeriod{};
+	uint32 s_scene = ~0u;                          // the last scene asked for: 8 the opening (title), 9 the file select, 7 play
+
+	uint32 s_shownSinceScene = 0;                  // frames shown since the last scene change was asked for
+
+	void SceneRequested(uint32 proc)
+	{
+		s_scene = proc;
+		s_shownSinceScene = 0;
+	}
+	uint32 s_wholeSkipped = 0, s_wholeFrames = 0, s_periodTicks = 0;
+	Clock::time_point s_wholeStart{};              // the last whole frame's start, and whether it was skipped
+	bool s_wholeWasSkipped = false;
+	double s_skippedMs = 0;                        // the skipped whole frames' length this period (to the next whole frame)
+
+	bool WholeSkip(uint32 tick, Clock::time_point now, Clock::time_point due)
+	{
+		static const int test = [] { const char* e = getenv("WWHD_FRAMESKIP_TEST"); return e ? atoi(e) : 0; }();   // -k: k-1 of every k
+		static const bool on = [] {
+			const char* e = getenv("WWHD_FRAMESKIP");
+			if (e && atoi(e) == 0)
+				cemuLog_log(LogType::Force, "wwhd pacing: WARNING: WWHD_FRAMESKIP=0, a test override: below 30 frames a second the game slows down");
+			return !(e && atoi(e) == 0);
+		}();
+		if (s_scene != 7)                               // only in play: the logo, the opening and the file select
+			return false;                               // go on as authored (the opening's progress waits on its rendering)
+		// nor in a scene's first 60 shown frames (a precaution: its first frames' render jobs set up its rendering)
+		if (s_shownSinceScene < 60)
+			return false;
+		if (test > 0)
+			return tick % (uint32)test == 0;
+		if (test < 0)
+			return tick % (uint32)-test != 0;
+		if (!on || PPCTimer_isVirtualClock())
+			return false;
+		static const auto behind = std::chrono::microseconds([] { const char* e = getenv("WWHD_FRAMESKIP_LATE"); return e ? atoi(e) * 1000 : 33333; }());
+		const auto late = now - due;
+		return late > behind && late < std::chrono::milliseconds(250) &&
+			s_lastShown != Clock::time_point{} && now - s_lastShown < std::chrono::milliseconds(100);
+	}
+
+	// every 10 s while frames are being skipped: how many, and the game's speed (ticks against 30 a second): a speed
+	// under 95% with frames skipped means the logic itself is the limit
+	void SkipLog(Clock::time_point now)
+	{
+		s_periodTicks++;
+		if (s_skipPeriod == Clock::time_point{})
+			s_skipPeriod = now;
+		const double secs = std::chrono::duration<double>(now - s_skipPeriod).count();
+		if (secs < 10.0)
+			return;
+		if (s_wholeSkipped)
+		{
+			// a skipped frame (logic, no render jobs, no present) longer than a tick: that, not rendering, is the limit
+			const double speed = 100.0 * s_periodTicks / secs / 30.0, skippedMs = s_skippedMs / s_wholeSkipped;
+			cemuLog_log(LogType::Force, "wwhd pacing: frame skip: {} of {} whole frames skipped in {:.0f} s, game speed {:.0f}%; a skipped frame "
+				"took {:.1f} ms{}", s_wholeSkipped, s_wholeFrames, secs, speed, skippedMs, speed >= 95.0 ? " (rendering was the limit)" :
+				skippedMs > 33.3 ? ": even without rendering a tick takes longer than 33.3 ms here (the game's logic, or a wait for the GPU)" :
+				": the shown frames are too slow for the floor of one every 100 ms");
+		}
+		s_wholeSkipped = s_wholeFrames = s_periodTicks = 0;
+		s_skippedMs = 0;
+		s_skipPeriod = now;
+	}
+
+	// a whole tick's frame (30 fps, or 60's whole frames from FrameStart): the schedule and the skip
+	void WholeFrame(uint32 tick, Clock::time_point now)
+	{
+		if (s_tickDue == Clock::time_point{} || now - s_tickDue > std::chrono::milliseconds(250))
+			s_tickDue = now;
+		if (s_wholeWasSkipped && s_wholeStart != Clock::time_point{})
+			s_skippedMs += std::chrono::duration<double, std::milli>(now - s_wholeStart).count();
+		g_dropFrame = WholeSkip(tick, now, s_tickDue);
+		s_wholeStart = now;
+		s_wholeWasSkipped = g_dropFrame;
+		s_wholeFrames++;
+		if (g_dropFrame)
+			s_wholeSkipped++;
+		SkipLog(now);
+		s_tickDue += std::chrono::microseconds(33333);
+	}
+
+	// at 30 fps (sixty.cpp's frame body, real time and WWHD_FRAMESKIP_TEST)
+	void FrameStart30(uint32 swap)
+	{
+		const Clock::time_point now = Clock::now();
+		g_dropFrame = false;
+		WholeFrame(swap, now);
+	}
+
+	void FrameShown()
+	{
+		if (!g_dropFrame)
+		{
+			s_lastShown = Clock::now();
+			s_shownSinceScene++;
+		}
+	}
+
 	void FrameStart(uint32 swap, uint32 from, bool half)
 	{
 		static const uint32 test = [] { const char* e = getenv("WWHD_60FPS_DROPTEST"); return e ? (uint32)atoi(e) : 0u; }();
@@ -230,10 +344,9 @@ namespace wwhd::pacing
 		if (!half)
 		{
 			// the tick's whole frame: it was due at s_tickDue; the next one 33.3 ms after (resynced after a long hitch:
-			// a load or a pause plays on from where it is, it doesn't race to catch up)
-			if (s_tickDue == Clock::time_point{} || now - s_tickDue > std::chrono::milliseconds(250))
-				s_tickDue = now;
-			s_tickDue += std::chrono::microseconds(33333);
+			// a load or a pause plays on from where it is, it doesn't race to catch up); more than a tick behind, it's
+			// skipped (above)
+			WholeFrame((swap - from) / 2, now);
 			return;
 		}
 		s_halves++;
@@ -266,7 +379,10 @@ namespace wwhd::pacing
 void f_020350C4(PPCInterpreter_t* __restrict ctx)
 {
 	if (!wwhd::pacing::g_dropFrame)
+	{
+		wwhd::pacing::FrameShown();
 		[[clang::musttail]] return orig_f_020350C4(ctx);
+	}
 	wwhd::os::SkipSwap();
 }
 

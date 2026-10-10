@@ -1966,10 +1966,12 @@ void f_025ABF00(PPCInterpreter_t* __restrict ctx)
 	GPR(3) = 1;
 }
 
-// fopScnM_ChangeReq(scene, proc, ?, fade, ?) (f_025DC86C): WWHD_DEBUG_BOOT_LOG=1 logs each (a probe: logo -> 8 the
+// fopScnM_ChangeReq(scene, proc, ?, fade, ?) (f_025DC86C): the scene asked for, for the frame skip (play only);
+// WWHD_DEBUG_BOOT_LOG=1 logs each (a probe: logo -> 8 the
 // title at frame 54, the title -> 9 the file select at A, the file select -> 7 play at Start)
 void f_025DC86C(PPCInterpreter_t* __restrict ctx)
 {
+	wwhd::pacing::SceneRequested(GPR(4));             // the frame skip runs only in play (pacing.cpp)
 	if (static const bool log = getenv("WWHD_DEBUG_BOOT_LOG") != nullptr; log)
 		cemuLog_log(LogType::Force, "wwhd boot: ChangeReq({:08x}, {:x}, {:x}, {:x}, {:x}) at frame {}, lr {:08x}", GPR(3), GPR(4), GPR(5), GPR(6), GPR(7),
 			wwhd::rt::GameFrame(wwhd::os::SwapCount()), ctx->spr.LR);
@@ -3221,6 +3223,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 	const uint32 from = wwhd::rt::SixtyFrom();      // ~0 when 60 fps is off
 	if (from == ~0u)
 	{
+		wwhd::pacing::FrameStart30(wwhd::os::SwapCount());   // the frame skip below 30 (pacing.cpp; real time)
 		RndSeedProbe(false);
 		// WWHD_STATE_CENSUS=2 at 30 fps: every frame watched (the census trace of a store the 30 Hz game makes);
 		// =3 also between frames, every guest thread on the frame's host thread (one host thread: the virtual clock)

@@ -116,8 +116,23 @@ void GX2_SkipSwap()
 	}
 }
 
+// wwhd: a frame dropped at 30 fps (the frame skip, src/overrides/pacing.cpp): its present is skipped and counted above,
+// and the game's own wait, which runs, swaps too (fw_waitForVsync, 0274C990): that swap is left out, or the frame would
+// count twice and the renderer's scan buffers part from the game's (the TV image became the GamePad's)
+static bool s_suppressSwap = false;
+void GX2_SuppressNextSwap()
+{
+	s_suppressSwap = true;
+}
+
 void gx2Export_GX2SwapScanBuffers(PPCInterpreter_t* hCPU)
 {
+	if (s_suppressSwap)
+	{
+		s_suppressSwap = false;
+		osLib_returnFromFunction(hCPU, 0);
+		return;
+	}
 	_refShotRequest(++s_refSwapCount);
 	// wwhd: WWHD_EXIT_FRAME=N ends the run when the Nth swap begins, as CEMU_HLE_TRACE_EXIT_FRAME does
 	// for traced runs: timing and profiling without the trace (tools/reference/timing.sh)

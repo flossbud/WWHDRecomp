@@ -16,6 +16,10 @@ namespace wwhd::pacing
 	// game's random stream, so leaving them out moves every later draw of it: a seagull's flight, then the sea)
 	bool DropDraws();
 	void FrameStart(uint32 swap, uint32 from, bool half);
+	// at 30 fps a whole frame more than a tick behind is dropped too (the frame skip, pacing.cpp)
+	void FrameStart30(uint32 swap);
+	void FrameShown();                               // a frame was presented (the frame skip's floor)
+	void SceneRequested(uint32 proc);                // a scene change asked for (fopScnM_ChangeReq): the skip is play's only
 }
 namespace wwhd::rt
 {
