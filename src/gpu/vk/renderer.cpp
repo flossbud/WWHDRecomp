@@ -518,6 +518,8 @@ namespace wwhd::gpu
 	void DestroyImage(Image& img)
 	{
 		ForgetImage(img.image);
+		if (fsr3::On())
+			fsr3::Forget(img.image);
 		ForgetSets();
 		for (VkImageView v : img.layerViews)
 			if (v)

@@ -267,6 +267,7 @@ namespace wwhd::gpu
 		bool On();
 		// the scaled scene (`color`, its `depth`, the motion target) upscaled into `out` (the guest's size, storage usage)
 		bool Upscale(Image& color, Image& depth, Image& motionTarget, Image& out, float jitterX, float jitterY, bool reset);
+		void Forget(VkImage image);                               // an image is destroyed: its cached views go
 	}
 	// renderer.cpp: where the TV image's HUD begins (a draw into the TV surface alone, sampling only textures from
 	// memory, after a full-screen pass into it that sampled surfaces): with FSR 1 the scaled image is upscaled there

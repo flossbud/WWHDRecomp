@@ -10,6 +10,7 @@
 #include "renderer_internal.h"
 #include <FidelityFX/host/ffx_fsr3upscaler.h>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <glslang/Public/ShaderLang.h>
@@ -51,8 +52,11 @@ namespace wwhd::gpu::fsr3
 			std::vector<VkImageView> mipViews;                   // storage views, one per mip
 			VkImageView sampled = VK_NULL_HANDLE;                // sampled view: all mips (depth: the depth aspect alone)
 			bool external = false;
+			bool cachedViews = false;                            // a registered image's views: s_viewCache's, not its own
 			~Resource()
 			{
+				if (cachedViews)
+					return;
 				for (VkImageView v : mipViews)
 					vkDestroyImageView(s.device, v, nullptr);
 				if (sampled)
@@ -62,6 +66,8 @@ namespace wwhd::gpu::fsr3
 		std::vector<std::unique_ptr<Resource>> s_resources;     // index = FfxResourceInternal::internalIndex
 		std::vector<int32_t> s_dynamic;                          // registered this dispatch (unregistered after it)
 		std::vector<std::unique_ptr<Resource>> s_retired[2];    // unregistered, by frame slot: freed when the slot comes round
+		std::unordered_map<uint64, std::pair<VkImageView, VkImageView>> s_viewCache;   // a registered image's sampled, storage views
+		std::unordered_map<VkImage, std::vector<uint64>> s_viewImages;               // their keys by image (Forget)
 
 		VkFormat Format(FfxSurfaceFormat f)
 		{
@@ -248,22 +254,32 @@ namespace wwhd::gpu::fsr3
 			const ExternalImage& e = *(const ExternalImage*)in->resource;
 			auto res = std::make_unique<Resource>();
 			res->external = true;
+			res->cachedViews = true;
 			res->image = e.image;
 			res->desc = in->description;
-			VkImageViewCreateInfo vi{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-			vi.image = e.image->image;
-			vi.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			vi.format = e.image->format;
-			vi.components = e.swizzle;
-			vi.subresourceRange = { e.aspect, 0, 1, 0, 1 };
-			Check(vkCreateImageView(s.device, &vi, nullptr, &res->sampled), "vkCreateImageView");
-			if (!(e.aspect & VK_IMAGE_ASPECT_DEPTH_BIT))
+			// the views, made once an image (they were a third of FSR 3's render-thread time on the worker's driver,
+			// made and destroyed every frame); dropped when the renderer destroys the image (Forget)
+			const uint64 key = (uint64)(uintptr_t)e.image->image ^ ((uint64)e.aspect << 56) ^ ((uint64)e.swizzle.r << 48);
+			auto& views = s_viewCache[key];
+			if (!views.first)
 			{
-				vi.components = {};
-				VkImageView v;
-				Check(vkCreateImageView(s.device, &vi, nullptr, &v), "vkCreateImageView");
-				res->mipViews.push_back(v);
+				VkImageViewCreateInfo vi{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+				vi.image = e.image->image;
+				vi.viewType = VK_IMAGE_VIEW_TYPE_2D;
+				vi.format = e.image->format;
+				vi.components = e.swizzle;
+				vi.subresourceRange = { e.aspect, 0, 1, 0, 1 };
+				Check(vkCreateImageView(s.device, &vi, nullptr, &views.first), "vkCreateImageView");
+				if (!(e.aspect & VK_IMAGE_ASPECT_DEPTH_BIT))
+				{
+					vi.components = {};
+					Check(vkCreateImageView(s.device, &vi, nullptr, &views.second), "vkCreateImageView");
+				}
+				s_viewImages[e.image->image].push_back(key);
 			}
+			res->sampled = views.first;
+			if (views.second)
+				res->mipViews.push_back(views.second);
 			out->internalIndex = (int32_t)s_resources.size();
 			s_dynamic.push_back(out->internalIndex);
 			s_resources.push_back(std::move(res));
@@ -732,6 +748,23 @@ namespace wwhd::gpu::fsr3
 		return on;
 	}
 
+	void Forget(VkImage image)
+	{
+		auto it = s_viewImages.find(image);
+		if (it == s_viewImages.end())
+			return;
+		for (uint64 key : it->second)
+			if (auto v = s_viewCache.find(key); v != s_viewCache.end())
+			{
+				if (v->second.first)
+					vkDestroyImageView(s.device, v->second.first, nullptr);
+				if (v->second.second)
+					vkDestroyImageView(s.device, v->second.second, nullptr);
+				s_viewCache.erase(v);
+			}
+		s_viewImages.erase(it);
+	}
+
 	namespace
 	{
 		bool Init(uint32 w, uint32 h)
@@ -842,6 +875,24 @@ namespace wwhd::gpu::fsr3
 
 	bool Upscale(Image& color, Image& depth, Image& motionTarget, Image& out, float jitterX, float jitterY, bool reset)
 	{
+		// its CPU time on the render thread, a line every 600 dispatches (the first's context and pipelines left out)
+		struct Timer
+		{
+			std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+			~Timer()
+			{
+				static double s_ms = 0;
+				static uint32 s_n = 0;
+				if (s_fsr3.frames < 2)
+					return;
+				s_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+				if (++s_n % 600 == 0)
+				{
+					Log(fmt::format("fsr3: {:.3f} ms of the render thread a dispatch (the last 600)", s_ms / 600));
+					s_ms = 0;
+				}
+			}
+		} timer;
 		if (!Init(out.width, out.height))
 			return false;
 		EndRendering();
