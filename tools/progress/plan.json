@@ -407,6 +407,12 @@
       "name": "Round 14: [7] The lazy GX2DrawDone by default (deck-plan item 2; -15% game thread): A/B on the desktop worker with a window, vsync on and off; a sync-validation run with it; then on by default with full gates"
     },
     {
+      "id": "t-skipcost",
+      "lane": "top",
+      "complexity": 5,
+      "name": "Round 14: [5] Frame skipping's shown frames cost ~85 ms against ~48 ms in plain 30 (render-bound worker: 11.6 fps shown where ~20 should fit): find what piles into the shown frame (the GPU catching up, texture uploads) and fix it, so slow machines show as many frames as fit"
+    },
+    {
       "id": "t-writewatch",
       "lane": "top",
       "complexity": 6,
