@@ -515,6 +515,12 @@
       "name": "Round 14: [5] Graphics options: the ambient occlusion toggle (find the pass), anisotropic filtering, FXAA (gpu-plan item 4's rest, rival-study #8)"
     },
     {
+      "id": "b-1dviews",
+      "lane": "bottom",
+      "complexity": 4,
+      "name": "Round 14: [4] Vulkan validation clean: the game-texture path makes 1D views of 2D images (the last validation error after b-displayres, older than round 14; strict drivers may reject it); a validation pass of every route with the game's output kept, so the next error isn't missed"
+    },
+    {
       "id": "b-uncapped-plan",
       "lane": "bottom",
       "complexity": 8,
