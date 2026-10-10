@@ -69,6 +69,7 @@ namespace wwhd::os
 	void SkipSwap();            // a dropped frame's swap: counted, nothing presented (src/overrides/pacing.cpp)
 	void SuppressNextSwap();     // the game's own next GX2SwapScanBuffers does nothing (a frame dropped at 30: pacing.cpp)
 	void FrameDropMarker(bool dropped);   // a dropped frame marked in the command stream, and the next shown one (pacing.cpp)
+	void LayoutMarker(uint32 kind, uint32 value);   // the HUD at another aspect ratio, marked in the command stream (os/aspect.h)
 	void SleepTicks(uint64 ticks);                  // the calling guest thread sleeps (the scheduler's)
 	uint32 AllocSystemArea(uint32 size, uint32 alignment); // guest memory for the OS's own data (Cemu's system area)
 	// run the guest function `fn` with r3, r4 on the OS's callback thread (Cemu's async callbacks)

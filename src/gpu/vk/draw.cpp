@@ -20,6 +20,7 @@
 // Derived in part from Cemu (the files above, Core/LatteIndices.cpp, Core/LatteBufferData.cpp,
 // Core/LatteRenderTarget.cpp, Core/LatteShader.cpp); Mozilla Public License 2.0.
 #include "renderer_internal.h"
+#include "../../os/aspect.h"
 #include <unordered_set>
 #include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/Core/LattePM4.h"
@@ -1140,6 +1141,23 @@ namespace wwhd::gpu
 		bool s_samplesSurface = false;                          // the draw samples a render target (Textures; HudBegins)
 		float s_fragScale[2] = { 1.0f, 1.0f };
 
+		// the HUD at another aspect ratio (b-wide stage 2, os/aspect.h): the vertex uniform registers holding a layout's
+		// projection (gx2's 0xFD mark before their upload; any later write over them ends it), and the widening of the
+		// draw's target: a layout drawn into a widened target gets its projection's x row over kx, its y row over ky, so
+		// it keeps its proportions, centred
+		struct { bool pending = false, valid = false; uint32 base = 0, next = 0; } s_layoutProj;
+		bool s_layoutContent = false;                            // the pane being drawn is content: clipped to the 16:9 picture
+		float s_drawKx = 1.0f, s_drawKy = 1.0f;
+
+		void NarrowRow(uint8* row, float k)
+		{
+			float v[4];
+			memcpy(v, row, 16);
+			for (float& f : v)
+				f /= k;
+			memcpy(row, v, 16);
+		}
+
 		// uniform variables (uniformData_updateUniformVars, LatteBufferCache_LoadRemappedUniforms)
 		VkDeviceSize UniformVars(Shader& sh, bool vertex, float viewportW, float viewportH)
 		{
@@ -1196,6 +1214,22 @@ namespace wwhd::gpu
 			}
 			if (sh.uniforms.offset_uniformRegister >= 0)
 				memcpy(at(sh.uniforms.offset_uniformRegister), regs + mmSQ_ALU_CONSTANT0_0 + aluConst, sh.uniforms.count_uniformRegister * 16);
+			if (vertex && s_layoutProj.valid && (s_drawKx != 1.0f || s_drawKy != 1.0f))   // a layout's projection (b-wide)
+			{
+				const uint32 b = s_layoutProj.base;                   // in 32-bit registers from the vertex stage's first
+				if (sh.uniforms.offset_uniformRegister >= 0 && b + 8 <= (uint32)sh.uniforms.count_uniformRegister * 4)
+				{
+					NarrowRow(at(sh.uniforms.offset_uniformRegister) + b * 4, s_drawKx);
+					NarrowRow(at(sh.uniforms.offset_uniformRegister) + b * 4 + 16, s_drawKy);
+				}
+				if (sh.uniforms.offset_remapped >= 0 && r.SQ_CONFIG.get_DX9_CONSTS())
+					for (auto& e : sh.dec->list_remappedUniformEntries_register)
+					{
+						const uint32 reg = e.indexOffset / 4;
+						if (reg == b || reg == b + 4)
+							NarrowRow(at(sh.uniforms.offset_remapped) + e.mappedIndexOffset, reg == b ? s_drawKx : s_drawKy);
+					}
+			}
 			if (sh.uniforms.offset_windowSpaceToClipSpaceTransform >= 0)
 			{
 				float v[2] = { 2.0f / (float)(sint32)viewportW, 2.0f / (float)(sint32)viewportH };  // the guest viewport, as ints
@@ -1836,6 +1870,43 @@ namespace wwhd::gpu
 	static bool s_frameDropped = false;
 	static uint64 s_droppedDraws = 0;
 
+	// 0xFD (gx2's GX2_WriteLayoutMarker, b-wide): 1, REG: a layout's projection follows at vertex uniform register REG;
+	// 2, PANE: a layout root is drawn now, into the target bound now: whether it is a widened one goes to the game's
+	// layout hooks (src/overrides/aspect.cpp anchors only the TV's layouts)
+	void RendererLayoutMark(uint32 kind, uint32 value)
+	{
+		if (kind == 1)
+			s_layoutProj.pending = true, s_layoutProj.next = value;
+		else if (kind == 2)
+		{
+			const uint32 base = LatteGPUState.contextRegister[mmCB_COLOR0_BASE] & 0xFFFFFF00;
+			bool wide = false;
+			for (auto it = s.surfaces.lower_bound({ base, 0 }); it != s.surfaces.end() && it->first.first == base; ++it)
+				wide |= it->second.wide && (it->second.kx != 1.0f || it->second.ky != 1.0f);
+			os::aspect::SetRootTv(value, wide);
+		}
+		else if (kind == 3)
+			s_layoutContent = value != 0;
+	}
+
+	// a write of vertex or pixel uniform registers (IT_SET_ALU_CONST: the first register from the ALU constants' base,
+	// and how many) once layout marks are in use: the marked projection's own write, or one over it that ends it
+	void RendererAluConst(uint32 first, uint32 count)
+	{
+		auto& p = s_layoutProj;
+		if (first < 0x400)
+			return;                                              // the pixel stage's
+		const uint32 reg = first - 0x400;
+		if (p.pending)
+		{
+			p.pending = false;
+			p.valid = reg == p.next && count >= 16;
+			p.base = reg;
+		}
+		else if (p.valid && reg < p.base + 16 && reg + count > p.base)
+			p.valid = false;
+	}
+
 	void RendererFrameDropped(bool dropped)
 	{
 		static uint32 marks = 0;
@@ -2091,6 +2162,7 @@ namespace wwhd::gpu
 		// guest pixel on the same host pixel, or a depth-equal pass misses what an earlier one drew (black faces at 4:3)
 		const Image* first = attachments[0];
 		const float fx = first->scale * first->kx, fy = first->scale * first->ky;
+		s_drawKx = first->wide ? first->kx : 1.0f, s_drawKy = first->wide ? first->ky : 1.0f;
 		for (uint32 i = 1; i < nAttachments; i++)
 			if (attachments[i]->scale != first->scale)
 				LogOnce("scalemix", [&] { return fmt::format("render scale: a pass into {}x{} and {}x{}: one scaled, one not (frame {})",
@@ -2143,6 +2215,13 @@ namespace wwhd::gpu
 		{
 			scissorX = (uint32)std::floor(scissorX * fx), scissorY = (uint32)std::floor(scissorY * fy);
 			scissorR = (uint32)std::ceil(scissorR * fx), scissorB = (uint32)std::ceil(scissorB * fy);
+		}
+		if (s_layoutContent && first->wide && (first->kx != 1.0f || first->ky != 1.0f))   // a layout's content: the 16:9 picture
+		{
+			const uint32 left = (uint32)std::ceil((first->width - first->width / first->kx) * 0.5f - 0.01f);
+			const uint32 top = (uint32)std::ceil((first->height - first->height / first->ky) * 0.5f - 0.01f);
+			scissorX = std::max(scissorX, left), scissorY = std::max(scissorY, top);
+			scissorR = std::min(scissorR, first->width - left), scissorB = std::min(scissorB, first->height - top);
 		}
 		VkRect2D scissor{ { (sint32)scissorX, (sint32)scissorY }, { scissorR - std::min(scissorX, scissorR), scissorB - std::min(scissorY, scissorB) } };
 		if (!known || memcmp(&b.scissor, &scissor, sizeof(scissor)) != 0)

@@ -108,6 +108,20 @@ void GX2_WriteFrameDropMarker(bool dropped)
 	gx2WriteGather_submitU32AsBE(dropped ? 1 : 0);
 }
 
+// wwhd: the HUD at another aspect ratio (b-wide, os/aspect.h): 0xFD (an opcode neither Latte nor Cemu uses; 0xFB is its occlusion query end) with a kind and a
+// value, written only when the picture isn't 16:9 (so no check's stream sees one). 1, REG: the vertex uniform registers
+// from REG (16 of them) that follow are a layout's projection; 2, PANE: a layout root's draw begins (the renderer
+// reports which target it went to)
+void GX2_WriteLayoutMarker(uint32 kind, uint32 value)
+{
+	if (!LatteGPUState.gx2InitCalled)
+		return;
+	GX2::GX2ReserveCmdSpace(3);
+	gx2WriteGather_submitU32AsBE(pm4HeaderType3(0xFD, 2));
+	gx2WriteGather_submitU32AsBE(kind);
+	gx2WriteGather_submitU32AsBE(value);
+}
+
 namespace GX2
 {
 	SysAllocator<uint8, 640 * 480 * 4, 0x1000> _lastFrame;

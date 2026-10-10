@@ -278,10 +278,10 @@ validation 0 hazards. **Cost** on the worker (en-tn at 60): render thread +3.9 m
 not their waves' and sway's; judge FSR 3 on the sail route and Outset's grass, and if they ghost, keep last frame's
 CPU-written vertex data per group and run the two-pass shader on it (or mark them reactive).
 
-## Aspect ratios: Hor+ and Vert+ (b-wide, session bottom, 2026-10-10), stage 1 of 2
+## Aspect ratios: Hor+ and Vert+, the HUD at the corners (b-wide, session bottom, 2026-10-10)
 
 `WWHD_ASPECT=16:9` (the default: the game's own picture), `auto` (the window's shape) or a fixed one (`4:3`, `16:10`,
-`21:9`, `32:9`; any `W:H` from 1:1 to 4:1). The game keeps its 1920x1080 guest screen; os/aspect.h holds the setting
+`21:9`, `32:9`; any `W:H` from 1:1 to 4:1); in the settings "Aspect ratio: 16:9 / Auto (fill the window) / 4:3". The game keeps its 1920x1080 guest screen; os/aspect.h holds the setting
 and the aspect latched at each swap.
 
 - **The camera** (src/overrides/aspect.cpp): hooks, a new generator rule kind (`hook:NAME` in a tick-rules file: the
@@ -302,9 +302,25 @@ and the aspect latched at each swap.
   depth-equal pass missed what the depth pass drew: black faces, found by tracing one pixel through every draw. With
   that, surface fit works at every aspect (main's ask: it is the Deck's biggest GPU win, and the Deck is 16:10).
 - **Checked on captures** (llvmpipe, sail, tour3, en-tn, gohmarock at 16:10, 4:3, 21:9, 32:9): more view to the
-  sides or above and below, the same scale. **Stage 2, the HUD:** today it is stretched with the picture; next, the
-  layouts drawn undistorted and their edge panes anchored to the picture's edges, full-screen fades stretched (the
-  rival's nw::lyt hooks, with marker packets for what only the render thread knows).
+  sides or above and below, the same scale.
+- **The HUD (stage 2; the rival's approach, src/overrides/aspect.cpp):** a layout's projection is narrowed for draws
+  into a widened target, so it keeps its proportions, centred: the game's projection upload is marked while
+  `LoadProjectionMtx` or the text draw runs (overrides), gx2 writes a mark (opcode 0xFD; 0xFB is Cemu's occlusion
+  query end) before the 16 registers, and the renderer divides the matrix's x row by kx, its y row by ky when the
+  draw's target is widened (draw.cpp; layouts drawn into textures or the GamePad's screen are untouched). Each
+  layout root's draw is marked too, and the renderer reports whether it went to a widened target: only those are
+  anchored. `Pane::CalculateMtx`: the HUD's edge panes (hearts, rupees, keys, the compass...) move out by the extra
+  half width (height), panes placed at an actor's position scale with the picture, full-screen backgrounds and wipes
+  stretch; `Pane::Draw` keeps the anchored panes the game parks off the 16:9 screen hidden; each pane's DrawSelf
+  (an instruction hook on its `bctrl`; the generator's hook rule now takes calls through CTR) marks whether it is
+  content, clipped to the centred 16:9 region (menus, the swim timer the game parks below the screen), or not. Every
+  mark is written only when the picture isn't 16:9: no check's command stream changes.
+- **Checked** at 21:9, 16:10 and 4:3 on sail, menus (items, map, the telescope), warp (fades), en-tn (lock-on bars),
+  gohmarock (the boss's HP): the HUD undistorted, at the corners; menus centred on stretched backgrounds.
+- **Known limits:** the item buttons (top right) keep their 16:9 place (inside the generic N_All_00 container, which
+  the message window's choice box shares; the rival leaves them too); the telescope's and the Picto Box's black frame
+  covers only the 16:9 middle (its panes not yet found). The worker at 16:10 with surface fit: en-tn 41.8 -> 40.3 fps,
+  continue 60.1 -> 58.0 (11% more pixels; b-displayres's native 1280x800 is the Deck's answer).
 
 ## FSR 3.1 frame generation (b-framegen, session bottom, 2026-10-10), opt-in
 

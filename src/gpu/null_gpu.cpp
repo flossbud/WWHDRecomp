@@ -666,6 +666,8 @@ namespace
 			memory_writeU32(memory_physicalToVirtual(p[1]), LatteGPUState.contextRegister[mmVGT_STRMOUT_BUFFER_OFFSET_0 + 4 * so]);
 	}
 
+	bool s_layoutMarks = false;                          // a 0xFD seen (only at an aspect other than 16:9)
+
 	void processBuffer(const uint32be* p, const uint32be* end, int depth);
 
 	// One type-3 packet. `body` points at its nWords payload words.
@@ -677,7 +679,11 @@ namespace
 		{
 		case IT_SET_CONTEXT_REG: case IT_SET_ALL_CONTEXTS: setRegisters<LATTE_REG_BASE_CONTEXT>(body, nWords); break;
 		case IT_SET_RESOURCE: setRegisters<LATTE_REG_BASE_RESOURCE>(body, nWords); break;
-		case IT_SET_ALU_CONST: setRegisters<LATTE_REG_BASE_ALU_CONST>(body, nWords); break;
+		case IT_SET_ALU_CONST:
+			setRegisters<LATTE_REG_BASE_ALU_CONST>(body, nWords);
+			if (s_layoutMarks && wwhd::gpu::RendererOn() && nWords > 1)   // the HUD at another aspect ratio (0xFD, below)
+				wwhd::gpu::RendererAluConst(body[0], nWords - 1);
+			break;
 		case IT_SET_CTL_CONST: setRegisters<mmSQ_VTX_BASE_VTX_LOC>(body, nWords); break;
 		case IT_SET_SAMPLER: setRegisters<LATTE_REG_BASE_SAMPLER>(body, nWords); break;
 		case IT_SET_CONFIG_REG: setRegisters<LATTE_REG_BASE_CONFIG>(body, nWords); break;
@@ -780,6 +786,11 @@ namespace
 				wwhd::gpu::RendererCopySurface(body, nWords);
 			break;
 		case IT_SURFACE_SYNC: case IT_HLE_SYNC_ASYNC_OPERATIONS:
+			break;
+		case 0xFD:                                          // wwhd: the HUD at another aspect ratio (gx2's GX2_WriteLayoutMarker)
+			s_layoutMarks = true;
+			if (wwhd::gpu::RendererOn() && nWords >= 2)
+				wwhd::gpu::RendererLayoutMark(body[0], body[1]);
 			break;
 		case 0xFC:                                          // wwhd: a dropped frame's mark (gx2's GX2_WriteFrameDropMarker)
 			if (wwhd::gpu::RendererOn())

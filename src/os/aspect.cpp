@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <unordered_map>
 
 namespace wwhd::os::aspect
 {
@@ -87,5 +88,37 @@ namespace wwhd::os::aspect
 	{
 		kx = a > kBase ? a / kBase : 1.0f;
 		ky = a < kBase ? kBase / a : 1.0f;
+	}
+
+	namespace
+	{
+		thread_local int t_tag = 0;
+		std::mutex s_rootLock;
+		std::unordered_map<uint32_t, bool> s_rootTv;
+	}
+
+	void TagProjection(int delta)
+	{
+		t_tag += delta;
+	}
+
+	bool Tagged()
+	{
+		return t_tag > 0;
+	}
+
+	void SetRootTv(uint32_t root, bool tv)
+	{
+		std::lock_guard guard(s_rootLock);
+		if (s_rootTv.size() > 4096)
+			s_rootTv.clear();
+		s_rootTv[root] = tv;
+	}
+
+	bool RootOnTv(uint32_t root)
+	{
+		std::lock_guard guard(s_rootLock);
+		auto it = s_rootTv.find(root);
+		return it == s_rootTv.end() || it->second;
 	}
 }

@@ -372,6 +372,8 @@ class Program:
             have = i.op
             if i.op == "b" and i.lk:
                 have = f"bl {self.rel24.get(ea, (ea + i.li) & 0xFFFFFFFF):08x}"
+            elif kind == "hook" and i.op == "bcctr" and i.lk and (i.bo & 0x14) == 0x14:
+                have = "bctrl"                         # a hook may precede a call through CTR too
             elif i.op in ("b", "bc", "bclr", "bcctr"):
                 return f"{ea:08X}: step rules don't apply to branches ({i.op})"
             if have != expect.lower():

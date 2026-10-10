@@ -9,11 +9,14 @@
 #include "Cafe/OS/libs/coreinit/coreinit_Misc.h"
 #include "Cafe/HW/Latte/Core/LatteConst.h"
 #include "Cafe/HW/Latte/Core/LattePM4.h"
+#include "../aspect.h"
 #include "Cafe/HW/Latte/ISA/LatteReg.h"
 #include "Cafe/HW/Latte/ISA/LatteInstructions.h"
 #include "Cafe/OS/libs/gx2/GX2_Command.h"
 #include "ported.h"
 #include "../os.h"
+
+void GX2_WriteLayoutMarker(uint32 kind, uint32 value);   // GX2_Misc.cpp
 
 namespace wwhd::gx2
 {
@@ -459,6 +462,8 @@ namespace wwhd::gx2
 			cemuLog_logOnce(LogType::APIErrors, "GX2Set*UniformReg must be called with a size that is a multiple of 4 (size: {:})", sizeInU32s);
 			sizeInU32s &= ~3;
 		}
+		if (offsetRegBase == 0x400 && sizeInU32s == 16 && wwhd::os::aspect::Tagged())   // a layout's projection (b-wide)
+			GX2_WriteLayoutMarker(1, aluRegisterOffset);
 		GX2ReserveCmdSpace(2 + sizeInU32s);
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_ALU_CONST, 1 + sizeInU32s), offsetRegBase + aluRegisterOffset);
 		gx2WriteGather_submitU32AsLEArray((uint32*)dataWords, sizeInU32s);

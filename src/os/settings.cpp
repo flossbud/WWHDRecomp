@@ -38,6 +38,10 @@ namespace
 		{ "WWHD_WINDOW_SIZE", "Window size", { { "1280x720", "1280x720" }, { "1600x900", "1600x900" },
 			{ "1920x1080", "1920x1080" }, { "2560x1440", "2560x1440" } }, true, nullptr },
 		{ "WWHD_RENDER_SCALE", "Render scale", { { "1", "100%" }, { "0.75", "75%" }, { "0.5", "50%" }, { "auto", "Auto" } }, false, "auto" },
+		// the TV picture's shape (os/aspect.h, b-wide): Auto fills the window (more view to the sides on a wider one, above
+		// and below on a taller one, the Steam Deck's 16:10), 4:3 a 4:3 picture (more view above and below; bars at the
+		// sides on a wide screen, the GameCube's shape); the HUD keeps its proportions, at the picture's corners
+		{ "WWHD_ASPECT", "Aspect ratio", { { "16:9", "16:9" }, { "auto", "Auto (fill the window)" }, { "4:3", "4:3" } }, false, nullptr },
 		{ "WWHD_UPSCALER", "Upscaler (render scale under 100%)", { { "none", "bilinear" }, { "fsr1", "FSR 1" },
 			{ "fsr3", "FSR 3 (desktop GPUs)" } }, false, nullptr },
 		// FSR 3.1 frame generation (gpu/vk/fsr3.cpp Interpolate): a frame between each two, shown when the display runs at

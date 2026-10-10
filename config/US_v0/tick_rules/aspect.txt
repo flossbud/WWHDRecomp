@@ -12,3 +12,6 @@
 # view times a constant, from f9 in degrees; f4 the aspect), which it draws the scene with: Vert+ widens f3 too (found
 # at 4:3: the aspect alone narrowed the horizontal view)
 0250007C hook:rt_aspect_engine bl 0274E04C        camera_draw: the HD engine's camera (f3 fovy x k, f9 fovy, f4 aspect)
+# the HUD (stage 2): each pane's DrawSelf (through its vtable) marks whether its draws are content, clipped to the 16:9
+# picture (a menu's, a parked pane's: they'd show in the extra width), or not (backgrounds, fades, the anchored HUD)
+0287714C hook:rt_aspect_drawself bctrl          nw::lyt::Pane::Draw (02877100): DrawSelf, through the vtable (+0x94)

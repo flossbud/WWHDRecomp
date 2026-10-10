@@ -116,3 +116,7 @@
 027F0E04    src/overrides/sixty.cpp            J3DDrawBuffer::entryImm: the same (B76)
 027F10CC    src/overrides/sixty.cpp            J3DDrawBuffer::drawHead: a list that loops, logged (WWHD_J3D_GUARD, off; B76)
 027F1174    src/overrides/sixty.cpp            J3DDrawBuffer::drawTail: the same (B76)
+02874038    src/overrides/aspect.cpp           nw::lyt::DrawInfo::LoadProjectionMtx: at another aspect ratio its upload is marked (b-wide)
+028F8250    src/overrides/aspect.cpp           nw::font's text draw: its projection's upload marked too (b-wide)
+028766CC    src/overrides/aspect.cpp           nw::lyt::Pane::CalculateMtx: the HUD's edge panes anchored, fades stretched (b-wide)
+02877100    src/overrides/aspect.cpp           nw::lyt::Pane::Draw: a layout root's draw marked; parked panes kept hidden (b-wide)

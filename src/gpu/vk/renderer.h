@@ -49,4 +49,6 @@ namespace wwhd::gpu
 	void RendererDraw(uint32 op, const uint32be* body, uint32 nWords); // IT_DRAW_INDEX_2 / _AUTO (draw.cpp)
 	void RendererCopySurface(const uint32be* body, uint32 nWords); // IT_HLE_COPY_SURFACE_NEW (texture.cpp)
 	void RendererFrameDropped(bool dropped);                       // 0xFC, a dropped frame's mark (draw.cpp: its screen-sized draws left out)
+	void RendererLayoutMark(uint32 kind, uint32 value);            // 0xFD, the HUD at another aspect ratio (draw.cpp, os/aspect.h)
+	void RendererAluConst(uint32 first, uint32 count);             // uniform registers written (after a 0xFD has been seen)
 }

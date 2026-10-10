@@ -18,4 +18,14 @@ namespace wwhd::os::aspect
 	// the widening of the 16:9 picture: kx = a / (16/9) wider, ky = (16/9) / a taller (one of them 1)
 	void Factors(float a, float& kx, float& ky);
 	inline bool Same(float a, float b) { return a == b || (a - b < 1e-4f && b - a < 1e-4f); }
+
+	// The HUD (stage 2): the HD layouts (nw::lyt) drawn into the wider picture keep their proportions, centred, and their
+	// edge panes move out to its edges (src/overrides/aspect.cpp). Which screen a layout is drawn to is known only where
+	// it is drawn (the renderer): its projection's upload is marked in the command stream while the game loads it
+	// (TagProjection, around DrawInfo::LoadProjectionMtx and the text draw: gx2's uniform upload asks Tagged), and each
+	// layout root's draw is marked; the renderer reports whether that root went to a widened target (SetRootTv)
+	void TagProjection(int delta);                 // the calling thread's tag, +1 entering, -1 leaving
+	bool Tagged();
+	void SetRootTv(uint32_t root, bool tv);        // the renderer: a layout root drawn into a widened target, or not
+	bool RootOnTv(uint32_t root);                  // true until reported otherwise
 }
