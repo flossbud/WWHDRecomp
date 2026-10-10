@@ -55,9 +55,9 @@ namespace wwhd::os::aspect
 		return std::fmin(std::fmax(a, 1.0f), 4.0f);
 	}
 
-	float Latch()
+	float Latch(float a)
 	{
-		const float a = Requested(), was = s_current.load();
+		const float was = s_current.load();
 		if (!Same(a, was))
 		{
 			std::lock_guard guard(s_lock);

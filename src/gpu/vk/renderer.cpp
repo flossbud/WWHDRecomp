@@ -653,9 +653,25 @@ namespace wwhd::gpu
 		return Config().dynamic;
 	}
 
+	// ---- the display's resolution (b-displayres) ------------------------------------------------------------------
+	// The render scale is a share of the picture's size in the window, not of the guest's 1920x1080: the screen-sized
+	// targets are made at DisplayScale() (the window's picture height over the guest's 1080 rows, at the aspect ratio's
+	// widening) times RenderScale(), and the HUD split's full-size images (Promote: the upscalers' output, the HUD) at
+	// DisplayScale(): a 4K window at 100% renders 4K, at 50% 1080p upscaled to 4K; the Deck's 1280x800 at 100% its own
+	// 1280x800. Latched at each swap (RendererSwap); without a window (every check) it is 1, the guest's size.
+	namespace
+	{
+		float s_display = 1.0f;
+	}
+
+	float DisplayScale()
+	{
+		return s_display;
+	}
+
 	bool ScaledSurface(uint32 gw, uint32 gh)
 	{
-		return (DynamicScale() || RenderScale() != 1.0f) && gw >= 1280 && gh >= 720;
+		return gw >= 1280 && gh >= 720;                          // the screen-sized ones: they follow the scales (1 in checks)
 	}
 
 	uint32 ScaledBy(uint32 guest, float scale)
@@ -665,7 +681,7 @@ namespace wwhd::gpu
 
 	uint32 Scaled(uint32 guest, bool scaled)
 	{
-		return scaled ? ScaledBy(guest, RenderScale()) : guest;
+		return scaled ? ScaledBy(guest, RenderScale() * s_display) : guest;
 	}
 
 	// ---- the aspect ratio (b-wide, os/aspect.h) -------------------------------------------------------------------
@@ -820,18 +836,19 @@ namespace wwhd::gpu
 		// the full-size image for `img` (made or kept), its picture by FSR 1 (the TV) or a blit, swapped into the map
 		bool Promote(const std::pair<uint32, uint32>& key, Image& img, bool fsr)
 		{
-			if (img.scale >= 1.0f || img.layers != 1)
+			if (img.scale >= s_display || img.layers != 1)
 				return false;
 			Promoted& p = s_promoted[key];
 			if (p.active)
 				return true;
 			const bool depth = img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT;
-			const uint32 fullW = ScaledBy(img.gw, img.kx), fullH = ScaledBy(img.gh, img.ky);   // full size, at its widening
+			const uint32 fullW = ScaledBy(img.gw, s_display * img.kx), fullH = ScaledBy(img.gh, s_display * img.ky);   // the display's
+			                                                      // size, at its widening
 			if (!p.full.image || p.full.width != fullW || p.full.height != fullH || p.full.format != img.format)
 			{
 				if (p.full.image)
 				{
-					WaitPending();
+					SubmitAndWait();                                  // this frame's commands may use it too (a resize)
 					DestroyImage(p.full);
 				}
 				p.full = CreateImage(img.format, img.aspect, fullW, fullH, VK_IMAGE_USAGE_SAMPLED_BIT |
@@ -878,7 +895,7 @@ namespace wwhd::gpu
 			Image full = p.full;
 			full.gw = img.gw, full.gh = img.gh;
 			ScaleLike(full, img);
-			full.scale = 1.0f;
+			full.scale = s_display;
 			full.bytes = img.bytes, full.written = img.written, full.resetFor = img.resetFor;
 			full.readH = img.readH, full.fitH = img.fitH, full.readSince = img.readSince, full.noFit = img.noFit;
 			p.scaled = img;
@@ -995,7 +1012,7 @@ namespace wwhd::gpu
 				Image want;
 				ScaleLike(want, img);
 				if (img.scaled)
-					want.scale = scale;
+					want.scale = scale * s_display;
 				if (img.wide)
 					want.kx = s_kx, want.ky = s_ky;
 				return want;
@@ -1151,7 +1168,7 @@ namespace wwhd::gpu
 			(depth ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
 		const uint32 gw = std::max(w, img.gw), gh = std::max(h, img.gh);
 		Image grown;
-		grown.scaled = ScaledSurface(gw, gh), grown.scale = grown.scaled ? RenderScale() : 1.0f;
+		grown.scaled = ScaledSurface(gw, gh), grown.scale = grown.scaled ? RenderScale() * s_display : 1.0f;
 		grown.wide = ScreenShaped(gw, gh) && std::max(layers, img.layers) <= 1;
 		if (grown.wide)
 			Widening(grown.kx, grown.ky);
@@ -1568,16 +1585,37 @@ namespace wwhd::gpu
 			WritePPM(s_fgShot, s.frame - 1, "fg");
 		}
 		HudEnds();
-		{                                                           // the aspect ratio from this swap on (b-wide, above)
+		{
+			// the aspect ratio (b-wide) and the display's scale (b-displayres), from the setting and the window: the largest
+			// picture of the aspect the window holds, over the guest's size (1 without a window or with
+			// WWHD_DISPLAY_RES=0, the guest's 1920x1080). Applied once the window has held them 12 swaps (a drag or a
+			// maximise resizes continuously: the targets are made again once, at the end), the first at once
+			static const bool displayRes = [] { const char* e = getenv("WWHD_DISPLAY_RES"); return !(e && atoi(e) == 0); }();
+			const float a = os::aspect::Requested();
 			float kx, ky;
-			os::aspect::Factors(os::aspect::Latch(), kx, ky);
-			if (kx != s_kx || ky != s_ky)
+			os::aspect::Factors(a, kx, ky);
+			uint32 ww = 0, wh = 0;
+			float d = 1.0f;
+			if (displayRes && WindowExtent(ww, wh))
+				d = std::max(0.25f, std::min(ww / (1920.0f * kx), wh / (1080.0f * ky)));
+			static float s_candA = 0.0f, s_candD = 0.0f;
+			static uint32 s_held = 0;
+			static bool s_first = true;
+			if (a != s_candA || d != s_candD)
+				s_candA = a, s_candD = d, s_held = 0;
+			else
+				s_held++;
+			const bool differs = !os::aspect::Same(a, os::aspect::Current()) || d != s_display;
+			if (differs && (s_first || s_held >= 12))
 			{
-				Log(fmt::format("aspect ratio: {:.4f} from frame {}: screen-shaped targets {:.3f}x wider, {:.3f}x taller",
-					os::aspect::Current(), s.frame, kx, ky));
-				s_kx = kx, s_ky = ky;
+				os::aspect::Latch(a);
+				Log(fmt::format("display: {}x{}, the picture {}x{} (aspect {:.4f}: targets {:.3f}x wider, {:.3f}x taller), render targets "
+					"at {:.3f} of the guest's size x the render scale {:.2f}, from frame {}", ww, wh, (uint32)std::round(1920 * kx * d),
+					(uint32)std::round(1080 * ky * d), a, kx, ky, d, RenderScale(), s.frame));
+				s_kx = kx, s_ky = ky, s_display = d;
 				RescaleSurfaces(RenderScale());
 			}
+			s_first = false;
 		}
 		if (motion::On())
 			motion::FrameEnd(s.frame);

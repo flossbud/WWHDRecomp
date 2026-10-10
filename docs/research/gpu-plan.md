@@ -278,6 +278,39 @@ validation 0 hazards. **Cost** on the worker (en-tn at 60): render thread +3.9 m
 not their waves' and sway's; judge FSR 3 on the sail route and Outset's grass, and if they ghost, keep last frame's
 CPU-written vertex data per group and run the two-pass shader on it (or mark them reactive).
 
+## The display's resolution (b-displayres, session bottom, 2026-10-10)
+
+The render scale is a share of the resolution the picture is shown at, not of the guest's 1920x1080: the game renders
+at the window's picture (the largest picture of the aspect ratio the window holds) times the render scale, and the
+upscalers (FSR 1, FSR 3), frame generation and the HUD work at the picture's size. A 4K window at 100% renders 4K, at
+50% 1080p upscaled to 4K; the Deck's 1280x800 (Auto aspect) at 100% renders its own 1280x800.
+
+- **How:** `DisplayScale()` (renderer.cpp: the picture's height over the guest's 1080, at the aspect's widening) times
+  `RenderScale()` makes the screen-sized surfaces (1280x720 and up, now always "scaled": at scale 1 nothing changes);
+  the HUD split's full-size images (`Promote`) are made at `DisplayScale()`. Latched at the swap with the aspect ratio
+  (b-wide), once the window has held its size 12 swaps (a drag or a maximise makes the targets again once, at its end);
+  without a window (every check, the worker's headless A/Bs) it is 1, the guest's size. `WWHD_DISPLAY_RES=0` keeps the
+  old model.
+- **Settings:** "Resolution (window; fullscreen: the display's)", 1920x1080 by default (720p, 800p, 900p, 1440p, 4K too;
+  a size bigger than the desktop's usable area opens fitted to it, its shape kept); fullscreen is the display's own
+  resolution (SDL's desktop fullscreen; switching the monitor's modes is not done). "Render scale (of the resolution)":
+  50, 67, 75, 100%, 150 and 200% (supersampling), Auto (against the resolution; no 1080p floor). A value the list
+  hasn't (a file's, a launcher's) shows as it is.
+- **Checked on the desktop worker** (windowed, its own Xvfb displays): 1280x800 Auto -> the picture exactly 1280x800;
+  3840x2160 at 100% and at 50% + FSR 3 -> 3840x2160 (capture posted); a 3840x2160 window on a 2200x1100 desktop opens
+  at 1870x1052; a resize from 1920x1080 to 1280x800 with FSR 3 and frame generation on: one rebuild, three runs clean.
+- **Found on the way:** a resize with frame generation lost the device: its two window images a swap, and the second
+  acquire rebuilt the swapchain, destroying the first, which the swap's commands already drew into (the second acquire
+  now never rebuilds: that swap shows the generated frame alone); the HUD split's full images, the HUD-less copy and the
+  motion target are destroyed after a submit (a resize can make them again mid-frame). **And a correction:** b-framegen's
+  "validation clean" was wrong: that run's messages went nowhere (run.sh drops the game's output; validation now writes
+  to `VK_KHRONOS_VALIDATION_LOG_FILENAME`). The FSR backend had descriptors never written (AMD's host code binds index 0,
+  its backends' null resource, to what a pass doesn't use: the first dispatch's accumulation, the optical flow's
+  confidence; ours was a real resource) and a confidence image read as unsigned through a UNORM view. Fixed: index 0
+  reserved, 1x1 dummies of the declared type and format for null bindings, views of another numeric type for our
+  images (mutable format), by the declarations in each effect's callbacks header. Left: 1D views of 2D images from the
+  game's texture path (`VUID-VkImageViewCreateInfo-subResourceRange-01021`, 8 a run), older than this.
+
 ## Aspect ratios: Hor+ and Vert+, the HUD at the corners (b-wide, session bottom, 2026-10-10)
 
 `WWHD_ASPECT=16:9` (the default: the game's own picture), `auto` (the window's shape) or a fixed one (`4:3`, `16:10`,

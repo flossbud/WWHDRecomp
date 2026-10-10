@@ -370,7 +370,7 @@ namespace wwhd::gpu::motion
 		{
 			if (s_target.image)
 			{
-				WaitPending();
+				SubmitAndWait();                                    // this frame's commands may use it too (a resize)
 				DestroyImage(s_target);
 			}
 			s_target = CreateImage(kFormat, VK_IMAGE_ASPECT_COLOR_BIT, depth.width, depth.height,

@@ -12,7 +12,8 @@ namespace wwhd::os::aspect
 	constexpr float kBase = 16.0f / 9.0f;
 	void SetWindow(uint32_t width, uint32_t height);   // the window's drawable size (the frontend, whenever it changes)
 	float Requested();                             // what the setting asks for now (Auto without a window: 16:9)
-	float Latch();                                 // at each swap (the renderer): the aspect from here on, Requested's
+	float Latch(float a);                          // the renderer, at a swap: the aspect from here on (Requested's, once
+	                                               // the window has held its size a moment: a drag resizes continuously)
 	float Current();                               // the latched aspect (the game's hooks, the renderer)
 	bool Recent(float a);                          // one the game may still hold (the last few latched, and 16:9)
 	// the widening of the 16:9 picture: kx = a / (16/9) wider, ky = (16/9) / a taller (one of them 1)

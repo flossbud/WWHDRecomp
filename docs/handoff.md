@@ -4264,8 +4264,12 @@ Every item's evidence is in docs/research/gpu-plan.md (a section each) and its c
   the guest's: two images of one factor must map a guest pixel to the same host pixel, or a depth-equal pass misses
   (found with `WWHD_RENDER_TRACE=FRAME:ADDR:X,Y`, one pixel through every draw). Surfaces are made at their pitch's
   padded width (960x540 is 1024x544).
-- **Next in the lane:** b-displayres (the resolution as the display's, the render scale a share of it, the upscalers
-  and the HUD at the display's size), b-gfxopts (AO, AF, FXAA), b-uncapped-plan (research and a plan only).
+- **b-displayres** (landed): the render scale is a share of the window's picture; fullscreen is the display's own
+  resolution (SDL's desktop fullscreen): **switching the monitor's modes is not done** (a later item if wanted). A
+  resize makes the targets again once, after the window held its size 12 swaps. Validation: run with
+  `VK_KHRONOS_VALIDATION_LOG_FILENAME` (run.sh drops the game's own output); left, 1D views of 2D images from the
+  game's texture path.
+- **Next in the lane:** b-gfxopts (AO, AF, FXAA), b-uncapped-plan (research and a plan only).
 
 ### Session qa (week 2, WW-15): the problems top and bottom are stuck on
 

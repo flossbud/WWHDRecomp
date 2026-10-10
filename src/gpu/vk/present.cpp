@@ -241,7 +241,9 @@ namespace wwhd::gpu
 	}
 
 	// the next swapchain image (w.index, w.pending), the swapchain rebuilt first if needed
-	static bool Acquire(bool srgb)
+	// rebuild: false for frame generation's second image of a swap: a rebuild would destroy its first, which the swap's
+	// commands already draw into (the swapchain is then rebuilt at the next swap)
+	static bool Acquire(bool srgb, bool rebuild = true)
 	{
 		w.pending = false;
 		if (!w.acquired)
@@ -253,12 +255,26 @@ namespace wwhd::gpu
 		s_window.size(width, height);
 		for (int attempt = 0; attempt < 2; attempt++)
 		{
-			if (!w.chain || width != w.width || height != w.height || srgb != w.srgb || attempt > 0 || s_rebuild.exchange(false))
+			if (!w.chain || width != w.width || height != w.height || srgb != w.srgb || attempt > 0 || (rebuild && s_rebuild.exchange(false)))
+			{
+				if (!rebuild && w.chain)
+				{
+					w.width = 0;                                    // at the next swap
+					return false;
+				}
 				if (!Build(width, height, srgb))
 					return false;
+			}
 			VkResult r = vkAcquireNextImageKHR(s.device, w.chain, UINT64_MAX, VK_NULL_HANDLE, w.acquired, &w.index);
 			if (r == VK_ERROR_OUT_OF_DATE_KHR)
+			{
+				if (!rebuild)
+				{
+					w.width = 0;
+					return false;
+				}
 				continue;
+			}
 			if (r != VK_SUCCESS && r != VK_SUBOPTIMAL_KHR)
 				Check(r, "vkAcquireNextImageKHR");
 			Check(vkWaitForFences(s.device, 1, &w.acquired, VK_TRUE, UINT64_MAX), "vkWaitForFences");
@@ -302,15 +318,23 @@ namespace wwhd::gpu
 		{
 			Draw(*between);
 			w.first = w.index;
-			const VkSwapchainKHR chain = w.chain;
-			if (!Acquire(IsSrgb(scan.format)) || w.chain != chain)  // rebuilt meanwhile (a resize): that one's gone
-				w.first = UINT32_MAX;
-			if (!w.pending)
+			if (!Acquire(IsSrgb(scan.format), false))               // no second image this swap (a resize): the first alone
+			{
+				w.index = w.first, w.first = UINT32_MAX, w.pending = true;
 				return;
+			}
 		}
 		else if (!Acquire(IsSrgb(scan.format)))
 			return;
 		Draw(scan);
+	}
+
+	bool WindowExtent(uint32& width, uint32& height)
+	{
+		if (!s_hasWindow)
+			return false;
+		s_window.size(width, height);
+		return width && height;
 	}
 
 	// Frame generation presents twice a swap, so FIFO shows its frame and the game's one refresh apart: it takes a

@@ -19,6 +19,7 @@
 #include <glslang/Public/ResourceLimits.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
 #include <map>
+#include <regex>
 #include <memory>
 #include "fsr3_sources.inc"
 
@@ -55,6 +56,7 @@ namespace wwhd::gpu::fsr3
 			VkImageView sampled = VK_NULL_HANDLE;                // sampled view: all mips (depth: the depth aspect alone)
 			bool external = false;
 			bool cachedViews = false;                            // a registered image's views: s_viewCache's, not its own
+			std::map<VkFormat, VkImageView> alt;                 // sampled views of another numeric type (AltView)
 			VkBuffer buffer = VK_NULL_HANDLE;                    // a buffer (frame interpolation's counters) instead of an image
 			VkDeviceMemory bufferMemory = VK_NULL_HANDLE;
 			VkDeviceSize bufferSize = 0;
@@ -65,6 +67,8 @@ namespace wwhd::gpu::fsr3
 					vkDestroyBuffer(s.device, buffer, nullptr);
 					vkFreeMemory(s.device, bufferMemory, nullptr);
 				}
+				for (auto& [f, v] : alt)
+					vkDestroyImageView(s.device, v, nullptr);
 				if (cachedViews)
 					return;
 				for (VkImageView v : mipViews)
@@ -141,6 +145,9 @@ namespace wwhd::gpu::fsr3
 			if (r.sampled)
 				vkDestroyImageView(s.device, r.sampled, nullptr);
 			r.sampled = VK_NULL_HANDLE;
+			for (auto& [f, v] : r.alt)
+				vkDestroyImageView(s.device, v, nullptr);
+			r.alt.clear();
 		}
 
 		// a staging buffer for initial data, freed when its frame slot comes round again
@@ -219,6 +226,7 @@ namespace wwhd::gpu::fsr3
 			ci.arrayLayers = 1;
 			ci.samples = VK_SAMPLE_COUNT_1_BIT;
 			ci.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+			ci.flags = VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;           // a shader may read it as another numeric type (AltView)
 			Check(vkCreateImage(s.device, &ci, nullptr, &img.image), "vkCreateImage");
 			VkMemoryRequirements req;
 			vkGetImageMemoryRequirements(s.device, img.image, &req);
@@ -392,6 +400,7 @@ namespace wwhd::gpu::fsr3
 			VkPipelineLayout layout = VK_NULL_HANDLE;
 			VkPipeline pipeline = VK_NULL_HANDLE;
 			uint32 cbBindings[FFX_MAX_NUM_CONST_BUFFERS]{}, cbSizes[FFX_MAX_NUM_CONST_BUFFERS]{};
+			std::map<uint32, std::pair<char, std::string>> decls; // by binding: its numeric type (f, u, i) and storage format
 		};
 		VkSampler s_point = VK_NULL_HANDLE, s_linear = VK_NULL_HANDLE;
 
@@ -492,6 +501,122 @@ namespace wwhd::gpu::fsr3
 			out[i] = 0;
 		}
 
+		// The effect's texture and image declarations (its callbacks header), by name: the numeric type the shader reads
+		// (texture2D/image2D f, utexture2D u, itexture2D i) and a storage image's format qualifier: what a binding's view
+		// must be (Vulkan checks both; HLSL's typeless views don't care)
+		const std::map<std::string, std::pair<char, std::string>>& Decls(FfxEffect effect)
+		{
+			static std::map<FfxEffect, std::map<std::string, std::pair<char, std::string>>> s_decls;
+			auto [it, made] = s_decls.try_emplace(effect);
+			if (!made)
+				return it->second;
+			const char* file = effect == FFX_EFFECT_FRAMEINTERPOLATION ? "frameinterpolation/ffx_frameinterpolation_callbacks_glsl.h"
+				: effect == FFX_EFFECT_OPTICALFLOW ? "opticalflow/ffx_opticalflow_callbacks_glsl.h" : "fsr3upscaler/ffx_fsr3upscaler_callbacks_glsl.h";
+			const char* text = Source(file);
+			if (!text)
+				return it->second;
+			static const std::regex decl(R"(layout\s*\(\s*set\s*=\s*0\s*,\s*binding\s*=\s*\w+\s*(?:,\s*(\w+)\s*)?\)\s*(?:coherent\s+)?uniform\s+(\w+)\s+(\w+))");
+			const std::string t = text;
+			for (std::sregex_iterator m(t.begin(), t.end(), decl), end; m != end; ++m)
+			{
+				const std::string type = (*m)[2];
+				if (type.find("texture") == std::string::npos && type.find("image") == std::string::npos)
+					continue;
+				it->second[(*m)[3]] = { type[0] == 'u' ? 'u' : type[0] == 'i' ? 'i' : 'f', (*m)[1] };
+			}
+			return it->second;
+		}
+
+		char Kind(VkFormat f)
+		{
+			switch (f)
+			{
+			case VK_FORMAT_R8_UINT: case VK_FORMAT_R8G8_UINT: case VK_FORMAT_R16_UINT: case VK_FORMAT_R16G16_UINT:
+			case VK_FORMAT_R32_UINT: case VK_FORMAT_R32G32_UINT: case VK_FORMAT_R32G32B32A32_UINT: case VK_FORMAT_R8G8B8A8_UINT:
+			case VK_FORMAT_R16G16B16A16_UINT:
+				return 'u';
+			case VK_FORMAT_R8_SINT: case VK_FORMAT_R8G8_SINT: case VK_FORMAT_R16_SINT: case VK_FORMAT_R16G16_SINT: case VK_FORMAT_R32_SINT:
+			case VK_FORMAT_R32G32_SINT: case VK_FORMAT_R32G32B32A32_SINT: case VK_FORMAT_R8G8B8A8_SINT: case VK_FORMAT_R16G16B16A16_SINT:
+				return 'i';
+			default:
+				return 'f';
+			}
+		}
+
+		// a format of the same texel size and the numeric type `kind` (for a view of an image made with a mutable format)
+		VkFormat AltFormat(VkFormat f, char kind)
+		{
+			const uint32 bytes = TexelBytes(f);
+			const bool two = f == VK_FORMAT_R8G8_UNORM || f == VK_FORMAT_R8G8_UINT || f == VK_FORMAT_R8G8_SINT;
+			switch (bytes)
+			{
+			case 1: return kind == 'u' ? VK_FORMAT_R8_UINT : kind == 'i' ? VK_FORMAT_R8_SINT : VK_FORMAT_R8_UNORM;
+			case 2: return two ? (kind == 'u' ? VK_FORMAT_R8G8_UINT : kind == 'i' ? VK_FORMAT_R8G8_SINT : VK_FORMAT_R8G8_UNORM)
+				: (kind == 'u' ? VK_FORMAT_R16_UINT : kind == 'i' ? VK_FORMAT_R16_SINT : VK_FORMAT_R16_SFLOAT);
+			case 4: return kind == 'u' ? VK_FORMAT_R32_UINT : kind == 'i' ? VK_FORMAT_R32_SINT : VK_FORMAT_R32_SFLOAT;
+			case 8: return kind == 'u' ? VK_FORMAT_R32G32_UINT : kind == 'i' ? VK_FORMAT_R32G32_SINT : VK_FORMAT_R32G32_SFLOAT;
+			case 16: return kind == 'u' ? VK_FORMAT_R32G32B32A32_UINT : kind == 'i' ? VK_FORMAT_R32G32B32A32_SINT : VK_FORMAT_R32G32B32A32_SFLOAT;
+			default: return VK_FORMAT_UNDEFINED;
+			}
+		}
+
+		VkFormat GlslFormat(const std::string& q, char kind)
+		{
+			static const std::map<std::string, VkFormat> m = { { "rgba32f", VK_FORMAT_R32G32B32A32_SFLOAT },
+				{ "rgba16f", VK_FORMAT_R16G16B16A16_SFLOAT }, { "rg32f", VK_FORMAT_R32G32_SFLOAT }, { "rg16f", VK_FORMAT_R16G16_SFLOAT },
+				{ "r11f_g11f_b10f", VK_FORMAT_B10G11R11_UFLOAT_PACK32 }, { "r32f", VK_FORMAT_R32_SFLOAT }, { "r16f", VK_FORMAT_R16_SFLOAT },
+				{ "rgba8", VK_FORMAT_R8G8B8A8_UNORM }, { "rg8", VK_FORMAT_R8G8_UNORM }, { "r8", VK_FORMAT_R8_UNORM }, { "r16", VK_FORMAT_R16_UNORM },
+				{ "rgba32ui", VK_FORMAT_R32G32B32A32_UINT }, { "rg32ui", VK_FORMAT_R32G32_UINT }, { "r32ui", VK_FORMAT_R32_UINT },
+				{ "rg16ui", VK_FORMAT_R16G16_UINT }, { "r16ui", VK_FORMAT_R16_UINT }, { "rgba8ui", VK_FORMAT_R8G8B8A8_UINT },
+				{ "rg8ui", VK_FORMAT_R8G8_UINT }, { "r8ui", VK_FORMAT_R8_UINT }, { "rg16i", VK_FORMAT_R16G16_SINT }, { "r32i", VK_FORMAT_R32_SINT },
+				{ "r16i", VK_FORMAT_R16_SINT }, { "r8i", VK_FORMAT_R8_SINT } };
+			if (auto it = m.find(q); it != m.end())
+				return it->second;
+			return kind == 'u' ? VK_FORMAT_R32G32B32A32_UINT : kind == 'i' ? VK_FORMAT_R32G32B32A32_SINT : VK_FORMAT_R32G32B32A32_SFLOAT;
+		}
+
+		// a 1x1 image of zeroes standing in for a binding with no resource (AMD's host code binds index 0, its backends'
+		// null resource, to what a pass doesn't use this time: the first dispatch's accumulation, the optical flow's
+		// confidence), by format; in GENERAL, for sampling and storage
+		void ComputeBarrierEarly()
+		{
+			VkMemoryBarrier b{ VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+			b.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			b.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+			vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &b, 0, nullptr, 0, nullptr);
+		}
+		struct Dummy { Image img; VkImageView view = VK_NULL_HANDLE; };
+		std::map<VkFormat, Dummy> s_dummies;
+		VkImageView DummyView(VkFormat f)
+		{
+			Dummy& d = s_dummies[f];
+			if (!d.view)
+			{
+				EndRendering();
+				d.img = CreateImage(f, VK_IMAGE_ASPECT_COLOR_BIT, 1, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+					VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+				Transition(d.img, VK_IMAGE_LAYOUT_GENERAL);
+				VkClearColorValue zero{};
+				VkImageSubresourceRange all{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+				vkCmdClearColorImage(s.cmd, d.img.image, VK_IMAGE_LAYOUT_GENERAL, &zero, 1, &all);
+				ComputeBarrierEarly();
+				d.view = MakeView(d.img.image, f, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1);
+			}
+			return d.view;
+		}
+
+		// a sampled view of one of our images as another numeric type
+		VkImageView AltView(Resource& r, char kind)
+		{
+			const VkFormat f = AltFormat(r.image->format, kind);
+			if (f == VK_FORMAT_UNDEFINED || r.external)
+				return VK_NULL_HANDLE;
+			VkImageView& v = r.alt[f];
+			if (!v)
+				v = MakeView(r.image->image, f, VK_IMAGE_ASPECT_COLOR_BIT, 0, std::max<uint32>(r.desc.mipCount, 1));
+			return v;
+		}
+
 		FfxErrorCode CreatePipeline(FfxInterface*, FfxEffect effect, FfxPass pass, uint32_t options, const FfxPipelineDescription* desc,
 			FfxUInt32, FfxPipelineState* out)
 		{
@@ -573,6 +698,8 @@ namespace wwhd::gpu::fsr3
 					continue;
 				const uint32 binding = (uint32)u.getBinding();
 				const std::string name = u.name.substr(0, u.name.find('['));
+				if (auto d = Decls(effect).find(name); d != Decls(effect).end())
+					p->decls[binding] = d->second;
 				const uint32 count = std::max(u.size, 1);
 				if (name.rfind("s_", 0) == 0)
 				{
@@ -744,11 +871,20 @@ namespace wwhd::gpu::fsr3
 			for (uint32 i = 0; i < job.pipeline.srvTextureCount; i++)
 			{
 				Resource* r = Res(job.srvTextures[i].resource);
-				if (!r)
-					continue;
-				if (r->external)
-					Transition(*r->image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-				images[n] = { VK_NULL_HANDLE, r->sampled, r->external ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL };
+				const auto decl = p->decls.find(job.pipeline.srvTextureBindings[i].slotIndex);
+				const char kind = decl != p->decls.end() ? decl->second.first : 'f';
+				if (!r || r->buffer || !r->image)                   // nothing bound (the host's null): a dummy of the type read
+					images[n] = { VK_NULL_HANDLE, DummyView(GlslFormat("", kind)), VK_IMAGE_LAYOUT_GENERAL };
+				else
+				{
+					if (r->external)
+						Transition(*r->image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+					VkImageView v = r->sampled;
+					if (Kind(r->image->format) != kind && !(r->image->aspect & VK_IMAGE_ASPECT_DEPTH_BIT))   // read as another type
+						if (VkImageView alt = AltView(*r, kind))
+							v = alt;
+					images[n] = { VK_NULL_HANDLE, v, r->external ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL };
+				}
 				VkWriteDescriptorSet w{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
 				w.dstSet = set;
 				w.dstBinding = job.pipeline.srvTextureBindings[i].slotIndex;
@@ -760,12 +896,19 @@ namespace wwhd::gpu::fsr3
 			for (uint32 i = 0; i < job.pipeline.uavTextureCount; i++)
 			{
 				Resource* r = Res(job.uavTextures[i].resource);
-				if (!r || r->mipViews.empty())
-					continue;
-				if (r->external)
-					Transition(*r->image, VK_IMAGE_LAYOUT_GENERAL);
-				const uint32 mip = std::min<uint32>(job.uavTextures[i].mip, (uint32)r->mipViews.size() - 1);
-				images[n] = { VK_NULL_HANDLE, r->mipViews[mip], VK_IMAGE_LAYOUT_GENERAL };
+				if (!r || r->mipViews.empty())                      // nothing bound: a dummy of the declared format
+				{
+					const auto decl = p->decls.find(job.pipeline.uavTextureBindings[i].slotIndex);
+					images[n] = { VK_NULL_HANDLE, DummyView(decl != p->decls.end() ? GlslFormat(decl->second.second, decl->second.first)
+						: VK_FORMAT_R32G32B32A32_SFLOAT), VK_IMAGE_LAYOUT_GENERAL };
+				}
+				else
+				{
+					if (r->external)
+						Transition(*r->image, VK_IMAGE_LAYOUT_GENERAL);
+					const uint32 mip = std::min<uint32>(job.uavTextures[i].mip, (uint32)r->mipViews.size() - 1);
+					images[n] = { VK_NULL_HANDLE, r->mipViews[mip], VK_IMAGE_LAYOUT_GENERAL };
+				}
 				VkWriteDescriptorSet w{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
 				w.dstSet = set;
 				w.dstBinding = job.pipeline.uavTextureBindings[i].slotIndex;
@@ -1020,6 +1163,8 @@ namespace wwhd::gpu::fsr3
 			i.fpDestroyPipeline = DestroyPipeline;
 			i.fpScheduleGpuJob = ScheduleGpuJob;
 			i.fpExecuteGpuJobs = ExecuteGpuJobs;
+			if (s_resources.empty())                            // index 0 is the host's null resource (AMD's backends: a dummy)
+				s_resources.emplace_back();
 			f.scratch.resize(1 << 20);
 			i.scratchBuffer = f.scratch.data();
 			i.scratchBufferSize = f.scratch.size();
@@ -1163,7 +1308,7 @@ namespace wwhd::gpu::fsr3
 			{
 				if (g.hudless.image)
 				{
-					WaitPending();
+					SubmitAndWait();                                // this frame's commands may use it too (a resize)
 					Forget(g.hudless.image);
 					DestroyImage(g.hudless);
 				}

@@ -25,6 +25,7 @@
 #include "input/InputManager.h"
 #include "audio/CubebAPI.h"
 #include "audio/CubebInputAPI.h"
+#include <chrono>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #include <algorithm>
@@ -58,6 +59,22 @@ static void setSize(int w, int h)
 // The window's drawable size, kept by the event loop for the renderer's thread.
 static std::atomic<uint32> s_pixelWidth, s_pixelHeight;
 static std::atomic<float> s_refresh{ 0.0f };                    // the window's display's refresh rate (frame generation)
+
+// a window size that fits the desktop's usable area (the taskbar left out, room for the title bar), its shape kept: a
+// resolution bigger than the desktop opens fitted, never off the screen (b-displayres)
+static void FitToDesktop(int& width, int& height)
+{
+	SDL_Rect r{};
+	if (!SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &r) || r.w <= 0 || r.h <= 0)
+		return;
+	const int maxW = r.w, maxH = std::max(r.h - 48, 180);
+	if (width <= maxW && height <= maxH)
+		return;
+	const float k = std::min((float)maxW / (float)width, (float)maxH / (float)height);
+	cemuLog_log(LogType::Force, "wwhd: the window {}x{} is bigger than the desktop ({}x{} usable): {}x{}", width, height, r.w, r.h,
+		(int)(width * k), (int)(height * k));
+	width = (int)(width * k), height = (int)(height * k);
+}
 
 static void StorePixelSize(SDL_Window* window)
 {
@@ -309,10 +326,12 @@ static SDL_Window* OpenWindow()
 		cemuLog_log(LogType::Force, "wwhd: no gamepads: {}", SDL_GetError());   // the keyboard still works
 	wwhd::os::input::SetRumble(Rumble);
 	// the window's size and fullscreen from the settings (WWHD_WINDOW_SIZE=WxH, WWHD_FULLSCREEN=1; src/os/settings.h)
-	int width = 1280, height = 720;
+	int width = 1920, height = 1080;                             // the resolution's default (b-displayres: the game renders at it)
 	if (const char* size = getenv("WWHD_WINDOW_SIZE"); size && sscanf(size, "%dx%d", &width, &height) != 2)
-		width = 1280, height = 720;
+		width = 1920, height = 1080;
 	const char* full = getenv("WWHD_FULLSCREEN");
+	if (!(full && strcmp(full, "1") == 0))
+		FitToDesktop(width, height);
 	SDL_Window* window = SDL_CreateWindow("The Legend of Zelda: The Wind Waker HD", std::max(width, 320), std::max(height, 180),
 		SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | (full && strcmp(full, "1") == 0 ? SDL_WINDOW_FULLSCREEN : 0));
 	if (!window)
@@ -387,10 +406,28 @@ static void PrepareShaders(SDL_Window* window)
 				if (full != ((SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0))
 					SDL_SetWindowFullscreen(window, full);
 				if (!full && w > 0 && h > 0)
+				{
+					FitToDesktop(w, h);
 					SDL_SetWindowSize(window, w, h);
+				}
 				if (vsync)
 					wwhd::gpu::RebuildSwapchain();      // its present mode reads WWHD_VSYNC
 			}
+		// WWHD_TEST_RESIZE=SECONDS:WxH (a test, b-displayres): the window resized once, that long after the event loop starts
+		if (static const char* resize = getenv("WWHD_TEST_RESIZE"); resize)
+		{
+			static const auto start = std::chrono::steady_clock::now();
+			static bool done = false;
+			float secs = 0.0f;
+			int rw = 0, rh = 0;
+			if (!done && sscanf(resize, "%f:%dx%d", &secs, &rw, &rh) == 3 &&
+				std::chrono::steady_clock::now() - start > std::chrono::duration<float>(secs))
+			{
+				done = true;
+				cemuLog_log(LogType::Force, "wwhd: test resize to {}x{}", rw, rh);
+				SDL_SetWindowSize(window, rw, rh);
+			}
+		}
 		bool typing = wwhd::os::swkbd::Current().open;
 		if (typing != SDL_TextInputActive(window))
 			typing ? SDL_StartTextInput(window) : SDL_StopTextInput(window);

@@ -35,9 +35,14 @@ namespace
 		{ "WWHD_VSYNC", "Vsync", { { "0", "off" }, { "1", "on" } }, true, nullptr },
 		{ "WWHD_VRR", "Variable refresh (FreeSync / G-Sync / VRR)", { { "0", "off" }, { "1", "on" } }, false, nullptr },
 		{ "WWHD_FULLSCREEN", "Display", { { "0", "window" }, { "1", "fullscreen" } }, true, nullptr },
-		{ "WWHD_WINDOW_SIZE", "Window size", { { "1280x720", "1280x720" }, { "1600x900", "1600x900" },
-			{ "1920x1080", "1920x1080" }, { "2560x1440", "2560x1440" } }, true, nullptr },
-		{ "WWHD_RENDER_SCALE", "Render scale", { { "1", "100%" }, { "0.75", "75%" }, { "0.5", "50%" }, { "auto", "Auto" } }, false, "auto" },
+		// the resolution: the window's size (fullscreen: the display's own); the game renders at it times the render scale
+		// (b-displayres: gpu/vk/renderer.cpp DisplayScale), the upscalers and the HUD at it
+		{ "WWHD_WINDOW_SIZE", "Resolution (window; fullscreen: the display's)", { { "1920x1080", "1920x1080" },
+			{ "1280x720", "1280x720" }, { "1280x800", "1280x800" }, { "1600x900", "1600x900" }, { "2560x1440", "2560x1440" },
+			{ "3840x2160", "3840x2160" } }, true, nullptr },
+		{ "WWHD_RENDER_SCALE", "Render scale (of the resolution; the effects' buffers stay at the game's size)", { { "1", "100%" },
+			{ "0.75", "75%" }, { "0.67", "67%" }, { "0.5", "50%" }, { "1.5", "150% (supersampling)" }, { "2", "200% (supersampling)" },
+			{ "auto", "Auto" } }, false, "auto" },
 		// the TV picture's shape (os/aspect.h, b-wide): Auto fills the window (more view to the sides on a wider one, above
 		// and below on a taller one, the Steam Deck's 16:10), 4:3 a 4:3 picture (more view above and below; bars at the
 		// sides on a wide screen, the GameCube's shape); the HUD keeps its proportions, at the picture's corners
@@ -311,6 +316,8 @@ namespace wwhd::os::settings
 		const Option& o = kOptions[option];
 		const std::string v = s_fromEnv.count(o.key) ? s_atStart[o.key] : Current(o);
 		std::string line = std::string(o.label) + ": " + o.values[IndexOf(o, v)].shown;
+		if (!v.empty() && o.values[IndexOf(o, v)].value != v)       // a value the list hasn't (the file's, the launcher's)
+			line = std::string(o.label) + ": " + v + " (not one of the list)";
 		if (auto n = s_notes.find(o.key); n != s_notes.end())
 			line += " (" + n->second + ")";
 		if (!s_active)

@@ -127,6 +127,8 @@ namespace wwhd::gpu
 	// the shaders' uf_fragCoordScale and uf_texNScale undo it. Off (1): every image the guest's size
 	// WWHD_RENDER_SCALE=auto: dynamic resolution, the scale chosen at each swap from the GPU's time a frame (DynamicScale)
 	float RenderScale();                                          // the current scale
+	float DisplayScale();                                         // the window's picture over the guest's size (b-displayres)
+	bool WindowExtent(uint32& w, uint32& h);                      // the window's drawable size (its swapchain's); false: none
 	bool DynamicScale();
 	bool ScaledSurface(uint32 gw, uint32 gh);
 	uint32 Scaled(uint32 guest, bool scaled = true);            // an image's size for a guest size (scaled or not), now
