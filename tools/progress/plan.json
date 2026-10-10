@@ -500,7 +500,7 @@
       "id": "b-wide",
       "lane": "bottom",
       "complexity": 7,
-      "name": "Round 14: [7] Widescreen (Hor+) and HUD anchoring (rival-study 9.3 #7)"
+      "name": "Round 14: [7] Screens that aren't 16:9 (the game is 16:9): ultrawide 21:9 and 32:9 with more view to the sides (Hor+), taller screens like the Steam Deck's 16:10 with more view above and below (Vert+), the HUD anchored to the real screen's corners (rival-study 9.3 #7)"
     },
     {
       "id": "b-gfxopts",
