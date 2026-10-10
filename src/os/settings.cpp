@@ -37,7 +37,6 @@ namespace
 		{ "WWHD_WINDOW_SIZE", "Window size", { { "1280x720", "1280x720" }, { "1600x900", "1600x900" },
 			{ "1920x1080", "1920x1080" }, { "2560x1440", "2560x1440" } }, true, nullptr },
 		{ "WWHD_RENDER_SCALE", "Render scale", { { "1", "100%" }, { "0.75", "75%" }, { "0.5", "50%" }, { "auto", "Auto" } }, false, "auto" },
-		{ "WWHD_RENDER_SCALE", "Render scale", { { "1", "100%" }, { "0.75", "75%" }, { "0.5", "50%" }, { "auto", "Auto" } }, false, "auto" },
 		{ "WWHD_UPSCALER", "Upscaler (render scale under 100%)", { { "none", "bilinear" }, { "fsr1", "FSR 1" },
 			{ "fsr3", "FSR 3 (desktop GPUs)" } }, false, nullptr },
 		{ "WWHD_CORES", "CPU threads", { { "3", "3" }, { "1", "1" } }, false, "3" },
@@ -234,6 +233,12 @@ namespace wwhd::os::settings
 		for (const Option& o : kOptions)
 			if (o.performance)
 				s_startLog += std::string(", ") + o.key + "=" + s_atStart[o.key] + (s_fromEnv.count(o.key) ? " (environment)" : "");
+		{
+			std::set<std::string> seen;                 // the table lists each option once (a rebase once doubled one)
+			for (const Option& o : kOptions)
+				if (!seen.insert(o.key).second)
+					s_startLog += std::string("; an option listed twice: ") + o.key;
+		}
 		if (const char* fr = getenv("WWHD_FRAMERATE"))
 		{
 			const char* sixty = getenv("WWHD_60FPS");
