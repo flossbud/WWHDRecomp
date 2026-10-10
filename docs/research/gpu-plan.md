@@ -291,6 +291,22 @@ CPU-written vertex data per group and run the two-pass shader on it (or mark the
 - **Decision:** wait for AMD's Vulkan FSR 4 (or a licensed model); our FSR 3.1 path (above) takes the same inputs, so
   FSR 4 would slot into the same place (the HUD split, the motion target, the jitter). Revisit at each SDK release.
 
+## XeSS and DLSS: parked (b-xess, b-dlss, session bottom, 2026-10-10)
+
+- **XeSS:** Intel ships it as closed Windows DLLs only (`libxess.dll`; still so in the 2026 XeSS 3 SDK), no Linux
+  library; Vulkan on Windows only. Intel Simplified Software License: the binaries redistributable unmodified with
+  the license text, no reverse engineering. Parked for the Windows platform work.
+- **DLSS:** NVIDIA's RTX SDK license (DLSS SDK v310.9.1) lets SDK materials be distributed only "as incorporated in
+  object code format into a software application" (1c), nothing else copied or distributed (4b), and never in a way
+  that makes them subject to an open-source license (4e); for NVIDIA GPUs only, with NVIDIA notified before any
+  commercial release (supplement 1, 4). So nothing of it may go into this public MPL repository, headers included,
+  and the supported API is the static `libnvsdk_ngx.a` (which loads the driver's NGX), not the driver's library
+  directly. **The compliant route, if it's taken up:** a CMake option pointing at a locally downloaded SDK
+  (`WWHD_DLSS_SDK=path`); only then our own `dlss.cpp` is built and `libnvsdk_ngx.a` linked (object code), and such
+  builds carry NVIDIA's `libnvidia-ngx-dlss.so`; offered only on vendor 0x10DE with NGX up, falling back to FSR 3 or
+  bilinear on any failure; the same inputs as FSR 3. None of our machines has an NVIDIA GPU to test on. Parked by
+  the owner.
+
 ## Item 4, the settings menu: design (session cloud3; the first round landed as designed: handoff.md, "Session cloud3")
 
 **What exists.** Every option on the list is a startup switch today, read once from the environment (`static const`
