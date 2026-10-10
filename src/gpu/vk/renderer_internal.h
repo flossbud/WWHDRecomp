@@ -61,6 +61,7 @@ namespace wwhd::gpu
 		bool customBorder = false;                               // VK_EXT_custom_border_color, without format
 		bool anisotropy = false;
 		bool float16 = false;                                    // shaderFloat16 and 16-bit storage (FSR 1's fp16 path)
+		bool subgroupHalf = false;                               // and subgroup operations on halves (FSR 3's fp16 path)
 		VkCommandPool pool = VK_NULL_HANDLE;
 		VkCommandBuffer cmd = VK_NULL_HANDLE;
 		VkFence fence = VK_NULL_HANDLE;
@@ -255,8 +256,17 @@ namespace wwhd::gpu
 		void OnSubmitted();                                       // the ring was handed back (its offsets are gone)
 		Image* Target(const Image& depth, bool& clear);           // the motion target for a scene pass (clear: first this frame)
 		void DrawDebug(Image& tv);                                // WWHD_MOTION=debug: the motion over the TV image
+		Image* TargetImage();                                     // this frame's motion target (null if none yet)
+		Image* SceneDepth();                                      // the depth target the scene drew with this frame
 		bool JitterOn();                                          // WWHD_JITTER=1 (with WWHD_MOTION)
 		void Jitter(uint32 frame, float& x, float& y);            // this frame's offset, target pixels (-0.5..0.5)
+	}
+	// fsr3.cpp: AMD FSR 3.1's upscaler on the motion vectors (WWHD_UPSCALER=fsr3)
+	namespace fsr3
+	{
+		bool On();
+		// the scaled scene (`color`, its `depth`, the motion target) upscaled into `out` (the guest's size, storage usage)
+		bool Upscale(Image& color, Image& depth, Image& motionTarget, Image& out, float jitterX, float jitterY, bool reset);
 	}
 	// renderer.cpp: where the TV image's HUD begins (a draw into the TV surface alone, sampling only textures from
 	// memory, after a full-screen pass into it that sampled surfaces): with FSR 1 the scaled image is upscaled there

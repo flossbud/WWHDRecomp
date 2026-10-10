@@ -35,7 +35,9 @@ namespace wwhd::vk
 	X(vkCmdSetScissor) X(vkCmdPushConstants) X(vkCmdSetBlendConstants) X(vkCmdSetDepthBias) \
 	X(vkCreateSwapchainKHR) X(vkDestroySwapchainKHR) X(vkGetSwapchainImagesKHR) X(vkAcquireNextImageKHR) \
 	X(vkQueuePresentKHR) X(vkCreateSemaphore) X(vkDestroySemaphore) \
-	X(vkCreateQueryPool) X(vkCmdResetQueryPool) X(vkCmdWriteTimestamp) X(vkGetQueryPoolResults)
+	X(vkCreateQueryPool) X(vkCmdResetQueryPool) X(vkCmdWriteTimestamp) X(vkGetQueryPoolResults) \
+	X(vkCreateComputePipelines) X(vkCmdDispatch) X(vkDestroyShaderModule) X(vkDestroyPipeline) X(vkDestroyPipelineLayout) \
+	X(vkDestroyDescriptorSetLayout)
 
 #define WWHD_VK_DECLARE(f) extern PFN_##f f;
 	WWHD_VK_GLOBAL(WWHD_VK_DECLARE)

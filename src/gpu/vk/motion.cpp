@@ -57,6 +57,7 @@ namespace wwhd::gpu::motion
 		// block, the camera's or the lights', is copied once, not once per draw); cleared at each submit (OnSubmitted)
 		std::unordered_map<uint32, VkDeviceSize> s_inRing;
 		Image s_target;                                         // the motion target, the scene's own size
+		Image* s_sceneDepth = nullptr;                          // the depth target it was made for (a surface: the map's entry)
 		uint32 s_targetFrame = UINT32_MAX;                      // the frame it was last cleared in
 		struct { uint32 draws = 0, matched = 0, camera = 0, plain = 0, noId = 0, noGroup = 0, far = 0, ambiguous = 0, taken = 0; } s_stats;
 
@@ -78,7 +79,7 @@ namespace wwhd::gpu::motion
 
 	bool On()
 	{
-		static const bool on = [] { const char* e = getenv("WWHD_MOTION"); return e && (atoi(e) != 0 || strcmp(e, "debug") == 0); }();
+		static const bool on = [] { const char* e = getenv("WWHD_MOTION"); return (e && (atoi(e) != 0 || strcmp(e, "debug") == 0)) || fsr3::On(); }();
 		return on;
 	}
 
@@ -345,7 +346,7 @@ namespace wwhd::gpu::motion
 	// their viewport (draw.cpp), so the clip positions, and with them the motion vectors, don't contain it.
 	bool JitterOn()
 	{
-		static const bool on = [] { const char* e = getenv("WWHD_JITTER"); return On() && e && atoi(e) != 0; }();
+		static const bool on = [] { const char* e = getenv("WWHD_JITTER"); return On() && ((e && atoi(e) != 0) || (!e && fsr3::On())); }();
 		return on;
 	}
 
@@ -379,7 +380,18 @@ namespace wwhd::gpu::motion
 		}
 		clear = s_targetFrame != s.frame;
 		s_targetFrame = s.frame;
+		s_sceneDepth = const_cast<Image*>(&depth);
 		return &s_target;
+	}
+
+	Image* TargetImage()
+	{
+		return s_target.image && s_targetFrame == s.frame ? &s_target : nullptr;
+	}
+
+	Image* SceneDepth()
+	{
+		return s_targetFrame == s.frame ? s_sceneDepth : nullptr;
 	}
 
 	void DrawDebug(Image& tv)

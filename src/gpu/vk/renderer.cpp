@@ -130,13 +130,15 @@ namespace wwhd::gpu
 		if (!v13.dynamicRendering)
 			Fail("no dynamic rendering");
 		{
-			const VkBool32 f16 = v12.shaderFloat16, s16 = v11.storageBuffer16BitAccess;
+			const VkBool32 f16 = v12.shaderFloat16, s16 = v11.storageBuffer16BitAccess, sub = v12.shaderSubgroupExtendedTypes;
 			void* next12 = v12.pNext, *next11 = v11.pNext;
 			v12 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, next12 };
 			v11 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES, next11 };
 			v12.shaderFloat16 = f16;
+			v12.shaderSubgroupExtendedTypes = sub;                   // FSR 3's fp16 passes: subgroup operations on halves
 			v11.storageBuffer16BitAccess = s16;
 			s.float16 = f16 && s16;
+			s.subgroupHalf = s.float16 && sub;
 		}
 		s.depthClip = clip.depthClipEnable;
 		s.customBorder = border.customBorderColors && border.customBorderColorWithoutFormat;
@@ -775,12 +777,21 @@ namespace wwhd::gpu
 					DestroyImage(p.full);
 				}
 				p.full = CreateImage(img.format, img.aspect, img.gw, img.gh, VK_IMAGE_USAGE_SAMPLED_BIT |
-					(depth ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+					(depth ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) |
+					(fsr && fsr3::On() ? VK_IMAGE_USAGE_STORAGE_BIT : 0));    // FSR 3 writes it from a compute pass
 			}
 			EndRendering();
 			if (fsr)
 			{
-				if (!fsr1::Upscale(img, p.full))
+				// FSR 3 with this frame's motion and the scene's depth (both at the scene's scale), else FSR 1
+				Image* motionTarget = fsr3::On() ? motion::TargetImage() : nullptr;
+				Image* sceneDepth = motionTarget ? motion::SceneDepth() : nullptr;
+				float jx = 0.0f, jy = 0.0f;
+				if (motion::JitterOn())
+					motion::Jitter(s.frame, jx, jy);
+				const bool done = sceneDepth && sceneDepth->image && sceneDepth->scale == img.scale &&
+					fsr3::Upscale(img, *sceneDepth, *motionTarget, p.full, jx, jy, false);
+				if (!done && !fsr1::Upscale(img, p.full))
 					return false;
 			}
 			else
@@ -857,7 +868,7 @@ namespace wwhd::gpu
 
 	Image* TvSurface()
 	{
-		if (!s_tvKnown || !fsr1::On())
+		if (!s_tvKnown || !(fsr1::On() || fsr3::On()))
 			return nullptr;
 		auto it = s.surfaces.find(s_tvKey);
 		return it == s.surfaces.end() || !it->second.image ? nullptr : &it->second;
@@ -889,7 +900,7 @@ namespace wwhd::gpu
 	{
 		void HudEnds()
 		{
-			if (fsr1::On() && s.frame % 600 == 0 && (s_hudStats.split || s_hudStats.atScan))
+			if ((fsr1::On() || fsr3::On()) && s.frame % 600 == 0 && (s_hudStats.split || s_hudStats.atScan))
 			{
 				Log(fmt::format("fsr1: frames {}-{}: {} upscaled where the HUD begins, {} at the scan copy (HUD included); {} "
 					"targets given full-size stand-ins after the split", s.frame - 599, s.frame, s_hudStats.split, s_hudStats.atScan,
@@ -1411,7 +1422,7 @@ namespace wwhd::gpu
 		SurfaceRead(src, h);
 		if (target == 1 && motion::Debug())                         // WWHD_MOTION=debug: the motion over the TV image
 			motion::DrawDebug(src);
-		if (target == 1 && fsr1::On())                              // the TV surface (FSR 1's HUD split)
+		if (target == 1 && (fsr1::On() || fsr3::On()))             // the TV surface (the upscalers' HUD split)
 		{
 			s_tvKey = KeyOf(src), s_tvKnown = true;
 			if (!s_hudActive)

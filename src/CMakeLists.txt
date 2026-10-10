@@ -128,11 +128,31 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/gen/fsr1_headers.inc.new"
 configure_file("${CMAKE_CURRENT_BINARY_DIR}/gen/fsr1_headers.inc.new" "${CMAKE_CURRENT_BINARY_DIR}/gen/fsr1_headers.inc" COPYONLY)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${fsr1_dir}/ffx_a.h" "${fsr1_dir}/ffx_fsr1.h")
 
+# AMD's FidelityFX SDK v1.1.4 FSR 3.1 upscaler host code (MIT, third_party/fsr3: README.md), built as it is with a
+# shim for the few Windows CRT names it uses (gpu/vk/fsr3_compat.h); its backend is ours (gpu/vk/fsr3.cpp)
+set(fsr3_dir "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fsr3")
+add_library(wwhd_fsr3 OBJECT "${fsr3_dir}/src/components/fsr3upscaler/ffx_fsr3upscaler.cpp" "${fsr3_dir}/src/shared/ffx_object_management.cpp")
+target_include_directories(wwhd_fsr3 PRIVATE "${fsr3_dir}/include" "${fsr3_dir}/src/shared")
+set_property(TARGET wwhd_fsr3 PROPERTY CXX_STANDARD 20)
+target_compile_options(wwhd_fsr3 PRIVATE -include "${CMAKE_CURRENT_SOURCE_DIR}/gpu/vk/fsr3_compat.h" -w)
+
+# its shaders (GLSL compute) and the GPU headers they include, as strings for glslang at run time (gpu/vk/fsr3.cpp)
+file(GLOB_RECURSE fsr3_gpu_sources RELATIVE "${fsr3_dir}" "${fsr3_dir}/shaders/*.glsl" "${fsr3_dir}/include/FidelityFX/gpu/*.h")
+set(fsr3_table "")
+foreach(f ${fsr3_gpu_sources})
+	file(READ "${fsr3_dir}/${f}" text)
+	string(REGEX REPLACE "^include/FidelityFX/gpu/" "" name "${f}")
+	string(APPEND fsr3_table "\t{ \"${name}\", R\"FFX(${text})FFX\" },\n")
+	set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${fsr3_dir}/${f}")
+endforeach()
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/gen/fsr3_sources.inc.new" "static const struct { const char* path; const char* text; } kFsr3Sources[] = {\n${fsr3_table}};\n")
+configure_file("${CMAKE_CURRENT_BINARY_DIR}/gen/fsr3_sources.inc.new" "${CMAKE_CURRENT_BINARY_DIR}/gen/fsr3_sources.inc" COPYONLY)
+
 add_library(wwhd_gpu OBJECT gpu/null_gpu.cpp gpu/vk/vk.cpp gpu/vk/renderer.cpp gpu/vk/present.cpp
 	gpu/vk/shader_cache.cpp gpu/vk/shader_list.cpp gpu/vk/draw.cpp gpu/vk/texture.cpp gpu/vk/latte_glue.cpp gpu/vk/gpu_timing.cpp
-	gpu/vk/fsr1.cpp gpu/vk/motion.cpp)
+	gpu/vk/fsr1.cpp gpu/vk/motion.cpp gpu/vk/fsr3.cpp)
 wwhd_like_cemu(wwhd_gpu)
-target_include_directories(wwhd_gpu PRIVATE gpu "${CMAKE_CURRENT_BINARY_DIR}/gen")
+target_include_directories(wwhd_gpu PRIVATE gpu "${CMAKE_CURRENT_BINARY_DIR}/gen" "${fsr3_dir}/include")
 
 add_library(wwhd_runtime OBJECT runtime/dispatch.cpp runtime/imports.cpp runtime/diff.cpp runtime/profile.cpp
 	runtime/without_forks.cpp runtime/write_watch.cpp)
@@ -147,7 +167,7 @@ add_library(wwhd_os OBJECT os/coreinit_memory.cpp os/coreinit_queue_wait.cpp os/
 	os/gx2/surface_copy.cpp os/gx2/texture.cpp os/gx2/tiling_aperture.cpp)
 wwhd_like_cemu(wwhd_os)
 
-set(objects $<TARGET_OBJECTS:wwhd_main> $<TARGET_OBJECTS:wwhd_frontend> $<TARGET_OBJECTS:wwhd_gpu>
+set(objects $<TARGET_OBJECTS:wwhd_main> $<TARGET_OBJECTS:wwhd_frontend> $<TARGET_OBJECTS:wwhd_gpu> $<TARGET_OBJECTS:wwhd_fsr3>
 	$<TARGET_OBJECTS:wwhd_runtime> $<TARGET_OBJECTS:wwhd_os>)
 
 # the recompiled program (M3) and the overrides (D9): strict FP to match the interpreter, no strict
