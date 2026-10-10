@@ -290,7 +290,15 @@ namespace wwhd::gpu
 		static const bool on = [] {
 			const char* e = getenv("WWHD_LAZY_DRAWDONE");
 			const int v = e ? atoi(e) : 0;
-			return v == 2 || v == 3 || (v == 1 && !PPCTimer_isVirtualClock());
+			const bool lazy = v == 2 || v == 3 || (v == 1 && !PPCTimer_isVirtualClock());
+			// FSR 3 on the render thread with the lazy path crashed the command processor in a third of the worker's
+			// runs (qa's q-lazyring): off with it until that's fixed
+			if (lazy && fsr3::On())
+			{
+				Log("lazy GX2DrawDone off: WWHD_UPSCALER=fsr3 (the lazy path with FSR 3 crashes the command processor; qa's q-lazyring)");
+				return false;
+			}
+			return lazy;
 		}();
 		return on;
 	}
