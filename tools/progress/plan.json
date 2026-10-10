@@ -479,16 +479,10 @@
       "name": "Round 14: [7] FSR 3.1 upscaling (open, Vulkan, any GPU) on b-motion's inputs; a settings option (quality, balanced, performance); its frame generation is b-framegen"
     },
     {
-      "id": "b-xess",
-      "lane": "bottom",
-      "complexity": 6,
-      "name": "Round 14: [6] XeSS upscaling (Intel; Vulkan; most GPUs) on b-motion's inputs; a settings option"
-    },
-    {
       "id": "b-dlss",
       "lane": "bottom",
       "complexity": 6,
-      "name": "Round 14: [6] DLSS upscaling (NVIDIA only; Vulkan; the SDK's licence checked against MPL-2.0 and redistribution) on b-motion's inputs; a desktop NVIDIA option"
+      "name": "Round 14: [6] DLSS upscaling (NVIDIA only; Vulkan; the SDK's licence checked against MPL-2.0 and redistribution) on b-motion's inputs; a desktop NVIDIA option; built blind (no NVIDIA GPU here, the owner's call): offered only when NGX reports DLSS, falls back to FSR 3 on any failure, marked untested"
     },
     {
       "id": "b-framegen",
@@ -547,6 +541,7 @@
   ],
   "later": [
     "FSR 4 (parked 2026-10-10 after bottom's evaluation): AMD ships it only as a signed DirectX 12 DLL (SDK 2.3); the community Vulkan ports use a leaked model we can't ship. Waiting for AMD's Vulkan FSR 4; FSR 3.1's inputs (HUD split, motion, jitter) fit it; revisit at each SDK release",
+    "XeSS (parked 2026-10-10): Intel ships it only as closed Windows DLLs (no Linux library); for the Windows platform work, on FSR 3.1's inputs",
     "Platforms: Linux arm64, Windows, Android and CI through cloud sessions on github.com/flossbud/WWHDRecomp (docs/cloud-handoff.md)",
     "Android-specific speed: ADPF hints, core pinning, thermal (deck-plan), once the port runs",
     "More of the rival's lessons (rival-study 9.3): save states, a constant guest memory base, draw batching, interpolation as a low-power mode",
