@@ -407,6 +407,12 @@
       "name": "Round 14: [7] The lazy GX2DrawDone by default (deck-plan item 2; -15% game thread): A/B on the desktop worker with a window, vsync on and off; a sync-validation run with it; then on by default with full gates"
     },
     {
+      "id": "t-vrr",
+      "lane": "top",
+      "complexity": 5,
+      "name": "Round 14: [5] Variable refresh (the owner's ask: FreeSync / G-Sync Compatible / HDMI VRR): present so the display's VRR drives the refresh (the present mode, Linux's adaptive-sync hint; KDE, GNOME, gamescope, Windows fullscreen), frames paced by our own clock rather than vblank; a setting with a note when the display or compositor lacks it; dips and the 40/50 caps shown at their own rate; the owner tests on their monitor"
+    },
+    {
       "id": "t-skipcost",
       "lane": "top",
       "complexity": 5,
