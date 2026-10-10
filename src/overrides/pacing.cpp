@@ -74,6 +74,13 @@ namespace
 		return paced && !PPCTimer_isVirtualClock() && wwhd::os::SwapCount() >= wwhd::rt::SixtyFrom();   // ~0 when off
 	}
 
+	// 30 fps in real time paced as 60 is (f_0274C874 below; t-30fps): WWHD_30_PACING=0 keeps the game's own wait
+	bool Paced30()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_30_PACING"); return !(e && atoi(e) == 0); }();
+		return on && !PPCTimer_isVirtualClock() && wwhd::rt::SixtyFrom() == ~0u;
+	}
+
 	uint64 s_dropped = 0, s_halves = 0;            // half frames dropped, and all half frames (the real-time log)
 	bool s_capDrop = false;                        // this frame was dropped by the frame rate cap (WWHD_FPS_CAP), not late
 	Clock::time_point s_tickDue{}, s_frameStart{};
@@ -158,7 +165,7 @@ void f_0274C874(PPCInterpreter_t* __restrict ctx)
 	if (wwhd::pacing::g_dropFrame && !Paced())
 		wwhd::os::SuppressNextSwap();                  // a frame dropped at 30: the game's wait, not its swap (gx2)
 	const bool logging = Logging();
-	if (!logging && !Paced())
+	if (!logging && !Paced() && !Paced30())
 		[[clang::musttail]] return orig_f_0274C874(ctx);
 	const Clock::time_point waitFrom = logging ? Clock::now() : Clock::time_point{};
 	const uint64 vsync = wwhd::gpu::VsyncCount();
@@ -185,7 +192,22 @@ void f_0274C874(PPCInterpreter_t* __restrict ctx)
 	}
 	if (g_rtHalfTick && !wwhd::pacing::g_dropFrame && s_frameStart != Clock::time_point{})
 		s_halfWorkMs += (std::chrono::duration<double, std::milli>(Clock::now() - s_frameStart).count() - s_halfWorkMs) / 8;
-	if (wwhd::pacing::g_dropFrame && Paced() && s_capDrop)
+	// at 30 in real time (t-30fps): the game's wait (orig: GX2WaitForVsync until GX2GetSwapStatus shows no swap pending)
+	// slipped a whole vsync whenever the GPU thread hadn't flipped the last frame yet, so on the worker 30 ran at 27-28.7
+	// with 14.5 ms of work a frame; as at 60, the frame's own slot instead: two vsyncs after the last frame's, or none
+	// when it's late already (or dropped: the frame skip). WWHD_30_PACING=0: the game's wait
+	static uint64 s_slot30 = 0;
+	if (Paced30())
+	{
+		if (!wwhd::pacing::g_dropFrame && s_slot30 && vsync < s_slot30 + 2)
+		{
+			GX2::wwhd_WaitForVsyncCount(s_slot30 + 2);
+			s_slot30 += 2;
+		}
+		else
+			s_slot30 = vsync;                          // late, dropped or the first: the schedule from here
+	}
+	else if (wwhd::pacing::g_dropFrame && Paced() && s_capDrop)
 		GX2::wwhd_WaitForVsyncCount(s_pairVsync + 2);   // dropped by the frame rate cap: on time, so its slot waits as shown
 	else if (wwhd::pacing::g_dropFrame && Paced())
 		;                                          // dropped: behind already, the next tick at once
