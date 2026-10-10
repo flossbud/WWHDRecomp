@@ -24,6 +24,9 @@ namespace GX2
 	GX2PerCoreCBState s_perCoreCBState[Espresso::CORE_COUNT];
 }
 
+void wwhd_CpGuardNote(uint32 physAddr, uint32 words, int kind);   // gpu/null_gpu.cpp: WWHD_CP_GUARD (a probe)
+namespace GX2 { std::string wwhd_PoolState(uint32 physAddr); }                    // below: for the guard's reports
+
 void gx2WriteGather_submitU32AsBE(uint32 v)
 {
 	uint32 coreIndex = PPCInterpreter_getCoreIndex(PPCInterpreter_getCurrentInstance());
@@ -230,6 +233,7 @@ namespace GX2
 	{
 		uint32be cmd[10];
 		uint32 cmdLen = 4;
+		wwhd_CpGuardNote(memory_virtualToPhysical(MEMPTR<void>(buffer).GetMPTR()), sizeInU32s, 10 + coreinit::OSGetCoreId());
 		cmd[0] = pm4HeaderType3(IT_INDIRECT_BUFFER_PRIV, 3);
 		cmd[1] = memory_virtualToPhysical(MEMPTR<void>(buffer).GetMPTR());
 		cmd[2] = 0x00000000; // address high bits
@@ -317,6 +321,29 @@ namespace GX2
 					GX2Command_StartNewCommandBuffer(numU32sForNextBuffer);
 			}
 		}
+	}
+
+	// WWHD_CP_GUARD's reports: the pool's read index and each core's current buffer (offsets in words)
+	std::string wwhd_PoolState(uint32 physAddr)
+	{
+		if (!s_commandState->commandPoolBase)
+			return "no pool";
+		const sint64 at = ((sint64)memory_physicalToVirtual(physAddr) - (sint64)s_commandState->commandPoolBase.GetMPTR()) / 4;
+		std::string out = fmt::format("this buffer at pool word {}; pool {} words, the GPU's read index {}, main core {};", at,
+			s_commandState->commandPoolSizeInU32s, GX2Command_GetPoolGPUReadIndex(), sGX2MainCoreIndex);
+		for (uint32 i = 0; i < Espresso::CORE_COUNT; i++)
+		{
+			auto& c = s_perCoreCBState[i];
+			if (!c.bufferPtr)
+			{
+				out += fmt::format(" core {} none;", i);
+				continue;
+			}
+			const sint64 from = c.bufferPtr - s_commandState->commandPoolBase.GetPtr();
+			out += fmt::format(" core {} {} {}+{} written {};", i, c.isDisplayList ? "list" : "buffer", from, c.bufferSizeInU32s,
+				c.currentWritePtr ? (sint64)(c.currentWritePtr - c.bufferPtr) : -1);
+		}
+		return out;
 	}
 
 	void GX2Flush()
@@ -446,6 +473,7 @@ namespace GX2
 		cemu_assert_debug((size&3) == 0);
 		// write PM4 command
 		GX2ReserveCmdSpace(4);
+		wwhd_CpGuardNote(memory_virtualToPhysical(addr), size / 4, 20 + coreinit::OSGetCoreId());
 		gx2WriteGather_submit(pm4HeaderType3(IT_INDIRECT_BUFFER_PRIV, 3),
 			memory_virtualToPhysical(addr),
 			0, // high address bits

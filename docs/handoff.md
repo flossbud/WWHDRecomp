@@ -4256,6 +4256,32 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
     at key 1694 in both; real time with three host threads and the boot (`RT_VARIANTS="mt1 mt2" rt_routes.sh` on slash, cuts, leaf,
     items, talk, house, hook, ladder): 16 of 16 in play on time at the first try, no crash or panic, mt1 against mt2
     0.0 apart on all 8 (the packs in by frame ~66 there).
+- **q-lazyring, the GPU thread's crash in packet() with FSR 3 and the lazy DrawDone (fixed): dropped frames skipped the
+  game's GX2DrawDone.** Bottom saw signal 11 in null_gpu.cpp's packet() in a third of the worker's FSR 3 runs with the
+  lazy DrawDone; the crashes were garbage packets (an IT_SET_RESOURCE naming registers far past the register file, and
+  so on), and "unknown PM4 packet 00" had appeared in most real-time runs since 27d276e, lazy or not (bottom's count).
+  - *The probe* `WWHD_CP_GUARD=1` (null_gpu.cpp, GX2_Command.cpp): every indirect buffer hashed when the guest hands it
+    over and again when the GPU thread reaches it, each unreadable packet logged with its buffer, and the pool's state.
+    It showed the game's own display lists (sent by GX2DirectCallDisplayList, outside gx2's pool, from core 1) rewritten
+    before the GPU thread read them, up to 13 submissions behind; gx2's pool and the TCL ring were never at fault. With
+    and without the lazy DrawDone, with one host thread or three. `WWHD_CP_DELAY_US=n` (a test) stalls the GPU thread
+    at each swap, as a slow renderer would: it widens the window (458-724 rewritten lists a run at 20 ms).
+  - *The cause*: a frame that keep-speed, frame skip or a 40/50 cap drops skips game_procPresent (pacing.cpp
+    f_020350C4) and with it the present's GX2DrawDone, the one wait that keeps the game from writing its lists again
+    before the GPU thread has read them. Since 27d276e keep-speed is always on in real time. A slow GPU thread (FSR 3 on
+    the worker's iGPU) turned the garbage into a crash.
+  - *The fix*: a dropped frame still calls GX2DrawDone (`WWHD_60FPS_DROPDRAWDONE=0`: left out, a test); top's bisect on
+    tour3 with forced drops found the same. And null_gpu.cpp rejects (and logs) a packet naming registers past the
+    register file (setRegisters, loadRegisters), so garbage can no longer write outside LatteGPUState.
+  - *Confirmed* with `WWHD_CP_GUARD=1`: the worker, bottom's FSR 3 + lazy en-tn runs: fixed 10/10 clean (0 lists
+    rewritten, 0 unknown packets, no crash), with the wait left out 4/4 rewrote 97-136 lists a run and one died (a
+    garbage draw asked for 1.99 GB of the ring). The desktop at the 40 cap (constant drops), half with a 20 ms stall:
+    fixed 36/36 clean, left out 10 of 18 rewrote lists. The wait costs nothing measurable on the worker: en-tn at 60
+    with the lazy DrawDone 44.5 fps (left out 43.7), 100% speed either way; without it 10.7 fps / 36% (11.1 / 37%: that
+    GPU can't keep 60 without the lazy path either way); frame skip at 30 at render scale 2, 80% speed (79%).
+  - *Gates* (main c160216 + the fix; then rebased on 73392e9, b-fsr3, without conflicts, rebuilt, the 40-cap runs
+    again): checks all MATCH (traces, streams, sound, diff 0 mismatches, 15 captures PSNR inf); regress identical
+    (da06a4ee); predeploy 50 ok, 0 FAIL, gohmatail WARN 54.0 (as on main), gohmarock ok 4.8.
 
 ## Waiting on the owner
 
@@ -4310,6 +4336,9 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
 - **`Mix(a, b)` in `draw.cpp` is `(a ^ b) * P + C`**, so a key made of two values alone depends
   only on their XOR. Keys that started from two Vulkan handles collided (fixed in e1aae8b). Start a
   key from a hash, or from `Mix(0, a)`.
+- **A frame that isn't presented must still call GX2DrawDone.** The game writes its display lists again in later
+  frames and relies on the present's DrawDone to know the GPU thread has read them (q-lazyring, session qa above).
+  Anything that skips game_procPresent keeps the wait; `WWHD_CP_GUARD=1` shows a list rewritten too early.
 - **The title loads the game's permanent packs** (Pack/szs_permanent0-2.pack, f_025B1F54: the title is a play scene).
   Anything that skips it must start that preload itself and wait for it (`WWHD_DEBUG_BOOT` does): an archive asked
   for while the packs load is called done at once and isn't there (q-boot3, session qa above). One host thread hides it.

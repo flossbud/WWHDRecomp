@@ -16,6 +16,7 @@
 #include "Cafe/HW/Espresso/PPCState.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
 #include "Cafe/OS/libs/gx2/GX2_Event.h"
+#include "Cafe/OS/libs/gx2/GX2_Command.h"
 #include "../os/tcl/tcl_host.h"
 #include "Cafe/OS/libs/TCL/TCL.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Time.h"
@@ -24,6 +25,9 @@
 #include "util/helpers/helpers.h"
 #include "vk/renderer.h"
 #include <algorithm>
+#include <deque>
+#include <mutex>
+#include <unordered_map>
 #include <ctime>
 #include <map>
 #include <set>
@@ -123,6 +127,14 @@ static std::chrono::microseconds untilTimedVsync()
 	return std::chrono::microseconds(HighResolutionTimer::ticksToMicroseconds(next - now));
 }
 
+namespace wwhd::os
+{
+	uint32 SwapCount();             // os/os.h: the guest's swaps so far (the cp guard's reports)
+}
+namespace GX2
+{
+	std::string wwhd_PoolState(uint32 physAddr);   // os/gx2/core/GX2_Command.cpp: the cp guard's reports
+}
 namespace coreinit
 {
 	uint64 __OSIdleNanoseconds();   // os/coreinit/coreinit_Thread.cpp
@@ -437,11 +449,109 @@ namespace streamhash
 // ---- command processing (LatteCommandProcessor.cpp) --------------------------------------------
 namespace
 {
+	// WWHD_CP_GUARD=1 (a probe, q-lazyring): each indirect buffer (a command buffer: gx2's own from its pool, or a list in
+	// the game's own memory sent by GX2DirectCallDisplayList; a display list called from one) is hashed when the guest
+	// hands it over (GX2Command_SubmitCommandBuffer, GX2CallDisplayList: wwhd_CpGuardNote) and
+	// again when this thread reaches it, so a buffer rewritten before the GPU read it shows. Each packet this thread
+	// can't make sense of (an unknown op, registers out of range) is logged with the buffer it was in, that buffer's
+	// hash then and now, and how far behind the guest this thread was.
+	namespace cpguard
+	{
+		bool On()
+		{
+			static const bool on = getenv("WWHD_CP_GUARD") != nullptr;
+			return on;
+		}
+		struct Noted { uint64 hash = 0; uint32 swap = 0; uint64 submitted = 0, retired = 0; int kind = 0; };
+		std::mutex s_lock;
+		std::unordered_map<uint64, std::deque<Noted>> s_noted;
+		std::atomic<int> s_reports{ 0 };
+		std::atomic<uint64> s_checked{ 0 }, s_changed{ 0 };
+		uint64 Hash(const uint32be* p, uint32 words)
+		{
+			uint64 h = 1469598103934665603ull;
+			for (uint32 i = 0; i < words; i++)
+				h = (h ^ (uint32)p[i]) * 1099511628211ull;
+			return h;
+		}
+		struct Current { uint32 phys = 0, words = 0; bool noted = false; Noted then; uint32 lastOps[8] = {}; uint32 nOps = 0; };
+		thread_local int t_depth = 0;     // the depth processBuffer is at
+		thread_local Current t_cur[18];   // per nesting depth (processBuffer's limit is 16)
+		std::string Kind(int k) { return fmt::format("{} from core {}", k / 10 == 1 ? "command buffer" : k / 10 == 2 ? "display list" : "?", k % 10); }
+
+		void Enter(uint32 phys, uint32 words, int depth, const uint32be* p)
+		{
+			Current& c = t_cur[std::min(depth, 17)];
+			c = Current{};
+			c.phys = phys, c.words = words;
+			std::unique_lock lock(s_lock);
+			auto it = s_noted.find((uint64)phys << 32 | words);
+			if (it == s_noted.end() || it->second.empty())
+				return;
+			c.then = it->second.front();
+			it->second.pop_front();
+			lock.unlock();
+			c.noted = true;
+			s_checked++;
+			const uint64 now = Hash(p, words);
+			if (now != c.then.hash)
+			{
+				s_changed++;
+				if (s_reports++ < 40)
+					cemuLog_log(LogType::Force, "cp guard: {} {:08x} ({} words) changed after the guest handed it over at swap {} "
+						"(this thread was {} submissions behind then, {} now; the guest at swap {}, depth {})", Kind(c.then.kind), phys, words,
+						c.then.swap, c.then.submitted - c.then.retired, GX2::GX2GetLastSubmittedTimeStamp() - GX2::GX2GetRetiredTimeStamp(),
+						wwhd::os::SwapCount(), depth);
+				if (s_reports <= 40)
+					cemuLog_log(LogType::Force, "cp guard:   {}", GX2::wwhd_PoolState(phys));
+			}
+		}
+
+		void Op(int depth, uint32 op)
+		{
+			Current& c = t_cur[std::min(depth, 17)];
+			c.lastOps[c.nOps++ % 8] = op;
+		}
+
+		void Bad(int depth, const char* what, uint32 op, uint32 a, uint32 b)
+		{
+			if (s_reports++ >= 40)
+				return;
+			Current& c = t_cur[std::min(depth, 17)];
+			std::string ops;
+			for (uint32 i = c.nOps > 8 ? c.nOps - 8 : 0; i < c.nOps; i++)
+				ops += fmt::format(" {:02x}", c.lastOps[i % 8]);
+			const uint64 now = c.phys ? Hash(phys(c.phys), c.words) : 0;
+			cemuLog_log(LogType::Force, "cp guard: {} (op {:02x}, {:x} {:x}) at depth {} in {:08x} ({} words; {}: noted at swap {}, its hash "
+				"then {:016x}, now {:016x}); the last ops{}; {} submissions behind; the guest at swap {}", what, op, a, b, depth, c.phys,
+				c.words, c.noted ? Kind(c.then.kind) : "not noted", c.then.swap, c.then.hash, now, ops,
+				GX2::GX2GetLastSubmittedTimeStamp() - GX2::GX2GetRetiredTimeStamp(), wwhd::os::SwapCount());
+		}
+
+		void Summary()
+		{
+			cemuLog_log(LogType::Force, "cp guard: {} buffers checked, {} changed before this thread read them", s_checked.load(), s_changed.load());
+		}
+	}
+
+	// A packet that names registers past the register file is rejected, never written: a garbage command stream (a buffer
+	// the guest rewrote before this thread read it, q-lazyring) otherwise wrote far outside LatteGPUState, or crashed here
+	void BadRegisters(uint32 base, uint32 index, uint32 count)
+	{
+		static std::atomic<uint32> s_bad{ 0 };
+		if (s_bad++ < 10)
+			cemuLog_log(LogType::Force, "null GPU: a packet for registers {:x}+{} (base {:x}) past the register file, left out", index, count, base);
+		if (cpguard::On())
+			cpguard::Bad(cpguard::t_depth, "registers out of range", base >> 8, index, count);
+	}
+
 	template<uint32 Base>
 	void setRegisters(const uint32be* p, uint32 nWords)
 	{
 		uint32 index = Base + (uint32)p[0];
 		uint32 count = nWords - 1;
+		if (index >= LATTE_MAX_REGISTER || count > LATTE_MAX_REGISTER - index)
+			return BadRegisters(Base, index, count);
 		const bool shadow = LatteGPUState.contextControl0 == 0x80000077;
 		for (uint32 i = 0; i < count; i++)
 		{
@@ -471,6 +581,8 @@ namespace
 		{
 			uint32 reg = base + (uint32)p[2 + e * 2];
 			uint32 count = p[3 + e * 2];
+			if (reg >= LATTE_MAX_REGISTER || count > LATTE_MAX_REGISTER - reg)
+				return BadRegisters(base, reg, count);
 			for (uint32 f = 0; f < count; f++, reg++, shadowAddr += 4)
 			{
 				LatteGPUState.contextRegisterShadowAddr[reg] = shadowAddr;
@@ -590,6 +702,8 @@ namespace
 			if (size)
 			{
 				const uint32be* buf = phys(body[0]);
+				if (cpguard::On())
+					cpguard::Enter(body[0], size, depth + 1, buf);
 				processBuffer(buf, buf + size, depth + 1);
 			}
 			break;
@@ -619,6 +733,9 @@ namespace
 			LatteGPUState.frameCounter++;
 			if (wwhd::gpu::RendererOn())
 				wwhd::gpu::RendererSwap();
+			// WWHD_CP_DELAY_US=n (a test, q-lazyring): this thread stalls n us at each swap, as a slow renderer would
+			if (static const uint32 delay = [] { const char* e = getenv("WWHD_CP_DELAY_US"); return e ? (uint32)atoi(e) : 0u; }(); delay)
+				std::this_thread::sleep_for(std::chrono::microseconds(delay));
 			if (!PPCTimer_isVirtualClock())
 			{
 				frametimes::Swap();
@@ -665,6 +782,8 @@ namespace
 		case IT_SURFACE_SYNC: case IT_HLE_SYNC_ASYNC_OPERATIONS:
 			break;
 		default:
+			if (cpguard::On())
+				cpguard::Bad(depth, "unknown packet", op, nWords, 0);
 			cemuLog_logOnce(LogType::Force, "null GPU: unknown PM4 packet {:02x}", op);
 			break;
 		}
@@ -686,6 +805,8 @@ namespace
 			cemuLog_logOnce(LogType::Force, "null GPU: indirect buffers nested too deep");
 			return;
 		}
+		const int outer = cpguard::t_depth;
+		cpguard::t_depth = depth;
 		while (p < end)
 		{
 			uint32 h = *p++;
@@ -693,7 +814,14 @@ namespace
 			if (type == 3)
 			{
 				uint32 n = ((h >> 16) & 0x3FFF) + 1;
+				if (cpguard::On())
+				{
+					cpguard::Op(depth, (h >> 8) & 0xFF);
+					if (p + n > end)
+						cpguard::Bad(depth, "a packet past its buffer's end", (h >> 8) & 0xFF, n, (uint32)(end - p));
+				}
 				packet((h >> 8) & 0xFF, p, n, depth);
+				cpguard::t_depth = depth;
 				p += n;
 			}
 			else if (type == 0)
@@ -703,6 +831,7 @@ namespace
 			}
 			// type 2: filler
 		}
+		cpguard::t_depth = outer;
 	}
 
 	// The next word of the ring: after a few quick looks (a submission usually follows closely), the
@@ -738,6 +867,8 @@ namespace
 				uint32 n = ((h >> 16) & 0x3FFF) + 1;
 				for (uint32 i = 0; i < n; i++)
 					tmp[i] = ringWord();
+				if (cpguard::On())
+					cpguard::Op(0, (h >> 8) & 0xFF);
 				packet((h >> 8) & 0xFF, tmp, n, 0);
 			}
 			else if (type == 0)
@@ -770,6 +901,11 @@ namespace
 		LatteGPUState.contextRegister[Latte::REGADDR::PA_CL_CLIP_CNTL] = 0;
 		*(float*)&LatteGPUState.contextRegister[mmDB_DEPTH_CLEAR] = 1.0f;
 		g_isGPUInitFinished = true;
+		if (cpguard::On())
+		{
+			atexit(cpguard::Summary);
+			at_quick_exit(cpguard::Summary);
+		}
 		while (LatteGPUState.gx2InitCalled == 0)
 		{
 			if (!s_running)
@@ -778,6 +914,24 @@ namespace
 		}
 		processRing();
 	}
+}
+
+// WWHD_CP_GUARD (above): the guest hands an indirect buffer over (os/gx2/core/GX2_Command.cpp); kind 10 + the guest
+// core for a command buffer, 20 + the core for a display list
+void wwhd_CpGuardNote(uint32 physAddr, uint32 words, int kind)
+{
+	if (!cpguard::On() || !words)
+		return;
+	cpguard::Noted n;
+	n.hash = cpguard::Hash(phys(physAddr), words);
+	n.swap = wwhd::os::SwapCount();
+	n.submitted = GX2::GX2GetLastSubmittedTimeStamp();
+	n.retired = GX2::GX2GetRetiredTimeStamp();
+	n.kind = kind;
+	std::lock_guard lock(cpguard::s_lock);
+	auto& q = cpguard::s_noted[(uint64)physAddr << 32 | words];
+	if (q.size() < 64)
+		q.push_back(n);
 }
 
 // ---- the Latte entry points the rest of Cemu calls ----------------------------------------------

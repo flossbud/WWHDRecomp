@@ -54,6 +54,7 @@ namespace GX2
 {
 	void wwhd_WaitForVsyncCount(uint64 count);     // src/os/gx2/core/GX2_Event.cpp
 	uint64 wwhd_TakeDrawDoneWaitNs();
+	bool GX2DrawDone();
 }
 namespace wwhd::sixty
 {
@@ -375,7 +376,13 @@ namespace wwhd::pacing
 	}
 }
 
-// game_procPresent (gfx_EndFrame: the outputs' copies, GX2DrawDone, the swap, ProcUI): a dropped frame presents nothing
+// game_procPresent (gfx_EndFrame: the outputs' copies, GX2DrawDone, the swap, ProcUI): a dropped frame presents nothing,
+// but keeps the GX2DrawDone (q-lazyring). The game submits display lists in buffers of its own (GX2DirectCallDisplayList)
+// and writes them again in a later frame; that is safe only because each frame's present waits in GX2DrawDone until the
+// GPU thread has read everything submitted. Without it the next frames overwrote lists the GPU thread hadn't reached (up
+// to 13 submissions behind), which it then parsed as garbage: "unknown PM4 packet 00" in most real-time runs since
+// keep-speed became the default (27d276e), and a crash in null_gpu.cpp's packet() when the render thread fell behind
+// (FSR 3 on the worker's iGPU, with the lazy DrawDone: a third of the runs). WWHD_60FPS_DROPDRAWDONE=0: left out (a test)
 void f_020350C4(PPCInterpreter_t* __restrict ctx)
 {
 	if (!wwhd::pacing::g_dropFrame)
@@ -383,6 +390,9 @@ void f_020350C4(PPCInterpreter_t* __restrict ctx)
 		wwhd::pacing::FrameShown();
 		[[clang::musttail]] return orig_f_020350C4(ctx);
 	}
+	static const bool drawDone = [] { const char* e = getenv("WWHD_60FPS_DROPDRAWDONE"); return !(e && atoi(e) == 0); }();
+	if (drawDone)
+		GX2::GX2DrawDone();
 	wwhd::os::SkipSwap();
 }
 
