@@ -239,7 +239,7 @@ namespace wwhd::gpu
 	{
 		constexpr uint32 kPrevBinding = 64;                       // the previous frame's uniform blocks: binding + this
 		constexpr uint32 kSlot = 7;                               // the motion target's colour slot
-		constexpr VkFormat kFormat = VK_FORMAT_R16G16_SFLOAT;
+		constexpr VkFormat kFormat = VK_FORMAT_R16G16B16A16_SFLOAT;  // motion in R and G, the reactive mask in B
 		// a vertex shader binding's data this draw: its ring offset, the guest's bytes in it, the range the shader reads,
 		// and the block's guest address (0: the uniform vars)
 		struct UniformData { VkDeviceSize offset = 0; uint32 bytes = 0, readable = 0; MPTR phys = 0; };
@@ -248,6 +248,7 @@ namespace wwhd::gpu
 		uint32 VaryingBase();                                     // the two clip positions' locations (0: no room)
 		bool VertexVariant(const std::string& in, std::string& out);
 		bool PixelVariant(const std::string& in, std::string& out);
+		bool ReactiveVariant(const std::string& in, std::string& out);   // a blended draw's: the mask alone
 		// a scene draw's constants kept, and the previous frame's for it (matched, or the camera's) pushed as offsets
 		void Remember(uint64 group, uint64 vsKey, std::span<const UniformData> data, std::vector<uint32>& prevOffsets, bool want);
 		void FrameEnd(uint32 frame);                              // a presented frame's swap

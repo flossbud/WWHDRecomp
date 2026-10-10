@@ -13,8 +13,10 @@
 // - A matched draw runs a variant of its vertex shader: the decompiled body twice, once on this frame's constants
 //   and once on the previous frame's (every uniform block declared again at binding + kPrevBinding, its members
 //   renamed _prev), writing only the previous clip position; both positions go to a pixel shader variant that
-//   writes their difference (in UV units, half the NDC difference) to colour slot kSlot, an RG16F target of the
-//   scene's own size. Draws without depth writes keep their shaders and leave the target alone (write mask 0).
+//   writes their difference (in UV units, half the NDC difference) to colour slot kSlot, an RGBA16F target of the
+//   scene's own size (R, G). A blended draw that tests depth but doesn't write it (particles, water, effects) runs
+//   the same variants with only B written: the reactive mask (0.9 where they draw), the upscalers' cue that the
+//   history there can't be trusted. Other draws leave the target alone (write mask 0).
 // - A draw with no match (new, ambiguous, its vertex data written fresh each frame: particles) gets the camera's
 //   motion only: its first block (its own matrix) from this frame, the others from the last frame's draws of the
 //   same vertex shader.
@@ -169,7 +171,19 @@ namespace wwhd::gpu::motion
 			"layout(location = {}) out vec4 wwhd_motion;\n", loc, loc + 1, kSlot) +
 			"void wwhd_main()" + in.substr(mainAt + 11) +
 			"\nvoid main()\n{\nwwhd_main();\n"
-			"wwhd_motion = vec4((wwhd_currClip.xy / wwhd_currClip.w - wwhd_prevClip.xy / wwhd_prevClip.w) * 0.5, 0.0, 1.0);\n}\n";
+			"wwhd_motion = vec4((wwhd_currClip.xy / wwhd_currClip.w - wwhd_prevClip.xy / wwhd_prevClip.w) * 0.5, 0.9, 1.0);\n}\n";
+		return true;
+	}
+
+	// the reactive variant: the pixel shader as it is, plus the mask written to the motion target's B (the draw's own
+	// vertex shader: no positions needed, no previous constants)
+	bool ReactiveVariant(const std::string& in, std::string& out)
+	{
+		const size_t mainAt = in.find("void main()");
+		if (mainAt == std::string::npos || in.find(fmt::format("layout(location = {}) out", kSlot)) != std::string::npos)
+			return false;
+		out = in.substr(0, mainAt) + fmt::format("layout(location = {}) out vec4 wwhd_motion;\n", kSlot) +
+			"void wwhd_main()" + in.substr(mainAt + 11) + "\nvoid main()\n{\nwwhd_main();\nwwhd_motion = vec4(0.0, 0.0, 0.9, 1.0);\n}\n";
 		return true;
 	}
 
@@ -210,36 +224,60 @@ namespace wwhd::gpu::motion
 				b.arena = Store(cur, s.ring.data + d.offset, d.bytes);
 			rec.bindings.push_back(b);
 		}
-		cur.groups[group].push_back(idx);
+		auto& mine = cur.groups[group];
+		const size_t nth = mine.size();                         // this draw's place in its group this frame
+		mine.push_back(idx);
 		// the match in the last frame
 		const Kept* match = nullptr;
+		auto g = rec.hasId ? prev.groups.find(group) : prev.groups.end();
 		if (!rec.hasId)
 			s_stats.noId++;
-		else if (prev.groups.find(group) == prev.groups.end())
+		else if (g == prev.groups.end())
 			s_stats.noGroup++;
-		if (rec.hasId)
-			if (auto g = prev.groups.find(group); g != prev.groups.end())
+		// the fast path: the draw at the same place in the group last frame, with the same matrix (a still object: most
+		// of a scene's instances; any match with an unchanged matrix has the same motion, so it needs no search)
+		if (g != prev.groups.end() && nth < g->second.size())
+			if (const uint32 i = g->second[nth]; !prev.claimed[i] && prev.records[i].hasId &&
+				prev.records[i].bindings.size() == data.size() && memcmp(prev.records[i].id, rec.id, sizeof(rec.id)) == 0)
 			{
-				float best = FLT_MAX;
-				uint32 bestIdx = UINT32_MAX;
-				for (uint32 i : g->second)
-					if (!prev.claimed[i] && prev.records[i].hasId)
-						if (float d = Dist(rec.id, prev.records[i].id); d < best)
-							best = d, bestIdx = i;
-				bool ambiguous = false;
-				if (bestIdx != UINT32_MAX)
-					for (uint32 i : g->second)
-						if (i != bestIdx && !prev.claimed[i] && prev.records[i].hasId &&
-							Dist(rec.id, prev.records[i].id) < 2.0f * best + 0.05f && Dist(prev.records[i].id, prev.records[bestIdx].id) > 0.05f)
-							ambiguous = true;
-				if (bestIdx != UINT32_MAX && best < kMaxMove && !ambiguous && prev.records[bestIdx].bindings.size() == data.size())
-				{
-					prev.claimed[bestIdx] = true;
-					match = &prev.records[bestIdx];
-				}
-				else
-					(bestIdx == UINT32_MAX ? s_stats.taken : best >= kMaxMove ? s_stats.far : s_stats.ambiguous)++;
+				prev.claimed[i] = true;
+				match = &prev.records[i];
 			}
+		// the nearest unclaimed candidate in [from, to) of the group, and whether another as near differs from it
+		auto nearest = [&](const std::vector<uint32>& list, size_t from, size_t to, float& best, bool& ambiguous) {
+			best = FLT_MAX, ambiguous = false;
+			uint32 bestIdx = UINT32_MAX;
+			for (size_t k = from; k < to; k++)
+				if (const uint32 i = list[k]; !prev.claimed[i] && prev.records[i].hasId)
+					if (float d = Dist(rec.id, prev.records[i].id); d < best)
+						best = d, bestIdx = i;
+			if (bestIdx != UINT32_MAX)
+				for (size_t k = from; k < to && !ambiguous; k++)
+					if (const uint32 i = list[k]; i != bestIdx && !prev.claimed[i] && prev.records[i].hasId &&
+						Dist(rec.id, prev.records[i].id) < 2.0f * best + 0.05f && Dist(prev.records[i].id, prev.records[bestIdx].id) > 0.05f)
+						ambiguous = true;
+			return bestIdx;
+		};
+		if (!match && g != prev.groups.end())
+		{
+			// first the draws near this one's place in the group (the game draws a group's instances in much the same
+			// order every frame), then, failing that, the whole group: a search per draw over large groups whose matrices
+			// all change (the camera's view in them) cost the render thread a quarter of its time in a busy fight
+			const auto& list = g->second;
+			constexpr size_t kNear = 4;
+			float best;
+			bool ambiguous;
+			uint32 bestIdx = nearest(list, nth > kNear ? nth - kNear : 0, std::min(list.size(), nth + kNear + 1), best, ambiguous);
+			if (bestIdx == UINT32_MAX || best >= kMaxMove || ambiguous)
+				bestIdx = nearest(list, 0, list.size(), best, ambiguous);
+			if (bestIdx != UINT32_MAX && best < kMaxMove && !ambiguous && prev.records[bestIdx].bindings.size() == data.size())
+			{
+				prev.claimed[bestIdx] = true;
+				match = &prev.records[bestIdx];
+			}
+			else
+				(bestIdx == UINT32_MAX ? s_stats.taken : best >= kMaxMove ? s_stats.far : s_stats.ambiguous)++;
+		}
 		const Kept* camera = nullptr;
 		if (!match)
 			if (auto l = prev.lastOfVs.find(vsKey); l != prev.lastOfVs.end() && prev.records[l->second].bindings.size() == data.size())
@@ -264,9 +302,11 @@ namespace wwhd::gpu::motion
 					prevOffsets.push_back((uint32)it->second);
 					continue;
 				}
-			// the range the shader may read, but only the guest's bytes copied: past them nothing the game indexes
-			// (the current data's zeros there are for the guest's view; the previous position needs none)
-			const VkDeviceSize off = RingAlloc(d.readable, s.props.limits.minUniformBufferOffsetAlignment);
+			// only the guest's bytes: the descriptor's range (up to 64 KB) reaches past them into whatever the ring holds
+			// next (RingAlloc keeps 64 KB spare at its end), which nothing the game indexes reads; allocating the whole
+			// range per draw filled the ring (a block indexed dynamically reads 64 KB) and forced submits mid-frame
+			const uint32 n = std::max(std::min(b.bytes, d.readable), 16u);
+			const VkDeviceSize off = RingAlloc(n, s.props.limits.minUniformBufferOffsetAlignment);
 			memcpy(s.ring.data + off, prev.arena.data() + b.arena, std::min(b.bytes, d.readable));
 			if (b.phys)
 				s_inRing[b.arena] = off;
@@ -332,7 +372,7 @@ namespace wwhd::gpu::motion
 				WaitPending();
 				DestroyImage(s_target);
 			}
-			s_target = CreateImage(VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT, depth.width, depth.height,
+			s_target = CreateImage(kFormat, VK_IMAGE_ASPECT_COLOR_BIT, depth.width, depth.height,
 				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
 			s_target.gw = depth.gw, s_target.gh = depth.gh, s_target.scaled = depth.scaled, s_target.scale = depth.scale;
 			s_targetFrame = UINT32_MAX;
@@ -352,8 +392,9 @@ layout(push_constant) uniform Constants { uvec4 c0, c1, c2, c3; } p;
 layout(location = 0) out vec4 outColor;
 void main()
 {
-	vec2 m = texture(src, gl_FragCoord.xy * uintBitsToFloat(p.c0.xy)).rg * 40.0;
-	outColor = vec4(0.5 + m.x, 0.5 + m.y, 0.5 - 0.5 * length(m), 1.0);
+	vec4 t = texture(src, gl_FragCoord.xy * uintBitsToFloat(p.c0.xy));
+	vec2 m = t.rg * 40.0;                               // motion: red right, green down; the reactive mask: blue
+	outColor = vec4(0.5 + m.x - 0.4 * t.b, 0.5 + m.y - 0.4 * t.b, 0.5 - 0.5 * length(m) + 0.5 * t.b, 1.0);
 }
 )", "motion debug");
 		if (!frag)

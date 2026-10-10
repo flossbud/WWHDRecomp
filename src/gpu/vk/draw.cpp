@@ -162,8 +162,8 @@ namespace wwhd::gpu
 			VkDescriptorSetLayout layout = VK_NULL_HANDLE;
 			std::vector<uint8> uniformBuffers;                       // uniform block indices, in binding order
 			// WWHD_MOTION (motion.cpp): this shader's variant writing motion vectors, made at its first scene draw
-			Shader* motion = nullptr;
-			bool motionTried = false, isMotion = false;            // isMotion: a variant (its bindings + kPrevBinding too)
+			Shader* motion = nullptr, *reactive = nullptr;
+			bool motionTried = false, reactiveTried = false, isMotion = false;   // isMotion: a vertex variant's bindings + kPrevBinding too
 		};
 		std::unordered_map<uint64, Shader*> s_shaders;
 		std::unordered_map<uint64, LatteFetchShader*> s_fetchShaders;
@@ -452,11 +452,11 @@ namespace wwhd::gpu
 		}
 		// WWHD_MOTION: the shader's motion variant (motion.cpp), from the decompiler again (a shader from the cache has no
 		// GLSL); null if it can't be made (logged once): the draw then writes no motion
-		Shader* MotionShader(Shader* sh, bool vertex, const uint8* code, uint32 size, LatteFetchShader* fetch)
+		Shader* MotionShader(Shader* sh, bool vertex, const uint8* code, uint32 size, LatteFetchShader* fetch, bool reactive = false)
 		{
-			if (sh->motionTried)
-				return sh->motion;
-			sh->motionTried = true;
+			if (reactive ? sh->reactiveTried : sh->motionTried)
+				return reactive ? sh->reactive : sh->motion;
+			(reactive ? sh->reactiveTried : sh->motionTried) = true;
 			LatteDecompilerOptions opt;
 			opt.usesGeometryShader = false;
 			opt.useTFViaSSBO = false;
@@ -470,7 +470,8 @@ namespace wwhd::gpu
 			std::string glsl, log;
 			std::vector<uint32> spirv;
 			const bool ok = out.shader && !out.shader->hasError && out.shader->strBuf_shaderSource &&
-				(vertex ? motion::VertexVariant(out.shader->strBuf_shaderSource->c_str(), glsl) : motion::PixelVariant(out.shader->strBuf_shaderSource->c_str(), glsl)) &&
+				(vertex ? motion::VertexVariant(out.shader->strBuf_shaderSource->c_str(), glsl) : reactive ?
+					motion::ReactiveVariant(out.shader->strBuf_shaderSource->c_str(), glsl) : motion::PixelVariant(out.shader->strBuf_shaderSource->c_str(), glsl)) &&
 				CompileSpirv(glsl, vertex ? EShLangVertex : EShLangFragment, spirv, log);
 			if (!ok)
 			{
@@ -479,17 +480,17 @@ namespace wwhd::gpu
 				return nullptr;
 			}
 			Shader* m = new Shader;
-			m->key = sh->key ^ 0x6D6F74696F6E0000ull;
+			m->key = sh->key ^ (reactive ? 0x7265616374000000ull : 0x6D6F74696F6E0000ull);
 			m->dec = out.shader;
 			m->uniforms = out.uniformOffsetsVK;
 			m->mapping = out.resourceMappingVK;
-			m->isMotion = true;
+			m->isMotion = !reactive;
 			VkShaderModuleCreateInfo mi{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
 			mi.codeSize = spirv.size() * 4;
 			mi.pCode = spirv.data();
 			Check(vkCreateShaderModule(s.device, &mi, nullptr, &m->module), "vkCreateShaderModule");
 			m->layout = CreateLayout(*m, vertex ? VK_SHADER_STAGE_VERTEX_BIT : VK_SHADER_STAGE_FRAGMENT_BIT);
-			return sh->motion = m;
+			return (reactive ? sh->reactive : sh->motion) = m;
 		}
 
 
@@ -500,7 +501,8 @@ namespace wwhd::gpu
 			Image* depth = nullptr;
 			uint32 colorLayer[8]{}, depthLayer = 0;                 // array slices (CB_COLORn_VIEW, DB_DEPTH_VIEW)
 			Image* motion = nullptr;                                 // WWHD_MOTION: the motion target at colour slot motion::kSlot
-			bool motionClear = false, motionWrite = false;           // cleared at this pass's start; this draw writes it
+			bool motionClear = false;                                // cleared at this pass's start
+			uint8 motionMask = 0;                                    // what this draw writes of it: RG motion, B reactive
 			bool operator==(const Targets& o) const
 			{
 				return depth == o.depth && depthLayer == o.depthLayer && motion == o.motion && std::equal(std::begin(color), std::end(color), std::begin(o.color)) &&
@@ -817,7 +819,7 @@ namespace wwhd::gpu
 				d.colorFormats[motion::kSlot] = motion::kFormat;
 				d.colorCount = motion::kSlot + 1;
 				d.blends[motion::kSlot] = {};
-				d.blends[motion::kSlot].colorWriteMask = t.motionWrite ? VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT : 0;
+				d.blends[motion::kSlot].colorWriteMask = t.motionMask;
 			}
 			auto rop = r.CB_COLOR_CONTROL.get_ROP();
 			d.logicOpEnable = rop != Latte::LATTE_CB_COLOR_CONTROL::E_LOGICOP::COPY;
@@ -938,7 +940,7 @@ namespace wwhd::gpu
 			for (uint32 i = 0; i < 8; i++)
 				key = Mix(Mix(key, raw[Latte::REGADDR::CB_BLEND0_CONTROL + i]), t.color[i] ? (uint64)t.color[i]->format : 0);
 			key = Mix(key, t.depth ? (uint64)t.depth->format + 1 : 0);
-			key = Mix(key, t.motion ? 1 + t.motionWrite : 0);
+			key = Mix(key, t.motion ? 1 + t.motionMask : 0);
 			auto it = s_pipelines.find(key);
 			if (it != s_pipelines.end())
 				return it->second;
@@ -1953,10 +1955,18 @@ namespace wwhd::gpu
 		{
 			scene = true;
 			t.motion = motion::Target(*t.depth, t.motionClear);
-			if (r.DB_DEPTH_CONTROL.get_Z_ENABLE() && r.DB_DEPTH_CONTROL.get_Z_WRITE_ENABLE())
+			const auto& dc = r.DB_DEPTH_CONTROL;
+			const uint8 mask = !dc.get_Z_ENABLE() ? 0 : dc.get_Z_WRITE_ENABLE() ? VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
+				: (r.CB_COLOR_CONTROL.get_BLEND_MASK() & 1) ? VK_COLOR_COMPONENT_B_BIT : 0;   // depth-tested and blended: reactive
+			if (mask == VK_COLOR_COMPONENT_B_BIT)               // reactive: the pixel shader's variant alone
+			{
+				if (Shader* rp = MotionShader(ps, false, psCode, psSize, nullptr, true))
+					dps = rp, t.motionMask = mask;
+			}
+			else if (mask)
 				if (Shader* mv = MotionShader(vs, true, vsCode, vsSize, fetch))
 					if (Shader* mp = MotionShader(ps, false, psCode, psSize, nullptr))
-						dvs = mv, dps = mp, t.motionWrite = true;
+						dvs = mv, dps = mp, t.motionMask = mask;
 		}
 		Reserve();
 
@@ -2003,7 +2013,8 @@ namespace wwhd::gpu
 		static std::vector<uint32> dynamicOffsets;
 		dynamicOffsets.clear();
 		VkDescriptorSet sets[2] = { Descriptors(*dvs, true, vsImages, dynamicOffsets, vpW, vpH), VK_NULL_HANDLE };
-		if (scene)                                               // its constants kept; the previous frame's after this frame's
+		if (dvs != vs)                                           // its constants kept; the previous frame's after this frame's
+		                                                         // (only the draws that write motion need either)
 		{
 			uint64 group = Mix(Mix(0, vsKey), psKey);
 			for (auto& g : fetch->bufferGroups)                 // the vertex buffers proper (a 1-byte one moves every frame)
@@ -2011,9 +2022,8 @@ namespace wwhd::gpu
 					group = Mix(group, regs[mmSQ_VTX_ATTRIBUTE_BLOCK_START + g.attributeBufferIndex * 7]);
 			static std::vector<uint32> prevOffsets;
 			prevOffsets.clear();
-			motion::Remember(group, vsKey, s_vsData, prevOffsets, dvs != vs);
-			if (dvs != vs)
-				dynamicOffsets.insert(dynamicOffsets.end(), prevOffsets.begin(), prevOffsets.end());
+			motion::Remember(group, vsKey, s_vsData, prevOffsets, true);
+			dynamicOffsets.insert(dynamicOffsets.end(), prevOffsets.begin(), prevOffsets.end());
 		}
 		sets[1] = Descriptors(*dps, false, psImages, dynamicOffsets, vpW, vpH);
 		VkPipelineLayout layout = PipelineLayout(dvs, dps);
