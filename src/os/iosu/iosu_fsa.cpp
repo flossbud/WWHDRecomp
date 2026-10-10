@@ -481,7 +481,7 @@ namespace iosu
 			// todo: File permissions
 			// wwhd: a file read can be a kernel read() into guest memory, which fails with EFAULT on a page the
 			// texture write-watch protected instead of faulting: open and stamp the pages first (write_watch.h; nothing
-			// unless WWHD_WRITE_WATCH=1)
+			// while the watch is active: real time, unless WWHD_WRITE_WATCH=0)
 			wwhd::rt::write_watch::HostWrite hostWrite(destPtr.GetPtr(), bytesToRead);
 			uint32 bytesSuccessfullyRead = fsc_readFile(fscFile, destPtr, bytesToRead);
 			if (transferElementSize == 0)

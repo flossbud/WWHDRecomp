@@ -205,7 +205,7 @@ namespace wwhd::rt::write_watch
 	{
 		static const bool on = [] {
 			const char* e = getenv("WWHD_WRITE_WATCH");
-			return e && strcmp(e, "1") == 0;
+			return !(e && strcmp(e, "0") == 0);           // on unless WWHD_WRITE_WATCH=0 (t-writewatch)
 		}();
 		return on;
 	}

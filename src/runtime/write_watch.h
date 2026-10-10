@@ -8,8 +8,9 @@
 // Kernel writes into guest memory (read(), fread()) don't fault, they fail with EFAULT: such a write goes inside a
 // HostWrite scope, which unprotects and stamps first and stamps again at its end.
 //
-// Real time only and off by default: Init does nothing unless WWHD_WRITE_WATCH=1. The checks build (the virtual
-// clock) hashes every texture whole and never calls it, so it can't change a trace or a capture.
+// Real time only, on by default (t-writewatch; WWHD_WRITE_WATCH=0 turns it off): Init is called by the texture cache in
+// real time only (texture.cpp; and in its verify mode). The checks build (the virtual clock) hashes every texture whole
+// and never calls it, so it can't change a trace or a capture.
 //
 // The SIGSEGV handler (SIGBUS too on macOS) is installed by Init after Cemu's crash handler, so it runs first; a
 // fault it doesn't own (outside the watched region, or on a page it never protected) goes on to the handler that
@@ -23,7 +24,7 @@
 
 namespace wwhd::rt::write_watch
 {
-	// WWHD_WRITE_WATCH=1 (read once)
+	// on unless WWHD_WRITE_WATCH=0 (read once)
 	bool Enabled();
 
 	// Watch [base, base + size) (guest memory: memory_base and its 4 GB reservation). Installs the handler and

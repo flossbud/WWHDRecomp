@@ -397,10 +397,10 @@ namespace wwhd::gpu
 			return whole;
 		}
 
-		// Write-watch (docs/research/texture-tracking.md, src/runtime/write_watch.h): WWHD_WRITE_WATCH=1 in real time
+		// Write-watch (docs/research/texture-tracking.md, src/runtime/write_watch.h): on in real time (WWHD_WRITE_WATCH=0: off)
 		// replaces the sampled check: a texture's level 0 is protected right before it's hashed, and it's hashed again
 		// only when one of its pages was written since (exact, no lag, whatever the frame count). With
-		// WWHD_TEXTURE_HASH=verify (WWHD_WRITE_WATCH=1 too; the virtual clock allowed) every texture is still hashed
+		// WWHD_TEXTURE_HASH=verify (the virtual clock allowed) every texture is still hashed
 		// whole every frame and decides as before, and a hash that changed while the watch saw no write is a miss:
 		// logged with its address (the writer the watch doesn't see: a kernel write without HostWrite). The checks
 		// must show 0.
