@@ -497,12 +497,6 @@
       "name": "Round 14: [6] The GPU's other exact wins (gpu-plan item 2's rest): load ops instead of clears, redundant transitions"
     },
     {
-      "id": "b-shaders",
-      "lane": "bottom",
-      "complexity": 8,
-      "name": "Round 14: [8] Shaders optimised offline (gpu-plan item 5) from the D20 shader list"
-    },
-    {
       "id": "b-wide",
       "lane": "bottom",
       "complexity": 7,
@@ -543,6 +537,7 @@
     "FSR 4 (parked 2026-10-10 after bottom's evaluation): AMD ships it only as a signed DirectX 12 DLL (SDK 2.3); the community Vulkan ports use a leaked model we can't ship. Waiting for AMD's Vulkan FSR 4; FSR 3.1's inputs (HUD split, motion, jitter) fit it; revisit at each SDK release",
     "XeSS (parked 2026-10-10): Intel ships it only as closed Windows DLLs (no Linux library); for the Windows platform work, on FSR 3.1's inputs",
     "DLSS (parked 2026-10-10, the owner's call): NVIDIA's RTX SDK licence forbids its files in our public repo (distribution only as object code; not under an open-source licence); a compliant route exists (nothing NVIDIA in git, an optional local SDK path at build time, our glue code under MPL); needs an NVIDIA GPU to test",
+    "Optimised shaders (parked 2026-10-10 after bottom's measurements on the worker): exact branch-free multiply +0.5% (noise), SPIRV-Tools -O +1.9% (noise), even inexact a*b only -5%: the iGPU is bandwidth-bound, which render scale answers. Revisit on an ALU-bound GPU (phones, the Android port)",
     "Platforms: Linux arm64, Windows, Android and CI through cloud sessions on github.com/flossbud/WWHDRecomp (docs/cloud-handoff.md)",
     "Android-specific speed: ADPF hints, core pinning, thermal (deck-plan), once the port runs",
     "More of the rival's lessons (rival-study 9.3): save states, a constant guest memory base, draw batching, interpolation as a low-power mode",
