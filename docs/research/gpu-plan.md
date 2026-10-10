@@ -277,6 +277,20 @@ validation 0 hazards. **Cost** on the worker (en-tn at 60): render thread +3.9 m
 not their waves' and sway's; judge FSR 3 on the sail route and Outset's grass, and if they ghost, keep last frame's
 CPU-written vertex data per group and run the two-pass shader on it (or mark them reactive).
 
+## FSR 4 on Vulkan: evaluated, not built (b-fsr4, session bottom, 2026-10-10)
+
+- **AMD has no Vulkan FSR 4.** The FSR SDK 2.3.0 (the current one) ships FSR 4 only as a signed prebuilt DirectX 12
+  DLL (`Kits/FidelityFX/signedbin/amd_fidelityfx_upscaler_dx12.dll`); its open upscaler sources are FSR 3's alone,
+  and its readme says "Vulkan is currently not supported in AMD FSR SDK 2.3". An issue asking for Vulkan (SDK repo
+  #194, 2026-08) has no answer.
+- **Community Vulkan ports** (fsr4vk, FireBurn/FSR-Vulkan) are experimental and built on FSR 4 code and an INT8 model
+  that came from a leak (OptiScaler's maintainer asks for that DLL not to be shipped): nothing we could vendor under a
+  licence. vkd3d-proton 3.0 runs FSR 4 by translating D3D12, which a native Vulkan renderer can't use.
+- **Detecting RX 7000/9000** (when it's possible): `VkPhysicalDeviceProperties` vendor 0x1002 and the device's ID
+  (Navi 3x/4x); trivial.
+- **Decision:** wait for AMD's Vulkan FSR 4 (or a licensed model); our FSR 3.1 path (above) takes the same inputs, so
+  FSR 4 would slot into the same place (the HUD split, the motion target, the jitter). Revisit at each SDK release.
+
 ## Item 4, the settings menu: design (session cloud3; the first round landed as designed: handoff.md, "Session cloud3")
 
 **What exists.** Every option on the list is a startup switch today, read once from the environment (`static const`
