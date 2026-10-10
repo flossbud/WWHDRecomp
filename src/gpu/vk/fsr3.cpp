@@ -737,9 +737,10 @@ namespace wwhd::gpu::fsr3
 		bool Init(uint32 w, uint32 h)
 		{
 			State& f = s_fsr3;
-			if (f.context && (f.maxW != w || f.maxH != h))       // the output's size changed: made again
+			if (f.context && (w > f.maxW || h > f.maxH))         // larger than the context was made for: made again
+			                                                      // (smaller is a dispatch's own size: surface fit's 1080 rows)
 			{
-				WaitPending();
+				SubmitAndWait();                                    // the GPU idle: the recording frame may use them too
 				ffxFsr3UpscalerContextDestroy(f.context.get());
 				for (Resource*& r : f.shared)
 					if (r)
