@@ -34,6 +34,7 @@
 #include "util/helpers/helpers.h"
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/Xatom.h>
 
 void CemuCommonInit();          // main.cpp
 void LatteOverlay_init();
@@ -243,6 +244,45 @@ static void QuietCemuAudio(bool cemuDevice)
 	CubebInputAPI::Destroy();
 }
 
+// WWHD_VRR=1 (the settings page's "Variable refresh"; t-vrr): the display's refresh follows our presents (FreeSync,
+// G-Sync, VRR), so frames that dip (keep-speed, the frame skip) and the 40/50 caps show at their own rate instead of the
+// display's next fixed vblank. The renderer presents FIFO then (present.cpp: no tearing; the refresh follows the
+// present rate); here the window asks for it where a program can: on X11 the _VARIABLE_REFRESH property (the X
+// server's driver decides: AMD's "VariableRefresh" option, NVIDIA's G-SYNC setting, usually fullscreen only); on
+// Wayland it's the compositor's (KDE's adaptive sync, GNOME's variable refresh rate, gamescope's --adaptive-sync)
+static void VariableRefresh(SDL_Window* window)
+{
+	const char* e = getenv("WWHD_VRR");
+	if (!e || atoi(e) != 1)
+		return;
+	const char* driver = SDL_GetCurrentVideoDriver();
+	if (driver && strcmp(driver, "x11") == 0)
+	{
+		SDL_PropertiesID props = SDL_GetWindowProperties(window);
+		Display* dpy = (Display*)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_X11_DISPLAY_POINTER, nullptr);
+		const ::Window xw = (::Window)SDL_GetNumberProperty(props, SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0);
+		if (dpy && xw)
+		{
+			const long one = 1;
+			XChangeProperty(dpy, xw, XInternAtom(dpy, "_VARIABLE_REFRESH", 0), XA_CARDINAL, 32, PropModeReplace,
+				(const unsigned char*)&one, 1);
+			XFlush(dpy);
+			cemuLog_log(LogType::Force, "wwhd: variable refresh: X11, the window's _VARIABLE_REFRESH set to 1 (the X driver decides: "
+				"AMD's VariableRefresh option, NVIDIA's G-SYNC setting; usually in fullscreen); presenting FIFO");
+		}
+		else
+			cemuLog_log(LogType::Force, "wwhd: variable refresh: X11, but no X window from SDL: not asked for");
+	}
+	else if (getenv("GAMESCOPE_WAYLAND_DISPLAY"))
+		cemuLog_log(LogType::Force, "wwhd: variable refresh: in gamescope: its own (start it with --adaptive-sync); presenting FIFO");
+	else if (driver && strcmp(driver, "wayland") == 0)
+		cemuLog_log(LogType::Force, "wwhd: variable refresh: Wayland: the compositor's choice (KDE: Display Configuration, Adaptive "
+			"sync; GNOME 46 and later: variable refresh rate); presenting FIFO");
+	else
+		cemuLog_log(LogType::Force, "wwhd: variable refresh: on SDL's {} video driver: nothing to ask for here; presenting FIFO",
+			driver ? driver : "?");
+}
+
 // WWHD_WINDOW=1: the TV window, handed to the renderer; nullptr otherwise
 static SDL_Window* OpenWindow()
 {
@@ -268,6 +308,7 @@ static SDL_Window* OpenWindow()
 	if (!window)
 		wwhd::Fatal(fmt::format("SDL window: {}", SDL_GetError()));
 	StorePixelSize(window);
+	VariableRefresh(window);
 	Uint32 n = 0;
 	const char* const* extensions = SDL_Vulkan_GetInstanceExtensions(&n);
 	if (!extensions)

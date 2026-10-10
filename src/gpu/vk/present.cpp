@@ -5,7 +5,8 @@
 // takes the scan buffer's encoding (sRGB or not) so the blit keeps its bytes, which are the bytes the
 // reference's screenshot has. It is rebuilt when the window's size or that encoding changes, or
 // when the presentation engine says it is out of date. Mailbox presentation when the device has it
-// (never waits, never tears), FIFO otherwise; WWHD_VSYNC=1 asks for FIFO. The overlay (renderer.h)
+// (never waits, never tears), FIFO otherwise; WWHD_VSYNC=1 asks for FIFO, and so does WWHD_VRR=1 (variable refresh:
+// the display's refresh follows the presents; window_system.cpp asks the display system for it). The overlay (renderer.h)
 // is blitted over it, uploaded again whenever the frontend changes it.
 #include "renderer_internal.h"
 #include <atomic>
@@ -71,7 +72,8 @@ namespace wwhd::gpu
 			std::vector<VkPresentModeKHR> modes(n);
 			vkGetPhysicalDeviceSurfacePresentModesKHR(s.physical, w.surface, &n, modes.data());
 			const char* vsync = getenv("WWHD_VSYNC");
-			if (!(vsync && *vsync == '1'))
+			const char* vrr = getenv("WWHD_VRR");                  // variable refresh: FIFO, the refresh follows the presents
+			if (!(vsync && *vsync == '1') && !(vrr && *vrr == '1'))
 				for (VkPresentModeKHR m : modes)
 					if (m == VK_PRESENT_MODE_MAILBOX_KHR)
 						return m;
@@ -139,7 +141,8 @@ namespace wwhd::gpu
 			w.width = extent.width;
 			w.height = extent.height;
 			Log(fmt::format("window: {}x{}, {} images, format {}, {}", w.width, w.height, n, (int)w.format,
-				ci.presentMode == VK_PRESENT_MODE_MAILBOX_KHR ? "mailbox" : "fifo"));
+				ci.presentMode == VK_PRESENT_MODE_MAILBOX_KHR ? "mailbox" : getenv("WWHD_VRR") && *getenv("WWHD_VRR") == '1' ?
+				"fifo (variable refresh)" : "fifo"));
 			return true;
 		}
 	}

@@ -33,6 +33,7 @@ namespace
 		{ "WWHD_FRAMERATE", "Frame rate", { { "30", "30" }, { "40", "40 (smoother at 30 or 60)" }, { "50", "50 (smoother at 30 or 60)" },
 			{ "60", "60" } }, false, nullptr },
 		{ "WWHD_VSYNC", "Vsync", { { "0", "off" }, { "1", "on" } }, true, nullptr },
+		{ "WWHD_VRR", "Variable refresh (FreeSync / G-Sync / VRR)", { { "0", "off" }, { "1", "on" } }, false, nullptr },
 		{ "WWHD_FULLSCREEN", "Display", { { "0", "window" }, { "1", "fullscreen" } }, true, nullptr },
 		{ "WWHD_WINDOW_SIZE", "Window size", { { "1280x720", "1280x720" }, { "1600x900", "1600x900" },
 			{ "1920x1080", "1920x1080" }, { "2560x1440", "2560x1440" } }, true, nullptr },
