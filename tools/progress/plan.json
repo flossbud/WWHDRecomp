@@ -509,6 +509,12 @@
       "name": "Round 14: [5] Graphics options: the ambient occlusion toggle (find the pass), anisotropic filtering, FXAA (gpu-plan item 4's rest, rival-study #8)"
     },
     {
+      "id": "b-uncapped-plan",
+      "lane": "bottom",
+      "complexity": 8,
+      "name": "Round 14: [8] Uncapped: research and a plan (the owner's ask; building waits for the owner's go): how the half steps and tick rules generalise to any fraction of a tick and which systems can't; a true variable step against a fixed higher tick rate with the picture placed between ticks; how it stays verifiable (today's 30-against-60 checks); pacing, VRR, the caps and frame generation; phased tasks with complexity, in docs/research/uncapped-plan.md, top reviewing"
+    },
+    {
       "id": "m-setup",
       "lane": "main",
       "complexity": 2,
