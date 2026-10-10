@@ -283,13 +283,14 @@ namespace wwhd::gpu
 
 	// Real time only, never under the virtual clock: the checks keep the full wait, so they stay exact by
 	// construction. With a window the present waits for the swap's submit by a semaphore (present.cpp).
+	// On by default in real time (deck-plan item 2); WWHD_LAZY_DRAWDONE=0: every frame waits for the GPU.
 	// WWHD_LAZY_DRAWDONE=2 (a test) also under the virtual clock: the guest's time is its cycles there, so the
 	// checks then compare the lazy path's pictures with the references (captures byte-identical: it renders the same)
 	bool LazyDrawDone()
 	{
 		static const bool on = [] {
 			const char* e = getenv("WWHD_LAZY_DRAWDONE");
-			const int v = e ? atoi(e) : 0;
+			const int v = e ? atoi(e) : 1;
 			return v == 2 || v == 3 || (v == 1 && !PPCTimer_isVirtualClock());
 		}();
 		return on;

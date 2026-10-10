@@ -40,7 +40,7 @@ namespace
 		{ "WWHD_UPSCALER", "Upscaler (render scale under 100%)", { { "none", "bilinear" }, { "fsr1", "FSR 1" },
 			{ "fsr3", "FSR 3 (desktop GPUs)" } }, false, nullptr },
 		{ "WWHD_CORES", "CPU threads", { { "3", "3" }, { "1", "1" } }, false, "3" },
-		{ "WWHD_LAZY_DRAWDONE", "Lazy DrawDone", { { "0", "off" }, { "1", "on" } }, false, "1" },
+		{ "WWHD_LAZY_DRAWDONE", "Lazy DrawDone", { { "1", "on" }, { "0", "off" } }, false, "1" },
 	};
 	constexpr const char* kPresetKey = "WWHD_PRESET";
 	const char* const kPresets[] = { "auto", "performance", "quality" };
