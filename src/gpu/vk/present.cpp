@@ -9,6 +9,7 @@
 // the display's refresh follows the presents; window_system.cpp asks the display system for it). The overlay (renderer.h)
 // is blitted over it, uploaded again whenever the frontend changes it.
 #include "renderer_internal.h"
+#include "../../os/settings.h"
 #include <atomic>
 
 namespace wwhd::gpu
@@ -32,6 +33,7 @@ namespace wwhd::gpu
 			bool pending = false;                                // an image was acquired and drawn this swap
 			std::vector<VkSemaphore> rendered;                   // per image: the lazy path's swap submit signals it
 			bool signalled = false;                              // this swap's present waits for rendered[index]
+			uint32 first = UINT32_MAX;                           // frame generation: the frame between, presented before index
 		} w;
 
 		struct OverlayPixels
@@ -73,7 +75,8 @@ namespace wwhd::gpu
 			vkGetPhysicalDeviceSurfacePresentModesKHR(s.physical, w.surface, &n, modes.data());
 			const char* vsync = getenv("WWHD_VSYNC");
 			const char* vrr = getenv("WWHD_VRR");                  // variable refresh: FIFO, the refresh follows the presents
-			if (!(vsync && *vsync == '1') && !(vrr && *vrr == '1'))
+			// frame generation: FIFO paces its two presents a swap
+			if (!(vsync && *vsync == '1') && !(vrr && *vrr == '1') && !FrameGenPresents())
 				for (VkPresentModeKHR m : modes)
 					if (m == VK_PRESENT_MODE_MAILBOX_KHR)
 						return m;
@@ -108,7 +111,8 @@ namespace wwhd::gpu
 
 			VkSwapchainCreateInfoKHR ci{ VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR };
 			ci.surface = w.surface;
-			ci.minImageCount = caps.maxImageCount ? std::min(caps.minImageCount + 1, caps.maxImageCount) : caps.minImageCount + 1;
+			const uint32 extra = FrameGenPresents() ? 2 : 1;        // frame generation holds two images at once
+			ci.minImageCount = caps.maxImageCount ? std::min(caps.minImageCount + extra, caps.maxImageCount) : caps.minImageCount + extra;
 			ci.imageFormat = chosen.format;
 			ci.imageColorSpace = chosen.colorSpace;
 			ci.imageExtent = extent;
@@ -265,12 +269,9 @@ namespace wwhd::gpu
 		return w.pending;
 	}
 
-	void PresentRecord(Image& scan)
+	// the image scaled to fit and centred in the acquired window image, the overlay over it, ready to present
+	static void Draw(Image& scan)
 	{
-		w.pending = false;
-		if (!s_hasWindow || !scan.image || !Acquire(IsSrgb(scan.format)))
-			return;
-
 		VkImage target = w.images[w.index];
 		Barrier(target, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 		VkClearColorValue black{};
@@ -289,6 +290,58 @@ namespace wwhd::gpu
 		vkCmdBlitImage(s.cmd, scan.image, scan.layout, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b, VK_FILTER_LINEAR);
 		DrawOverlay(target, x, y, dw / 1920.0);
 		Barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	}
+
+	void PresentRecord(Image& scan, Image* between)
+	{
+		w.pending = false;
+		w.first = UINT32_MAX;
+		if (!s_hasWindow || !scan.image)
+			return;
+		if (between && Acquire(IsSrgb(scan.format)))              // frame generation: the frame between, presented first
+		{
+			Draw(*between);
+			w.first = w.index;
+			const VkSwapchainKHR chain = w.chain;
+			if (!Acquire(IsSrgb(scan.format)) || w.chain != chain)  // rebuilt meanwhile (a resize): that one's gone
+				w.first = UINT32_MAX;
+			if (!w.pending)
+				return;
+		}
+		else if (!Acquire(IsSrgb(scan.format)))
+			return;
+		Draw(scan);
+	}
+
+	// Frame generation presents twice a swap, so FIFO shows its frame and the game's one refresh apart: it takes a
+	// display at (about) twice the game's frame rate, or the game would wait for it. WWHD_FRAMEGEN=force skips the check
+	// (tests). Decided once, at the first present with a window.
+	bool FrameGenPresents()
+	{
+		static int s_decided = -1;
+		if (s_decided >= 0)
+			return s_decided != 0;
+		if (!s_hasWindow || !fsr3::FrameGenWanted())
+		{
+			const char* up = getenv("WWHD_FRAMEGEN");
+			if (s_hasWindow && up && *up == '1')                       // asked for without the FSR 3 upscaler
+				os::settings::SetNote("WWHD_FRAMEGEN", "off: it needs the FSR 3 upscaler");
+			return s_decided = 0, false;
+		}
+		const char* e = getenv("WWHD_FRAMEGEN");
+		const char* cap = getenv("WWHD_FPS_CAP");
+		const char* sixty = getenv("WWHD_60FPS");
+		const float rate = cap && atoi(cap) > 0 ? (float)atoi(cap) : sixty && *sixty == '1' ? 60.0f : 30.0f;
+		const float hz = s_window.refresh ? s_window.refresh() : 0.0f;
+		const bool force = e && strcmp(e, "force") == 0;
+		s_decided = force || hz >= 2 * rate * 0.95f;
+		if (!s_decided)                                           // the settings page says why, not only the log
+			os::settings::SetNote("WWHD_FRAMEGEN", hz > 0 ? fmt::format("off: the display runs at {:.0f} Hz, under twice the game's {:.0f}",
+				hz, rate) : "off: the display's refresh rate is unknown");
+		Log(s_decided ? fmt::format("window: frame generation: {} frames shown a second from the game's {} (the display at {:.0f} Hz){}",
+				2 * rate, rate, hz, force ? ", forced" : "")
+			: fmt::format("window: frame generation off: the display runs at {:.0f} Hz, under twice the game's {} frames a second", hz, rate));
+		return s_decided != 0;
 	}
 
 	// before the game starts (design D20): the overlay on black, in a 1920x1080 frame fitted to the
@@ -311,20 +364,27 @@ namespace wwhd::gpu
 
 	// the semaphore the swap's submit signals and its present waits for (the lazy path: the submit isn't waited for);
 	// one per image: an image is acquired again (its fence waited for) only once its last present is done with it
-	VkSemaphore PresentSemaphore()
+	uint32 PresentSemaphores(VkSemaphore (&out)[2])
 	{
 		if (!w.pending)
-			return VK_NULL_HANDLE;
+			return 0;
 		if (w.rendered.size() != w.images.size())
 			w.rendered.resize(w.images.size(), VK_NULL_HANDLE);
-		VkSemaphore& sem = w.rendered[w.index];
-		if (!sem)
+		uint32 n = 0;
+		for (uint32 index : { w.first, w.index })
 		{
-			VkSemaphoreCreateInfo sci{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-			Check(vkCreateSemaphore(s.device, &sci, nullptr, &sem), "vkCreateSemaphore");
+			if (index == UINT32_MAX)
+				continue;
+			VkSemaphore& sem = w.rendered[index];
+			if (!sem)
+			{
+				VkSemaphoreCreateInfo sci{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+				Check(vkCreateSemaphore(s.device, &sci, nullptr, &sem), "vkCreateSemaphore");
+			}
+			out[n++] = sem;
 		}
 		w.signalled = true;
-		return sem;
+		return n;
 	}
 
 	void PresentQueue()
@@ -332,20 +392,27 @@ namespace wwhd::gpu
 		if (!w.pending)
 			return;
 		w.pending = false;
-		VkPresentInfoKHR pi{ VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
-		pi.swapchainCount = 1;
-		pi.pSwapchains = &w.chain;
-		pi.pImageIndices = &w.index;
-		if (w.signalled)                                          // the lazy path: the submit may not have finished
+		const bool signalled = w.signalled;
+		w.signalled = false;
+		for (uint32 index : { w.first, w.index })                 // frame generation's frame first
 		{
-			pi.waitSemaphoreCount = 1;
-			pi.pWaitSemaphores = &w.rendered[w.index];
-			w.signalled = false;
+			if (index == UINT32_MAX)
+				continue;
+			VkPresentInfoKHR pi{ VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
+			pi.swapchainCount = 1;
+			pi.pSwapchains = &w.chain;
+			pi.pImageIndices = &index;
+			if (signalled)                                        // the lazy path: the submit may not have finished
+			{
+				pi.waitSemaphoreCount = 1;
+				pi.pWaitSemaphores = &w.rendered[index];
+			}
+			VkResult r = vkQueuePresentKHR(s.queue, &pi);         // otherwise the submit has finished: nothing to wait for
+			if (r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR)
+				w.width = 0;                                      // rebuild at the next swap
+			else
+				Check(r, "vkQueuePresentKHR");
 		}
-		VkResult r = vkQueuePresentKHR(s.queue, &pi);             // otherwise the submit has finished: nothing to wait for
-		if (r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR)
-			w.width = 0;                                          // rebuild at the next swap
-		else
-			Check(r, "vkQueuePresentKHR");
+		w.first = UINT32_MAX;
 	}
 }

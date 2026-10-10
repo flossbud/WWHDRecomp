@@ -40,6 +40,11 @@ namespace
 		{ "WWHD_RENDER_SCALE", "Render scale", { { "1", "100%" }, { "0.75", "75%" }, { "0.5", "50%" }, { "auto", "Auto" } }, false, "auto" },
 		{ "WWHD_UPSCALER", "Upscaler (render scale under 100%)", { { "none", "bilinear" }, { "fsr1", "FSR 1" },
 			{ "fsr3", "FSR 3 (desktop GPUs)" } }, false, nullptr },
+		// FSR 3.1 frame generation (gpu/vk/fsr3.cpp Interpolate): a frame between each two, shown when the display runs at
+		// twice the game's rate (present.cpp FrameGenPresents, which notes on this line why it's off); with the FSR 3
+		// upscaler only. Its input lag: each real frame shows one refresh later, after the generated one (8 ms at 120 Hz)
+		{ "WWHD_FRAMEGEN", "Frame generation (FSR 3: generated in-between frames, adds input lag; 120 Hz+ displays)",
+			{ { "0", "off" }, { "1", "on" } }, false, nullptr },
 		{ "WWHD_CORES", "CPU threads", { { "3", "3" }, { "1", "1" } }, false, "3" },
 		{ "WWHD_LAZY_DRAWDONE", "Lazy DrawDone", { { "1", "on" }, { "0", "off" } }, false, "1" },
 	};
@@ -57,6 +62,7 @@ namespace
 	std::string s_autoChoice, s_autoWhy;            // what Auto picks on this machine, and why
 	std::string s_startLog;                         // the start's decision, logged once Cemu's log is up
 	std::string s_startLog2;                        // and notes on the file's lines
+	std::map<std::string, std::string> s_notes;     // SetNote's, by key
 	bool s_windowChanged = false, s_vsyncChanged = false;
 
 	int IndexOf(const Option& o, const std::string& v)
@@ -301,6 +307,8 @@ namespace wwhd::os::settings
 		const Option& o = kOptions[option];
 		const std::string v = s_fromEnv.count(o.key) ? s_atStart[o.key] : Current(o);
 		std::string line = std::string(o.label) + ": " + o.values[IndexOf(o, v)].shown;
+		if (auto n = s_notes.find(o.key); n != s_notes.end())
+			line += " (" + n->second + ")";
 		if (!s_active)
 			line += " (not saved: no window or a test)";
 		else if (s_fromEnv.count(o.key))
@@ -308,6 +316,15 @@ namespace wwhd::os::settings
 		else if (!o.live && v != s_atStart[o.key])
 			line += " (at the next start)";
 		return line;
+	}
+
+	void SetNote(const char* key, const std::string& note)
+	{
+		std::lock_guard lock(s_lock);
+		if (note.empty())
+			s_notes.erase(key);
+		else
+			s_notes[key] = note;
 	}
 
 	void Cycle(int option, int step)

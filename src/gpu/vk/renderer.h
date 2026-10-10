@@ -20,6 +20,7 @@ namespace wwhd::gpu
 		std::vector<const char*> instanceExtensions;              // what createSurface needs
 		std::function<uint64(void* instance)> createSurface;     // a VkSurfaceKHR for it, 0 on failure
 		std::function<void(uint32& w, uint32& h)> size;           // its drawable size in pixels
+		std::function<float()> refresh;                           // its display's refresh rate in Hz, 0 unknown
 	};
 	void SetWindow(Window window);
 	// An image laid over the TV image in the window, never in captures: the system's own screens

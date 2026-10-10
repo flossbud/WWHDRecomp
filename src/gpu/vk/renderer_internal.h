@@ -142,9 +142,11 @@ namespace wwhd::gpu
 	std::vector<const char*> WindowInstanceExtensions();
 	void CreateWindowSurface();                                   // after the instance
 	bool CanPresent(uint32 queueFamily);                          // true without a window
-	void PresentRecord(Image& scan);                              // before the swap's submit: into the next window image
+	void PresentRecord(Image& scan, Image* between = nullptr);    // before the swap's submit: into the next window image
+	                                                              // (frame generation: between first, into one before it)
+	bool FrameGenPresents();                                      // frame generation on, and the display fast enough for it
 	void PresentQueue();                                          // after it
-	VkSemaphore PresentSemaphore();                               // the swap's submit signals it when the lazy path presents
+	uint32 PresentSemaphores(VkSemaphore (&out)[2]);              // the swap's submit signals them when the lazy path presents
 
 	// shader_cache.cpp: the cache on disk (design D20); its records are draw.cpp's byte strings
 	namespace cache
@@ -268,6 +270,12 @@ namespace wwhd::gpu
 		// the scaled scene (`color`, its `depth`, the motion target) upscaled into `out` (the guest's size, storage usage)
 		bool Upscale(Image& color, Image& depth, Image& motionTarget, Image& out, float jitterX, float jitterY, bool reset);
 		void Forget(VkImage image);                               // an image is destroyed: its cached views go
+		// frame generation (WWHD_FRAMEGEN=1, with the FSR 3 upscaler): the frame between the last swap's and this one's,
+		// recorded at the TV image's scan copy; null when there's none (no upscale this frame). Interpolated: the last one
+		// made (shots)
+		bool FrameGenWanted();
+		Image* Interpolate(Image& tv);
+		Image* Interpolated();
 	}
 	// renderer.cpp: where the TV image's HUD begins (a draw into the TV surface alone, sampling only textures from
 	// memory, after a full-screen pass into it that sampled surfaces): with FSR 1 the scaled image is upscaled there

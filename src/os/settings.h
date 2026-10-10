@@ -18,6 +18,8 @@ namespace wwhd::os::settings
 	int Count();                                   // the settings page's options
 	std::string Line(int option);                  // "Frame rate: 60 (at the next start)"
 	void Cycle(int option, int step);              // to its next (+1) or previous (-1) value, saved at once
+	// a note on an option's line, from the part that reads it ("off: the display runs at 60 Hz"); "" removes it
+	void SetNote(const char* key, const std::string& note);
 
 	// what applies live: the event loop takes the requests (window_system.cpp): the display (fullscreen, window size;
 	// width 0 when no size is set) and vsync (the swapchain rebuilt); true when either changed

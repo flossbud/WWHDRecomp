@@ -128,10 +128,11 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/gen/fsr1_headers.inc.new"
 configure_file("${CMAKE_CURRENT_BINARY_DIR}/gen/fsr1_headers.inc.new" "${CMAKE_CURRENT_BINARY_DIR}/gen/fsr1_headers.inc" COPYONLY)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${fsr1_dir}/ffx_a.h" "${fsr1_dir}/ffx_fsr1.h")
 
-# AMD's FidelityFX SDK v1.1.4 FSR 3.1 upscaler host code (MIT, third_party/fsr3: README.md), built as it is with a
+# AMD's FidelityFX SDK v1.1.4 FSR 3.1 upscaler, frame interpolation and optical flow host code (MIT, third_party/fsr3: README.md), built as it is with a
 # shim for the few Windows CRT names it uses (gpu/vk/fsr3_compat.h); its backend is ours (gpu/vk/fsr3.cpp)
 set(fsr3_dir "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fsr3")
-add_library(wwhd_fsr3 OBJECT "${fsr3_dir}/src/components/fsr3upscaler/ffx_fsr3upscaler.cpp" "${fsr3_dir}/src/shared/ffx_object_management.cpp")
+add_library(wwhd_fsr3 OBJECT "${fsr3_dir}/src/components/fsr3upscaler/ffx_fsr3upscaler.cpp" "${fsr3_dir}/src/shared/ffx_object_management.cpp"
+	"${fsr3_dir}/src/components/frameinterpolation/ffx_frameinterpolation.cpp" "${fsr3_dir}/src/components/opticalflow/ffx_opticalflow.cpp")
 target_include_directories(wwhd_fsr3 PRIVATE "${fsr3_dir}/include" "${fsr3_dir}/src/shared")
 set_property(TARGET wwhd_fsr3 PROPERTY CXX_STANDARD 20)
 target_compile_options(wwhd_fsr3 PRIVATE -include "${CMAKE_CURRENT_SOURCE_DIR}/gpu/vk/fsr3_compat.h" -w)

@@ -277,6 +277,37 @@ validation 0 hazards. **Cost** on the worker (en-tn at 60): render thread +3.9 m
 not their waves' and sway's; judge FSR 3 on the sail route and Outset's grass, and if they ghost, keep last frame's
 CPU-written vertex data per group and run the two-pass shader on it (or mark them reactive).
 
+## FSR 3.1 frame generation (b-framegen, session bottom, 2026-10-10), opt-in
+
+`WWHD_FRAMEGEN=1` (settings: "Frame generation (FSR 3: generated in-between frames, adds input lag; 120 Hz+ displays)",
+off by default, set by no preset; when it can't run, the page's line says why: "off: the display runs at 60 Hz, ..."), with the FSR 3 upscaler only. A generated frame between each two of the
+game's, presented before the game's own: 120 shown a second from the game's 60 (or 60 from 30). Latency: each real
+frame shows one refresh later than without it (8 ms at 120 Hz), plus the interpolation's GPU time.
+
+- **What runs:** AMD's optical flow and frame interpolation components (SDK v1.1.4, vendored next to the upscaler)
+  through our FfxInterface backend (`fsr3.cpp`), which gained storage buffers (interpolation's counters), integer and
+  10-bit formats and the two components' passes. Not AMD's `ffx_fsr3.cpp` nor its `FrameInterpolationSwapchainVK`
+  (a swapchain replacement with its own present thread): `fsr3::Interpolate` drives optical flow and interpolation
+  itself, as `ffxFsr3DispatchFrameGeneration` does, reusing the upscaler's dilated depth, dilated motion and
+  reconstructed previous depth (the shared resources it already owned).
+- **Inputs:** the upscaler's output copied before the HUD draws (the HUD-less scene: optical flow and interpolation
+  read it) and the TV image at its scan copy (the HUD comes from it). The TV image, not the scan buffer: the game's
+  scan buffer is sRGB, which a storage view can't be; the TV image is 10-bit RGB (`A2B10G10R10`, the SDK's
+  `R10G10B10A2_UNORM`), and the interpolated frame is made in that format and goes to the window by the same blit.
+- **Presenting:** two window images a swap (the interpolated one acquired and drawn first), both presented after
+  the swap's submit, each waiting on its own semaphore in the lazy path. FIFO paces them a refresh apart, so it takes
+  a display at about twice the game's rate: `FrameGenPresents` reads the display's refresh rate (SDL) once and keeps
+  frame generation off below 1.9x the game's rate, logged ("frame generation off: the display runs at 60 Hz, ...");
+  `WWHD_FRAMEGEN=force` skips that (tests). It forces FIFO and one more swapchain image.
+- **Measured (the desktop worker's AMD GPU, sail, FSR 3 at 50%, 3 paired rounds):** +0.87 ms of GPU time a game
+  frame (1.76 -> 2.63 ms); the render thread +0.7 ms. The worker's games run on a virtual X display (no refresh
+  rate), so the pacing itself (120 shown on a 120 Hz screen) is **not measured**: the owner's display is the test.
+  Vulkan validation: clean over a 1200-frame run.
+- **Quality:** sail, 5 consecutive frames: each interpolated frame between its neighbours (PSNR 31.9 and 32.3 dB to
+  them, which are 26.9 dB apart); Link, the wake and the HUD clean, no ghosting seen.
+- **Not done:** VRR (t-vrr, top's lane) would let it pace on any refresh above twice the rate; a present thread
+  (AMD's way) would let it run with mailbox. Not on the worker's iGPU: FSR 3 alone costs 18.5 ms there.
+
 ## FSR 4 on Vulkan: evaluated, not built (b-fsr4, session bottom, 2026-10-10)
 
 - **AMD has no Vulkan FSR 4.** The FSR SDK 2.3.0 (the current one) ships FSR 4 only as a signed prebuilt DirectX 12

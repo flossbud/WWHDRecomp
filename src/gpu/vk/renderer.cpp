@@ -267,7 +267,7 @@ namespace wwhd::gpu
 			}
 		}
 
-		void Submit(VkSemaphore signal = VK_NULL_HANDLE)
+		void Submit(const VkSemaphore* signal = nullptr, uint32 signals = 0)
 		{
 			EndRendering();
 			timing::End();                                            // the last span's end
@@ -275,8 +275,8 @@ namespace wwhd::gpu
 			VkSubmitInfo si{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
 			si.commandBufferCount = 1;
 			si.pCommandBuffers = &s.cmd;
-			si.signalSemaphoreCount = signal ? 1 : 0;
-			si.pSignalSemaphores = &signal;
+			si.signalSemaphoreCount = signals;
+			si.pSignalSemaphores = signal;
 			Check(vkQueueSubmit(s.queue, 1, &si, s.fence), "vkQueueSubmit");
 		}
 	}
@@ -326,7 +326,9 @@ namespace wwhd::gpu
 	{
 		if (!s.cmds[1])
 			return SubmitAndWait();
-		Submit(PresentSemaphore());                                 // a window's present waits for it (none without one)
+		VkSemaphore present[2];
+		const uint32 presents = PresentSemaphores(present);
+		Submit(present, presents);                                  // a window's presents wait for them (none without one)
 		s.pending[s.slot] = true;
 		s.slot ^= 1;
 		s.cmd = s.cmds[s.slot], s.fence = s.fences[s.slot], s.descriptors = s.pools[s.slot];
@@ -753,6 +755,7 @@ namespace wwhd::gpu
 		std::map<std::pair<uint32, uint32>, Promoted> s_promoted;  // by surface key; the TV surface's among them
 		std::pair<uint32, uint32> s_tvKey{};
 		bool s_tvKnown = false, s_hudActive = false;
+		Image* s_between = nullptr;                               // frame generation's frame for this swap (fsr3::Interpolate)
 		struct { uint32 split = 0, atScan = 0, promoted = 0; } s_hudStats;   // a line every 600 frames (HudEnds)
 
 		std::pair<uint32, uint32> KeyOf(const Image& img)
@@ -1431,6 +1434,8 @@ namespace wwhd::gpu
 			if (!s_hudActive)
 				HudBegins(true);                                    // no HUD split this frame: upscaled here
 		}
+		if (target == 1 && FrameGenPresents())                    // frame generation: the frame before this one, presented first
+			s_between = fsr3::Interpolate(src);
 		Image& dst = s.scan[target == 1 ? 0 : 1];
 		// the reference's screenshot is an RGBA8 blit of this buffer, sRGB if the scan buffer is
 		VkFormat f = (target == 1 ? LatteGPUState.tvBufferUsesSRGB : LatteGPUState.drcBufferUsesSRGB)
@@ -1469,6 +1474,24 @@ namespace wwhd::gpu
 		static const bool shotDrc = getenv("WWHD_SHOT_DRC") && atoi(getenv("WWHD_SHOT_DRC")) != 0;
 		if (shotDrc && s.frame > 1 && s.shotFrames.count(s.frame - 1) && s.scan[1].image)
 			WritePPM(s.scan[1], s.frame - 1, "drc");
+		if (s.frame > 1 && s.shotFrames.count(s.frame - 1) && fsr3::Interpolated() && s.scan[0].image)   // frame generation's,
+		{                                                           // encoded as the scan buffer is (the blit the TV image takes)
+			static Image s_fgShot;
+			Image& fg = *fsr3::Interpolated();
+			if (!s_fgShot.image || s_fgShot.width != fg.width || s_fgShot.height != fg.height || s_fgShot.format != s.scan[0].format)
+			{
+				if (s_fgShot.image)
+					DestroyImage(s_fgShot);
+				s_fgShot = CreateImage(s.scan[0].format, VK_IMAGE_ASPECT_COLOR_BIT, fg.width, fg.height, 0);
+			}
+			Transition(fg, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+			Transition(s_fgShot, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			VkImageBlit b{};
+			b.srcSubresource = b.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+			b.srcOffsets[1] = b.dstOffsets[1] = { (sint32)fg.width, (sint32)fg.height, 1 };
+			vkCmdBlitImage(s.cmd, fg.image, fg.layout, s_fgShot.image, s_fgShot.layout, 1, &b, VK_FILTER_NEAREST);
+			WritePPM(s_fgShot, s.frame - 1, "fg");
+		}
 		HudEnds();
 		if (motion::On())
 			motion::FrameEnd(s.frame);
@@ -1477,7 +1500,8 @@ namespace wwhd::gpu
 		ResetOverwrittenSurfaces();
 		{
 			timing::Scope span(timing::Kind::Present);
-			PresentRecord(s.scan[0]);
+			PresentRecord(s.scan[0], s_between);                    // frame generation's frame first, when there is one
+			s_between = nullptr;
 		}
 		timing::Frame();
 		SubmitFrame();

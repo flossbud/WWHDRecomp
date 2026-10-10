@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <bit>
 #include <cwchar>
+#include <cstring>                                      // memset, memcpy (frame interpolation: Windows headers bring them)
 
 #ifndef _WIN32
 // the contexts' opaque storage: twice the SDK's, as wchar_t, which the private contexts hold names in, is 4 bytes here

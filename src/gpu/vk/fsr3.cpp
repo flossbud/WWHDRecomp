@@ -9,6 +9,8 @@
 #include "fsr3_compat.h"
 #include "renderer_internal.h"
 #include <FidelityFX/host/ffx_fsr3upscaler.h>
+#include <FidelityFX/host/ffx_frameinterpolation.h>
+#include <FidelityFX/host/ffx_opticalflow.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -53,8 +55,16 @@ namespace wwhd::gpu::fsr3
 			VkImageView sampled = VK_NULL_HANDLE;                // sampled view: all mips (depth: the depth aspect alone)
 			bool external = false;
 			bool cachedViews = false;                            // a registered image's views: s_viewCache's, not its own
+			VkBuffer buffer = VK_NULL_HANDLE;                    // a buffer (frame interpolation's counters) instead of an image
+			VkDeviceMemory bufferMemory = VK_NULL_HANDLE;
+			VkDeviceSize bufferSize = 0;
 			~Resource()
 			{
+				if (buffer)
+				{
+					vkDestroyBuffer(s.device, buffer, nullptr);
+					vkFreeMemory(s.device, bufferMemory, nullptr);
+				}
 				if (cachedViews)
 					return;
 				for (VkImageView v : mipViews)
@@ -81,6 +91,12 @@ namespace wwhd::gpu::fsr3
 			case FFX_SURFACE_FORMAT_R11G11B10_FLOAT: return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
 			case FFX_SURFACE_FORMAT_R16G16_FLOAT: return VK_FORMAT_R16G16_SFLOAT;
 			case FFX_SURFACE_FORMAT_R16G16_UINT: return VK_FORMAT_R16G16_UINT;
+			case FFX_SURFACE_FORMAT_R16G16_SINT: return VK_FORMAT_R16G16_SINT;
+			case FFX_SURFACE_FORMAT_R8G8_UINT: return VK_FORMAT_R8G8_UINT;
+			case FFX_SURFACE_FORMAT_R32G32B32A32_UINT: return VK_FORMAT_R32G32B32A32_UINT;
+			case FFX_SURFACE_FORMAT_R8G8B8A8_SNORM: return VK_FORMAT_R8G8B8A8_SNORM;
+			case FFX_SURFACE_FORMAT_B8G8R8A8_UNORM: return VK_FORMAT_B8G8R8A8_UNORM;
+			case FFX_SURFACE_FORMAT_R10G10B10A2_UNORM: return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
 			case FFX_SURFACE_FORMAT_R16_FLOAT: return VK_FORMAT_R16_SFLOAT;
 			case FFX_SURFACE_FORMAT_R16_UINT: return VK_FORMAT_R16_UINT;
 			case FFX_SURFACE_FORMAT_R16_UNORM: return VK_FORMAT_R16_UNORM;
@@ -97,9 +113,9 @@ namespace wwhd::gpu::fsr3
 		{
 			switch (f)
 			{
-			case VK_FORMAT_R32G32B32A32_SFLOAT: return 16;
+			case VK_FORMAT_R32G32B32A32_SFLOAT: case VK_FORMAT_R32G32B32A32_UINT: return 16;
 			case VK_FORMAT_R16G16B16A16_SFLOAT: case VK_FORMAT_R32G32_SFLOAT: return 8;
-			case VK_FORMAT_R16_SFLOAT: case VK_FORMAT_R16_UINT: case VK_FORMAT_R16_UNORM: case VK_FORMAT_R16_SNORM: case VK_FORMAT_R8G8_UNORM: return 2;
+			case VK_FORMAT_R16_SFLOAT: case VK_FORMAT_R16_UINT: case VK_FORMAT_R16_UNORM: case VK_FORMAT_R16_SNORM: case VK_FORMAT_R8G8_UNORM: case VK_FORMAT_R8G8_UINT: return 2;
 			case VK_FORMAT_R8_UNORM: case VK_FORMAT_R8_UINT: return 1;
 			default: return 4;
 			}
@@ -131,9 +147,51 @@ namespace wwhd::gpu::fsr3
 		struct Staging { VkBuffer buffer; VkDeviceMemory memory; };
 		std::vector<Staging> s_staging, s_retiredStaging[2];
 
+		// a storage buffer (frame interpolation's counters), its initial data copied or filled in
+		FfxErrorCode CreateBuffer(const FfxCreateResourceDescription* d, FfxResourceInternal* out)
+		{
+			const FfxResourceDescription& rd = d->resourceDescription;
+			auto res = std::make_unique<Resource>();
+			res->desc = rd;
+			res->bufferSize = std::max<VkDeviceSize>(rd.size, 4);
+			VkBufferCreateInfo bi{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+			bi.size = res->bufferSize;
+			bi.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+			Check(vkCreateBuffer(s.device, &bi, nullptr, &res->buffer), "vkCreateBuffer");
+			VkMemoryRequirements req;
+			vkGetBufferMemoryRequirements(s.device, res->buffer, &req);
+			VkMemoryAllocateInfo ai{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+			ai.allocationSize = req.size;
+			ai.memoryTypeIndex = MemoryType(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			Check(vkAllocateMemory(s.device, &ai, nullptr, &res->bufferMemory), "vkAllocateMemory");
+			Check(vkBindBufferMemory(s.device, res->buffer, res->bufferMemory, 0), "vkBindBufferMemory");
+			EndRendering();
+			const FfxResourceInitData& init = d->initData;
+			const uint8 v = init.type == FFX_RESOURCE_INIT_DATA_TYPE_VALUE ? (uint8)init.value : 0;
+			if (init.type == FFX_RESOURCE_INIT_DATA_TYPE_BUFFER && init.buffer)
+			{
+				const VkDeviceSize bytes = (std::min<VkDeviceSize>(init.size, res->bufferSize) + 3) & ~3ull;
+				const VkDeviceSize off = RingAlloc(bytes, 4);
+				memcpy(s.ring.data + off, init.buffer, std::min<VkDeviceSize>(init.size, res->bufferSize));
+				VkBufferCopy c{ off, 0, bytes };
+				vkCmdCopyBuffer(s.cmd, s.ring.buffer, res->buffer, 1, &c);
+			}
+			else
+				vkCmdFillBuffer(s.cmd, res->buffer, 0, VK_WHOLE_SIZE, v * 0x01010101u);
+			VkMemoryBarrier b{ VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+			b.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			b.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+			vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &b, 0, nullptr, 0, nullptr);
+			out->internalIndex = (int32_t)s_resources.size();
+			s_resources.push_back(std::move(res));
+			return FFX_OK;
+		}
+
 		FfxErrorCode CreateResource(FfxInterface*, const FfxCreateResourceDescription* d, FfxUInt32, FfxResourceInternal* out)
 		{
 			const FfxResourceDescription& rd = d->resourceDescription;
+			if (rd.type == FFX_RESOURCE_TYPE_BUFFER)
+				return CreateBuffer(d, out);
 			if (rd.type != FFX_RESOURCE_TYPE_TEXTURE2D)
 			{
 				Log(fmt::format("fsr3: a resource of type {} asked for (only 2D textures are made here)", (int)rd.type));
@@ -227,7 +285,7 @@ namespace wwhd::gpu::fsr3
 			Resource& res = *s_resources[r.internalIndex];
 			WaitPending();
 			DestroyViews(res);
-			if (!res.external)
+			if (!res.external && !res.buffer)
 				DestroyImage(res.own);
 			s_resources[r.internalIndex].reset();
 			return FFX_OK;
@@ -337,8 +395,39 @@ namespace wwhd::gpu::fsr3
 		};
 		VkSampler s_point = VK_NULL_HANDLE, s_linear = VK_NULL_HANDLE;
 
-		const char* PassFile(FfxPass pass)
+		const char* PassFile(FfxEffect effect, FfxPass pass)
 		{
+			if (effect == FFX_EFFECT_FRAMEINTERPOLATION)
+				switch ((FfxFrameInterpolationPass)pass)
+				{
+				case FFX_FRAMEINTERPOLATION_PASS_RECONSTRUCT_AND_DILATE: return "shaders/frameinterpolation/ffx_frameinterpolation_reconstruct_and_dilate_pass.glsl";
+				case FFX_FRAMEINTERPOLATION_PASS_SETUP: return "shaders/frameinterpolation/ffx_frameinterpolation_setup_pass.glsl";
+				case FFX_FRAMEINTERPOLATION_PASS_RECONSTRUCT_PREV_DEPTH: return "shaders/frameinterpolation/ffx_frameinterpolation_reconstruct_previous_depth_pass.glsl";
+				case FFX_FRAMEINTERPOLATION_PASS_GAME_MOTION_VECTOR_FIELD: return "shaders/frameinterpolation/ffx_frameinterpolation_game_motion_vector_field_pass.glsl";
+				case FFX_FRAMEINTERPOLATION_PASS_OPTICAL_FLOW_VECTOR_FIELD: return "shaders/frameinterpolation/ffx_frameinterpolation_optical_flow_vector_field_pass.glsl";
+				case FFX_FRAMEINTERPOLATION_PASS_DISOCCLUSION_MASK: return "shaders/frameinterpolation/ffx_frameinterpolation_disocclusion_mask_pass.glsl";
+				case FFX_FRAMEINTERPOLATION_PASS_INTERPOLATION: return "shaders/frameinterpolation/ffx_frameinterpolation_pass.glsl";
+				case FFX_FRAMEINTERPOLATION_PASS_INPAINTING_PYRAMID: return "shaders/frameinterpolation/ffx_frameinterpolation_compute_inpainting_pyramid_pass.glsl";
+				case FFX_FRAMEINTERPOLATION_PASS_INPAINTING: return "shaders/frameinterpolation/ffx_frameinterpolation_inpainting_pass.glsl";
+				case FFX_FRAMEINTERPOLATION_PASS_GAME_VECTOR_FIELD_INPAINTING_PYRAMID:
+					return "shaders/frameinterpolation/ffx_frameinterpolation_compute_game_vector_field_inpainting_pyramid_pass.glsl";
+				case FFX_FRAMEINTERPOLATION_PASS_DEBUG_VIEW: return "shaders/frameinterpolation/ffx_frameinterpolation_debug_view_pass.glsl";
+				default: return nullptr;
+				}
+			if (effect == FFX_EFFECT_OPTICALFLOW)
+				switch ((FfxOpticalflowPass)pass)
+				{
+				case FFX_OPTICALFLOW_PASS_PREPARE_LUMA: return "shaders/opticalflow/ffx_opticalflow_prepare_luma_pass.glsl";
+				case FFX_OPTICALFLOW_PASS_GENERATE_OPTICAL_FLOW_INPUT_PYRAMID: return "shaders/opticalflow/ffx_opticalflow_compute_luminance_pyramid_pass.glsl";
+				case FFX_OPTICALFLOW_PASS_GENERATE_SCD_HISTOGRAM: return "shaders/opticalflow/ffx_opticalflow_generate_scd_histogram_pass.glsl";
+				case FFX_OPTICALFLOW_PASS_COMPUTE_SCD_DIVERGENCE: return "shaders/opticalflow/ffx_opticalflow_compute_scd_divergence_pass.glsl";
+				case FFX_OPTICALFLOW_PASS_COMPUTE_OPTICAL_FLOW_ADVANCED_V5: return "shaders/opticalflow/ffx_opticalflow_compute_optical_flow_advanced_pass_v5.glsl";
+				case FFX_OPTICALFLOW_PASS_FILTER_OPTICAL_FLOW_V5: return "shaders/opticalflow/ffx_opticalflow_filter_optical_flow_pass_v5.glsl";
+				case FFX_OPTICALFLOW_PASS_SCALE_OPTICAL_FLOW_ADVANCED_V5: return "shaders/opticalflow/ffx_opticalflow_scale_optical_flow_advanced_pass_v5.glsl";
+				default: return nullptr;
+				}
+			if (effect != FFX_EFFECT_FSR3UPSCALER)
+				return nullptr;
 			switch ((FfxFsr3UpscalerPass)pass)
 			{
 			case FFX_FSR3UPSCALER_PASS_PREPARE_INPUTS: return "shaders/fsr3upscaler/ffx_fsr3upscaler_prepare_inputs_pass.glsl";
@@ -406,24 +495,42 @@ namespace wwhd::gpu::fsr3
 		FfxErrorCode CreatePipeline(FfxInterface*, FfxEffect effect, FfxPass pass, uint32_t options, const FfxPipelineDescription* desc,
 			FfxUInt32, FfxPipelineState* out)
 		{
-			const char* file = PassFile(pass);
+			const char* file = PassFile(effect, pass);
 			const char* text = file ? Source(file) : nullptr;
-			if (effect != FFX_EFFECT_FSR3UPSCALER || !text)
+			if (!text)
 				return FFX_ERROR_INVALID_ARGUMENT;
-			// the permutation's defines (CMakeCompileFSR3UpscalerShaders.txt, the Vulkan backend's arguments)
-			std::string defines = "#define FFX_GPU 1\n#define FFX_GLSL 1\n"
-				"#define FFX_FSR3UPSCALER_OPTION_UPSAMPLE_SAMPLERS_USE_DATA_HALF 0\n#define FFX_FSR3UPSCALER_OPTION_ACCUMULATE_SAMPLERS_USE_DATA_HALF 0\n"
-				"#define FFX_FSR3UPSCALER_OPTION_REPROJECT_SAMPLERS_USE_DATA_HALF 1\n#define FFX_FSR3UPSCALER_OPTION_POSTPROCESSLOCKSTATUS_SAMPLERS_USE_DATA_HALF 0\n"
-				"#define FFX_FSR3UPSCALER_OPTION_UPSAMPLE_USE_LANCZOS_TYPE 2\n";
+			// the permutation's defines (the SDK's CMakeCompile*Shaders.txt, the Vulkan backend's arguments; the option bits
+			// are each component's *_SHADER_PERMUTATION_* in its private header)
+			std::string defines = "#define FFX_GPU 1\n#define FFX_GLSL 1\n";
 			auto flag = [&](const char* name, uint32 bit) { defines += fmt::format("#define {} {}\n", name, (options & bit) ? 1 : 0); };
-			flag("FFX_FSR3UPSCALER_OPTION_REPROJECT_USE_LANCZOS_TYPE", 1u << 0);
-			flag("FFX_FSR3UPSCALER_OPTION_HDR_COLOR_INPUT", 1u << 1);
-			flag("FFX_FSR3UPSCALER_OPTION_LOW_RESOLUTION_MOTION_VECTORS", 1u << 2);
-			flag("FFX_FSR3UPSCALER_OPTION_JITTERED_MOTION_VECTORS", 1u << 3);
-			flag("FFX_FSR3UPSCALER_OPTION_INVERTED_DEPTH", 1u << 4);
-			flag("FFX_FSR3UPSCALER_OPTION_APPLY_SHARPENING", 1u << 5);
-			if (options & (1u << 7))
-				defines += "#define FFX_HALF 1\n";
+			if (effect == FFX_EFFECT_FSR3UPSCALER)
+			{
+				defines += "#define FFX_FSR3UPSCALER_OPTION_UPSAMPLE_SAMPLERS_USE_DATA_HALF 0\n#define FFX_FSR3UPSCALER_OPTION_ACCUMULATE_SAMPLERS_USE_DATA_HALF 0\n"
+					"#define FFX_FSR3UPSCALER_OPTION_REPROJECT_SAMPLERS_USE_DATA_HALF 1\n#define FFX_FSR3UPSCALER_OPTION_POSTPROCESSLOCKSTATUS_SAMPLERS_USE_DATA_HALF 0\n"
+					"#define FFX_FSR3UPSCALER_OPTION_UPSAMPLE_USE_LANCZOS_TYPE 2\n";
+				flag("FFX_FSR3UPSCALER_OPTION_REPROJECT_USE_LANCZOS_TYPE", 1u << 0);
+				flag("FFX_FSR3UPSCALER_OPTION_HDR_COLOR_INPUT", 1u << 1);
+				flag("FFX_FSR3UPSCALER_OPTION_LOW_RESOLUTION_MOTION_VECTORS", 1u << 2);
+				flag("FFX_FSR3UPSCALER_OPTION_JITTERED_MOTION_VECTORS", 1u << 3);
+				flag("FFX_FSR3UPSCALER_OPTION_INVERTED_DEPTH", 1u << 4);
+				flag("FFX_FSR3UPSCALER_OPTION_APPLY_SHARPENING", 1u << 5);
+				if (options & (1u << 7))
+					defines += "#define FFX_HALF 1\n";
+			}
+			else if (effect == FFX_EFFECT_FRAMEINTERPOLATION)
+			{
+				flag("FFX_FRAMEINTERPOLATION_OPTION_LOW_RES_MOTION_VECTORS", 1u << 0);
+				flag("FFX_FRAMEINTERPOLATION_OPTION_JITTERED_MOTION_VECTORS", 1u << 1);
+				flag("FFX_FRAMEINTERPOLATION_OPTION_INVERTED_DEPTH", 1u << 2);
+				if (options & (1u << 4))
+					defines += "#define FFX_HALF 1\n";
+			}
+			else                                                     // optical flow
+			{
+				defines += "#define FFX_OPTICALFLOW_OPTION_HDR_COLOR_INPUT 0\n";
+				if (options & (1u << 1))
+					defines += "#define FFX_HALF 1\n";
+			}
 			// the shader's own text after its #version line, the defines before the rest
 			std::string src = text;
 			const size_t v = src.find("#version");
@@ -507,6 +614,32 @@ namespace wwhd::gpu::fsr3
 				b.slotIndex = (uint32)u.getBinding();
 				Widen(ConstantBufferName(u.name), b.name);
 			}
+			// storage buffers (frame interpolation's counters): r_counters read only, rw_counters written; by block name
+			for (int i = 0; i < program.getNumBufferBlocks(); i++)
+			{
+				const glslang::TObjectReflection& u = program.getBufferBlock(i);
+				if (u.getBinding() < 0)
+					continue;
+				const bool rw = u.name.find("RW") != std::string::npos;
+				std::string name = u.name.substr(0, u.name.find('['));
+				if (name == "FrameInterpolationCounters_t")
+					name = "r_counters";
+				else if (name == "FrameInterpolationRWCounters_t")
+					name = "rw_counters";
+				bindings.push_back({ (uint32)u.getBinding(), VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr });
+				if (rw && out->uavBufferCount < FFX_MAX_NUM_UAVS)
+				{
+					auto& b = out->uavBufferBindings[out->uavBufferCount++];
+					b.slotIndex = (uint32)u.getBinding();
+					Widen(name, b.name);
+				}
+				else if (!rw && out->srvBufferCount < FFX_MAX_NUM_SRVS)
+				{
+					auto& b = out->srvBufferBindings[out->srvBufferCount++];
+					b.slotIndex = (uint32)u.getBinding();
+					Widen(name, b.name);
+				}
+			}
 			VkDescriptorSetLayoutCreateInfo li{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
 			li.bindingCount = (uint32)bindings.size();
 			li.pBindings = bindings.data();
@@ -565,11 +698,11 @@ namespace wwhd::gpu::fsr3
 			const uint32 slot = s.slot;
 			if (!s_pools[slot])
 			{
-				VkDescriptorPoolSize sizes[] = { { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1024 }, { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1024 },
-					{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 256 }, { VK_DESCRIPTOR_TYPE_SAMPLER, 256 } };
+				VkDescriptorPoolSize sizes[] = { { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2048 }, { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2048 },
+					{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 256 }, { VK_DESCRIPTOR_TYPE_SAMPLER, 256 }, { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 128 } };
 				VkDescriptorPoolCreateInfo pi{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
-				pi.maxSets = 128;
-				pi.poolSizeCount = 4;
+				pi.maxSets = 256;
+				pi.poolSizeCount = 5;
 				pi.pPoolSizes = sizes;
 				Check(vkCreateDescriptorPool(s.device, &pi, nullptr, &s_pools[slot]), "vkCreateDescriptorPool");
 			}
@@ -642,6 +775,25 @@ namespace wwhd::gpu::fsr3
 				w.pImageInfo = &images[n++];
 				writes.push_back(w);
 			}
+			std::vector<VkDescriptorBufferInfo> storage(job.pipeline.uavBufferCount + job.pipeline.srvBufferCount);
+			uint32 nb = 0;
+			auto storageBuffer = [&](FfxResourceInternal ri, uint32 binding) {
+				Resource* r = Res(ri);
+				if (!r || !r->buffer)
+					return;
+				storage[nb] = { r->buffer, 0, VK_WHOLE_SIZE };
+				VkWriteDescriptorSet w{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+				w.dstSet = set;
+				w.dstBinding = binding;
+				w.descriptorCount = 1;
+				w.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+				w.pBufferInfo = &storage[nb++];
+				writes.push_back(w);
+			};
+			for (uint32 i = 0; i < job.pipeline.uavBufferCount; i++)
+				storageBuffer(job.uavBuffers[i].resource, job.pipeline.uavBufferBindings[i].slotIndex);
+			for (uint32 i = 0; i < job.pipeline.srvBufferCount; i++)
+				storageBuffer(job.srvBuffers[i].resource, job.pipeline.srvBufferBindings[i].slotIndex);
 			for (uint32 i = 0; i < job.pipeline.constCount; i++)
 			{
 				const uint32 bytes = std::max(p->cbSizes[i], job.cbs[i].num32BitEntries * 4u);
@@ -678,8 +830,28 @@ namespace wwhd::gpu::fsr3
 					Resource* r = Res(job.clearJobDescriptor.target);
 					if (!r)
 						break;
+					if (r->buffer)
+					{
+						vkCmdFillBuffer(s.cmd, r->buffer, 0, VK_WHOLE_SIZE, (uint32)job.clearJobDescriptor.color[0]);
+						ComputeBarrier();
+						break;
+					}
 					VkClearColorValue c;
 					memcpy(c.float32, job.clearJobDescriptor.color, 16);
+					switch (r->image->format)                        // integer formats take the values as integers
+					{
+					case VK_FORMAT_R32_UINT: case VK_FORMAT_R16_UINT: case VK_FORMAT_R8_UINT: case VK_FORMAT_R8G8_UINT:
+					case VK_FORMAT_R16G16_UINT: case VK_FORMAT_R32G32B32A32_UINT:
+						for (int k = 0; k < 4; k++)
+							c.uint32[k] = (uint32)job.clearJobDescriptor.color[k];
+						break;
+					case VK_FORMAT_R16G16_SINT:
+						for (int k = 0; k < 4; k++)
+							c.int32[k] = (sint32)job.clearJobDescriptor.color[k];
+						break;
+					default:
+						break;
+					}
 					VkImageSubresourceRange all{ VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, 1 };
 					vkCmdClearColorImage(s.cmd, r->image->image, VK_IMAGE_LAYOUT_GENERAL, &c, 1, &all);
 					ComputeBarrier();
@@ -690,6 +862,22 @@ namespace wwhd::gpu::fsr3
 					Resource* src = Res(job.copyJobDescriptor.src), *dst = Res(job.copyJobDescriptor.dst);
 					if (!src || !dst)
 						break;
+					if (src->buffer || dst->buffer)
+					{
+						if (src->buffer && dst->buffer)
+						{
+							VkBufferCopy c{ 0, 0, std::min(src->bufferSize, dst->bufferSize) };
+							vkCmdCopyBuffer(s.cmd, src->buffer, dst->buffer, 1, &c);
+							ComputeBarrier();
+						}
+						break;
+					}
+					for (Resource* r : { src, dst })
+						if (r->external)
+						{
+							Transition(*r->image, VK_IMAGE_LAYOUT_GENERAL);
+							ComputeBarrier();
+						}
 					VkImageCopy c{};
 					c.srcSubresource = c.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
 					c.extent = { std::min(src->image->width, dst->image->width), std::min(src->image->height, dst->image->height), 1 };
@@ -740,6 +928,21 @@ namespace wwhd::gpu::fsr3
 			uint32 frames = 0;
 		};
 		State s_fsr3;
+
+		// frame generation (Interpolate)
+		struct FrameGen
+		{
+			bool made = false, failed = false, upscaled = false, reset = false, afterGap = true, loggedOdd = false;
+			FfxOpticalflowContext of{};
+			FfxFrameInterpolationContext fi{};
+			Resource* ofShared[2]{};                             // optical flow's vectors and scene-change detection
+			Image hudless;                                       // the upscaled scene before the HUD
+			Image out;                                           // the interpolated frame
+			uint32 w = 0, h = 0, renderW = 0, renderH = 0, logged = 0;
+			uint64 frameID = 0, frames = 0;
+		};
+		FrameGen s_fg;
+		constexpr float kNear = 1.0f, kFar = 100000.0f, kFov = 1.047f, kMeters = 0.01f;
 	}
 
 	bool On()
@@ -854,7 +1057,8 @@ namespace wwhd::gpu::fsr3
 			FfxResource r{};
 			r.resource = &e;
 			r.description.type = FFX_RESOURCE_TYPE_TEXTURE2D;
-			r.description.format = FFX_SURFACE_FORMAT_R8G8B8A8_UNORM;
+			r.description.format = e.image->format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 ? FFX_SURFACE_FORMAT_R10G10B10A2_UNORM
+				: FFX_SURFACE_FORMAT_R8G8B8A8_UNORM;
 			r.description.width = e.image->width;
 			r.description.height = e.image->height;
 			r.description.depth = 1;
@@ -940,10 +1144,10 @@ namespace wwhd::gpu::fsr3
 		dd.frameTimeDelta = 1000.0f / 60.0f;
 		dd.preExposure = 1.0f;
 		dd.reset = reset || s_fsr3.frames == 0;
-		dd.cameraNear = 1.0f;                                    // the game's camera, roughly (its depth isn't linearised here)
-		dd.cameraFar = 100000.0f;
-		dd.cameraFovAngleVertical = 1.047f;
-		dd.viewSpaceToMetersFactor = 0.01f;
+		dd.cameraNear = kNear;                                   // the game's camera, roughly (its depth isn't linearised here)
+		dd.cameraFar = kFar;
+		dd.cameraFovAngleVertical = kFov;
+		dd.viewSpaceToMetersFactor = kMeters;
 		if (const FfxErrorCode e = ffxFsr3UpscalerContextDispatch(s_fsr3.context.get(), &dd); e != FFX_OK)
 		{
 			static uint32 s_logged = 0;
@@ -952,6 +1156,180 @@ namespace wwhd::gpu::fsr3
 			return false;
 		}
 		s_fsr3.frames++;
+		if (FrameGenWanted())                                     // frame generation's inputs: the scene before the HUD
+		{
+			FrameGen& g = s_fg;
+			if (!g.hudless.image || g.hudless.width != out.width || g.hudless.height != out.height || g.hudless.format != out.format)
+			{
+				if (g.hudless.image)
+				{
+					WaitPending();
+					Forget(g.hudless.image);
+					DestroyImage(g.hudless);
+				}
+				g.hudless = CreateImage(out.format, VK_IMAGE_ASPECT_COLOR_BIT, out.width, out.height,
+					VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+			}
+			Transition(out, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+			Transition(g.hudless, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			VkImageCopy c{};
+			c.srcSubresource = c.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+			c.extent = { out.width, out.height, 1 };
+			vkCmdCopyImage(s.cmd, out.image, out.layout, g.hudless.image, g.hudless.layout, 1, &c);
+			g.renderW = color.width, g.renderH = color.height;
+			g.reset = dd.reset;
+			g.upscaled = true;
+		}
 		return true;
+	}
+
+	bool FrameGenWanted()
+	{
+		static const bool on = [] {
+			const char* e = getenv("WWHD_FRAMEGEN");
+			const bool want = e && (strcmp(e, "1") == 0 || strcmp(e, "force") == 0);
+			if (want && !On())
+				Log("fsr3: frame generation needs the FSR 3 upscaler (WWHD_UPSCALER=fsr3): off");
+			return want && On();
+		}();
+		return on;
+	}
+
+	// The frame between the last swap's and this one's (FSR 3.1 frame interpolation, b-framegen), at the TV image's copy
+	// to the scan buffer: optical flow over the HUD-less scene, then interpolation with the upscaler's dilated depth and
+	// motion, the HUD taken from the TV image. The TV image, not the scan buffer: that one is sRGB, which a storage view
+	// can't be; the frame made here goes to the window as the TV image does (the same blit's encoding). Null when there
+	// is nothing to interpolate (no FSR 3 upscale this frame: a loading screen, the title's movie).
+	Image* Interpolate(Image& tv)
+	{
+		FrameGen& g = s_fg;
+		if (!FrameGenWanted() || !s_fsr3.context || !g.upscaled)
+		{
+			g.afterGap = true;                                     // the next one starts over
+			return nullptr;
+		}
+		g.upscaled = false;
+		const bool tenBit = tv.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32;   // the game's TV image is 10-bit RGB
+		if ((!tenBit && tv.format != VK_FORMAT_R8G8B8A8_UNORM) || tv.width != g.hudless.width || tv.height != g.hudless.height)
+		{
+			if (!g.loggedOdd)
+				Log(fmt::format("fsr3: frame generation skips a TV image of format {} {}x{} (the upscaled scene: {}x{})", (int)tv.format,
+					tv.width, tv.height, g.hudless.width, g.hudless.height));
+			g.loggedOdd = true;
+			g.afterGap = true;
+			return nullptr;
+		}
+		EndRendering();
+		const uint32 w = tv.width, h = tv.height;
+		if (g.made && (g.w != w || g.h != h || g.out.format != tv.format))   // the TV image's size or format changed: made again
+		{
+			SubmitAndWait();
+			ffxFrameInterpolationContextDestroy(&g.fi);
+			ffxOpticalflowContextDestroy(&g.of);
+			for (Resource*& r : g.ofShared)
+				if (r)
+					DestroyResource(nullptr, { (int32_t)(std::find_if(s_resources.begin(), s_resources.end(),
+						[&](const auto& p) { return p.get() == r; }) - s_resources.begin()) }, 0), r = nullptr;
+			Forget(g.out.image);
+			DestroyImage(g.out);
+			g.made = false;
+		}
+		if (!g.made)
+		{
+			if (g.failed)
+				return nullptr;
+			FfxOpticalflowContextDescription od{};
+			od.backendInterface = s_fsr3.iface;
+			od.resolution = { w, h };
+			FfxErrorCode e = ffxOpticalflowContextCreate(&g.of, &od);
+			FfxFrameInterpolationContextDescription fd{};
+			fd.backendInterface = s_fsr3.iface;
+			fd.maxRenderSize = { s_fsr3.maxW, s_fsr3.maxH };
+			fd.displaySize = { w, h };
+			fd.backBufferFormat = tenBit ? FFX_SURFACE_FORMAT_R10G10B10A2_UNORM : FFX_SURFACE_FORMAT_R8G8B8A8_UNORM;
+			fd.previousInterpolationSourceFormat = fd.backBufferFormat;
+			if (e == FFX_OK)
+				e = ffxFrameInterpolationContextCreate(&g.fi, &fd);
+			FfxOpticalflowSharedResourceDescriptions ofs{};
+			if (e == FFX_OK)
+				e = ffxOpticalflowGetSharedResourceDescriptions(&g.of, &ofs);
+			const FfxCreateResourceDescription* descs[2] = { &ofs.opticalFlowVector, &ofs.opticalFlowSCD };
+			for (int k = 0; k < 2 && e == FFX_OK; k++)
+			{
+				FfxResourceInternal r;
+				e = CreateResource(nullptr, descs[k], 0, &r);
+				if (e == FFX_OK)
+					g.ofShared[k] = s_resources[r.internalIndex].get();
+			}
+			if (e != FFX_OK)
+			{
+				Log(fmt::format("fsr3: frame generation's contexts weren't made (error {:#x}); it is off", (uint32)e));
+				g.failed = true;
+				return nullptr;
+			}
+			g.out = CreateImage(tv.format, VK_IMAGE_ASPECT_COLOR_BIT, w, h,
+				VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+			g.w = w, g.h = h;
+			g.made = true;
+			g.afterGap = true;
+			Log(fmt::format("fsr3: AMD FidelityFX FSR 3.1 frame generation (SDK v1.1.4) at {}x{} (WWHD_FRAMEGEN)", w, h));
+		}
+		timing::Scope span(timing::Kind::Upscale, !timing::On() ? std::string() : fmt::format("framegen {}x{}", w, h));
+		const bool reset = g.reset || g.afterGap;
+		g.afterGap = false;
+		const VkComponentMapping id{};
+		ExternalImage hl{ &g.hudless, VK_IMAGE_ASPECT_COLOR_BIT, id }, sc{ &tv, VK_IMAGE_ASPECT_COLOR_BIT, id },
+			o{ &g.out, VK_IMAGE_ASPECT_COLOR_BIT, id };
+		FfxOpticalflowDispatchDescription od{};
+		od.commandList = s.cmd;
+		od.color = External(hl, FFX_RESOURCE_STATE_COMPUTE_READ);
+		od.reset = reset;
+		od.backbufferTransferFunction = FFX_BACKBUFFER_TRANSFER_FUNCTION_SRGB;   // SDR, 0 to 1 (the shaders' "linear LDR")
+		od.minMaxLuminance = { 0.0f, 1.0f };
+		od.opticalFlowVector = Shared(g.ofShared[0]);
+		od.opticalFlowSCD = Shared(g.ofShared[1]);
+		FfxErrorCode e = ffxOpticalflowContextDispatch(&g.of, &od);
+		FfxFrameInterpolationDispatchDescription fd{};
+		fd.commandList = s.cmd;
+		fd.displaySize = { w, h };
+		fd.renderSize = { g.renderW, g.renderH };
+		fd.currentBackBuffer = External(sc, FFX_RESOURCE_STATE_COMPUTE_READ);
+		fd.currentBackBuffer_HUDLess = External(hl, FFX_RESOURCE_STATE_COMPUTE_READ);
+		fd.output = External(o, FFX_RESOURCE_STATE_UNORDERED_ACCESS);
+		fd.interpolationRect = { 0, 0, (int32_t)w, (int32_t)h };
+		fd.opticalFlowVector = Shared(g.ofShared[0]);
+		fd.opticalFlowSceneChangeDetection = Shared(g.ofShared[1]);
+		fd.opticalFlowBufferSize = { g.ofShared[0]->desc.width, g.ofShared[0]->desc.height };
+		fd.opticalFlowScale = { 1.0f / w, 1.0f / h };
+		fd.opticalFlowBlockSize = 8;
+		fd.cameraNear = kNear;
+		fd.cameraFar = kFar;
+		fd.cameraFovAngleVertical = kFov;
+		fd.viewSpaceToMetersFactor = kMeters;
+		fd.frameTimeDelta = 1000.0f / 60.0f;
+		fd.reset = reset;
+		fd.backBufferTransferFunction = FFX_BACKBUFFER_TRANSFER_FUNCTION_SRGB;
+		fd.minMaxLuminance[0] = 0.0f;
+		fd.minMaxLuminance[1] = 1.0f;
+		fd.frameID = ++g.frameID;
+		fd.dilatedDepth = Shared(s_fsr3.shared[0]);
+		fd.dilatedMotionVectors = Shared(s_fsr3.shared[1]);
+		fd.reconstructedPrevDepth = Shared(s_fsr3.shared[2]);
+		if (e == FFX_OK)
+			e = ffxFrameInterpolationDispatch(&g.fi, &fd);
+		if (e != FFX_OK)
+		{
+			if (g.logged++ < 4)
+				Log(fmt::format("fsr3: frame interpolation failed (error {:#x})", (uint32)e));
+			g.afterGap = true;
+			return nullptr;
+		}
+		g.frames++;
+		return &g.out;
+	}
+
+	Image* Interpolated()
+	{
+		return s_fg.frames ? &s_fg.out : nullptr;
 	}
 }

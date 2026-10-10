@@ -55,6 +55,7 @@ static void setSize(int w, int h)
 #ifdef WWHD_NULL_GPU
 // The window's drawable size, kept by the event loop for the renderer's thread.
 static std::atomic<uint32> s_pixelWidth, s_pixelHeight;
+static std::atomic<float> s_refresh{ 0.0f };                    // the window's display's refresh rate (frame generation)
 
 static void StorePixelSize(SDL_Window* window)
 {
@@ -63,6 +64,12 @@ static void StorePixelSize(SDL_Window* window)
 	s_pixelWidth = (uint32)w;
 	s_pixelHeight = (uint32)h;
 	setSize(w, h);
+	const SDL_DisplayID display = SDL_GetDisplayForWindow(window);
+	const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(display);
+	if (!mode || mode->refresh_rate <= 0)                         // some drivers know only the desktop's
+		mode = SDL_GetDesktopDisplayMode(display);
+	if (mode && mode->refresh_rate > 0)
+		s_refresh = mode->refresh_rate;
 }
 
 // ---- input: the keyboard and one gamepad, as the Pro Controller (src/os/input.cpp) ----------------
@@ -325,6 +332,7 @@ static SDL_Window* OpenWindow()
 		return (uint64)surface;
 	};
 	w.size = [](uint32& width, uint32& height) { width = s_pixelWidth; height = s_pixelHeight; };
+	w.refresh = [] { return s_refresh.load(); };
 	wwhd::gpu::SetWindow(std::move(w));
 	cemuLog_log(LogType::Force, "wwhd: window on SDL's {} video driver", SDL_GetCurrentVideoDriver());
 	return window;
@@ -394,7 +402,7 @@ static void PrepareShaders(SDL_Window* window)
 			wwhd::sixty::FlightFinal();
 			wwhd::gpu::SaveShaderCache();
 			_exit(0);   // like Cemu's own exit path mid-game: skip global destructors
-		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: StorePixelSize(window); break;
+		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: case SDL_EVENT_WINDOW_DISPLAY_CHANGED: StorePixelSize(window); break;
 		case SDL_EVENT_WINDOW_FOCUS_GAINED: g_windowInfo.app_active = true; cemuLog_log(LogType::Force, "wwhd: window focused"); break;
 		case SDL_EVENT_WINDOW_FOCUS_LOST: g_windowInfo.app_active = false; cemuLog_log(LogType::Force, "wwhd: window lost the focus"); PublishInput(); break;
 		case SDL_EVENT_KEY_DOWN:
