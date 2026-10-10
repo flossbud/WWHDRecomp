@@ -136,3 +136,5 @@ and tools only. The game itself, and everything generated from your copy of it, 
 not covered by it.
 `src/third_party/fsr1/` is AMD's FidelityFX Super Resolution 1 (`ffx_a.h`, `ffx_fsr1.h`), under the MIT license in
 `src/third_party/fsr1/LICENSE.txt`.
+`src/third_party/fsr3/` is AMD's FidelityFX SDK v1.1.4 FSR 3.1 upscaler (host code, headers and shaders), under the
+MIT license in `src/third_party/fsr3/LICENSE.txt` (its `README.md`: what's taken and the one local change).
