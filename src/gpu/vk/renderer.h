@@ -47,4 +47,5 @@ namespace wwhd::gpu
 	void RendererSwap();                                           // IT_HLE_TRIGGER_SCANBUFFER_SWAP
 	void RendererDraw(uint32 op, const uint32be* body, uint32 nWords); // IT_DRAW_INDEX_2 / _AUTO (draw.cpp)
 	void RendererCopySurface(const uint32be* body, uint32 nWords); // IT_HLE_COPY_SURFACE_NEW (texture.cpp)
+	void RendererFrameDropped(bool dropped);                       // 0xFC, a dropped frame's mark (draw.cpp: its screen-sized draws left out)
 }

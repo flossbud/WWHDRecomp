@@ -96,6 +96,18 @@ void gx2Export_GX2SampleBottomGPUCycle(PPCInterpreter_t* hCPU)
 	osLib_returnFromFunction(hCPU, 0);
 }
 
+// wwhd: a frame the pacing drops (src/overrides/pacing.cpp: keep-speed, the cap, the frame skip) is marked in the command
+// stream, written on the frame's own core at its start: 0xFC (an opcode Latte doesn't use) with 1, and with 0 at the next
+// shown frame's start. The renderer leaves out its draws into screen-sized targets (draw.cpp, t-skipcost)
+void GX2_WriteFrameDropMarker(bool dropped)
+{
+	if (!LatteGPUState.gx2InitCalled)
+		return;
+	GX2::GX2ReserveCmdSpace(2);
+	gx2WriteGather_submitU32AsBE(pm4HeaderType3(0xFC, 1));
+	gx2WriteGather_submitU32AsBE(dropped ? 1 : 0);
+}
+
 namespace GX2
 {
 	SysAllocator<uint8, 640 * 480 * 4, 0x1000> _lastFrame;

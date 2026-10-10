@@ -245,6 +245,18 @@ namespace wwhd::pacing
 	bool s_wholeWasSkipped = false;
 	double s_skippedMs = 0;                        // the skipped whole frames' length this period (to the next whole frame)
 
+	// the command stream's mark of a dropped frame (gx2's 0xFC, written at the frame's start on its own core): the renderer
+	// leaves out its draws into screen-sized targets (draw.cpp; t-skipcost). WWHD_FRAMESKIP_DRAWS=0: they're recorded
+	void MarkDropped(bool dropped)
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_FRAMESKIP_DRAWS"); return !(e && atoi(e) == 0); }();
+		static bool marked = false;
+		if (!on || dropped == marked)
+			return;
+		marked = dropped;
+		wwhd::os::FrameDropMarker(dropped);
+	}
+
 	bool WholeSkip(uint32 tick, Clock::time_point now, Clock::time_point due)
 	{
 		static const int test = [] { const char* e = getenv("WWHD_FRAMESKIP_TEST"); return e ? atoi(e) : 0; }();   // -k: k-1 of every k
@@ -318,6 +330,7 @@ namespace wwhd::pacing
 		const Clock::time_point now = Clock::now();
 		g_dropFrame = false;
 		WholeFrame(swap, now);
+		MarkDropped(g_dropFrame);
 	}
 
 	void FrameShown()
@@ -348,6 +361,7 @@ namespace wwhd::pacing
 			// a load or a pause plays on from where it is, it doesn't race to catch up); more than a tick behind, it's
 			// skipped (above)
 			WholeFrame((swap - from) / 2, now);
+			MarkDropped(g_dropFrame);
 			return;
 		}
 		s_halves++;
@@ -366,6 +380,7 @@ namespace wwhd::pacing
 			if (!g_dropFrame && keep && Paced())       // keep-speed: a half frame that would end after the next tick is due
 				g_dropFrame = now + std::chrono::microseconds((long long)(s_halfWorkMs * 1000)) > s_tickDue;
 		}
+		MarkDropped(g_dropFrame);
 		if (g_dropFrame)
 			s_dropped++;
 		if (s_halves % 600 == 0 && (keep || test || cap))
