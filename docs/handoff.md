@@ -4218,11 +4218,28 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
 - **Real-time scripted routes and the title:** in real time the title can take input after the routes' frame 420, and
   the run then sits on the file select or comes into play late (every input after it late). Not the threads' doing
   (one-thread runs too), cause not found; see threads.md. Next item t-boot (`WWHD_DEBUG_BOOT`) removes the title from
-  real-time tests.
+  real-time tests (done: t-boot).
 - **Sync validation of the lazy DrawDone** (t-lazy's first step, the desktop worker, a window on Xvfb, RADV,
   `VK_KHRONOS_VALIDATION_VALIDATE_SYNC`, continue to frame 1500): the same 2140 write-after-write hazards with it on
   and off, so the lazy path adds none. They are pre-existing, inside a frame: a blit (2101), a copy (7) and clears (32)
   into an image just cleared with no barrier between (the GPU side's, reported to main).
+- **Landed since** (each commit has its evidence): t-boot `WWHD_DEBUG_BOOT=1` (the logo goes to the file select; play
+  begins on the same frame; qa's 1dadb49 made it work with three host threads); t-fpscap, the frame rate 30/40/50/60
+  (`WWHD_FRAMERATE`, `WWHD_FPS_CAP`) and keep-speed always on in real time (`WWHD_60FPS_KEEPSPEED=0` a test override);
+  t-frameskip, full speed below 30 (whole frames dropped when behind, play only; `WWHD_FRAMESKIP=0`, `_LATE`, `_TEST`;
+  at 30 a dropped frame's own swap is suppressed, GX2_SuppressNextSwap); t-skipcost, a dropped frame's screen-sized
+  draws left out (a 0xFC marker in the command stream; `WWHD_FRAMESKIP_DRAWS=0`): the worker at 30 render-bound 20.4 fps
+  at 100% speed; t-lazy, the lazy GX2DrawDone on by default (after qa's e4e8271: a dropped frame keeps its DrawDone);
+  t-vrr, `WWHD_VRR=1` (FIFO and X11's _VARIABLE_REFRESH; the owner checks it on a VRR monitor); t-writewatch, texture
+  write-watch on by default in real time; t-bufcache, a vertex buffer's ring copy reused within the frame (a 64-byte
+  guard; the worker's render thread -17% at 60).
+- **Measured, not landed: t-rtstore** (the half tick journal's saved-bits test inline in `RT_STORE`, ppc_ops.h; exact:
+  checks MATCH, regress identical): the worker game thread +0.3% (noise): the bigger store sites cost what the calls
+  did. The patch: `rt_store_saved(pages, ea, size)` in ppc_ops.h doing rt_journal_store's first test (g_rtStoreBits,
+  not g_rtStoreAll, not *g_rtStoreHold, the page's bits cover the store) before the call; easy to redo from that.
+- **Open ideas**: t-bufcache's guard could be exact with write-watch on the vertex buffers (main's idea), but only
+  textures are protected now, and protecting CPU-written vertex buffers costs a fault on every frame's writes: an A/B
+  first. The frame skip's shown frames could come at even times under VRR (t-vrr's pacing is the existing one).
 
 ### Session qa (week 2, WW-15): the problems top and bottom are stuck on
 
