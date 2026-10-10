@@ -5,7 +5,8 @@
 # is the noise floor the three-host-thread runs are judged against.
 # Each run: tools/sixty/run.sh with SIXTY_REALTIME=1, WWHD_STATE_TRACK=168, the lazy DrawDone; a binary copy per slot
 # (its portable folder: one game per folder).
-# RT_VARIANTS (default "st1 st2 mt1 mt2"): mt* runs add RT_MT_ARGS (default WWHD_CORES=3), st* runs WWHD_CORES=1.
+# RT_VARIANTS (default "st1 st2 mt1 mt2"): mt* runs add RT_MT_ARGS (default WWHD_CORES=3), st* runs WWHD_CORES=1;
+# pl* runs are mt's with build/wwhd/wwhd-play, the real-time build (t-codegen; tools/sixty/tests/predeploy-rt.sh).
 # RT_RENDER=1: rendered (WWHD_RENDER=vk; default the null GPU, the game's logic only).
 # RT_JOBS runs at once (default 4; real time: the desktop worker has the threads, the worker wants 1).
 # The runs skip the title (WWHD_DEBUG_BOOT=1, tools/sixty/run.sh in real time): in real time the title can take input
@@ -19,19 +20,23 @@ source "$(dirname "$0")/common.sh"
 routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land3 sidle2 pot plants slash sail menus tour3 boomerang bombs grapple boots hammer armor mirror heavy drcjar fwbud tgbeam wtspring medli gtrock en-rd en-ph en-pz en-bo tgstatue medliharp gtgrapple fwswitch crate slope warppot climb)
 variants=(${RT_VARIANTS:-st1 st2 mt1 mt2})
 jobs=${RT_JOBS:-4}
+rate=${RT_RATE:-60}                             # RT_RATE=30: the routes at 30 instead
 R=$OUT/rt; mkdir -p "$R"
 for i in $(seq 0 $((jobs - 1))); do
     mkdir -p "$R/bin.$$.$i" && cp build/wwhd/wwhd-null "$R/bin.$$.$i/wwhd-null" || exit 2
+    if [[ " ${variants[*]} " == *" pl"* ]]; then cp build/wwhd/wwhd-play "$R/bin.$$.$i/wwhd-play" || exit 2; fi
 done
 run_one() {
     local r=$1 v=$2 slot=$3 w= n= extra=()
     case $r in back) w=M_NewD2,5,14,-1 ;; talk) w=sea,0,11,-1 ;; house) w=sea,9,11,-1 ;; warp) n=2460 ;; esac
-    if [[ $v == mt* ]]; then extra=(${RT_MT_ARGS:-WWHD_CORES=3}); else extra=(WWHD_CORES=1); fi
+    local bin=wwhd-null
+    if [[ $v == mt* || $v == pl* ]]; then extra=(${RT_MT_ARGS:-WWHD_CORES=3}); else extra=(WWHD_CORES=1); fi
+    [[ $v == pl* ]] && bin=wwhd-play
     local try
     for try in $(seq 0 "${RT_RETRIES:-3}"); do
         rm -rf "$R/$r/$v"; mkdir -p "$R/$r/$v"
         env ${w:+WWHD_DEBUG_STAGE=920:$w} ${n:+SIXTY_FRAMES=$n} "${extra[@]}" WWHD_THREAD_DUMP="$R/$r/$v.threads" ${RT_REMAP:+WWHD_INPUT_REMAP=$RT_REMAP} SIXTY_REALTIME=1 ${RT_RENDER:+WWHD_RENDER=vk} WWHD_LAZY_DRAWDONE=1 WWHD_STATE_TRACK=168 \
-            CEMU_BIN="$R/bin.$$.$slot/wwhd-null" SIXTY_OUT="$R/slot.$$.$r.$v" tools/sixty/run.sh "$r" "$R/$r/$v" 60 > "$R/$r/$v.log" 2>&1 \
+            CEMU_BIN="$R/bin.$$.$slot/$bin" SIXTY_OUT="$R/slot.$$.$r.$v" tools/sixty/run.sh "$r" "$R/$r/$v" $rate > "$R/$r/$v.log" 2>&1 \
             || echo "rt_routes: $r $v: the run failed (see $R/$r/$v.log)"
         cp "$R/bin.$$.$slot/portable/log.txt" "$R/$r/$v.emu.log" 2>/dev/null   # the emulator's log (a crash's last words)
         rm -rf "$R/slot.$$.$r.$v"
@@ -42,7 +47,7 @@ run_one() {
         # title's) or comes into play late, when a later press of the route's starts the game, and every input after
         # it lands late. In play: a Link (process 168) whose track starts between ticks 800 and 900 (the title's Link
         # is made at ~tick 100, the play scene's at ~tick 847). Otherwise play it again, and count it.
-        python3 - "$R/$r/$v/60/track.bin" <<'PY' && break
+        python3 - "$R/$r/$v/$rate/track.bin" <<'PY' && break
 import sys
 sys.path.insert(0, "tools/sixty")
 import compare
@@ -67,11 +72,11 @@ wait
 rm -rf "$R"/bin.$$.*
 for r in "${routes_run[@]}"; do cat "$R/$r/retries.txt" 2>/dev/null; done | awk '{print $3}' | sort | uniq -c |
     sed 's/^ *\([0-9]*\) \(.*\)/rt_routes: \2: \1 runs played again (never in play)/' 
-python3 - "$R" "${variants[*]}" "${routes[@]}" <<'PY'
+python3 - "$R" "${variants[*]}" "$rate" "${routes[@]}" <<'PY'
 import math, os, struct, sys
 sys.path.insert(0, "tools/sixty")
 import compare
-R, variants, routes = sys.argv[1], sys.argv[2].split(), sys.argv[3:]
+R, variants, rate, routes = sys.argv[1], sys.argv[2].split(), sys.argv[3], sys.argv[4:]
 def link(path):
     T = compare.load_track(path)
     if not any(k[0] == 168 and 1600 <= min(T[k]) <= 1800 for k in T if T[k]):
@@ -88,7 +93,7 @@ for r in routes:
     t = {}
     for v in variants:
         try:
-            t[v] = link(os.path.join(R, r, v, "60", "track.bin"))
+            t[v] = link(os.path.join(R, r, v, rate, "track.bin"))
         except OSError:
             t[v] = None
     cells = []

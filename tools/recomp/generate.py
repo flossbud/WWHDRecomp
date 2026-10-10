@@ -27,7 +27,11 @@ and runs without checks; one that doesn't fit runs a second copy with RT_TICK(ad
 instruction, so the yield lands on the same instruction. Nothing inside a block can tell the
 difference: a block ends before anything that could look at the budget (calls, imports, the
 runtime's hooks), and guest time only advances when a slice ends. --tick instruction emits only
-the checked form (one RT_TICK per instruction), as before.
+the checked form (one RT_TICK per instruction), as before. The same source also builds wwhd-play, the real-time build
+(t-codegen; WWHD_RT_LOOSE, runtime/ppc_ops.h): blocks charged but never checked, so the checked copies compile away
+(the binary ~45% smaller, the game thread ~7% faster), and a thread whose slice ran out yields at the next RT_LOOP,
+emitted at the function's entry and at each loop header (a label a branch at or after it goes back to): every loop
+and recursion reaches one. In the counting build RT_LOOP is nothing.
 
 Control flow (D1): branches inside a function become gotos; a branch to another function's
 entry is a musttail call; bl is a call; blr is return; a bctr listed in jump_tables.csv is a
@@ -501,6 +505,7 @@ class FunctionFlow:
     def __init__(self, prog, start, end, errors):
         self.prog, self.start, self.end, self.errors = prog, start, end, errors
         self.labels = set()
+        self.loops = set()         # labels some branch at or after them goes back to (loop headers): RT_LOOP
         self.callees = set()       # functions this one calls or tail-calls (incl. falling through)
         self.impure = []           # why it is not pure by itself (D8.2)
 
@@ -539,6 +544,8 @@ class FunctionFlow:
             return self._wrap(cond, [f"ctx->spr.LR = {emit.hx(ea + 4)};", f"{fname(target)}(ctx);"])
         if self.start <= target < self.end:
             self.labels.add(target)
+            if target <= ea:
+                self.loops.add(target)
             return [f"goto L_{target:08X};"] if cond is None else [f"if ({cond}) goto L_{target:08X};"]
         if target in p.entries:
             self.callees.add(target)
@@ -564,6 +571,8 @@ class FunctionFlow:
         for t in sorted(set(table)):
             if self.start <= t < self.end:
                 self.labels.add(t)
+                if t <= ea:
+                    self.loops.add(t)
                 body.append(f"case {emit.hx(t)}: goto L_{t:08X};")
             else:
                 self.errors.append(f"{ea:08X}: jump table target {t:08X} outside the function")
@@ -614,8 +623,10 @@ def ends_block(op, lines):
         any(re.search(r"\bf_[0-9A-F]{8}\(ctx\)", l) for l in lines)
 
 
-def emit_blocks(body, labels):
-    """body: [(ea, op, lines)] of one function, in order; returns its C++ lines, counted per block."""
+def emit_blocks(body, labels, loops=frozenset(), entry=None):
+    """body: [(ea, op, lines)] of one function, in order; returns its C++ lines, counted per block. RT_LOOP(ea) at the
+    function's entry and its loop headers (loops): nothing in the counting build; where the real-time build without
+    per-block checks (WWHD_RT_LOOSE, ppc_ops.h) yields, so every loop and recursion still reaches one."""
     blocks, cur = [], []
     for ea, op, lines in body:
         if cur and ea in labels:
@@ -628,9 +639,13 @@ def emit_blocks(body, labels):
     if cur:
         blocks.append(cur)
     out = []
+    if entry is not None:
+        out.append(f"\tRT_LOOP({emit.hx(entry)});")
     for block in blocks:
         if block[0][0] in labels:
             out.append(f"L_{block[0][0]:08X}:;")
+        if block[0][0] in loops:
+            out.append(f"\tRT_LOOP({emit.hx(block[0][0])});")
         if TICK_PER_INSTRUCTION or len(block) < MIN_BLOCK:
             for ea, lines in block:
                 out.append(f"\tRT_TICK({emit.hx(ea)});")
@@ -830,7 +845,7 @@ def generate_function(prog, em, start, end, errors):
     # -fno-strict-aliasing); calls still receive ctx, so it writes back and reloads around them
     name = ("orig_" if start in prog.overrides else "") + fname(start)    # D9: f_X is src/overrides'
     out = [f"void {name}(PPCInterpreter_t* __restrict ctx)", "{"]
-    out += emit_blocks(body, flow.labels)      # one cycle per instruction, charged per block (D6)
+    out += emit_blocks(body, flow.labels, flow.loops, start)   # one cycle per instruction, charged per block (D6)
     if last is None or not is_terminator(last):
         if end in prog.entries:
             flow.callees.add(end)

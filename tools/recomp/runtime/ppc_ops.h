@@ -117,8 +117,26 @@ static inline void rt_step_s16_end(uint32 ea, uint16 saved)
 #define RT_TICK(pc) do { if (--ctx->remainingCycles < 0) [[unlikely]] rt_yield(ctx, (pc)); } while (0)
 // Per basic block (tools/recomp/generate.py): a block of n instructions that fits in the slice (no
 // RT_TICK in it would yield) is charged at once and runs unchecked; otherwise its checked copy runs.
+#if defined(WWHD_RT_NOCOUNT)
+// t-codegen's measurement only (RECOMP_OPT=-DWWHD_RT_NOCOUNT): no cycle counting in blocks, so what it costs; the
+// guest then yields only in OS calls (no slices, no virtual clock): not a build to play or check
+#define RT_FITS(n) true
+#define RT_CHARGE(n) ((void)0)
+#define RT_LOOP(pc) ((void)0)
+#elif defined(WWHD_RT_LOOSE)
+// The real-time build (t-codegen): blocks are still charged but never checked (no second, checked copy: the code is
+// ~43% smaller); a thread whose slice ran out yields at the next function entry or loop header (RT_LOOP), so a few
+// blocks late. Real time only: the virtual clock needs the yield on the exact instruction (the counting build)
+#define RT_FITS(n) true
+#define RT_CHARGE(n) (ctx->remainingCycles -= (sint32)(n))
+#undef RT_TICK
+#define RT_TICK(pc) (--ctx->remainingCycles)
+#define RT_LOOP(pc) do { if (ctx->remainingCycles < 0) [[unlikely]] rt_yield(ctx, (pc)); } while (0)
+#else
 #define RT_FITS(n) (ctx->remainingCycles >= (sint32)(n))
 #define RT_CHARGE(n) (ctx->remainingCycles -= (sint32)(n))
+#define RT_LOOP(pc) ((void)0)
+#endif
 
 // Indirect calls (bctrl, bctr): straight to the recompiled function when CTR holds the entry of one
 // that runs natively, else the runtime (rt_call_ctr/rt_jump_ctr: HLE trampolines, patched code,

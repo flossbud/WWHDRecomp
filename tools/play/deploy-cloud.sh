@@ -12,7 +12,11 @@ r() { ssh -i "$key" -o IdentitiesOnly=yes -o BatchMode=yes "$host" "$@"; }
 [ "$(r status)" = idle ] || { echo "deploy-cloud: the game is running on the PC: not deploying" >&2; exit 3; }
 w=$here/../worker/w
 ref=$here/../reference
-"$w" bash -c 'mkdir -p build/play && llvm-objcopy --strip-debug build/wwhd/wwhd-null build/play/wwhd-null.new && mv build/play/wwhd-null.new build/play/wwhd-null'
+# wwhd-play, the real-time build (t-codegen; src/CMakeLists.txt), under the name play.sh runs; wwhd-null (every block's
+# cycles counted, what the checks run) only when the build made no wwhd-play (WWHD_PLAY_BUILD=0)
+if "$w" test -x build/wwhd/wwhd-play; then bin=wwhd-play; echo "deploying wwhd-play (the real-time build)"
+else bin=wwhd-null; echo "warning: no build/wwhd/wwhd-play (WWHD_PLAY_BUILD=0?): deploying wwhd-null, the counting build" >&2; fi
+"$w" bash -c "mkdir -p build/play && llvm-objcopy --strip-debug build/wwhd/$bin build/play/wwhd-null.new && mv build/play/wwhd-null.new build/play/wwhd-null"
 "$w" cat build/play/wwhd-null | r put wwhd-null
 r put portable/settings.xml < "$ref/settings.xml"
 r put portable/gameProfiles/0005000010143500.ini < "$ref/0005000010143500.ini"

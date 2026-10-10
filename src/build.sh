@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # build.sh [OUT_DIR]  - configure and build wwhd-null with CMake (CMakeLists.txt, src/CMakeLists.txt).
 # Run on the worker: tools/worker/job start wwhd-build src/build.sh
-#   OUT_DIR/wwhd-null (default build/wwhd): Cemu's OS libraries without Latte, with our forks of some
+#   OUT_DIR/wwhd-null (default build/wwhd) and OUT_DIR/wwhd-play (the same, real time only: t-codegen): Cemu's OS libraries without Latte, with our forks of some
 #   of their sources (src/forks.txt); the null GPU (src/gpu/null_gpu.cpp) and our Vulkan renderer;
 #   our OS layer and frontend; the runtime (src/runtime) and, when it has been generated, the
 #   recompiled program with its overrides. Headless, or in a window with SDL3.
@@ -12,15 +12,19 @@
 #   RECOMP_DIR: the generated program (tools/recomp/build.sh; default build/recomp, RECOMP_DIR= for
 #   none: the runtime then only interprets); WWHD_FORKS=0: Cemu's objects instead of our forks, to
 #   record baselines (WWHD_FORKS=0 src/build.sh build/wwhd-cemu); JOBS (default 10, the container's
-#   CPU quota).
+#   CPU quota); RECOMP_OPT: extra options for the recompiled program; WWHD_PLAY_BUILD=0: wwhd-null only, not
+#   wwhd-play (the real-time build that deploys ship: the generated code compiled a second time).
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 out=${1:-$root/build/wwhd}
 args=(-DCEMU_SRC="${CEMU_SRC:-/wwhd/opt/cemu-src}" -DWWHD_SDL3="${SDL3_DIR:-/wwhd/opt/sdl3}"
-      -DWWHD_RECOMP_DIR="${RECOMP_DIR-$root/build/recomp}" -DWWHD_FORKS="$([ "${WWHD_FORKS:-1}" = 0 ] && echo OFF || echo ON)")
+      -DWWHD_RECOMP_DIR="${RECOMP_DIR-$root/build/recomp}" -DWWHD_FORKS="$([ "${WWHD_FORKS:-1}" = 0 ] && echo OFF || echo ON)"
+      -DWWHD_RECOMP_OPT="${RECOMP_OPT:-}" -DWWHD_PLAY_BUILD="$([ "${WWHD_PLAY_BUILD:-1}" = 0 ] && echo OFF || echo ON)")
 [ -f "$out/CMakeCache.txt" ] || args+=(-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)
 cmake -S "$root" -B "$out" "${args[@]}"
+[ "${WWHD_PLAY_BUILD:-1}" = 0 ] && rm -f "$out/wwhd-play"     # never a stale one for deploy.sh to ship
 # parallel compiles: JOBS, else the worker's setting (/wwhd/data/m6/.build.jobs: 8 on the desktop, where
 # three sessions may build at once on 24 threads; a big shard takes ~0.8 GB to compile), else 10
 cmake --build "$out" -j "${JOBS:-$(cat /wwhd/data/m6/.build.jobs 2>/dev/null || echo 10)}"
 echo "wwhd: built $out/wwhd-null"
+if [ "${WWHD_PLAY_BUILD:-1}" != 0 ] && [ -x "$out/wwhd-play" ]; then echo "wwhd: built $out/wwhd-play (the real-time build)"; fi

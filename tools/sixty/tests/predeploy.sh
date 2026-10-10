@@ -35,6 +35,7 @@
 # Output: game state, it stays on the worker.
 set -e
 source "$(dirname "$0")/common.sh"
+named=$#                                       # routes named: those only (predeploy-rt below only for the default set)
 routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land3 sidle2 pot plants slash sail menus tour3 boomerang bombs grapple boots hammer armor mirror heavy drcjar fwbud tgbeam wtspring medli gtrock en-rd en-ph en-pz en-bo tgstatue medliharp gtgrapple fwswitch crate slope warppot climb)
 P=$OUT/predeploy; mkdir -p "$P"
 jobs=${PREDEPLOY_JOBS:-4}
@@ -100,3 +101,11 @@ for r in sys.argv[4:]:
           f" his action at the end {act(a):02x} at 30, {act(b):02x} at 60; ticks 900-{ts[-1] // 2}, 60's key 2k{off:+d}")
 sys.exit(1 if bad else 0)
 PY
+status=$?
+# wwhd-play, the real-time build deploys ship (t-codegen), refuses the virtual clock these routes run on: its real-time
+# check (predeploy-rt.sh) follows on the default routes when the build made one. PREDEPLOY_RT=0: not
+if [ "$named" = 0 ] && [ -x build/wwhd/wwhd-play ] && [ "${PREDEPLOY_RT:-1}" != 0 ]; then
+    echo "== predeploy-rt (wwhd-play, the real-time build)"
+    tools/sixty/tests/predeploy-rt.sh || status=1
+fi
+exit $status

@@ -5,6 +5,8 @@
 #include "Cafe/HW/Espresso/Const.h"
 #include "config/ActiveSettings.h"
 #include <chrono>
+#include <cstdio>
+#include <unistd.h>
 
 // wwhd: host time from std::chrono::steady_clock (design D19) in place of rdtsc: portable, and no
 // 3-second measurement of the TSC's frequency at start. The "TSC" of this interface is steady-clock
@@ -54,7 +56,19 @@ void PPCTimer_waitForInit()
 // Guest time advances only with executed guest instructions (1 instruction = 1 core cycle) and,
 // when every guest thread is idle, jumps straight to the next timed event. Nothing reads the
 // host clock, so two runs with the same input see the same guest time.
-static const bool s_virtualClockEnabled = getenv("CEMU_VIRTUAL_CLOCK") != nullptr;
+// wwhd-play (src/runtime/build_kind.cpp; weak: a build without the recompiled program has none) can't yield on the exact
+// instruction, so it refuses the virtual clock rather than run a check that can't match
+[[gnu::weak]] extern const bool g_rtLooseBuild;
+static const bool s_virtualClockEnabled = [] {
+	if (!getenv("CEMU_VIRTUAL_CLOCK"))
+		return false;
+	if (&g_rtLooseBuild && g_rtLooseBuild)
+	{
+		fprintf(stderr, "wwhd-play is the real-time build: the virtual clock (CEMU_VIRTUAL_CLOCK) needs wwhd-null\n");
+		_exit(2);
+	}
+	return true;
+}();
 static std::atomic<uint64> s_virtualCycles{0};
 // wwhd: WWHD_VIRTUAL_SPEED=n (default 1) runs n instructions per guest cycle: an emulated CPU n times
 // as fast. For the 60 fps measurements (D21, tools/sixty): at 60 frames a second each frame has to

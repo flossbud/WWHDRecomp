@@ -39,6 +39,7 @@
 
 void CemuCommonInit();          // main.cpp
 void LatteOverlay_init();
+[[gnu::weak]] extern const bool g_rtLooseBuild;   // runtime/build_kind.cpp: wwhd-play (none without the recompiled program)
 namespace wwhd::sixty
 {
 	void FlightDump();          // overrides/sixty.cpp: the flight recorder (WWHD_FLIGHT)
@@ -506,6 +507,8 @@ void WindowSystem::Create()
 	wwhd::LoadConfig();
 	if (const std::string preset = wwhd::os::settings::StartLog(); !preset.empty())
 		cemuLog_log(LogType::Force, "{}", preset);
+	if (&g_rtLooseBuild && g_rtLooseBuild)                      // which binary a run used (src/runtime/build_kind.cpp)
+		cemuLog_log(LogType::Force, "wwhd-play: the real-time build (blocks not checked: no virtual clock)");
 	wwhd::CreateDefaultMLCFiles();
 	ActiveSettings::Init();
 #ifndef WWHD_NULL_GPU

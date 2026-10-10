@@ -11,7 +11,11 @@ w=$here/../worker/w
 on() { ssh -o BatchMode=yes "$host" "cd && $*"; }
 on "mkdir -p $dir/game $dir/saves $dir/routes $dir/cemu $dir/portable/gameProfiles $dir/portable/controllerProfiles"
 # the program without debug info (made on the worker), replaced by rename so a running copy is untouched
-"$w" bash -c 'mkdir -p build/play && llvm-objcopy --strip-debug build/wwhd/wwhd-null build/play/wwhd-null.new && mv build/play/wwhd-null.new build/play/wwhd-null'
+# wwhd-play, the real-time build (t-codegen; src/CMakeLists.txt), under the name play.sh runs; wwhd-null (every block's
+# cycles counted, what the checks run) only when the build made no wwhd-play (WWHD_PLAY_BUILD=0)
+if "$w" test -x build/wwhd/wwhd-play; then bin=wwhd-play; echo "deploying wwhd-play (the real-time build)"
+else bin=wwhd-null; echo "warning: no build/wwhd/wwhd-play (WWHD_PLAY_BUILD=0?): deploying wwhd-null, the counting build" >&2; fi
+"$w" bash -c "mkdir -p build/play && llvm-objcopy --strip-debug build/wwhd/$bin build/play/wwhd-null.new && mv build/play/wwhd-null.new build/play/wwhd-null"
 "$w" cat build/play/wwhd-null | on "cat > $dir/wwhd-null.new && chmod +x $dir/wwhd-null.new && mv -f $dir/wwhd-null.new $dir/wwhd-null"
 on "test -d $dir/cemu/resources" || "$w" tar -c -C /wwhd/opt/cemu-src/bin resources gameProfiles | on "tar -x -C $dir/cemu"
 on "test -f $dir/game/wwhd.wua" || { echo "copying the game (1.5 GB)"; "$w" bash -c 'cat /wwhd/data/rom/*.wua' | on "cat > $dir/game/wwhd.wua.part && mv $dir/game/wwhd.wua.part $dir/game/wwhd.wua"; }
