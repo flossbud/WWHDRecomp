@@ -431,12 +431,6 @@
       "name": "Round 14: [9] A guest buffer cache (rival-study 9.3 #3): skip the per-frame vertex copy (~16% of the render thread) for buffers write-watch saw unchanged"
     },
     {
-      "id": "t-rtstore",
-      "lane": "top",
-      "complexity": 5,
-      "name": "Round 14: [5] The half step's journal: the inline check in RT_STORE (deck-plan item 5's rest, ~1% of the game thread)"
-    },
-    {
       "id": "t-30fps",
       "lane": "top",
       "complexity": 6,
@@ -550,6 +544,7 @@
     "XeSS (parked 2026-10-10): Intel ships it only as closed Windows DLLs (no Linux library); for the Windows platform work, on FSR 3.1's inputs",
     "DLSS (parked 2026-10-10, the owner's call): NVIDIA's RTX SDK licence forbids its files in our public repo (distribution only as object code; not under an open-source licence); a compliant route exists (nothing NVIDIA in git, an optional local SDK path at build time, our glue code under MPL); needs an NVIDIA GPU to test",
     "Optimised shaders (parked 2026-10-10 after bottom's measurements on the worker): exact branch-free multiply +0.5% (noise), SPIRV-Tools -O +1.9% (noise), even inexact a*b only -5%: the iGPU is bandwidth-bound, which render scale answers. Revisit on an ALU-bound GPU (phones, the Android port)",
+    "The half step's journal inline check in RT_STORE (parked 2026-10-10 after top's A/B: exact, but no gain on the worker, +0.3% mixed: the bigger store sites cost what the saved calls did; on top's local branch)",
     "Platforms: Linux arm64, Windows, Android and CI through cloud sessions on github.com/flossbud/WWHDRecomp (docs/cloud-handoff.md)",
     "Android-specific speed: ADPF hints, core pinning, thermal (deck-plan), once the port runs",
     "More of the rival's lessons (rival-study 9.3): save states, a constant guest memory base, draw batching, interpolation as a low-power mode",
