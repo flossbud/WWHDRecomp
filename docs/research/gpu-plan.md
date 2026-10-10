@@ -43,7 +43,8 @@ Weaker hardware (phones, the Deck in heavy scenes) needs more. The owner's order
 - Item 3: **fixed scales and dynamic resolution built, off by default** (`WWHD_RENDER_SCALE=0.75|0.5|auto`; Auto in the
   Performance preset, the owner's choice of 2026-10-09). The worker on en-tn at 60: 100% 49.9 fps, 75% 56.6, 50% 59.7, Auto 59.2 (`b-scale`, below).
 - Item 4: **first round and presets landed** (below). Left: the AO toggle, AF, FXAA (`b-gfxopts`).
-- Item 5: not started (`b-shaders`).
+- Item 5: **measured, parked** (`b-shaders`, below): the shaders' instructions are at most ~5% of the worker's
+  GPU frame, and only inexactly; SPIRV-Tools' optimiser gains nothing.
 
 ## Item 1 on the worker: where its iGPU's 18.7 ms go (session bottom, 2026-10-09)
 
@@ -307,6 +308,28 @@ frame shows one refresh later than without it (8 ms at 120 Hz), plus the interpo
   them, which are 26.9 dB apart); Link, the wake and the HUD clean, no ghosting seen.
 - **Not done:** VRR (t-vrr, top's lane) would let it pace on any refresh above twice the rate; a present thread
   (AMD's way) would let it run with mailbox. Not on the worker's iGPU: FSR 3 alone costs 18.5 ms there.
+
+## Item 5, shaders optimised: measured, little to gain on the iGPU (b-shaders, session bottom, 2026-10-10)
+
+The game's shaders as Cemu's decompiler writes them (en-tn: 702 of them, 121k lines) are full of two idioms: the
+R600's multiply (`mul_nonIEEE`: 0 times anything is 0, written as two compares and a branch; ~12k calls) and
+int/float reinterpretations (`intBitsToFloat`/`floatBitsToInt`, ~55k; free on GPUs: no instruction). Measured on the
+worker (en-tn at 60, lazy DrawDone, three threads, GPU timing; 4 paired rounds each), with switches since removed:
+
+| change | GPU ms a frame | |
+|---|---|---|
+| the multiply branch-free and still exact: `min(a*b, min(abs(a),abs(b))*FLT_MAX)` | 17.32 -> 17.41 | +0.5%, noise |
+| the multiply plain `a*b` (inexact: 0*inf is NaN; an upper bound, not shippable) | 17.32 -> 16.46 | -5% |
+| SPIRV-Tools' performance recipe (-O) on every module | 17.16 -> 17.43 | +1.9%, noise |
+
+- The exact branch-free form compiled to the same cost (the driver makes selects of the branch already); its
+  captures were byte-identical to today's on en-tn, tour3 and gohmarock (12 frames, llvmpipe).
+- **The glslang here is built without SPIRV-Tools**: `SpvOptions::optimizeSize` in draw.cpp optimises nothing, the
+  driver gets the translation as it is. Running SPIRV-Tools' optimiser on it gains nothing on the worker: Mesa's
+  compiler does the same work.
+- So the shaders' instructions are at most ~5% of the iGPU's frame, and only inexactly: it is bandwidth-bound
+  (item 1), which the render scale answers (item 3). **Parked**: an offline-optimised shader set isn't worth its
+  upkeep and its loss of exactness. Worth revisiting only for an ALU-bound GPU (phones), with this table to beat.
 
 ## FSR 4 on Vulkan: evaluated, not built (b-fsr4, session bottom, 2026-10-10)
 
