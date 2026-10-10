@@ -4241,6 +4241,32 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   textures are protected now, and protecting CPU-written vertex buffers costs a fault on every frame's writes: an A/B
   first. The frame skip's shown frames could come at even times under VRR (t-vrr's pacing is the existing one).
 
+### Session bottom (week 2, WW-14): the GPU side
+
+Worktree `.worktrees/ww-2-3`, branch `ww-2-3`, worker directory `/wwhd/WWHDRecomp-bottom`; the "bottom" lane of plan.json.
+Every item's evidence is in docs/research/gpu-plan.md (a section each) and its commit.
+- **Landed:** GPU timing (`WWHD_GPU_TIMING`), narrow barriers, surface fit and clears as load ops (on by default);
+  render scale and dynamic resolution (`WWHD_RENDER_SCALE=0.5..2|auto`, Auto in the Performance preset); FSR 1 and
+  FSR 3.1 over the render scale (`WWHD_UPSCALER=fsr1|fsr3`, with motion vectors and jitter, `WWHD_MOTION`); FSR 3.1
+  frame generation (`WWHD_FRAMEGEN=1`, opt-in, on only with a display at twice the game's rate; the settings line says
+  why when it's off; not paced on a real 120 Hz screen yet: the owner's display is the test); aspect ratios
+  (`WWHD_ASPECT=16:9|auto|4:3|W:H`, the settings' "Aspect ratio"): Hor+/Vert+ through the camera hooks (the
+  generator's `hook:NAME` rule kind, config/US_v0/tick_rules/aspect.txt), widened screen-shaped targets, the HUD
+  undistorted at the corners (layout overrides and gx2's 0xFD marks).
+- **Parked, with their evaluations:** FSR 4 (no Vulkan from AMD), XeSS (Windows-only binaries), DLSS (the RTX SDK
+  licence forbids it in a public repo; the compliant route is noted), b-shaders (the shaders' instructions are at most
+  ~5% of the iGPU's frame, and only inexactly; this glslang build optimises no SPIR-V at all).
+- **b-wide's known limits:** the item buttons (top right) keep their 16:9 place (inside the generic N_All_00 container,
+  which the message window's choice box shares; moving it misplaced the Yes/No cursor in the rival); the telescope's
+  and the Picto Box's black frame covers only the 16:9 middle (its panes not found yet: a pane log of the menus route
+  at 21:9 lists the candidates).
+- **Worth knowing:** draws and samples use each image's nominal factor (scale x widening), not its rounded size over
+  the guest's: two images of one factor must map a guest pixel to the same host pixel, or a depth-equal pass misses
+  (found with `WWHD_RENDER_TRACE=FRAME:ADDR:X,Y`, one pixel through every draw). Surfaces are made at their pitch's
+  padded width (960x540 is 1024x544).
+- **Next in the lane:** b-displayres (the resolution as the display's, the render scale a share of it, the upscalers
+  and the HUD at the display's size), b-gfxopts (AO, AF, FXAA), b-uncapped-plan (research and a plan only).
+
 ### Session qa (week 2, WW-15): the problems top and bottom are stuck on
 
 Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecomp-qa`. Main routes the escalations.
