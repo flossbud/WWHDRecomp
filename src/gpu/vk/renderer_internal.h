@@ -25,6 +25,8 @@ namespace wwhd::gpu
 		uint32 gw = 0, gh = 0;                                   // the guest's size it stands for (width x height but for
 		bool scaled = false;                                     // WWHD_RENDER_SCALE's surfaces and their copies: Scaled)
 		float scale = 1.0f;                                      // the scale it was made at (dynamic resolution: one of several)
+		bool wide = false;                                       // screen-shaped (ScreenShaped): made at the aspect ratio's
+		float kx = 1.0f, ky = 1.0f;                              //   widening, kx wider or ky taller (b-wide, os/aspect.h)
 		VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;         // of every subresource
 		std::vector<VkImageView> layerViews;                     // 2D views of layers 1.. (LayerView)
 		uint64 written = 0;                                      // s.writes when last drawn into or cleared (surfaces)
@@ -129,6 +131,12 @@ namespace wwhd::gpu
 	bool ScaledSurface(uint32 gw, uint32 gh);
 	uint32 Scaled(uint32 guest, bool scaled = true);            // an image's size for a guest size (scaled or not), now
 	uint32 ScaledBy(uint32 guest, float scale);                 // at a given scale (an existing image's: Image::scale)
+	uint32 ScaledW(uint32 guest, const Image& like);            // a width, a height at `like`'s scale and widening (b-wide)
+	uint32 ScaledH(uint32 guest, const Image& like);
+	bool SameScale(const Image& a, const Image& b);             // made at the same scale and widening
+	void ScaleLike(Image& img, const Image& like);              // `like`'s scale and widening noted on img (made from it)
+	bool ScreenShaped(uint32 gw, uint32 gh);                    // a target the aspect ratio widens: within 3% of 16:9
+	void Widening(float& kx, float& ky);                        // the latched aspect ratio's (1, 1 at 16:9)
 
 	struct Format { VkFormat vk; VkImageAspectFlags aspect; };
 	Format ColorFormat(uint32 gx2);

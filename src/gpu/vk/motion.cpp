@@ -375,7 +375,8 @@ namespace wwhd::gpu::motion
 			}
 			s_target = CreateImage(kFormat, VK_IMAGE_ASPECT_COLOR_BIT, depth.width, depth.height,
 				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
-			s_target.gw = depth.gw, s_target.gh = depth.gh, s_target.scaled = depth.scaled, s_target.scale = depth.scale;
+			s_target.gw = depth.gw, s_target.gh = depth.gh;
+			ScaleLike(s_target, depth);
 			s_targetFrame = UINT32_MAX;
 		}
 		clear = s_targetFrame != s.frame;

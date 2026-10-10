@@ -88,6 +88,9 @@ rules, for the code of processes that run every frame with a time step h
                same height on both steps (rising out of it, the plain put-back: the next step isn't put back)
   split:REG    after it, an integer per-tick amount split between the whole tick and the half tick
                (REG - REG/2, then REG/2: the two add up to the 30 Hz step exactly)
+  hook:NAME    not a tick rule: at every rate the runtime's NAME(ctx) runs just before the instruction (a call or
+               a store it names, as above), so it can change the registers the instruction takes (the aspect
+               ratio's: the camera's aspect and field of view, src/overrides/aspect.cpp)
   eqwhole      on a compare (cmpi, cmpl...) whose next reader is a branch on its EQ bit (beq, bne): a count
                kept to whole ticks tested for equality (`if (timer == 40) ...`) reads equal on the whole step
                and on the half step after it: on a stepping process's half step the compare reads unequal, so
@@ -318,6 +321,12 @@ class Program:
                     assert self.function_containing(ea) is not None, f"tick_rules.txt:{n}: {ea:08X} is in no function"
                     assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
                     rules[ea] = (kind, value, expect, what)
+                    continue
+                if kind == "hook":
+                    assert re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", arg), f"tick_rules.txt:{n}: hook:NAME takes a function's name"
+                    assert self.function_containing(ea) is not None, f"tick_rules.txt:{n}: {ea:08X} is in no function"
+                    assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
+                    rules[ea] = (kind, arg, expect, what)
                     continue
                 if kind in ("spliti", "lagi", "drawlagi", "eqwhole", "gtwhole", "ltwhole"):
                     assert not arg, f"tick_rules.txt:{n}: {kind} takes no argument"
@@ -658,6 +667,8 @@ def step_call(op, x):
 def apply_tick_rule(rule, i, lines):
     """An instruction's generated lines with its tick or step rule (see the docstring)."""
     kind, arg, _, what = rule
+    if kind == "hook":                         # at every rate: the runtime's function first, with the registers as they are
+        return [f"{{ void {arg}(PPCInterpreter_t*); {arg}(ctx); }}   // hook: {what}"] + lines
     if kind == "tick":
         assert i.op == "b" and i.lk, f"{what}: tick applies to a call"
         out = [f"if (RT_STEPPED()) {{   // tick rule: {what}", "\tif (RT_WHOLE_TICK()) {", "\t\tg_rtTickWindow = true;"]

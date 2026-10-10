@@ -2085,9 +2085,12 @@ namespace wwhd::gpu
 				return fmt::format("depth range {}..{} outside 0..1 (depth target {}x{}, halfZ {})", nearZ, farZ,
 					t.depth ? t.depth->width : 0, t.depth ? t.depth->height : 0, halfZ); });
 
-		// WWHD_RENDER_SCALE: the target's own size over the guest's (the first attachment's; all share the scale)
+		// WWHD_RENDER_SCALE and the aspect ratio's widening: the target's factor over the guest's size (the first
+		// attachment's; all share it). Its nominal factor, not its size over the guest's: sizes are rounded up per image
+		// (4:3's 1088 rows are 1451, its 1080 rows 1440), and passes into images of different heights must still put a
+		// guest pixel on the same host pixel, or a depth-equal pass misses what an earlier one drew (black faces at 4:3)
 		const Image* first = attachments[0];
-		const float fx = (float)first->width / (float)first->gw, fy = (float)first->height / (float)first->gh;
+		const float fx = first->scale * first->kx, fy = first->scale * first->ky;
 		for (uint32 i = 1; i < nAttachments; i++)
 			if (attachments[i]->scale != first->scale)
 				LogOnce("scalemix", [&] { return fmt::format("render scale: a pass into {}x{} and {}x{}: one scaled, one not (frame {})",

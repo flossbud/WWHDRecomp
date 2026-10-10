@@ -11,6 +11,7 @@
 #include <chrono>
 #include <atomic>
 #include "renderer_internal.h"
+#include "../../os/aspect.h"
 bool PPCTimer_isVirtualClock();                                  // src/runtime/espresso/PPCTimer.cpp
 #include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/ISA/LatteReg.h"
@@ -667,6 +668,54 @@ namespace wwhd::gpu
 		return scaled ? ScaledBy(guest, RenderScale()) : guest;
 	}
 
+	// ---- the aspect ratio (b-wide, os/aspect.h) -------------------------------------------------------------------
+	// Screen-shaped targets (within 3% of 16:9: the TV surface, the scene's depth, the post effects' half and quarter
+	// sizes; not the GamePad's 854x480 chain) are made kx wider or ky taller than their guest size, as the render scale
+	// makes the big ones smaller: draws keep their guest viewports, scaled to the image per axis (draw.cpp), so every
+	// full-screen pass lines up over the wider picture. The aspect is latched at each swap (RendererSwap); a change makes
+	// the screen-shaped surfaces again (RescaleSurfaces).
+	namespace
+	{
+		float s_kx = 1.0f, s_ky = 1.0f;                           // the latched aspect's widening
+	}
+
+	void Widening(float& kx, float& ky)
+	{
+		kx = s_kx, ky = s_ky;
+	}
+
+	// A surface's guest width is its pitch, padded (960x540 is 1024x544, 854x480 is 864x480): a width within 3% of 16:9
+	// for its height, or past it by less than the padding (128 texels)
+	bool ScreenShaped(uint32 gw, uint32 gh)
+	{
+		if (gw < 32 || gh < 18)
+			return false;
+		if ((gh == 480 || gh == 240 || gh == 120) && gw <= 896)       // the GamePad's 854x480 and its halves
+			return false;
+		const float w16 = (float)gh * (16.0f / 9.0f);
+		return gw >= w16 * 0.97f && gw <= w16 * 1.03f + 128.0f;
+	}
+
+	uint32 ScaledW(uint32 guest, const Image& like)
+	{
+		return ScaledBy(guest, like.scale * like.kx);
+	}
+
+	uint32 ScaledH(uint32 guest, const Image& like)
+	{
+		return ScaledBy(guest, like.scale * like.ky);
+	}
+
+	bool SameScale(const Image& a, const Image& b)
+	{
+		return a.scale == b.scale && a.kx == b.kx && a.ky == b.ky;
+	}
+
+	void ScaleLike(Image& img, const Image& like)
+	{
+		img.scaled = like.scaled, img.scale = like.scale, img.wide = like.wide, img.kx = like.kx, img.ky = like.ky;
+	}
+
 	// ---- surfaces ----------------------------------------------------------------------------
 	// Surface fit (gpu-plan.md item 2; the default from session bottom's A/B and proof sweep, WWHD_SURFACE_FIT=0 turns
 	// it off): a render target is often taller than anything reads of it
@@ -712,7 +761,7 @@ namespace wwhd::gpu
 				if (mode != 1)
 					continue;
 				EndRendering();
-				Image fitted = CreateImage(img.format, img.aspect, img.width, ScaledBy(img.readH, img.scale), VK_IMAGE_USAGE_SAMPLED_BIT |
+				Image fitted = CreateImage(img.format, img.aspect, img.width, ScaledH(img.readH, img), VK_IMAGE_USAGE_SAMPLED_BIT |
 					((img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT) ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT),
 					img.layers);
 				Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -721,7 +770,8 @@ namespace wwhd::gpu
 				c.srcSubresource = c.dstSubresource = { img.aspect, 0, 0, img.layers };
 				c.extent = { img.width, fitted.height, 1 };
 				vkCmdCopyImage(s.cmd, img.image, img.layout, fitted.image, fitted.layout, 1, &c);
-				fitted.gw = img.gw, fitted.gh = img.readH, fitted.scaled = img.scaled, fitted.scale = img.scale;
+				fitted.gw = img.gw, fitted.gh = img.readH;
+				ScaleLike(fitted, img);
 				SubmitAndWait();                                    // then the old image can go
 				const uint32 bytes = img.bytes, readH = img.readH, readSince = img.readSince, fitH = img.fitH;
 				const uint64 written = img.written, resetFor = img.resetFor;
@@ -776,14 +826,15 @@ namespace wwhd::gpu
 			if (p.active)
 				return true;
 			const bool depth = img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT;
-			if (!p.full.image || p.full.width != img.gw || p.full.height != img.gh || p.full.format != img.format)
+			const uint32 fullW = ScaledBy(img.gw, img.kx), fullH = ScaledBy(img.gh, img.ky);   // full size, at its widening
+			if (!p.full.image || p.full.width != fullW || p.full.height != fullH || p.full.format != img.format)
 			{
 				if (p.full.image)
 				{
 					WaitPending();
 					DestroyImage(p.full);
 				}
-				p.full = CreateImage(img.format, img.aspect, img.gw, img.gh, VK_IMAGE_USAGE_SAMPLED_BIT |
+				p.full = CreateImage(img.format, img.aspect, fullW, fullH, VK_IMAGE_USAGE_SAMPLED_BIT |
 					(depth ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) |
 					(fsr && fsr3::On() ? VK_IMAGE_USAGE_STORAGE_BIT : 0));    // FSR 3 writes it from a compute pass
 			}
@@ -796,7 +847,7 @@ namespace wwhd::gpu
 				float jx = 0.0f, jy = 0.0f;
 				if (motion::JitterOn())
 					motion::Jitter(s.frame, jx, jy);
-				const bool done = sceneDepth && sceneDepth->image && sceneDepth->scale == img.scale &&
+				const bool done = sceneDepth && sceneDepth->image && SameScale(*sceneDepth, img) &&
 					fsr3::Upscale(img, *sceneDepth, *motionTarget, p.full, jx, jy, false);
 				if (!done && !fsr1::Upscale(img, p.full))
 					return false;
@@ -825,7 +876,9 @@ namespace wwhd::gpu
 				}
 			}
 			Image full = p.full;
-			full.gw = img.gw, full.gh = img.gh, full.scaled = img.scaled, full.scale = 1.0f;
+			full.gw = img.gw, full.gh = img.gh;
+			ScaleLike(full, img);
+			full.scale = 1.0f;
 			full.bytes = img.bytes, full.written = img.written, full.resetFor = img.resetFor;
 			full.readH = img.readH, full.fitH = img.fitH, full.readSince = img.readSince, full.noFit = img.noFit;
 			p.scaled = img;
@@ -931,15 +984,25 @@ namespace wwhd::gpu
 			return (fp.optimalTilingFeatures & need) == need;
 		}
 
-		// every scaled surface made again at `scale`, its picture blitted over (depth, and formats that can't be blitted,
-		// start from zero, as a grown surface does: the next frame draws them again); its copies, views and descriptor
-		// sets go with the old image (DestroyImage), mip chains are made again at their next use (ChainOf)
+		// every scaled surface made again at `scale`, every screen-shaped one at the latched aspect's widening (s_kx, s_ky),
+		// its picture blitted over (depth, and formats that can't be blitted, start from zero, as a grown surface does:
+		// the next frame draws them again); its copies, views and descriptor sets go with the old image (DestroyImage), mip
+		// chains are made again at their next use (ChainOf)
 		void RescaleSurfaces(float scale)
 		{
 			s_scale = scale;                                          // surfaces made from now on
+			auto wanted = [&](const Image& img) {                     // the scale and widening it should have
+				Image want;
+				ScaleLike(want, img);
+				if (img.scaled)
+					want.scale = scale;
+				if (img.wide)
+					want.kx = s_kx, want.ky = s_ky;
+				return want;
+			};
 			bool any = false;
 			for (auto& [key, img] : s.surfaces)
-				any |= img.image && img.scaled && img.scale != scale;
+				any |= img.image && !SameScale(img, wanted(img));
 			if (!any)
 				return;
 			EndRendering();
@@ -947,12 +1010,14 @@ namespace wwhd::gpu
 			std::vector<std::pair<Image*, Image>> made;
 			for (auto& [key, img] : s.surfaces)
 			{
-				if (!img.image || !img.scaled || img.scale == scale)
+				const Image want = wanted(img);
+				if (!img.image || SameScale(img, want))
 					continue;
 				const bool depth = img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT;
-				Image next = CreateImage(img.format, img.aspect, ScaledBy(img.gw, scale), ScaledBy(img.gh, scale), VK_IMAGE_USAGE_SAMPLED_BIT |
+				Image next = CreateImage(img.format, img.aspect, ScaledW(img.gw, want), ScaledH(img.gh, want), VK_IMAGE_USAGE_SAMPLED_BIT |
 					(depth ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT), img.layers);
-				next.gw = img.gw, next.gh = img.gh, next.scaled = true, next.scale = scale;
+				next.gw = img.gw, next.gh = img.gh;
+				ScaleLike(next, want);
 				Transition(next, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 				VkImageSubresourceRange all{ img.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
 				const bool linear = !depth && CanBlit(img.format, true);
@@ -1085,9 +1150,17 @@ namespace wwhd::gpu
 		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT |
 			(depth ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
 		const uint32 gw = std::max(w, img.gw), gh = std::max(h, img.gh);
-		const bool scaled = ScaledSurface(gw, gh);
-		Image grown = CreateImage(f.vk, f.aspect, Scaled(gw, scaled), Scaled(gh, scaled), usage, std::max(layers, img.layers));
-		grown.gw = gw, grown.gh = gh, grown.scaled = scaled, grown.scale = scaled ? RenderScale() : 1.0f;
+		Image grown;
+		grown.scaled = ScaledSurface(gw, gh), grown.scale = grown.scaled ? RenderScale() : 1.0f;
+		grown.wide = ScreenShaped(gw, gh) && std::max(layers, img.layers) <= 1;
+		if (grown.wide)
+			Widening(grown.kx, grown.ky);
+		{
+			Image made = CreateImage(f.vk, f.aspect, ScaledW(gw, grown), ScaledH(gh, grown), usage, std::max(layers, img.layers));
+			ScaleLike(made, grown);
+			grown = made;
+		}
+		grown.gw = gw, grown.gh = gh;
 		Transition(grown, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);   // start from zero, not undefined contents
 		VkImageSubresourceRange all{ f.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
 		if (depth)
@@ -1104,7 +1177,7 @@ namespace wwhd::gpu
 		{
 			Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 			Transition(grown, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-			if (img.scale == grown.scale)
+			if (SameScale(img, grown))
 			{
 				VkImageCopy c{};
 				c.srcSubresource = c.dstSubresource = { img.aspect, 0, 0, img.layers };
@@ -1116,7 +1189,7 @@ namespace wwhd::gpu
 				VkImageBlit b{};
 				b.srcSubresource = b.dstSubresource = { img.aspect, 0, 0, img.layers };
 				b.srcOffsets[1] = { (sint32)img.width, (sint32)img.height, 1 };
-				b.dstOffsets[1] = { (sint32)ScaledBy(img.gw, grown.scale), (sint32)ScaledBy(img.gh, grown.scale), 1 };
+				b.dstOffsets[1] = { (sint32)ScaledW(img.gw, grown), (sint32)ScaledH(img.gh, grown), 1 };
 				vkCmdBlitImage(s.cmd, img.image, img.layout, grown.image, grown.layout, 1, &b, VK_FILTER_NEAREST);
 			}
 			SubmitAndWait();                                        // then the old image can go
@@ -1441,15 +1514,16 @@ namespace wwhd::gpu
 		// the reference's screenshot is an RGBA8 blit of this buffer, sRGB if the scan buffer is
 		VkFormat f = (target == 1 ? LatteGPUState.tvBufferUsesSRGB : LatteGPUState.drcBufferUsesSRGB)
 			? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
-		if (!dst.image || dst.gw != w || dst.gh != h || dst.format != f || dst.scale != src.scale)   // at its surface's scale too
+		if (!dst.image || dst.gw != w || dst.gh != h || dst.format != f || !SameScale(dst, src))   // at its surface's scale too
 		{
 			if (dst.image)
 			{
 				WaitPending();                                      // the other frame may still present from it
 				DestroyImage(dst);
 			}
-			dst = CreateImage(f, VK_IMAGE_ASPECT_COLOR_BIT, ScaledBy(w, src.scale), ScaledBy(h, src.scale), 0);
-			dst.gw = w, dst.gh = h, dst.scaled = src.scaled, dst.scale = src.scale;
+			dst = CreateImage(f, VK_IMAGE_ASPECT_COLOR_BIT, ScaledW(w, src), ScaledH(h, src), 0);
+			dst.gw = w, dst.gh = h;
+			ScaleLike(dst, src);
 		}
 		Transition(src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 		Transition(dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -1494,6 +1568,17 @@ namespace wwhd::gpu
 			WritePPM(s_fgShot, s.frame - 1, "fg");
 		}
 		HudEnds();
+		{                                                           // the aspect ratio from this swap on (b-wide, above)
+			float kx, ky;
+			os::aspect::Factors(os::aspect::Latch(), kx, ky);
+			if (kx != s_kx || ky != s_ky)
+			{
+				Log(fmt::format("aspect ratio: {:.4f} from frame {}: screen-shaped targets {:.3f}x wider, {:.3f}x taller",
+					os::aspect::Current(), s.frame, kx, ky));
+				s_kx = kx, s_ky = ky;
+				RescaleSurfaces(RenderScale());
+			}
+		}
 		if (motion::On())
 			motion::FrameEnd(s.frame);
 		FitSurfaces();

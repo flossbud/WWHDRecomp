@@ -1,0 +1,14 @@
+# The TV picture's aspect ratio (b-wide, src/overrides/aspect.cpp): hooks, not tick rules (generate.py's hook:NAME:
+# the function runs before the instruction, at every rate). At 16:9 they change nothing. The sites are the ones the
+# rival recomp found (docs/research/rival-study.md 4.7), checked against our code: the camera's aspect is the 16/9
+# constant at 1004AAF0; its projection and its culling frustum take f1 the vertical field of view, f2 the aspect.
+024FFA98 hook:rt_aspect_store stfs          camera_execute (024FFA3C): stfs f0 (16/9) -> view.mAspect (+0xD8), every step
+025020E0 hook:rt_aspect_store stfs          the camera's creation (02501F98): the same store
+024FFD60 hook:rt_aspect_projection bl 028E9948   camera_draw (024FFC40): C_MTXPerspective(mtx, f1 fovy, f2 aspect, f3 near, f4 far)
+024F811C hook:rt_aspect_projection bl 025F11AC   view_setup (024F8068): mDoLib_clipper::setup(f1 fovy, f2 aspect, f3 near, f4 far)
+024F8168 hook:rt_aspect_projection bl 025F11AC   view_setup: the same with the other far plane
+025ADB38 hook:rt_aspect_projection bl 028E9948   dScnName_c::setView (025ADB04): the file select scene's C_MTXPerspective
+# not in the rival's list: camera_draw then gives the HD engine its camera (f1 near, f2 far, f3 the vertical field of
+# view times a constant, from f9 in degrees; f4 the aspect), which it draws the scene with: Vert+ widens f3 too (found
+# at 4:3: the aspect alone narrowed the horizontal view)
+0250007C hook:rt_aspect_engine bl 0274E04C        camera_draw: the HD engine's camera (f3 fovy x k, f9 fovy, f4 aspect)

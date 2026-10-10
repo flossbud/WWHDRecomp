@@ -161,7 +161,7 @@ wwhd_like_cemu(wwhd_runtime)
 
 add_library(wwhd_os OBJECT os/coreinit_memory.cpp os/coreinit_queue_wait.cpp os/coreinit_thread_state.cpp
 	os/coreinit_time.cpp os/debug_menu.cpp os/settings.cpp os/erreula.cpp os/input.cpp os/install.cpp os/nn_offline.cpp os/swkbd.cpp
-	os/system_flags.cpp
+	os/system_flags.cpp os/aspect.cpp
 	os/gx2/blit.cpp os/gx2/context_state.cpp os/gx2/draw.cpp os/gx2/memory.cpp os/gx2/misc.cpp
 	os/gx2/query.cpp os/gx2/render_target.cpp os/gx2/resource.cpp os/gx2/shader.cpp
 	os/gx2/shader_legacy.cpp os/gx2/state.cpp os/gx2/streamout.cpp os/gx2/surface.cpp
@@ -183,7 +183,7 @@ if(WWHD_RECOMP_DIR AND EXISTS "${WWHD_RECOMP_DIR}/func_table.cpp")
 	target_precompile_headers(wwhd_recomp PRIVATE "${PROJECT_SOURCE_DIR}/tools/recomp/runtime/ppc_ops.h")
 	target_compile_options(wwhd_recomp PRIVATE -ffp-contract=off -fno-strict-aliasing -Wno-unused-label -Wno-unused-variable)
 	add_library(wwhd_overrides OBJECT overrides/task_loop.cpp overrides/gamepad_view.cpp overrides/sixty.cpp overrides/sixty_step.cpp
-		overrides/pacing.cpp)
+		overrides/pacing.cpp overrides/aspect.cpp)
 	wwhd_like_cemu(wwhd_overrides)
 	target_include_directories(wwhd_overrides PRIVATE "${WWHD_RECOMP_DIR}")
 	target_compile_options(wwhd_overrides PRIVATE -ffp-contract=off -fno-strict-aliasing)

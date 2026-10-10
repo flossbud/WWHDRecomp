@@ -661,9 +661,10 @@ namespace wwhd::gpu
 			Copy& c = s_copies[{ surface.image, w, h, format }];
 			if (!c.img.image)
 			{
-				c.img = CreateImage(format, surface.aspect, ScaledBy(w, surface.scale), ScaledBy(h, surface.scale), VK_IMAGE_USAGE_SAMPLED_BIT,
+				c.img = CreateImage(format, surface.aspect, ScaledW(w, surface), ScaledH(h, surface), VK_IMAGE_USAGE_SAMPLED_BIT,
 					surface.layers);
-				c.img.gw = w, c.img.gh = h, c.img.scaled = surface.scaled, c.img.scale = surface.scale;   // at the surface's scale (WWHD_RENDER_SCALE)
+				c.img.gw = w, c.img.gh = h;
+				ScaleLike(c.img, surface);                             // at the surface's scale (WWHD_RENDER_SCALE) and widening
 				ForgetImage(c.img.image);                              // a reused handle's stale views
 			}
 			if (c.written != surface.written)
@@ -728,7 +729,7 @@ namespace wwhd::gpu
 
 		Chain* ChainOf(const TexDesc& d, Image& base, VkFormat format)
 		{
-			const uint32 w = ScaledBy(d.width, base.scale), h = ScaledBy(d.height, base.scale);   // at its surface's scale (WWHD_RENDER_SCALE)
+			const uint32 w = ScaledW(d.width, base), h = ScaledH(d.height, base);   // at its surface's scale (WWHD_RENDER_SCALE) and widening
 			uint32 maxMips = 1;
 			for (uint32 m = std::max(w, h); m > 1; m >>= 1)
 				maxMips++;
@@ -737,7 +738,7 @@ namespace wwhd::gpu
 			for (uint64 v : { (uint64)d.phys, (uint64)d.physMip, (uint64)d.format, (uint64)d.width, (uint64)d.height, (uint64)mips, (uint64)format })
 				key = (key ^ v) * 0x100000001B3ull + 0x9E3779B97F4A7C15ull;
 			Chain& c = s_chains[key];
-			if (c.img.image && c.img.scale != base.scale)          // its surface rescaled (dynamic resolution): made again
+			if (c.img.image && !SameScale(c.img, base))           // its surface rescaled (dynamic resolution, the aspect): made again
 			{
 				ForgetSets();
 				for (auto& [k, v] : c.views)
@@ -782,7 +783,7 @@ namespace wwhd::gpu
 				c.img.height = h;
 				c.img.gw = d.width;
 				c.img.gh = d.height;
-				c.img.scaled = base.scaled, c.img.scale = base.scale;
+				ScaleLike(c.img, base);
 				c.mips = mips;
 				c.written.assign(mips, UINT64_MAX);
 				EndRendering();
@@ -815,7 +816,7 @@ namespace wwhd::gpu
 				}
 				Transition(*src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 				const uint32 lw = std::max(w >> level, 1u), lh = std::max(h >> level, 1u);
-				if (src->scale == c.img.scale)
+				if (SameScale(*src, c.img))
 				{
 					VkImageCopy r{};
 					r.srcSubresource = { src->aspect, 0, 0, 1 };
@@ -829,7 +830,7 @@ namespace wwhd::gpu
 					VkImageBlit b{};
 					b.srcSubresource = { src->aspect, 0, 0, 1 };
 					b.dstSubresource = { base.aspect, level, 0, 1 };
-					b.srcOffsets[1] = { (sint32)std::min(ScaledBy(gw, src->scale), src->width), (sint32)std::min(ScaledBy(gh, src->scale), src->height), 1 };
+					b.srcOffsets[1] = { (sint32)std::min(ScaledW(gw, *src), src->width), (sint32)std::min(ScaledH(gh, *src), src->height), 1 };
 					b.dstOffsets[1] = { (sint32)lw, (sint32)lh, 1 };
 					vkCmdBlitImage(s.cmd, src->image, src->layout, c.img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b,
 						(base.aspect & VK_IMAGE_ASPECT_DEPTH_BIT) ? VK_FILTER_NEAREST : VK_FILTER_LINEAR);
@@ -957,7 +958,7 @@ namespace wwhd::gpu
 				firstMip = std::min(firstMip, c->mips - 1);
 				uint32 mips = std::min(lastMip, c->mips - 1) + 1 - firstMip;
 				VkImageView v = View(c->img.image, c->img.format, c->img.aspect, viewType, firstMip, mips, 0, 1, comp, c->views);
-				return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, (float)c->img.width / c->img.gw, (float)c->img.height / c->img.gh, true };
+				return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c->img.scale * c->img.kx, c->img.scale * c->img.ky, true };
 			}
 			// a draw that samples its own target reads it as it was before the draw (a copy): what Vulkan defines,
 			// and what the console's separate colour and texture caches give; the reference does the same
@@ -973,7 +974,7 @@ namespace wwhd::gpu
 			uint32 baseLayer = std::min(firstSlice, img->layers - 1);
 			uint32 layers = viewType == VK_IMAGE_VIEW_TYPE_2D_ARRAY ? std::clamp(numSlices, 1u, img->layers - baseLayer) : 1;
 			VkImageView v = View(img->image, img->format, img->aspect, viewType, 0, 1, baseLayer, layers, comp, s_surfaceViewCache[img->image]);
-			return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, (float)img->width / img->gw, (float)img->height / img->gh, true };
+			return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, img->scale * img->kx, img->scale * img->ky, true };   // nominal (draw.cpp)
 		}
 
 		// from guest memory

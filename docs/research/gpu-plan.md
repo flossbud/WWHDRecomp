@@ -278,6 +278,34 @@ validation 0 hazards. **Cost** on the worker (en-tn at 60): render thread +3.9 m
 not their waves' and sway's; judge FSR 3 on the sail route and Outset's grass, and if they ghost, keep last frame's
 CPU-written vertex data per group and run the two-pass shader on it (or mark them reactive).
 
+## Aspect ratios: Hor+ and Vert+ (b-wide, session bottom, 2026-10-10), stage 1 of 2
+
+`WWHD_ASPECT=16:9` (the default: the game's own picture), `auto` (the window's shape) or a fixed one (`4:3`, `16:10`,
+`21:9`, `32:9`; any `W:H` from 1:1 to 4:1). The game keeps its 1920x1080 guest screen; os/aspect.h holds the setting
+and the aspect latched at each swap.
+
+- **The camera** (src/overrides/aspect.cpp): hooks, a new generator rule kind (`hook:NAME` in a tick-rules file: the
+  runtime's function runs just before the named call or store, at every rate; config/US_v0/tick_rules/aspect.txt).
+  The six sites the rival found (rival-study 4.7: the camera's stored aspect, its `C_MTXPerspective`, the culling
+  frustum's two `mDoLib_clipper::setup`, the file select's projection) and a seventh it lacks: camera_draw's call
+  `0274E04C`, which gives the HD engine its camera (f3 the vertical field of view in radians, f4 the aspect) and which
+  the scene is drawn with. Hor+ (wider than 16:9) changes only the aspect; Vert+ (narrower) also widens the vertical
+  field of view so that the horizontal one stays (without the seventh hook 4:3 was zoomed in). Only aspects the game
+  itself put there are changed; at 16:9 the hooks touch nothing.
+- **The targets:** screen-shaped surfaces (within 3% of 16:9 for their height, allowing the pitch's padding: 960x540
+  is 1024x544; not the GamePad's 854x480 chain) are made `kx` wider or `ky` taller, as the render scale makes the big
+  ones smaller (`Image::wide`, `kx`, `ky`; `ScaledW`, `ScaledH`, `SameScale`, `ScaleLike`); a change of aspect makes
+  them again (`RescaleSurfaces`). Draws keep their guest viewports.
+- **Draws and samples use each image's nominal factor** (scale x widening), not its size over the guest's: sizes are
+  rounded up per image (at 4:3 the 1088-row surfaces are 1451 rows, surface fit's 1080-row ones 1440), and two passes
+  into images of different heights put a guest pixel on different host rows (a third of a pixel at the bottom), so a
+  depth-equal pass missed what the depth pass drew: black faces, found by tracing one pixel through every draw. With
+  that, surface fit works at every aspect (main's ask: it is the Deck's biggest GPU win, and the Deck is 16:10).
+- **Checked on captures** (llvmpipe, sail, tour3, en-tn, gohmarock at 16:10, 4:3, 21:9, 32:9): more view to the
+  sides or above and below, the same scale. **Stage 2, the HUD:** today it is stretched with the picture; next, the
+  layouts drawn undistorted and their edge panes anchored to the picture's edges, full-screen fades stretched (the
+  rival's nw::lyt hooks, with marker packets for what only the render thread knows).
+
 ## FSR 3.1 frame generation (b-framegen, session bottom, 2026-10-10), opt-in
 
 `WWHD_FRAMEGEN=1` (settings: "Frame generation (FSR 3: generated in-between frames, adds input lag; 120 Hz+ displays)",

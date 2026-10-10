@@ -20,6 +20,7 @@
 #include "../os/swkbd.h"
 #include "../os/debug_menu.h"
 #include "../os/settings.h"
+#include "../os/aspect.h"
 #include "../os/erreula.h"
 #include "input/InputManager.h"
 #include "audio/CubebAPI.h"
@@ -64,6 +65,7 @@ static void StorePixelSize(SDL_Window* window)
 	s_pixelWidth = (uint32)w;
 	s_pixelHeight = (uint32)h;
 	setSize(w, h);
+	wwhd::os::aspect::SetWindow((uint32)w, (uint32)h);         // Aspect ratio: Auto follows the window's shape
 	const SDL_DisplayID display = SDL_GetDisplayForWindow(window);
 	const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(display);
 	if (!mode || mode->refresh_rate <= 0)                         // some drivers know only the desktop's
