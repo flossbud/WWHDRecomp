@@ -443,6 +443,12 @@
       "name": "Round 14: [9] The recompiled code itself (82% of the game thread, flat): registers kept in host registers, a real-time build without the cycle counting, -O3; measure each on the worker"
     },
     {
+      "id": "t-wideaudit",
+      "lane": "top",
+      "complexity": 7,
+      "name": "Round 14: [7] Scenes at other aspect ratios (the owner's ask, after b-wide): play the routes, cutscenes and menus at 4:3, 21:9 and 32:9 (and the Deck's 16:10) and list what breaks when the game shows more than its 16:9 frame: objects culled or popping in at the edges, cutscenes revealing what's off stage (actors waiting, unloaded or unfinished geometry, the sea's edge), screen effects and 2D overlays that cover only the middle (fades, wipes, the telescope, the Pictograph Box, maps), fog, the sky and shadows at the edges, and Vert+ at 4:3 above and below. Then fix by kind: widen the culling, or show a cutscene at 16:9 with bars where it can't be fixed (as ultrawide mods do); findings in docs/research/, a capture per aspect"
+    },
+    {
       "id": "b-gpumeasure",
       "lane": "bottom",
       "complexity": 5,
