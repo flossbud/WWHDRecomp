@@ -5,7 +5,7 @@
 // option a preset covers takes its value from, first to last: the environment, the option's own line in the file,
 // the preset, the program's default. Changing such an option in the menu writes its own line (the preset then shows
 // "Custom"); choosing a preset again drops those lines. Frame rate, vsync and the display are no preset's. The frame
-// rate (WWHD_FRAMERATE 30/40/50/60) sets WWHD_60FPS and, at 40 and 50, WWHD_FPS_CAP (overrides/pacing.cpp).
+// rate (WWHD_FRAMERATE 30/40/50/60, 60 by default) sets WWHD_60FPS and, at 40 and 50, WWHD_FPS_CAP (overrides/pacing.cpp).
 #include "settings.h"
 #include <cstdio>
 #include <cstdlib>
@@ -24,14 +24,16 @@ namespace
 	{
 		const char* key;                            // the switch
 		const char* label;
-		std::vector<Value> values;                  // the first is the program's default (no file, no switch)
+		std::vector<Value> values;                  // in the menu's order
 		bool live;                                  // applied at once (else at the next start)
 		const char* performance;                    // its value in the Performance preset, or nullptr: no preset's
+		int def = 0;                                // which value is the program's default (no file, no switch)
 	};
 	const std::vector<Option> kOptions = {
 		// 40 and 50 run 60's logic with a fixed share of its half frames left out (pacing.cpp, WWHD_FPS_CAP): smoother at 30 or 60
+		// 60 by default (the owner's ask: new players start at 60); an ini line or WWHD_FRAMERATE/WWHD_60FPS still wins
 		{ "WWHD_FRAMERATE", "Frame rate", { { "30", "30" }, { "40", "40 (smoother at 30 or 60)" }, { "50", "50 (smoother at 30 or 60)" },
-			{ "60", "60" } }, false, nullptr },
+			{ "60", "60" } }, false, nullptr, 3 },
 		{ "WWHD_VSYNC", "Vsync", { { "0", "off" }, { "1", "on" } }, true, nullptr },
 		{ "WWHD_VRR", "Variable refresh (FreeSync / G-Sync / VRR)", { { "0", "off" }, { "1", "on" } }, false, nullptr },
 		{ "WWHD_FULLSCREEN", "Display", { { "0", "window" }, { "1", "fullscreen" } }, true, nullptr },
@@ -156,6 +158,8 @@ namespace
 		return p == "auto" ? s_autoChoice : p;
 	}
 
+	const char* Default(const Option& o) { return o.values[o.def].value; }
+
 	// an option's value as the file and the preset give it (not the environment)
 	std::string Current(const Option& o)
 	{
@@ -163,7 +167,7 @@ namespace
 			return f->second;
 		if (o.performance && Resolve(PresetChosen()) == "performance")
 			return o.performance;
-		return o.values[0].value;
+		return Default(o);
 	}
 
 	// some option the preset covers has a line of its own that differs from the preset
@@ -172,7 +176,7 @@ namespace
 		const bool perf = Resolve(PresetChosen()) == "performance";
 		for (const Option& o : kOptions)
 			if (o.performance)
-				if (auto f = s_file.find(o.key); f != s_file.end() && f->second != (perf ? o.performance : o.values[0].value))
+				if (auto f = s_file.find(o.key); f != s_file.end() && f->second != (perf ? o.performance : Default(o)))
 					return true;
 		return false;
 	}
@@ -245,8 +249,12 @@ namespace wwhd::os::settings
 			else if (e && !s_file.count(o.key))
 				s_fromEnv.insert(o.key);
 			e = getenv(o.key);
-			s_atStart[o.key] = e ? e : o.values[0].value;
+			s_atStart[o.key] = e ? e : Default(o);
 		}
+		// the frame rate's default (60) is a switch too: without a line or a launcher's, the game would start at 30
+		for (const Option& o : kOptions)
+			if (o.def != 0 && !getenv(o.key))
+				setenv(o.key, Default(o), 0);
 		// the frame rate as the program's switches: 60 fps (WWHD_60FPS) from 40 up, and the cap (WWHD_FPS_CAP) at 40 and 50;
 		// a launcher's WWHD_60FPS or WWHD_FPS_CAP wins
 		if (const char* fr = getenv("WWHD_FRAMERATE"))
@@ -383,7 +391,7 @@ namespace wwhd::os::settings
 		const int i = ((IndexOf(o, Current(o)) + step) % n + n) % n;
 		s_file[o.key] = o.values[i].value;
 		// a preset's option back at the preset's value needs no line of its own
-		if (o.performance && s_file[o.key] == (Resolve(PresetChosen()) == "performance" ? o.performance : o.values[0].value))
+		if (o.performance && s_file[o.key] == (Resolve(PresetChosen()) == "performance" ? o.performance : Default(o)))
 			s_file.erase(o.key);
 		Save();
 		if (o.live)
