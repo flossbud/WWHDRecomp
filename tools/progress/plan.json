@@ -455,6 +455,24 @@
       "name": "Round 14: [7] Scenes at other aspect ratios (the owner's ask, after b-wide): play the routes, cutscenes and menus at 4:3, 21:9 and 32:9 (and the Deck's 16:10) and list what breaks when the game shows more than its 16:9 frame: objects culled or popping in at the edges, cutscenes revealing what's off stage (actors waiting, unloaded or unfinished geometry, the sea's edge), screen effects and 2D overlays that cover only the middle (fades, wipes, the telescope, the Pictograph Box, maps), the menus (the owner's ask: the item menu and its item assignment, the map, the collection and quest screens, the pause and save screens, the GamePad screen shown on the TV: today their content is kept in the centred 16:9 with the background stretched, and the item buttons at the top right keep their 16:9 place; check each and decide centred or spread to the edges), the Pictograph Box working (the owner's ask: its viewfinder, a picture taken matches what the viewfinder showed, the saved pictograph's shape and how it shows in the album and the menus, the quests that judge a picture's subject (the Nintendo Gallery's figurines, Lenzo's) still pass or fail as at 16:9 with more view around it), fog, the sky and shadows at the edges, and Vert+ at 4:3 above and below. Then fix by kind: widen the culling, or show a cutscene at 16:9 with bars where it can't be fixed (as ultrawide mods do); findings in docs/research/, a capture per aspect"
     },
     {
+      "id": "u2-rules",
+      "lane": "top",
+      "complexity": 8,
+      "name": "Round 14: [8] Uncapped U2: the tick rules at N (411), in parallel with U3"
+    },
+    {
+      "id": "u4-checks",
+      "lane": "top",
+      "complexity": 6,
+      "name": "Round 14: [6] Uncapped U4: the checks at N (30 against N's tick ends, as 30 against 60 today)"
+    },
+    {
+      "id": "u6-fixes",
+      "lane": "top",
+      "complexity": 5,
+      "name": "Round 14: [5] Uncapped U6: per-system fixes at N (the wake emitter, UI animations, sound timing); then the Deck OLED at 90 (the owner's ask: try it after U0's cuts)"
+    },
+    {
       "id": "b-gpumeasure",
       "lane": "bottom",
       "complexity": 5,
@@ -533,6 +551,30 @@
       "name": "Round 14: [8] Uncapped: research and a plan (the owner's ask; building waits for the owner's go): how the half steps and tick rules generalise to any fraction of a tick and which systems can't; a true variable step against a fixed higher tick rate with the picture placed between ticks; how it stays verifiable (today's 30-against-60 checks); pacing, VRR, the caps and frame generation; phased tasks with complexity, in docs/research/uncapped-plan.md, top reviewing"
     },
     {
+      "id": "u0-cost",
+      "lane": "bottom",
+      "complexity": 5,
+      "name": "Round 14: [5] Uncapped U0 (docs/research/uncapped-plan.md; the owner's go 10-11): measure the half frame's fixed costs (the frame path, the rollback journal) on the worker and the desktop worker and cut them about 40%, so 120 fits a tick (today 140% of it on the worker, 125% with PGO)"
+    },
+    {
+      "id": "u1-runtime",
+      "lane": "bottom",
+      "complexity": 7,
+      "name": "Round 14: [7] Uncapped U1: the runtime at N equal steps per 30 Hz tick (N 2 = 60, 3 = 90, 4 = 120); gate: N 2 byte-identical to today's 60"
+    },
+    {
+      "id": "u3-overrides",
+      "lane": "bottom",
+      "complexity": 8,
+      "name": "Round 14: [8] Uncapped U3: the overrides at N (about 20), in parallel with U2"
+    },
+    {
+      "id": "u5-present",
+      "lane": "bottom",
+      "complexity": 6,
+      "name": "Round 14: [6] Uncapped U5: presentation at N: pacing, the caps (90, 120; 144/165 by VRR or drop patterns like 40/50; 240 by frame generation over 120, the owner's list), VRR, the Frame rate setting"
+    },
+    {
       "id": "m-setup",
       "lane": "main",
       "complexity": 2,
@@ -566,8 +608,8 @@
     "Platforms: Linux arm64, Windows, Android and CI through cloud sessions on github.com/flossbud/WWHDRecomp (docs/cloud-handoff.md)",
     "Android-specific speed: ADPF hints, core pinning, thermal (deck-plan), once the port runs",
     "More of the rival's lessons (rival-study 9.3): save states, a constant guest memory base, draw batching, interpolation as a low-power mode",
-    "Uncapped frame rate (D21 step 4), built on the half steps: when the owner says",
-    "The owner's extensive testing and repair"
+    "The owner's extensive testing and repair",
+    "Uncapped U7 (uncapped-plan.md): N chosen per tick from the frame time; the owner: whatever works best, so decided once U5's fixed rates run"
   ],
   "queue_done": [
     "windfall",
