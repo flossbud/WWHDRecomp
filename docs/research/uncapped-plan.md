@@ -105,6 +105,50 @@ generation covers 240.
   not the converted executes (~13% of 60's extra). A desktop CPU with more single-thread speed shifts the table; U0
   measures it on the desktop worker too. The Deck stays at 60 (or 40/50) regardless.
 
+## U0: the table measured (session bottom, 2026-10-11)
+
+`worker-ab.sh` 30 against 60 (and 60 with `WWHD_60FPS_ROLLBACK=0`, the journal off: a probe, not playable), wwhd-play,
+4 rounds; each 60 run's frames split by `frames.py` into whole and half (median / 90th percentile of the frame's work,
+from swap 1000); the profile (`WWHD_PROFILE`, its half-frame samples tagged since U0: `profile_report.py --half`).
+
+**Where a half frame goes** (desktop, continue, the game thread's samples in half frames): the processes' draws
+(fpcM_Draw) 31%, RenderDisplay::draw (the render lists) 25%, the converted executes 23%, the frame's other parts 18%,
+the journal's own functions 3%. But the journal cost more than its functions: with it off a half frame took 4.7 ms
+against 6.4, and RT_STORE's filter alone (on, with nothing kept: a throwaway probe) 6.2. The filter on every store
+was the cost, mostly clang's test of each `thread_local` flag's TLS init function. **Cut 1** (ff9505b, landed): the
+flags `constinit`, the half frame 6.4 -> 5.3 ms and the whole 5.4 -> 5.0 on continue (soak: the game thread 35% ->
+31% of a core).
+
+After cut 1, a frame's work (ms):
+
+| machine, route | 30: a frame | 60: whole | 60: half | half, journal off | late at 60 |
+|---|---|---|---|---|---|
+| desktop, continue | 5.2 | 5.0 / 5.6 | 5.3 / 6.0 | (4.7 before cut 1) | 0% |
+| desktop, en-tn | 6.2 | 4.9 / 6.7 | 5.1 / 7.3 | | 0-1% |
+| speed worker, continue | 17.0 | 11.5 / 16.9 | 12.2 / 16.9 | 10.7 / 16.9 | 14-23% |
+| speed worker, en-tn | 16.9 | 13.8 / 18.3 | 14.9 / 18.3 | 14.9 / 18.0 | 53-56% (53 fps) |
+
+So the half frame costs about what the whole does, not 0.78 of it (the draws are a frame's, whatever its step), and
+**each frame has its own vsync's budget**: a tick's total isn't enough, every frame must fit 1/rate. Per rate:
+
+- **Desktop class (the desktop worker):** 90 (11.1 ms) and 120 (8.3 ms) fit with room, even at the 90th percentile;
+  144 (6.9 ms) is borderline (en-tn's 90th percentile 7.3); 165 (6.1 ms) doesn't, so 144/165 run with keep-speed's
+  drops or VRR below the refresh. The game thread at 120 is ~5.0 + 3 x 5.3 = 21 ms a tick (63% of a core).
+- **The speed worker** (iGPU and CPU under one power cap) is at its limit at 60 already (late 14-56%), and the Deck
+  drops at 60 too: 90 and 120 are not for that class. Its half frame isn't the issue (journal off saves 1.5 ms, 12%);
+  the frame is.
+- **Rates offered:** 90, 120 and "the display's" as settings, for machines that run them; keep-speed drops what a
+  machine can't (as at 60 today). The U0 gate's "half frame ≤ 6.5 ms on the worker" doesn't hold and can't by cutting
+  the half frame alone: U1-U5 go ahead, verified at 90/120 on the desktop worker; the speed worker and the Deck stay
+  at 60 (or 40/50).
+- **Left in the half frame:** the journal's remaining filter (~0.6 ms on the desktop, ~1.5 on the speed worker):
+  **cut 2**, queued after U1 (the owner wants 144/165). 144 then fits the desktop's 90th percentile (en-tn 7.3 -> ~6.7
+  against 6.9). 165 (6.06 ms) needs the 90th percentile frame ~1.2 ms lower still on en-tn, so besides cut 2 about
+  0.6 ms more out of a frame's draws or render lists (fpcM_Draw and RenderDisplay::draw are 56% of a half frame), or
+  165 runs with VRR (or drop patterns) below the refresh.
+- **The Deck:** QA measured the Deck OLED at 36 fps on en-tn and ~50 at the start of continue at 60 (2026-10-11), so
+  the OLED's 90 try is off; it's revisited when the Deck holds 60.
+
 ## What doesn't go to N steps (and stays on whole ticks)
 
 The whole-tick systems stay whole: process lifecycle and counters, input, the HD UI's update and the game manager (the
