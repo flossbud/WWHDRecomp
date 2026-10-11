@@ -124,6 +124,12 @@ if [ "$named" = 0 ] && [ "${PREDEPLOY_STATE:-1}" != 0 ]; then
     for j in $(jobs -p); do wait "$j" || status=1; done
     grep -h "statetest:" "$OUT/predeploy-state-tour3.log" "$OUT/predeploy-state-sail.log"
 fi
+# Doc Bandam's cups and pots stand still at 60 (bandam.sh, B81: the shelf at 60 against 30; rendered, about 5 minutes);
+# with the default routes only. PREDEPLOY_BANDAM=0: not
+if [ "$named" = 0 ] && [ "${PREDEPLOY_BANDAM:-1}" != 0 ]; then
+    echo "== bandam (Doc Bandam's dishes at 60)"
+    tools/sixty/tests/bandam.sh || status=1
+fi
 # wwhd-play, the real-time build deploys ship (t-codegen), refuses the virtual clock these routes run on: its real-time
 # check (predeploy-rt.sh) follows on the default routes when the build made one. PREDEPLOY_RT=0: not
 if [ "$named" = 0 ] && [ -x build/wwhd/wwhd-play ] && [ "${PREDEPLOY_RT:-1}" != 0 ]; then

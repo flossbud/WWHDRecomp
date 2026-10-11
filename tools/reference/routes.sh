@@ -43,6 +43,7 @@ route_info() {
         salvage) route=salvage-100.txt frames=2000 save=/wwhd/data/saves/wwhd_100 trace= ;;
         swim)  route=swim-100.txt      frames=1400  save=/wwhd/data/saves/wwhd_100 trace= ;;
         house) route=house-100.txt     frames=1400  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        bandam) route=bandam-100.txt   frames=1200  save=/wwhd/data/saves/wwhd_100 trace= ;;
         mob)   route=mob-100.txt       frames=1800  save=/wwhd/data/saves/wwhd_100 trace= ;;
         talk)  route=talk-100.txt      frames=1500  save=/wwhd/data/saves/wwhd_100 trace= ;;
         hyoi)  route=hyoi-100.txt      frames=2000  save=/wwhd/data/saves/wwhd_100 trace= ;;
@@ -90,4 +91,4 @@ route_info() {
         *) return 1 ;;
     esac
 }
-route_names="save route gohmatail gohmarock tour tour2 land2 tour3 land3 potthrow ladspawn auction sidle2 sail menus picto warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo tgstatue medliharp gtgrapple fwswitch moveramp moveangle movecircle moveturn movejump crate slope warppot climb drchaze"
+route_names="save route bandam gohmatail gohmarock tour tour2 land2 tour3 land3 potthrow ladspawn auction sidle2 sail menus picto warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo tgstatue medliharp gtgrapple fwswitch moveramp moveangle movecircle moveturn movejump crate slope warppot climb drchaze"

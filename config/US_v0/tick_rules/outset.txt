@@ -75,7 +75,11 @@
 0237D8D8    d@f0        fmuls           mshokki execute: speedF *= its damping a tick
 0237D920    spliti      addi            mshokki execute: shape_angle.x -= 0x80 a tick (rolling to rest)
 0237D928    spliti      addi            mshokki execute: shape_angle.y += 0x1000 a tick (rolling)
-0237D970    spliti      addi            mshokki execute: shape_angle.x -= 0xC00 a tick (in the air)
+# In the air at the tick's end only (late, B81): a dish placed on its shelf (the cups and pots on Doc Bandam's
+# shelves) lands within its first tick, so at 30 it never spins; at 60 the first step falls a fraction of that and
+# was in the air, its x turned 0x600, and on the shelf again "rolling to rest" steps x by -0x80 the long way round
+# (about 480 ticks of spinning, y +0x1000 a tick)
+0237D974    late        sth             mshokki execute: shape_angle.x -= 0xC00 a tick (in the air): its store
 0237D9AC    whole       stw             mshokki execute: m614 (+0x730) + 1
 0237DA58    whole       stw             mshokki execute: m614 + 1 (the other path)
 # shelves (Obj_Shelf, process 45, d_a_obj_shelf.cpp, in Abe and Rose's house), bumped: mode_vib (f_0238E3C8)

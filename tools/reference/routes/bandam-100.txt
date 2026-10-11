@@ -1,0 +1,10 @@
+# Route: Doc Bandam's shop on Windfall, the cups and pots on its shelves (B81, session top). Run it with the stage warp
+# WWHD_DEBUG_STAGE=920:Pdrgsh,0,0,-1 (Link comes in by the door); Link walks in and along the wall with the shelves.
+# FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start; gameplay from ~f870 (the warp at f920)
+1000 LDOWN 12   # into the room
+1015 LRIGHT 20  # along the shelves (the camera beside him, the wall with them behind)
+1045 RDOWN 15   # the camera tilted up to the shelves
