@@ -446,7 +446,7 @@
       "id": "t-fpsoverlay",
       "lane": "top",
       "complexity": 3,
-      "name": "Round 14: [3] An FPS overlay (the owner's ask): a display setting FPS overlay: off / FPS / FPS + frame time, applied at once, drawn in the bottom left corner over the picture after the upscaler (with frame generation: the real frames and the shown ones), readable at 4K (scaled with the display resolution), never in captures or the checks' images; its own panel beside frontend/overlay.cpp's (the keyboard and error panel), at a negligible cost"
+      "name": "Round 14: [3] An FPS overlay (the owner's ask): a display setting FPS overlay: off / FPS / FPS + frame time, applied at once, drawn in the bottom left corner over the picture after the upscaler (with frame generation: one number, the total shown including the generated frames, the owner's choice), readable at 4K (scaled with the display resolution), never in captures or the checks' images; its own panel beside frontend/overlay.cpp's (the keyboard and error panel), at a negligible cost"
     },
     {
       "id": "t-wideaudit",
