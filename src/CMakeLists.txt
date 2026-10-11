@@ -193,8 +193,11 @@ if(WWHD_RECOMP_DIR AND EXISTS "${WWHD_RECOMP_DIR}/func_table.cpp")
 	set(WWHD_RECOMP_OPT "" CACHE STRING "extra compile options for the recompiled program (a list)")
 	wwhd_recomp_lib(wwhd_recomp ${WWHD_RECOMP_OPT})
 	option(WWHD_PLAY_BUILD "also build wwhd-play, the real-time build (the shards compiled twice)" ON)
+	# WWHD_PLAY_OPT: for wwhd-play's copy only (tools/recomp/pgo.sh: the profile's options; a profile of wwhd-play
+	# doesn't fit wwhd-null's code)
+	set(WWHD_PLAY_OPT "" CACHE STRING "extra compile options for wwhd-play's recompiled program only (a list)")
 	if(WWHD_PLAY_BUILD)
-		wwhd_recomp_lib(wwhd_recomp_play -DWWHD_RT_LOOSE ${WWHD_RECOMP_OPT})
+		wwhd_recomp_lib(wwhd_recomp_play -DWWHD_RT_LOOSE ${WWHD_RECOMP_OPT} ${WWHD_PLAY_OPT})
 	endif()
 	add_library(wwhd_overrides OBJECT overrides/task_loop.cpp overrides/gamepad_view.cpp overrides/sixty.cpp overrides/sixty_step.cpp
 		overrides/pacing.cpp overrides/aspect.cpp)

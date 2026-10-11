@@ -15,10 +15,11 @@
 set -uo pipefail
 cd "$(dirname "$0")/../../.."
 source tools/sixty/tests/common.sh
-[ -x build/wwhd/wwhd-play ] || { echo "predeploy-rt: no build/wwhd/wwhd-play (WWHD_PLAY_BUILD=0?)"; exit 2; }
+play=${PLAY_BIN:-build/wwhd/wwhd-play}         # PLAY_BIN: another real-time build (tools/recomp/pgo.sh's)
+[ -x "$play" ] || { echo "predeploy-rt: no $play (WWHD_PLAY_BUILD=0?)"; exit 2; }
 routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk menus tour3 sail drcjar wtspring tgstatue en-rd)
 fail=0
-out=$(RT_VARIANTS="mt1 mt2 pl1 pl2" tools/sixty/tests/rt_routes.sh "${routes[@]}")
+out=$(RT_PLAY_BIN="$play" RT_VARIANTS="mt1 mt2 pl1 pl2" tools/sixty/tests/rt_routes.sh "${routes[@]}")
 echo "$out"
 echo "$out" | python3 -c '
 import re, sys
@@ -43,7 +44,7 @@ for l in rows:
 sys.exit(1 if bad else 0)
 ' "${PREDEPLOY_FAIL:-150}" || fail=1
 if [ "${PREDEPLOY_RT_SOAK:-10}" != 0 ]; then
-    soak=$(SOAK_BIN=build/wwhd/wwhd-play tools/sixty/tests/soak.sh "${PREDEPLOY_RT_SOAK:-10}" play:WWHD_CORES=3)
+    soak=$(SOAK_BIN="$play" tools/sixty/tests/soak.sh "${PREDEPLOY_RT_SOAK:-10}" play:WWHD_CORES=3)
     echo "$soak"                                # (not tee /dev/stderr: it reopens a job's log and truncates it)
     grep -q ": ok, swap" <<< "$soak" || fail=1
 fi

@@ -6,7 +6,8 @@
 # Each run: tools/sixty/run.sh with SIXTY_REALTIME=1, WWHD_STATE_TRACK=168, the lazy DrawDone; a binary copy per slot
 # (its portable folder: one game per folder).
 # RT_VARIANTS (default "st1 st2 mt1 mt2"): mt* runs add RT_MT_ARGS (default WWHD_CORES=3), st* runs WWHD_CORES=1;
-# pl* runs are mt's with build/wwhd/wwhd-play, the real-time build (t-codegen; tools/sixty/tests/predeploy-rt.sh).
+# pl* runs are mt's with build/wwhd/wwhd-play, the real-time build (t-codegen; tools/sixty/tests/predeploy-rt.sh;
+# RT_PLAY_BIN: another).
 # RT_RENDER=1: rendered (WWHD_RENDER=vk; default the null GPU, the game's logic only).
 # RT_JOBS runs at once (default 4; real time: the desktop worker has the threads, the worker wants 1).
 # The runs skip the title (WWHD_DEBUG_BOOT=1, tools/sixty/run.sh in real time): in real time the title can take input
@@ -24,7 +25,7 @@ rate=${RT_RATE:-60}                             # RT_RATE=30: the routes at 30 i
 R=$OUT/rt; mkdir -p "$R"
 for i in $(seq 0 $((jobs - 1))); do
     mkdir -p "$R/bin.$$.$i" && cp build/wwhd/wwhd-null "$R/bin.$$.$i/wwhd-null" || exit 2
-    if [[ " ${variants[*]} " == *" pl"* ]]; then cp build/wwhd/wwhd-play "$R/bin.$$.$i/wwhd-play" || exit 2; fi
+    if [[ " ${variants[*]} " == *" pl"* ]]; then cp "${RT_PLAY_BIN:-build/wwhd/wwhd-play}" "$R/bin.$$.$i/wwhd-play" || exit 2; fi
 done
 run_one() {
     local r=$1 v=$2 slot=$3 w= n= extra=()

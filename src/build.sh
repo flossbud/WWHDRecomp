@@ -12,14 +12,14 @@
 #   RECOMP_DIR: the generated program (tools/recomp/build.sh; default build/recomp, RECOMP_DIR= for
 #   none: the runtime then only interprets); WWHD_FORKS=0: Cemu's objects instead of our forks, to
 #   record baselines (WWHD_FORKS=0 src/build.sh build/wwhd-cemu); JOBS (default 10, the container's
-#   CPU quota); RECOMP_OPT: extra options for the recompiled program; WWHD_PLAY_BUILD=0: wwhd-null only, not
+#   CPU quota); RECOMP_OPT: extra options for the recompiled program (PLAY_OPT: wwhd-play's only); WWHD_PLAY_BUILD=0: wwhd-null only, not
 #   wwhd-play (the real-time build that deploys ship: the generated code compiled a second time).
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 out=${1:-$root/build/wwhd}
 args=(-DCEMU_SRC="${CEMU_SRC:-/wwhd/opt/cemu-src}" -DWWHD_SDL3="${SDL3_DIR:-/wwhd/opt/sdl3}"
       -DWWHD_RECOMP_DIR="${RECOMP_DIR-$root/build/recomp}" -DWWHD_FORKS="$([ "${WWHD_FORKS:-1}" = 0 ] && echo OFF || echo ON)"
-      -DWWHD_RECOMP_OPT="${RECOMP_OPT:-}" -DWWHD_PLAY_BUILD="$([ "${WWHD_PLAY_BUILD:-1}" = 0 ] && echo OFF || echo ON)")
+      -DWWHD_RECOMP_OPT="${RECOMP_OPT:-}" -DWWHD_PLAY_OPT="${PLAY_OPT:-}" -DWWHD_PLAY_BUILD="$([ "${WWHD_PLAY_BUILD:-1}" = 0 ] && echo OFF || echo ON)")
 [ -f "$out/CMakeCache.txt" ] || args+=(-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)
 cmake -S "$root" -B "$out" "${args[@]}"
 [ "${WWHD_PLAY_BUILD:-1}" = 0 ] && rm -f "$out/wwhd-play"     # never a stale one for deploy.sh to ship
