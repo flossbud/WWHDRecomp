@@ -18,7 +18,9 @@ A small status page for the owner (desktop and phone), served from the worker's 
   the page when the session ends; `publish.sh step ID DONE TOTAL` sets a queue item's progress bar
   (items with "ids" in `plan.json`, the actor types they cover, fill theirs on their own);
   `publish.sh shot PPM CAPTION` adds a capture made
-  on the worker; `publish.sh usage` copies the Claude account's usage meters from the editing machine into `usage.json` (a crontab entry
+  on the worker. It waits for review (`shots-pending.json`, not on the page) until a session other than its own opens it and
+  passes it (`publish.sh shot review`, `shot ok FILE`, `shot reject FILE REASON`; the owner's rule, 2026-10-11), and a picture
+  whose middle is black (a world that didn't render) is refused unless `WWHD_SHOT_DARK=REASON` explains it; `publish.sh usage` copies the Claude account's usage meters from the editing machine into `usage.json` (a crontab entry
   there, tagged `wwhd-usage`, runs it every 5 minutes; only percentages and reset times leave that machine);
   `publish.sh serve` installs `server.py` and starts it, or restarts it when it changed (a crontab
   `@reboot` entry on the worker, tagged `wwhd-progress`, starts `.server.py` after a reboot).

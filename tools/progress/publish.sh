@@ -40,7 +40,13 @@
 #                           it the page takes the caption's text before its first ": "
 #                           add a capture: PPM is a path on the worker (/wwhd/...: the desktop's while
 #                           it's lent, else the worker's; WWHD_ON= forces one); it becomes a JPEG
-#                           on the worker, never on the editing machine or in git (captures are game data); none is ever deleted
+#                           on the worker, never on the editing machine or in git (captures are game data). It waits
+#                           for review (shots-pending.json, not on the page) until another session passes it. A
+#                           picture whose middle is black (a world that didn't render) is refused;
+#                           WWHD_SHOT_DARK=REASON sends it anyway (a fade, a cave), the reason shown to the reviewer
+#   publish.sh shot review                   the shots waiting for review, with their links: open each and look
+#   publish.sh shot ok FILE                  it shows what its caption says: on the page (never your own shot)
+#   publish.sh shot reject FILE REASON       it doesn't: taken off and deleted; tell its session why
 #   publish.sh usage        the Claude account's usage meters (5 h, week, per model) from the editing machine's
 #                           /api/usage/claude ($WWHD_USAGE_URL, default http://127.0.0.1:7690) to usage.json:
 #                           percentages and reset times only, the login token never leaves that machine. A
@@ -199,6 +205,48 @@ PY
 		claims step "${2:?item id}" "${3:?done}/${4:?total}"
 		;;
 	shot)
+		case ${2:-} in
+		review|ok|reject)
+			# the review (the owner's rule, 2026-10-11, after a world-less capture went up): a shot reaches the page
+			# only when a session other than its own has opened it and passed it
+			ssh $host "flock $dir/.claims.lock python3 - $dir $2 $(printf %q "${3:-}") $(printf %q "$(json_str "${4:-}")") $(printf %q "$session") $(printf %q "${WWHD_PROGRESS_URL:-}")" <<'PY'
+import json, os, sys
+d, op, name, why, session, site = sys.argv[1], sys.argv[2], sys.argv[3], json.loads(sys.argv[4]), sys.argv[5], sys.argv[6]
+pend_p, path, arch = (os.path.join(d, f) for f in ("shots-pending.json", "shots.json", "shots-archive.json"))
+def load(p): return json.load(open(p)) if os.path.exists(p) else []
+def save(p, v): json.dump(v, open(p + ".tmp", "w")); os.replace(p + ".tmp", p)
+pend = load(pend_p)
+if op == "review":
+    for s in pend:
+        print(f"{os.path.basename(s['file'])} ({s['session']}): {s['caption']}")
+        print(f"   {(site or 'PROGRESS_URL').rstrip('/')}/{s['file']}" + (f"\n   dark, sent anyway: {s['dark']}" if s.get("dark") else ""))
+    print(f"{len(pend)} waiting" if pend else "none waiting")
+    sys.exit(0)
+s = next((s for s in pend if os.path.basename(s["file"]) == os.path.basename(name)), None)
+if not s:
+    sys.exit(f"{name}: not waiting for review (publish.sh shot review)")
+if op == "ok" and s["session"] == session:
+    sys.exit(f"{name} is this session's own: another session reviews it")
+if op == "reject" and not why:
+    sys.exit("reject: say why (its session reads it)")
+pend.remove(s)
+if op == "ok":
+    shots = load(path)
+    s.pop("dark", None)
+    shots.insert(0, s)
+    shots.sort(key=lambda x: -x["time"])
+    if len(shots) > 24:
+        save(arch, shots[24:] + load(arch))   # the archive first: a crash between leaves a duplicate, not a loss
+    save(path, shots[:24])
+    print(f"{name}: on the page")
+else:
+    try: os.remove(os.path.join(d, s["file"]))
+    except FileNotFoundError: pass
+    print(f"{name}: rejected and deleted ({why}); tell session {s['session']}")
+save(pend_p, pend)
+PY
+			exit ;;
+		esac
 		src=$2; cap=$(json_str "${3:-}"); place=$(json_str "${4:-}"); name=shot-$(date +%Y%m%d-%H%M%S-%3N).jpg   # ms: two shots in one second
 		# would share a file (one picture under both captions, deleted with the older one)
 		source "$root/tools/worker/target.sh"                # the worker the capture was made on (as for job)
@@ -208,21 +256,32 @@ PY
 		else
 			ssh $host "mkdir -p $dir/shots && docker exec wwhd-worker convert '$src' -resize 960x540 -quality 82 /wwhd/data/progress/shots/$name"
 		fi
-		# every shot is kept: shots.json holds the newest 24, older ones move to shots-archive.json (the page
-		# shows both, a page at a time). Kept short so a checkout from before this (it deleted the files of
-		# all but the newest 48 in shots.json) can't reach an archived shot's file
-		ssh $host "flock $dir/.claims.lock python3 - $dir/shots.json $name $(printf %q "$cap") $(date +%s) $(printf %q "$session") $(printf %q "$place")" <<'PY'
+		# a black middle (the share of its middle 60% brighter than 6%): the world didn't render (B77, B80's HUD over
+		# black). Under 5% is refused unless WWHD_SHOT_DARK gives the reason
+		lit=$(ssh $host "docker exec wwhd-worker convert $dir/shots/$name -gravity center -crop 60%x60%+0+0 +repage -colorspace Gray -threshold 6% -format '%[fx:mean]' info:")
+		dark=""
+		if python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) < 0.05 else 1)" "$lit"; then
+			if [ -z "${WWHD_SHOT_DARK:-}" ]; then
+				ssh $host "rm -f $dir/shots/$name"
+				echo "refused: the picture's middle is black (${lit} lit): did the world render? Look at the capture; if it's meant to be dark, WWHD_SHOT_DARK=REASON" >&2
+				exit 1
+			fi
+			dark=$WWHD_SHOT_DARK
+		fi
+		# it waits in shots-pending.json (not on the page) until another session reviews it (shot ok/reject). Every
+		# passed shot is kept: shots.json holds the newest 24, older ones move to shots-archive.json (the page shows
+		# both, a page at a time)
+		ssh $host "flock $dir/.claims.lock python3 - $dir/shots-pending.json $name $(printf %q "$cap") $(date +%s) $(printf %q "$session") $(printf %q "$place") $(printf %q "$(json_str "$dark")")" <<'PY'
 import json, os, sys
-path, name, cap, t, session, place = sys.argv[1], sys.argv[2], json.loads(sys.argv[3]), int(sys.argv[4]), sys.argv[5], json.loads(sys.argv[6])
-arch = os.path.join(os.path.dirname(path), "shots-archive.json")
+path, name, cap, t, session, place, dark = sys.argv[1], sys.argv[2], json.loads(sys.argv[3]), int(sys.argv[4]), sys.argv[5], json.loads(sys.argv[6]), json.loads(sys.argv[7])
 def load(p): return json.load(open(p)) if os.path.exists(p) else []
 def save(p, v): json.dump(v, open(p + ".tmp", "w")); os.replace(p + ".tmp", p)
-shots = load(path)
-shots.insert(0, dict({"file": "shots/" + name, "caption": cap, "time": t, "session": session}, **({"place": place} if place else {})))
-if len(shots) > 24:
-    save(arch, shots[24:] + load(arch))   # the archive first: a crash between leaves a duplicate, not a loss
-save(path, shots[:24])
+pend = load(path)
+pend.append(dict({"file": "shots/" + name, "caption": cap, "time": t, "session": session}, **({"place": place} if place else {}),
+    **({"dark": dark} if dark else {})))
+save(path, pend)
 PY
+		echo "$name waits for review: ask another session (main) to look at it (publish.sh shot review)"
 		;;
 	notes)
 		ssh $host "python3 - $dir/notes.json $(printf %q "$WWHD_PROGRESS_URL") $(printf %q "${2:-list}") $(printf %q "${3:-}") $(printf %q "$(json_str "${4:-}")") $(printf %q "$session") $(date +%s)" <<'PY'
