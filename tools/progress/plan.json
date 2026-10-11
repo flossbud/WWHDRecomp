@@ -581,6 +581,12 @@
       "name": "Round 14: [6] Lossless Scaling frame generation as an alternative to FSR 3's (the owner's ask): the setting Frame generation: off / FSR 3 / Lossless Scaling (x2, x3, x4), the latter through lsfg-vk (the Vulkan layer that runs Lossless Scaling's shaders on Linux; check its licence before bundling it, else detect an installed one) with the user's own Lossless.dll (a path setting or portable/; never shipped or committed: *.dll gitignored; the owner's copy for tests in /wwhd/data/lsfg on both workers); on the desktop and the Deck, with the HUD, pacing and VRR checked as for b-framegen"
     },
     {
+      "id": "u8-journal",
+      "lane": "bottom",
+      "complexity": 8,
+      "name": "Round 14: [8] A steady 144 and 165 (the owner's go 2026-10-11): the store journal without its per-store inline test (cut 2 showed the filter's ~1.5 ms a half frame is the test itself, not the table), e.g. write-protected journaled pages or a separate half-frame copy of the code; target en-tn's half-frame p90 under 6.06 ms on the desktop (7.3 now), N 2 byte-identical as always"
+    },
+    {
       "id": "q-savestate",
       "lane": "qa",
       "complexity": 9,
