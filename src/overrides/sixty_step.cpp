@@ -1380,7 +1380,8 @@ void f_024F9A48(PPCInterpreter_t* __restrict ctx)
 // end lagged the boat by half a tick on half ticks and the wake flickered. They emit every frame at
 // a frame's count (twice the particles: the same strip through twice the points; their draws spread
 // the texture over however many there are, and the wake's room, 150 segments, holds the 80 that 40
-// ticks of life make).
+// ticks of life make). At N steps a tick (WWHD_STEPS) they emit on at most 3 of a tick's steps,
+// spread over it: 40 ticks x 4 overran the wake's room and its draw (N=4 crashed in f_025AA12C).
 void f_0281F878(PPCInterpreter_t* __restrict ctx)
 {
 	if (!Stepped())
@@ -1389,6 +1390,13 @@ void f_0281F878(PPCInterpreter_t* __restrict ctx)
 	const uint32 vtable = cb ? rd32(cb) : 0;
 	if (vtable != 0x10052268u && vtable != 0x100521A8u)
 		[[clang::musttail]] return orig_f_0281F878(ctx);
+	if (g_rtSteps > 3)
+	{
+		constexpr uint32 kEmits = 3;
+		const uint32 k = g_rtHalfTick ? g_rtSubStep : 0;
+		if ((k + 1) * kEmits / g_rtSteps == k * kEmits / g_rtSteps)
+			return;
+	}
 	const float step = g_rtStep;
 	g_rtStep = 1.0f;
 	orig_f_0281F878(ctx);

@@ -44,6 +44,11 @@ void LatteBufferCache_notifyDCFlush(MPTR address, uint32 size);
 
 // 60 fps (D21, tools/recomp/runtime/ppc_ops.h): set per frame by src/overrides/sixty.cpp
 bool g_rtHalfTick = false;
+// U1: the frames a tick (WWHD_STEPS, 2 to 8; 2 when unset: 60 fps), the frame's step in it, and a step neither the
+// tick's first nor its last (ppc_ops.h)
+uint32 g_rtSteps = [] { const char* e = getenv("WWHD_STEPS"); const int n = e ? atoi(e) : 2; return (uint32)(n < 2 ? 2 : n > 8 ? 8 : n); }();
+uint32 g_rtSubStep = 0;
+bool g_rtEarlyStep = false;
 // The values set around one converted step (the step, its notes, hold) are per host thread: with Cemu's three host
 // threads (real time, docs/research/threads.md) the game's sound and job threads on the other cores never run inside
 // the frame thread's step. g_rtHalfTick is the frame's and stays shared (render jobs on other cores see it as before).
@@ -445,7 +450,7 @@ namespace wwhd::rt
 	uint32 GameFrame(uint32 swap)
 	{
 		const uint32 from = SixtyFrom();
-		return swap < from ? swap : from + (swap - from) / 2;
+		return swap < from ? swap : from + (swap - from) / g_rtSteps;
 	}
 
 	bool QuietWatching()

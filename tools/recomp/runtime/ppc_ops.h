@@ -38,15 +38,21 @@ void rt_journal_store(uint32 ea, uint32 size, uint32 pc);
 // WWHD_60FPS_FROM's swap on). The runtime owns them (src/runtime/dispatch.cpp, set by
 // src/overrides/sixty.cpp).
 extern bool g_rtHalfTick;
+// U1 (docs/research/uncapped-plan.md): a tick is g_rtSteps frames (2 at 60 fps; WWHD_STEPS=N for 30 N), the frame's
+// place in it g_rtSubStep (0: the whole tick's frame; g_rtHalfTick is set on all the others). g_rtEarlyStep is set
+// on a frame that is neither the whole tick's nor its last (N > 2 only: at 2 it is never set, and every rule reads as
+// before)
+extern uint32 g_rtSteps, g_rtSubStep;
+extern bool g_rtEarlyStep;
 extern thread_local constinit float g_rtStep;   // the per-step values are per host thread (docs/research/threads.md)
 // `tick` rules: a call made in a stepping process's whole step checks the whole tick ahead (sixty_step.cpp)
 extern thread_local constinit bool g_rtTickWindow;
 extern bool g_rtSixty;
 #define RT_WHOLE_TICK() (!g_rtHalfTick)
-// `late` tick rules: once a tick, at its end: the half tick when the code steps at 60 (g_rtStep
-// below 1 on both of its frames), the whole tick when it runs whole ticks (30 fps, an unconverted
+// `late` tick rules: once a tick, at its end: the tick's last frame when the code steps at 60 (g_rtStep
+// below 1 on all of its frames), the whole tick when it runs whole ticks (30 fps, an unconverted
 // process, a converted one in an event)
-#define RT_LATE_TICK() (g_rtHalfTick || g_rtStep == 1.0f)
+#define RT_LATE_TICK() ((g_rtHalfTick && !g_rtEarlyStep) || g_rtStep == 1.0f)
 // A `late` store that a stepping process's whole tick passes over is noted while g_rtLateNotes is set
 // (its value then, by the generated code's else branch: late_wr8 and on, below); if an event's edge
 // then holds that process's half step, src/overrides/sixty.cpp makes the noted stores there, so the
@@ -76,7 +82,16 @@ static inline double rt_step_approach75(double k)
 // surf (src/overrides/sixty_step.cpp): a height put back on a surface, with (1 - h) of the executing actor's
 // speed.y (and of gravity's part) so that its posMove's step ends where 30's tick does
 double rt_step_surface(double y);
-static inline uint32 rt_step_split(uint32 v) { const sint32 s = (sint32)v; return (uint32)(g_rtHalfTick ? s / 2 : s - s / 2); }
+// split: a tick's whole s over its steps, step i taking q(N - i) - q(N - i - 1) with q(k) = s k / N (truncated, as
+// the game's own division): the steps sum to s, and at N 2 that is s - s / 2 and s / 2
+static inline uint32 rt_step_split(uint32 v)
+{
+	const sint32 s = (sint32)v;
+	if (g_rtSteps == 2) [[likely]]
+		return (uint32)(g_rtHalfTick ? s / 2 : s - s / 2);
+	const sint64 n = g_rtSteps, i = g_rtHalfTick ? g_rtSubStep : 0;
+	return (uint32)(sint32)((sint64)s * (n - i) / n - (sint64)s * (n - i - 1) / n);
+}
 extern thread_local constinit float g_rtNote;                 // a value noted by a step rule for a later one in the same step
 // vec@ / arc@: for one call, the vector (three floats) at ea is h of itself; for arc@ (a velocity)
 // y is h y + (1 - h)/2 (y - g_rtNote), g_rtNote its value before gravity was added this step. The

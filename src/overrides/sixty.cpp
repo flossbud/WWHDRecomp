@@ -1250,8 +1250,10 @@ namespace
 			s_converting++;
 		}
 		g_rtHalfTick = true;
+		g_rtSubStep = 1;
 		fn(ctx);
 		g_rtHalfTick = false;
+		g_rtSubStep = 0;
 		s_converting--;
 		g_rtStep = 1.0f;
 		for (const auto& [b, u] : s_halfLast)
@@ -3247,11 +3249,14 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 	if (swap == from && from != 0)
 	{
 		wwhd_SetSwapInterval(1);                       // from here on the game presents every vsync
-		cemuLog_log(LogType::Force, "wwhd sixty: 60 fps from swap {}", swap);
+		cemuLog_log(LogType::Force, "wwhd sixty: 60 fps from swap {}{}", swap,
+			g_rtSteps == 2 ? std::string() : fmt::format(", {} steps a tick (WWHD_STEPS)", g_rtSteps));
 	}
 	if (RndSync() && g_rtSixty && !g_rtHalfTick)
 		RndFlushAll();                              // the whole tick is over: a process that didn't step (the random stream)
-	g_rtHalfTick = swap >= from && (swap - from) % 2 != 0;
+	g_rtSubStep = swap >= from ? (swap - from) % g_rtSteps : 0;   // the frame's step in its tick (U1)
+	g_rtHalfTick = g_rtSubStep != 0;
+	g_rtEarlyStep = g_rtHalfTick && g_rtSubStep + 1 < g_rtSteps;
 	g_rtSixty = swap >= from;
 	if (g_rtSixty)
 		wwhd::pacing::FrameStart(swap, from, g_rtHalfTick);   // a late half frame is dropped (pacing.cpp)
@@ -3344,8 +3349,8 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 	wr32(0x101FF9DCu, rng[2]);
 	if (input)
 		wr32(input + kPressed, pressed);
-	if (s_resolveCcs)
-		ResolvePending(ctx, "half");                   // the tick's collisions, its half step done (above)
+	if (s_resolveCcs && !g_rtEarlyStep)
+		ResolvePending(ctx, "half");                   // the tick's collisions, its last step done (above)
 }
 
 // Link's reset flags (daPy_py_c::mResetFlg0, WWHD's Link +0x3C0: the GameCube's 0x2A4 + 0x11C; procTactWait
@@ -3916,7 +3921,8 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 			{
 				s_edgeFinishes += edge;
 				s_halfSteps++;
-				s_lateNoted.erase(proc);                // its half step makes them
+				if (!g_rtEarlyStep)
+					s_lateNoted.erase(proc);            // its half step makes them (the tick's last)
 			}
 		}
 		converted = s_stepping[proc];
@@ -3944,7 +3950,7 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 		return;
 	}
 	const float step = g_rtStep;
-	g_rtStep = 0.5f;
+	g_rtStep = 1.0f / g_rtSteps;                     // a tick's step of N (0.5 at 60)
 	s_converting++;
 	const bool camTick = CamTick() && !g_rtHalfTick && rd16(proc + 0x08) == 476;
 	if (camTick)
@@ -3966,8 +3972,9 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	s_actionStops += hold;
 	g_rtHold = hold || camTick;                     // his half step leaves his new action's call out; the camera's
 	                                                // half step for show leaves its sound and rumble to its replay
-	// its whole step: the late stores it passes over are noted for its half step (s_lateNoted)
-	const bool notes = !g_rtHalfTick;
+	// its whole step: the late stores it passes over are noted for its half step (s_lateNoted); at N > 2 its early
+	// steps' are noted after them (made in order: the latest stands)
+	const bool notes = !g_rtHalfTick || g_rtEarlyStep;
 	const bool notesOuter = g_rtLateNotes;
 	std::vector<LateNote> outer;
 	if (notes)
@@ -4011,7 +4018,16 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	if (notes)
 	{
 		g_rtLateNotes = notesOuter;
-		if (s_lateNotes.empty())
+		if (g_rtEarlyStep)
+		{
+			if (!s_lateNotes.empty())
+			{
+				auto& noted = s_lateNoted[proc];
+				noted.insert(noted.end(), s_lateNotes.begin(), s_lateNotes.end());
+				s_lateNotes.clear();
+			}
+		}
+		else if (s_lateNotes.empty())
 			s_lateNoted.erase(proc);
 		else
 			s_lateNoted[proc].swap(s_lateNotes);
@@ -4074,7 +4090,7 @@ namespace
 			return;
 		}
 		const float step = g_rtStep;
-		g_rtStep = 0.5f;
+		g_rtStep = 1.0f / g_rtSteps;
 		s_converting++;
 		fn(ctx);
 		s_converting--;
@@ -4127,7 +4143,7 @@ void f_025A81A0(PPCInterpreter_t* __restrict ctx)
 		[[clang::musttail]] return orig_f_025A81A0(ctx);
 	}
 	const float step = g_rtStep;
-	g_rtStep = 0.5f;
+	g_rtStep = 1.0f / g_rtSteps;
 	s_converting++;
 	orig_f_025A81A0(ctx);
 	s_converting--;

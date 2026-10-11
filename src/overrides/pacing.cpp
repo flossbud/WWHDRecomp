@@ -224,7 +224,7 @@ void f_0274C874(PPCInterpreter_t* __restrict ctx)
 			GX2::wwhd_WaitForVsyncCount(vsync + 1);
 	}
 	else
-		GX2::wwhd_WaitForVsyncCount(s_pairVsync + 2);
+		GX2::wwhd_WaitForVsyncCount(s_pairVsync + 1 + g_rtSubStep);   // the tick's step i on vsync i after the whole's (+2 at 60)
 	if (logging && r.swap)
 	{
 		r.waitMs = Ms(Clock::now() - waitFrom);
@@ -374,7 +374,7 @@ namespace wwhd::pacing
 			// the tick's whole frame: it was due at s_tickDue; the next one 33.3 ms after (resynced after a long hitch:
 			// a load or a pause plays on from where it is, it doesn't race to catch up); more than a tick behind, it's
 			// skipped (above)
-			WholeFrame((swap - from) / 2, now);
+			WholeFrame((swap - from) / g_rtSteps, now);
 			return;
 		}
 		s_halves++;
@@ -383,7 +383,7 @@ namespace wwhd::pacing
 		// keep-speed drops them (their logic runs, their render jobs and picture don't). An even pattern, not even time:
 		// motion is smoother at 30 or 60. Its frames wait as shown ones in real time (f_0274C874)
 		static const uint32 cap = [] { const char* e = getenv("WWHD_FPS_CAP"); const int v = e ? atoi(e) : 60; return v == 40 || v == 50 ? (uint32)v : 0u; }();
-		const uint32 tick = (swap - from) / 2;
+		const uint32 tick = (swap - from) / g_rtSteps;
 		if (test)
 			g_dropFrame = tick % test == 0;
 		else
