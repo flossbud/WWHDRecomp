@@ -731,6 +731,81 @@ namespace wwhd::gpu
 
 	namespace
 	{
+		// A layered colour target sampled as a 3D texture: a lookup table drawn slice by slice (the Pictograph Box's
+		// colour grading: an 8x8x8 table drawn into eight targets at once, one array slice each, then sampled in 3D;
+		// B79: without it the picture came out black). Its layers copied into a 3D image's depth slices, again only
+		// when the target was written since.
+		struct Volume { VkImage image = VK_NULL_HANDLE; VkDeviceMemory memory = VK_NULL_HANDLE; VkFormat format{};
+			uint64 written = UINT64_MAX; std::unordered_map<uint64, VkImageView> views; };
+		std::unordered_map<VkImage, Volume> s_volumes;
+
+		Volume& VolumeOf(Image& surface, VkFormat format)
+		{
+			Volume& v = s_volumes[surface.image];
+			if (v.image && v.format != format)
+			{
+				ForgetSets();
+				for (auto& [k, view] : v.views)
+					vkDestroyImageView(s.device, view, nullptr);
+				vkDestroyImage(s.device, v.image, nullptr);
+				vkFreeMemory(s.device, v.memory, nullptr);
+				v = Volume{};
+			}
+			const VkImageSubresourceRange all{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+			auto barrier = [&](VkImageLayout from, VkImageLayout to) {
+				VkImageMemoryBarrier b{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+				b.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+				b.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+				b.oldLayout = from;
+				b.newLayout = to;
+				b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				b.image = v.image;
+				b.subresourceRange = all;
+				vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+			};
+			if (!v.image)
+			{
+				VkImageCreateInfo ci{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+				ci.imageType = VK_IMAGE_TYPE_3D;
+				ci.format = format;
+				ci.extent = { surface.width, surface.height, surface.layers };
+				ci.mipLevels = 1;
+				ci.arrayLayers = 1;
+				ci.samples = VK_SAMPLE_COUNT_1_BIT;
+				ci.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+				Check(vkCreateImage(s.device, &ci, nullptr, &v.image), "vkCreateImage");
+				VkMemoryRequirements req;
+				vkGetImageMemoryRequirements(s.device, v.image, &req);
+				VkMemoryAllocateInfo ai{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+				ai.allocationSize = req.size;
+				ai.memoryTypeIndex = MemoryType(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+				Check(vkAllocateMemory(s.device, &ai, nullptr, &v.memory), "vkAllocateMemory");
+				Check(vkBindImageMemory(s.device, v.image, v.memory, 0), "vkBindImageMemory");
+				v.format = format;
+				EndRendering();
+				barrier(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			}
+			if (v.written != surface.written)
+			{
+				EndRendering();
+				Transition(surface, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+				barrier(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+				std::vector<VkImageCopy> copies(surface.layers);
+				for (uint32 l = 0; l < surface.layers; l++)
+				{
+					VkImageCopy& c = copies[l];
+					c.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, l, 1 };
+					c.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+					c.dstOffset = { 0, 0, (sint32)l };
+					c.extent = { surface.width, surface.height, 1 };
+				}
+				vkCmdCopyImage(s.cmd, surface.image, surface.layout, v.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (uint32)copies.size(), copies.data());
+				barrier(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+				v.written = surface.written;
+			}
+			return v;
+		}
+
 		// The surface last written at an address (the game reuses memory for transient targets of
 		// other formats within a frame), one in `format` on a tie.
 		Image* SurfaceAt(uint32 addr, uint32 format)
@@ -879,6 +954,15 @@ namespace wwhd::gpu
 			DestroyImage(it->second.img);
 			it = s_copies.erase(it);
 		}
+		if (auto v = s_volumes.find(image); v != s_volumes.end())        // its 3D copy (VolumeOf)
+		{
+			ForgetSets();
+			for (auto& [key, view] : v->second.views)
+				vkDestroyImageView(s.device, view, nullptr);
+			vkDestroyImage(s.device, v->second.image, nullptr);
+			vkFreeMemory(s.device, v->second.memory, nullptr);
+			s_volumes.erase(v);
+		}
 		auto it = s_surfaceViewCache.find(image);
 		if (it == s_surfaceViewCache.end())
 			return;
@@ -967,6 +1051,19 @@ namespace wwhd::gpu
 		// render to texture
 		if (Image* surface = SurfaceAt(d.phys, (uint32)d.format))
 		{
+			if (viewType == VK_IMAGE_VIEW_TYPE_3D && !(surface->aspect & VK_IMAGE_ASPECT_DEPTH_BIT) && surface->layers > 1)
+			{
+				VkFormat format = surface->format;
+				TexFormat tf = TextureFormat(d.format, false);
+				if (tf.vk != VK_FORMAT_UNDEFINED && tf.vk != format && TexelSize(tf.vk) == TexelSize(format) && tf.decoder &&
+					!Latte::IsCompressedFormat(d.format))
+					format = tf.vk;
+				LogOnce(fmt::format("rt3d{:x}", d.phys), [&] { return fmt::format("render target {:#x} ({} layers) sampled as 3D: its layers copied into a 3D image",
+					d.phys, surface->layers); });
+				Volume& v = VolumeOf(*surface, format);
+				VkImageView view = View(v.image, v.format, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_3D, 0, 1, 0, 1, comp, v.views);
+				return { view, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1.0f, 1.0f, true };
+			}
 			if (viewType != VK_IMAGE_VIEW_TYPE_2D && viewType != VK_IMAGE_VIEW_TYPE_2D_ARRAY)
 			{
 				LogOnce(fmt::format("rtdim{:x}", d.phys), [&] { return fmt::format("render target {:#x} sampled as dim {}; placeholder", d.phys, (uint32)shaderDim); });

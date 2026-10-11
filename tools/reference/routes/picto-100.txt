@@ -1,0 +1,38 @@
+# Route: a pictograph taken (t-wideaudit, session top) with the 100% save (REF_SAVE=/wwhd/data/saves/wwhd_100) on its
+# Quest Log 3, the one whose album has room (its cking_pic2_2.sav, _3 and _6.._11 are empty): menus-100.txt's inputs with
+# the third quest log chosen, the Pictograph Box on R, pictures taken and kept, the album, then the game saved (the pictures go to its cking_pic files). FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+600 DOWN 3     # File Selection: to Quest Log 2
+630 DOWN 3     # to Quest Log 3
+660 A 5        # Quest Log 3
+780 A 5        # Start
+900 PLUS 5     # pause menu: the item screen
+960 DOWN 3     # the cursor starts on the ITEMS tab
+990 RIGHT 3    # to the Telescope
+1020 DOWN 3
+1050 DOWN 3    # to the Pictograph Box
+1080 R 3       # put it on R
+1110 PLUS 5    # close the menu
+1170 R 5       # the Pictograph Box: a first-person view in a frame
+1230 LRIGHT 30 # look around
+1290 A 5       # the shutter
+1380 A 5
+1470 A 5
+1560 A 5
+1650 ZR 5      # the album: the pictographs taken, decoded from the JPEGs the game encoded
+1740 RIGHT 3
+1800 RIGHT 3
+1950 B 5       # out of the album
+2010 B 5       # the box put away
+2100 PLUS 5    # the pause menu: the item screen
+2160 UP 3      # from the Pictograph Box up to the tabs (the MAP tab)
+2190 UP 3
+2220 UP 3
+2250 LEFT 3    # the ITEMS tab
+2310 DOWN 3    # "Save"
+2370 A 5       # Save
+2460 A 5
+2550 A 5
+2640 A 5
+2730 A 5

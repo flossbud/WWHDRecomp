@@ -27,6 +27,8 @@
 #include <algorithm>
 #include <deque>
 #include <mutex>
+#include <atomic>
+#include <condition_variable>
 #include <unordered_map>
 #include <ctime>
 #include <map>
@@ -135,6 +137,8 @@ namespace GX2
 {
 	std::string wwhd_PoolState(uint32 physAddr);   // os/gx2/core/GX2_Command.cpp: the cp guard's reports
 }
+// a CPU copy's GPU-rendered source, read back on the GPU thread while the copying thread waits (B79; below)
+static void ServeSourceReadback();
 namespace coreinit
 {
 	uint64 __OSIdleNanoseconds();   // os/coreinit/coreinit_Thread.cpp
@@ -631,6 +635,8 @@ namespace
 
 	void eventWriteEOP(const uint32be* p)
 	{
+		if (wwhd::gpu::RendererOn())
+			wwhd::gpu::RendererReadbacks();                 // what the CPU reads after GX2DrawDone, in its memory first
 		uint32 w0 = p[0], addr = p[1], w2 = p[2];
 		if (w0 == 0x504 && (w2 & 0x40000000))
 			stdx::atomic_ref<uint64be>(*(uint64be*)phys(addr)).store(((uint64)(uint32)p[4] << 32) | (uint32)p[3]);
@@ -858,6 +864,7 @@ namespace
 				return w;
 			if (!s_running)
 				threadExit();
+			ServeSourceReadback();
 			handleTimedVsync();
 			if (spins < 64)
 				std::this_thread::yield();
@@ -984,16 +991,61 @@ void LatteRenderTarget_getScreenImageArea(sint32* x, sint32* y, sint32* w, sint3
 // The reference queues them to its GPU thread (LatteSurfaceCopy_copySurfaceNew) and GX2CopySurface
 // waits for them. From a linear-special source, and from any source its texture cache doesn't
 // hold, it untiles and retiles in guest memory (LatteSurfaceCopy_CopyInRAM), which is done here in
-// place. The one path not taken is the reference's readback of a GPU-rendered source into a
-// linear-special destination: nothing here renders into guest memory.
+// place. A GPU-rendered (tiled) source is read back first, as the reference does (ReadBackSource, below).
 void gx2SurfaceCopySoftware(uint8* inputData, sint32 surfSrcHeight, sint32 srcPitch, sint32 srcDepth, uint32 srcSlice,
 	uint32 srcSwizzle, uint32 srcHwTileMode, uint8* outputData, sint32 surfDstHeight, sint32 dstPitch, sint32 dstDepth,
 	uint32 dstSlice, uint32 dstSwizzle, uint32 dstHwTileMode, uint32 copyWidth, uint32 copyHeight, uint32 copyBpp);
 
+// A CPU copy from a tiled source may read what the GPU rendered there, which only the renderer holds (it writes guest
+// memory only for this and RendererReadbacks): the Pictograph Box keeps a picture by copying its tiled 800x450 target
+// into a linear buffer, which the album then shows (B79: black without this). The reference reads such a source back
+// before copying (LatteSurfaceCopy). So: everything submitted is drawn first (GX2DrawDone), then the GPU thread, idle
+// at its ring, writes the renderer's image of the source into guest memory in the source's layout, and the copy goes on.
+namespace
+{
+	struct SourceRequest { uint32 addr, gx2, pitch, height, tileMode, swizzle; };
+	std::mutex s_sourceLock;
+	std::condition_variable s_sourceDone;
+	SourceRequest s_source{};
+	std::atomic<bool> s_sourcePending{ false };
+}
+
+static void ServeSourceReadback()
+{
+	if (!s_sourcePending.load(std::memory_order_acquire))
+		return;
+	std::lock_guard lock(s_sourceLock);
+	const SourceRequest& r = s_source;
+	wwhd::gpu::RendererReadbackTiled(r.addr, r.gx2, r.pitch, r.height, r.tileMode, r.swizzle);
+	s_sourcePending.store(false, std::memory_order_release);
+	s_sourceDone.notify_all();
+}
+
+static void ReadBackSource(const LatteSurfaceCopyParam& src)
+{
+	const uint32 tm = (uint32)src.tilemode;
+	if (!wwhd::gpu::RendererOn() || tm == 0 || tm == 1 || tm == 16)   // linear: never a render target's tiled memory
+		return;
+	GX2::GX2DrawDone();
+	std::unique_lock lock(s_sourceLock);
+	s_source = { src.physDataAddr, (uint32)src.surfaceFormat, (uint32)src.pitch, (uint32)src.heightInTexels, tm, (uint32)src.swizzle };
+	s_sourcePending.store(true, std::memory_order_release);
+	if (!s_sourceDone.wait_for(lock, std::chrono::seconds(2), [] { return !s_sourcePending.load(std::memory_order_acquire); }))
+	{
+		s_sourcePending.store(false, std::memory_order_release);
+		cemuLog_log(LogType::Force, "null GPU: a CPU copy's source {:08x} not read back (the GPU thread didn't come by)", src.physDataAddr);
+	}
+}
+
 void LatteAsyncCommand_queueTextureCopy(const LatteSurfaceCopyParam& src, const LatteSurfaceCopyParam& dst, const LatteSurfaceCopyRect& rect)
 {
+	ReadBackSource(src);
 	Latte::E_HWFMT dstHwFormat = Latte::GetHWFormat(dst.surfaceFormat);
 	sint32 copyWidth = rect.width, copyHeight = rect.height;
+	if (static const bool report = getenv("WWHD_RENDER_COPIES") != nullptr; report)
+		cemuLog_log(LogType::Force, "cpu copy {}x{}: src {:08x} fmt {:x} pitch {} h {} tm {} -> dst {:08x} fmt {:x} pitch {} h {} tm {}", copyWidth, copyHeight,
+			src.physDataAddr, (uint32)src.surfaceFormat, src.pitch, src.heightInTexels, (uint32)src.tilemode,
+			dst.physDataAddr, (uint32)dst.surfaceFormat, dst.pitch, dst.heightInTexels, (uint32)dst.tilemode);
 	if (Latte::IsCompressedFormat(dstHwFormat))
 	{
 		copyWidth = (copyWidth + 3) / 4;

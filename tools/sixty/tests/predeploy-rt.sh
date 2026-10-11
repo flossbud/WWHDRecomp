@@ -8,7 +8,8 @@
 #    twice (pl1, pl2). wwhd-null against itself is real time's noise for the route; FAIL when wwhd-play's runs both end
 #    more than PREDEPLOY_FAIL (150) units from both of wwhd-null's and further than twice that noise, or a wwhd-play
 #    run has no track (a crash or a hang); late starts (the title) are left out, as rt_routes does.
-# 2. A soak (soak.sh, rendered): PREDEPLOY_RT_SOAK minutes (default 10; 0: none) of seeded random play with wwhd-play.
+# 2. A soak (soak.sh, rendered): PREDEPLOY_RT_SOAK minutes (default 10; 0: none) of seeded random play with wwhd-play,
+#    at least PREDEPLOY_RT_SOAK_MIN fps (45; a WARN instead when the machine is busy).
 # RT_COMPARE_ONLY=1 (rt_routes.sh): the last runs judged again, nothing played.
 # Exit status 1 on a FAIL. Default routes: a dozen of predeploy's, the sound and loader threads busiest (warps, doors,
 # menus, the dungeons' and a fight). Run it as a job: tools/worker/job start prt tools/sixty/tests/predeploy-rt.sh
@@ -47,6 +48,18 @@ if [ "${PREDEPLOY_RT_SOAK:-10}" != 0 ]; then
     soak=$(SOAK_BIN="$play" tools/sixty/tests/soak.sh "${PREDEPLOY_RT_SOAK:-10}" play:WWHD_CORES=3)
     echo "$soak"                                # (not tee /dev/stderr: it reopens a job's log and truncates it)
     grep -q ": ok, swap" <<< "$soak" || fail=1
+    # its speed: under PREDEPLOY_RT_SOAK_MIN fps (default 45; the soak plays at 60) is a FAIL on a quiet machine, and on a
+    # busy one (load over half its CPUs: other jobs, deploy 9's soak read 10.5 fps beside three capture runs) a WARN
+    # to run it again when it's quiet
+    fps=$(grep -o '[0-9.]* fps over' <<< "$soak" | head -1 | cut -d' ' -f1)
+    load=$(cut -d' ' -f1 /proc/loadavg); cpus=$(nproc)
+    if [ -n "$fps" ] && awk -v f="$fps" -v m="${PREDEPLOY_RT_SOAK_MIN:-45}" 'BEGIN { exit !(f < m) }'; then
+        if awk -v l="$load" -v c="$cpus" 'BEGIN { exit !(l > c / 2) }'; then
+            echo "WARN  soak: $fps fps, under ${PREDEPLOY_RT_SOAK_MIN:-45}, with the machine busy (load $load on $cpus CPUs): run it again when it's quiet"
+        else
+            echo "FAIL  soak: $fps fps, under ${PREDEPLOY_RT_SOAK_MIN:-45} (load $load on $cpus CPUs)"; fail=1
+        fi
+    fi
 fi
 [ $fail = 0 ] && echo "predeploy-rt: ok" || echo "predeploy-rt: FAIL"
 exit $fail

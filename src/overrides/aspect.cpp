@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstring>
 #include <mutex>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 
@@ -115,6 +116,22 @@ namespace
 				return true;
 		return false;
 	}
+	// the Pictograph Box's (and the telescope's) black frame around its viewfinder: four leaves of N_Frame_00, 0 top,
+	// 1 bottom, 2 left, 3 right, or -1
+	int FrameEdge(uint32 pane)
+	{
+		const uint32 parent = rd32(pane + kParent);
+		if (!parent || Name(parent) != "N_Frame_00")
+			return -1;
+		const std::string_view n = Name(pane);
+		return n == "P_FramerT_00" ? 0 : n == "P_FrameB_00" ? 1 : n == "P_FrameL_00" ? 2 : n == "P_FramerR_00" ? 3 : -1;
+	}
+	// the Pictograph Box's viewfinder: its picture, PF_Pictograph_00 in N_Finder_00 (the album's are elsewhere)
+	bool IsViewfinder(uint32 pane)
+	{
+		const uint32 parent = rd32(pane + kParent);
+		return Name(pane) == "PF_Pictograph_00" && parent && Name(parent) == "N_Finder_00";
+	}
 	bool ProjectedChild(uint32 pane) { return Name(pane) == "L_EnemyHP_00" || Name(pane) == "L_CommandA_00"; }
 	bool ProjectedRootName(std::string_view n) { return n == "N_EnemyHP_00" || n == "T_CommandA_00" || n == "P_SetSeatASpecial_00"; }
 	bool WorldAnchor(uint32 pane, int depth = 0)              // a root placed at an actor's projected position
@@ -192,10 +209,43 @@ void f_028F8250(PPCInterpreter_t* ctx)
 	aspect::TagProjection(-1);
 }
 
+namespace
+{
+	// WWHD_PANE_LOG=1 (a probe, t-wideaudit): each pane's name, its root's and parent's, translation, size and scale, the
+	// first time a pane of that name under that root computes its matrix
+	void LogPane(uint32 pane)
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_PANE_LOG"); return e && *e == '1'; }();
+		if (!on)
+			return;
+		uint32 root = pane;
+		for (int i = 0; i < 32 && rd32(root + kParent); i++)
+			root = rd32(root + kParent);
+		static std::mutex lock;
+		static std::unordered_map<std::string, int> seen;
+		const std::string key = std::string(Name(root)) + "/" + std::string(Name(pane));
+		std::lock_guard guard(lock);
+		if (!seen.emplace(key, 0).second)
+			return;
+		const uint32 parent = rd32(pane + kParent);
+		const uint32 sentinel = pane + kChildren;
+		cemuLog_log(LogType::Force, "wwhd pane: {} parent {} root {}{}: t {:.0f},{:.0f} size {:.0f}x{:.0f} scale {:.2f},{:.2f}",
+			Name(pane), parent ? Name(parent) : std::string_view("-"), Name(root), rd32(sentinel) == sentinel ? " (leaf)" : "",
+			Rdf(pane + kTrans), Rdf(pane + kTrans + 4), Rdf(pane + kSize), Rdf(pane + kSize + 4), Rdf(pane + kScale), Rdf(pane + kScale + 4));
+	}
+}
+
 // Pane::CalculateMtx(this r3, DrawInfo& r4, bool parentDirty r5)
 void f_028766CC(PPCInterpreter_t* ctx)
 {
 	const float a = aspect::Current();
+	LogPane((uint32)ctx->gpr[3]);
+	// the Pictograph Box's viewfinder is up (its picture's pane computed, at any aspect; B79): the picture is the game's
+	// own at 16:9 (its camera, the quests that judge it), so the TV picture is 16:9 meanwhile (os::aspect::HoldBase; the
+	// window's sides black, as the viewfinder's frame is). (Dropped frames don't touch the picture: session qa found the
+	// saved JPEGs byte-identical with every half frame or every other whole frame dropped while the viewfinder was up.)
+	if (const char* n = (const char*)(memory_base + (uint32)ctx->gpr[3] + kName); n[0] == 'P' && n[1] == 'F' && IsViewfinder((uint32)ctx->gpr[3]))
+		aspect::HoldBase();
 	static bool s_everOther = false;                             // another aspect was in use (else 16:9 touches nothing)
 	if (aspect::Same(a, aspect::kBase) && !t_anchor && !t_root)
 	{
@@ -248,7 +298,18 @@ void f_028766CC(PPCInterpreter_t* ctx)
 	}
 	const uint32 sentinel = pane + kChildren;
 
-	if (rd32(sentinel) == sentinel && FillPane(pane, tx, ty, Rdf(pane + kSize) * std::fabs(sx), Rdf(pane + kSize + 4) * std::fabs(sy)))
+	// the viewfinder's black frame: each piece's origin is its outer edge (the top one spans y 360 down to 220, the sides
+	// 220 to -95 from x -+640 in to -+280, the bottom one -95 to -360): that edge goes out to the wider (taller) picture's
+	// and the piece grows by as much, its inner edge kept; the top and bottom ones, centred, as wide as the picture
+	if (const int edge = FrameEdge(pane); edge >= 0)
+	{
+		const float w = Rdf(pane + kSize) * std::fabs(sx), h = Rdf(pane + kSize + 4) * std::fabs(sy);
+		if (edge >= 2 && w > 0.0f)
+			nx = tx * kx, nsx = sx * (w + std::fabs(tx) * (kx - 1.0f)) / w;
+		else if (edge < 2 && h > 0.0f)
+			ny = ty * ky, nsy = sy * (h + std::fabs(ty) * (ky - 1.0f)) / h, nsx = sx * kx;
+	}
+	else if (rd32(sentinel) == sentinel && FillPane(pane, tx, ty, Rdf(pane + kSize) * std::fabs(sx), Rdf(pane + kSize + 4) * std::fabs(sy)))
 		nsx = sx * kx, nsy = sy * ky;                            // a leaf covering the screen: stretched to the new shape
 	const bool moved = nx != tx || ny != ty, scaled = nsx != sx || nsy != sy;
 	if (parent == t_root)
@@ -277,6 +338,8 @@ void rt_aspect_drawself(PPCInterpreter_t* ctx)
 	const uint32 sentinel = pane + kChildren;
 	if (rd32(sentinel) == sentinel && FillPane(pane, Rdf(pane + kTrans), Rdf(pane + kTrans + 4),
 		Rdf(pane + kSize) * std::fabs(Rdf(pane + kScale)), Rdf(pane + kSize + 4) * std::fabs(Rdf(pane + kScale + 4))))
+		content = false;
+	if (FrameEdge(pane) >= 0)                                    // the viewfinder's frame: out to the picture's edges
 		content = false;
 	for (uint32 p = pane, i = 0; p && i < 32; p = rd32(p + kParent), i++)
 	{

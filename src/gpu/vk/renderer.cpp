@@ -17,6 +17,10 @@ bool PPCTimer_isVirtualClock();                                  // src/runtime/
 #include "Cafe/HW/Latte/ISA/LatteReg.h"
 #include <cfloat>
 
+void gx2SurfaceCopySoftware(uint8* inputData, sint32 surfSrcHeight, sint32 srcPitch, sint32 srcDepth, uint32 srcSlice,
+	uint32 srcSwizzle, uint32 srcHwTileMode, uint8* outputData, sint32 surfDstHeight, sint32 dstPitch, sint32 dstDepth,
+	uint32 dstSlice, uint32 dstSwizzle, uint32 dstHwTileMode, uint32 copyWidth, uint32 copyHeight, uint32 copyBpp);
+
 namespace wwhd::gpu
 {
 	State s;
@@ -1156,8 +1160,29 @@ namespace wwhd::gpu
 		}
 	}
 
+	// WWHD_SURFACE_WATCH=ADDR (a probe, B79): the surface at ADDR made or grown (with its memory's contents), cleared, started from a twin
+	uint32 SurfaceWatch()
+	{
+		static const uint32 watch = [] { const char* e = getenv("WWHD_SURFACE_WATCH"); return e ? (uint32)strtoul(e, nullptr, 16) : 0u; }();
+		return watch;
+	}
+
 	Image& Surface(uint32 addr, uint32 gx2, bool depth, uint32 w, uint32 h, uint32 layers)
 	{
+		if (addr == SurfaceWatch() && addr)
+		{
+			auto it = s.surfaces.find({ addr, gx2 | (depth ? 0x80000000u : 0) });
+			if (it == s.surfaces.end() || !it->second.image || it->second.gw < w || it->second.gh < h)
+			{
+				const uint8* m = memory_getPointerFromPhysicalOffset(addr);
+				const uint32 n = w * h * Latte::GetFormatBits((Latte::E_GX2SURFFMT)gx2) / 8;
+				uint64 sum = 0, nonzero = 0;
+				for (uint32 i = 0; i < n; i++)
+					sum += m[i], nonzero += m[i] != 0;
+				Log(fmt::format("watch {:08x}: surface fmt {:x}{} {}x{} made at frame {}; its memory: {} of {} bytes non-zero, mean {:.1f}",
+					addr, gx2, depth ? " depth" : "", w, h, s.frame, nonzero, n, n ? (double)sum / n : 0.0));
+			}
+		}
 		Image& img = s.surfaces[{ addr, gx2 | (depth ? 0x80000000u : 0) }];
 		img.bytes = std::max(img.bytes, w * h * layers * Latte::GetFormatBits((Latte::E_GX2SURFFMT)gx2) / 8);
 		if (img.fitH && SurfaceFitMode() == 1)
@@ -1213,6 +1238,33 @@ namespace wwhd::gpu
 				vkCmdBlitImage(s.cmd, img.image, img.layout, grown.image, grown.layout, 1, &b, VK_FILTER_NEAREST);
 			}
 			SubmitAndWait();                                        // then the old image can go
+		}
+		else if (!depth)
+		{
+			// a first image at an address that holds the same format with other flags (sRGB and not: one memory, two
+			// views on the console) starts from that one's contents, the newest: the Pictograph Box clears its picture
+			// as RGBA8 and draws into it as sRGB writing colour alone, and its alpha must be the clear's (B79)
+			Image* twin = nullptr;
+			for (auto it = s.surfaces.lower_bound({ addr, 0 }); it != s.surfaces.end() && it->first.first == addr; ++it)
+			{
+				const uint32 other = it->first.second;
+				if (&it->second == &img || !it->second.image || (other & 0x80000000u) || (other & 0x3F) != (gx2 & 0x3F) ||
+					it->second.layers != 1 || !SameScale(it->second, grown))
+					continue;
+				if (!twin || it->second.written > twin->written)
+					twin = &it->second;
+			}
+			if (twin)
+			{
+				Transition(*twin, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);   // a deferred clear first
+				Transition(grown, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+				VkImageCopy c{};
+				c.srcSubresource = c.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+				c.extent = { std::min(twin->width, grown.width), std::min(twin->height, grown.height), 1 };
+				vkCmdCopyImage(s.cmd, twin->image, twin->layout, grown.image, grown.layout, 1, &c);
+				if (addr == SurfaceWatch())
+					Log(fmt::format("watch {:08x}: fmt {:x} started from its twin's contents", addr, gx2));
+			}
 		}
 		uint32 bytes = img.bytes, readH = img.readH, readSince = img.readSince;
 		uint64 written = img.written, resetFor = img.resetFor;
@@ -1371,6 +1423,25 @@ namespace wwhd::gpu
 				fwrite(out.data(), 1, out.size(), f);
 				fclose(f);
 			}
+			// WWHD_RENDER_DUMP_ALPHA=1: the alpha of RGBA8 and RGB10A2 surfaces too, as an 8-bit grey PGM (B79's probe)
+			static const bool dumpAlpha = getenv("WWHD_RENDER_DUMP_ALPHA") != nullptr;
+			const bool a2 = img.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+			if (dumpAlpha && (a2 || img.format == VK_FORMAT_R8G8B8A8_UNORM || img.format == VK_FORMAT_R8G8B8A8_SRGB))
+			{
+				std::vector<uint8> alpha(n);
+				for (size_t i = 0; i < n; i++)
+				{
+					uint32 w;
+					memcpy(&w, px + i * 4, 4);
+					alpha[i] = a2 ? (uint8)((w >> 30) * 85) : (uint8)(w >> 24);
+				}
+				if (FILE* f = fopen((path.substr(0, path.size() - 4) + "_a.pgm").c_str(), "wb"))
+				{
+					fprintf(f, "P5\n%u %u\n255\n", img.width, img.height);
+					fwrite(alpha.data(), 1, alpha.size(), f);
+					fclose(f);
+				}
+			}
 			vkUnmapMemory(s.device, mem);
 			vkDestroyBuffer(s.device, buf, nullptr);
 			vkFreeMemory(s.device, mem, nullptr);
@@ -1422,6 +1493,144 @@ namespace wwhd::gpu
 		vkFreeMemory(s.device, mem, nullptr);
 	}
 
+	// ---- readbacks: what the GPU drew into a linear colour buffer, copied into guest memory --------------------------
+	// The renderer never writes guest memory otherwise (design D13). A linear-aligned colour buffer is one the CPU reads
+	// (as Cemu decides: LatteTexture's enableReadback): the Pictograph Box draws its picture into one (800x450 RGBA8) and
+	// encodes it from memory as the JPEG it saves and shows (B79: a black picture without this). A draw into one queues it
+	// (draw.cpp); before the next retire timestamp, which GX2DrawDone waits for (null_gpu.cpp eventWriteEOP), the frame
+	// so far is submitted and waited for and the image, at the guest's size, written into its memory: a stall only on
+	// those frames.
+	namespace
+	{
+		struct Readback { uint32 addr, gx2, pitch, h; };
+		std::vector<Readback> s_readbacks;
+	}
+
+	void QueueReadback(uint32 addr, uint32 gx2, uint32 pitch, uint32 h)
+	{
+		for (const Readback& r : s_readbacks)
+			if (r.addr == addr && r.gx2 == gx2)
+				return;
+		s_readbacks.push_back({ addr, gx2, pitch, h });
+	}
+
+	// a surface's image at the guest's size as RGBA8 rows (an image the render scale or the aspect made bigger scaled
+	// down first), the frame so far submitted and waited for; false for a format other than RGBA8
+	static bool ReadSurface(Image& img, uint32 gx2, std::vector<uint8>& out)
+	{
+		const bool rgba8 = img.format == VK_FORMAT_R8G8B8A8_UNORM || img.format == VK_FORMAT_R8G8B8A8_SRGB;
+		if (!rgba8 || Latte::GetFormatBits((Latte::E_GX2SURFFMT)gx2) != 32 || img.layers != 1)
+		{
+			static std::set<uint32> s_told;
+			if (s_told.insert(gx2).second)
+				Log(fmt::format("readback of a surface in format {:x} (vk {}) not done: only RGBA8", gx2, (int)img.format));
+			return false;
+		}
+		EndRendering();
+		const uint32 gw = img.gw, gh = img.gh;
+		Image guest{};
+		Image* src = &img;
+		Transition(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		if (img.width != gw || img.height != gh)
+		{
+			guest = CreateImage(img.format, VK_IMAGE_ASPECT_COLOR_BIT, gw, gh, 0);
+			Transition(guest, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			VkImageBlit b{};
+			b.srcSubresource = b.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+			b.srcOffsets[1] = { (sint32)img.width, (sint32)img.height, 1 };
+			b.dstOffsets[1] = { (sint32)gw, (sint32)gh, 1 };
+			vkCmdBlitImage(s.cmd, img.image, img.layout, guest.image, guest.layout, 1, &b, VK_FILTER_LINEAR);
+			Transition(guest, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+			src = &guest;
+		}
+		const VkDeviceSize size = (VkDeviceSize)gw * gh * 4;
+		VkBufferCreateInfo bci{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+		bci.size = size;
+		bci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		VkBuffer buf;
+		Check(vkCreateBuffer(s.device, &bci, nullptr, &buf), "vkCreateBuffer");
+		VkMemoryRequirements req;
+		vkGetBufferMemoryRequirements(s.device, buf, &req);
+		VkMemoryAllocateInfo ai{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+		ai.allocationSize = req.size;
+		ai.memoryTypeIndex = MemoryType(req.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		VkDeviceMemory mem;
+		Check(vkAllocateMemory(s.device, &ai, nullptr, &mem), "vkAllocateMemory");
+		vkBindBufferMemory(s.device, buf, mem, 0);
+		VkBufferImageCopy c{};
+		c.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+		c.imageExtent = { gw, gh, 1 };
+		vkCmdCopyImageToBuffer(s.cmd, src->image, src->layout, buf, 1, &c);
+		HostReadBarrier();
+		SubmitAndWait();
+		uint8* px;
+		vkMapMemory(s.device, mem, 0, size, 0, (void**)&px);
+		out.assign(px, px + size);
+		vkUnmapMemory(s.device, mem);
+		vkDestroyBuffer(s.device, buf, nullptr);
+		vkFreeMemory(s.device, mem, nullptr);
+		if (guest.image)
+			DestroyImage(guest);
+		if (static const bool probe = getenv("WWHD_READBACK_LOG") != nullptr; probe)
+		{
+			uint64 sum = 0, alpha = 0;
+			for (size_t i = 0; i < (size_t)gw * gh; i++)
+				sum += out[i * 4] + out[i * 4 + 1] + out[i * 4 + 2], alpha += out[i * 4 + 3];
+			Log(fmt::format("readback frame {}: {}x{} mean {:.1f} alpha {:.1f}", s.frame, gw, gh, sum / (3.0 * gw * gh), alpha / (1.0 * gw * gh)));
+		}
+		return true;
+	}
+
+	void RendererReadbacks()
+	{
+		if (s_readbacks.empty())
+			return;
+		std::vector<uint8> px;
+		for (const Readback& r : s_readbacks)
+		{
+			auto it = s.surfaces.find({ r.addr, r.gx2 });
+			if (it == s.surfaces.end() || !it->second.image || !ReadSurface(it->second, r.gx2, px))
+				continue;
+			const Image& img = it->second;
+			static std::set<uint32> s_logged;
+			if (s_logged.insert(r.addr).second)
+				Log(fmt::format("readback: linear colour buffer {:08x} {}x{} (pitch {}) to guest memory", r.addr, img.gw, img.gh, r.pitch));
+			const uint32 w = std::min(r.pitch, img.gw), h = std::min(r.h, img.gh);
+			uint8* dst = memory_getPointerFromPhysicalOffset(r.addr);
+			for (uint32 y = 0; y < h; y++)                              // linear-aligned: rows of pitch texels
+				memcpy(dst + (size_t)y * r.pitch * 4, px.data() + (size_t)y * img.gw * 4, (size_t)w * 4);
+		}
+		s_readbacks.clear();
+	}
+
+	// GX2CopySurface's CPU path (null_gpu.cpp) from a source the GPU rendered: its image, newest of the formats at that
+	// address with the same texel size, written into guest memory as the guest lays it out (its tile mode, swizzle and
+	// pitch), so the copy reads the picture. The Pictograph Box keeps a picture so: from its tiled 800x450 target into
+	// a linear buffer, which the album shows (B79). On the GPU thread; false when the renderer holds no such surface
+	bool RendererReadbackTiled(uint32 addr, uint32 gx2, uint32 pitch, uint32 height, uint32 tileMode, uint32 swizzle)
+	{
+		Image* best = nullptr;
+		uint32 bestFmt = 0;
+		for (auto it = s.surfaces.lower_bound({ addr, 0 }); it != s.surfaces.end() && it->first.first == addr; ++it)
+		{
+			const uint32 f = it->first.second;
+			if (!it->second.image || (f & 0x80000000u) || (f & 0x3F) != (gx2 & 0x3F))
+				continue;
+			if (!best || it->second.written > best->written)
+				best = &it->second, bestFmt = f;
+		}
+		std::vector<uint8> px;
+		if (!best || !ReadSurface(*best, bestFmt, px))
+			return false;
+		static std::set<uint32> s_logged;
+		if (s_logged.insert(addr).second)
+			Log(fmt::format("readback: surface {:08x} {}x{} (tile mode {}) to guest memory for a CPU copy", addr, best->gw, best->gh, tileMode));
+		const uint32 w = std::min(pitch, best->gw), h = std::min(height, best->gh);
+		gx2SurfaceCopySoftware(px.data(), (sint32)best->gh, (sint32)best->gw, 1, 0, 0, (uint32)Latte::E_HWTILEMODE::TM_LINEAR_ALIGNED,
+			memory_getPointerFromPhysicalOffset(addr), (sint32)height, (sint32)pitch, 1, 0, swizzle, tileMode, w, h, 32);
+		return true;
+	}
+
 	bool RendererOn()
 	{
 		static const bool on = [] {
@@ -1451,6 +1660,8 @@ namespace wwhd::gpu
 			uint32 w = std::max<uint32>(p[4], p[6]), h = p[5], first = p[7], count = std::max<uint32>(p[8], 1);
 			Image& img = Surface(p[1], p[2], false, w, h, first + count);
 			img.written = ++s.writes;
+			if ((uint32)p[1] == SurfaceWatch())
+				Log(fmt::format("watch {:08x}: cleared at frame {} to {},{},{},{}", (uint32)p[1], s.frame, (uint32)p[17], (uint32)p[18], (uint32)p[19], (uint32)p[20]));
 			VkClearValue cv{};
 			VkClearColorValue& c = cv.color;
 			c.float32[0] = (float)(uint32)p[17] / 255.0f;
@@ -1609,7 +1820,7 @@ namespace wwhd::gpu
 			else
 				s_held++;
 			const bool differs = !os::aspect::Same(a, os::aspect::Current()) || d != s_display;
-			if (differs && (s_first || s_held >= 12))
+			if (differs && (s_first || s_held >= 12 || os::aspect::Forced()))   // the game's 16:9 (HoldBase): at once
 			{
 				os::aspect::Latch(a);
 				Log(fmt::format("display: {}x{}, the picture {}x{} (aspect {:.4f}: targets {:.3f}x wider, {:.3f}x taller), render targets "

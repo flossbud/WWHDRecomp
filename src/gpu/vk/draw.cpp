@@ -1512,9 +1512,9 @@ namespace wwhd::gpu
 			Image* target = slot >= 0 ? t.color[slot] : nullptr;
 			static uint32 n = 0;
 			const auto& r = LatteGPUState.contextNew;
-			std::string line = fmt::format("trace #{} slot {} of {:02x} vs {:016x} ps {:016x} prim {} count {} ({}) alpha {:x} ref {} depth {:08x} blend {:08x} cull {:x} mask {:08x}",
+			std::string line = fmt::format("trace #{} slot {} of {:02x} vs {:016x} ps {:016x} prim {} count {} ({}) alpha {:x} ref {} depth {:08x} blend on {:02x} {:08x} cull {:x} mask {:08x}",
 				n++, slot, [&] { uint32 m = 0; for (uint32 i = 0; i < 8; i++) m |= t.color[i] ? 1u << i : 0; return m; }(), vsKey, psKey, (uint32)prim, count, hostCount, regs[Latte::REGADDR::SX_ALPHA_TEST_CONTROL], r.SX_ALPHA_REF.get_ALPHA_TEST_REF(),
-				regs[Latte::REGADDR::DB_DEPTH_CONTROL], regs[Latte::REGADDR::CB_BLEND0_CONTROL], regs[Latte::REGADDR::PA_SU_SC_MODE_CNTL] & 3,
+				regs[Latte::REGADDR::DB_DEPTH_CONTROL], (regs[Latte::REGADDR::CB_COLOR_CONTROL] >> 8) & 0xFF, regs[Latte::REGADDR::CB_BLEND0_CONTROL], regs[Latte::REGADDR::PA_SU_SC_MODE_CNTL] & 3,
 				regs[Latte::REGADDR::CB_TARGET_MASK]);
 			if (addr == 0)                                           // which targets, and the area drawn
 			{
@@ -2020,6 +2020,8 @@ namespace wwhd::gpu
 			uint32 pitch = ((size & 0x3FF) + 1) << 3, height = ((((size >> 10) & 0xFFFFF) + 1) << 6) / pitch;
 			t.colorLayer[i] = regs[mmCB_COLOR0_VIEW + i] & 0x7FF;
 			t.color[i] = &Surface(base, (uint32)LatteMRT::GetColorBufferFormat(i, r), false, pitch, height, t.colorLayer[i] + 1);
+			if (((info >> 8) & 0xF) == (uint32)Latte::E_HWTILEMODE::TM_LINEAR_ALIGNED)   // one the CPU reads (the Pictograph Box)
+				QueueReadback(base, (uint32)LatteMRT::GetColorBufferFormat(i, r), pitch, height);
 		}
 		uint32 scissorX = r.PA_SC_GENERIC_SCISSOR_TL.get_TL_X(), scissorY = r.PA_SC_GENERIC_SCISSOR_TL.get_TL_Y();
 		uint32 scissorR = r.PA_SC_GENERIC_SCISSOR_BR.get_BR_X(), scissorB = r.PA_SC_GENERIC_SCISSOR_BR.get_BR_Y();

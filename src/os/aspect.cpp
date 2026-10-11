@@ -31,6 +31,7 @@ namespace wwhd::os::aspect
 		std::atomic<float> s_current{ kBase };
 		std::mutex s_lock;
 		float s_recent[4] = {};                                  // aspects latched before (the game may hold one a frame)
+		std::atomic<int> s_holdBase{ 0 };                        // HoldBase: swaps left at 16:9 (Requested counts them)
 	}
 
 	void SetWindow(uint32_t width, uint32_t height)
@@ -45,9 +46,24 @@ namespace wwhd::os::aspect
 		s_window = a;
 	}
 
+	void HoldBase()
+	{
+		s_holdBase.store(4, std::memory_order_relaxed);
+	}
+
+	bool Forced()
+	{
+		return s_holdBase.load(std::memory_order_relaxed) > 0;
+	}
+
 	float Requested()
 	{
 		static const Setting setting = Read();
+		if (s_holdBase.load(std::memory_order_relaxed) > 0)
+		{
+			s_holdBase.fetch_sub(1, std::memory_order_relaxed);   // once a swap (RendererSwap asks once)
+			return kBase;
+		}
 		const float window = s_window.load();
 		if (setting.mode == Mode::Original || (setting.mode == Mode::Window && window == 0.0f))
 			return kBase;                                        // Auto without a window (every check): 16:9

@@ -55,6 +55,9 @@ namespace wwhd::gpu
 	void RendererClear(const uint32be* body, uint32 nWords);       // IT_HLE_CLEAR_COLOR_DEPTH_STENCIL
 	void RendererCopyToScanBuffer(const uint32be* body, uint32 nWords); // IT_HLE_COPY_COLORBUFFER_TO_SCANBUFFER
 	void RendererSwap();                                           // IT_HLE_TRIGGER_SCANBUFFER_SWAP
+	void RendererReadbacks();                                      // before a retire timestamp: linear colour buffers to guest memory
+	// a CPU copy's tiled source the GPU rendered: its image into guest memory in that layout (the GPU thread; null_gpu.cpp)
+	bool RendererReadbackTiled(uint32 addr, uint32 gx2, uint32 pitch, uint32 height, uint32 tileMode, uint32 swizzle);
 	void RendererDraw(uint32 op, const uint32be* body, uint32 nWords); // IT_DRAW_INDEX_2 / _AUTO (draw.cpp)
 	void RendererCopySurface(const uint32be* body, uint32 nWords); // IT_HLE_COPY_SURFACE_NEW (texture.cpp)
 	void RendererLayoutMark(uint32 kind, uint32 value);            // 0xFD, the HUD at another aspect ratio (draw.cpp, os/aspect.h)

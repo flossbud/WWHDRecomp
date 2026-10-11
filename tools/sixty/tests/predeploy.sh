@@ -108,6 +108,12 @@ if [ "$named" = 0 ] && [ "${PREDEPLOY_BLACK:-1}" != 0 ]; then
     echo "== blacktest (dropped frames: no black pictures)"
     tools/sixty/tests/blacktest.sh || status=1
 fi
+# the Pictograph Box makes real pictures (picto.sh, B79: the viewfinder's picture, the album and the saved JPEGs not
+# black; rendered, about 10 minutes); with the default routes only. PREDEPLOY_PICTO=0: not
+if [ "$named" = 0 ] && [ "${PREDEPLOY_PICTO:-1}" != 0 ]; then
+    echo "== picto (the Pictograph Box's pictures)"
+    tools/sixty/tests/picto.sh || status=1
+fi
 # wwhd-play, the real-time build deploys ship (t-codegen), refuses the virtual clock these routes run on: its real-time
 # check (predeploy-rt.sh) follows on the default routes when the build made one. PREDEPLOY_RT=0: not
 if [ "$named" = 0 ] && [ -x build/wwhd/wwhd-play ] && [ "${PREDEPLOY_RT:-1}" != 0 ]; then

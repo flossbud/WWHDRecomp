@@ -12,6 +12,11 @@ namespace wwhd::os::aspect
 	constexpr float kBase = 16.0f / 9.0f;
 	void SetWindow(uint32_t width, uint32_t height);   // the window's drawable size (the frontend, whenever it changes)
 	float Requested();                             // what the setting asks for now (Auto without a window: 16:9)
+	// The game's own 16:9 for now: the Pictograph Box's viewfinder (overrides/aspect.cpp; B79), whose picture, its
+	// camera and the quests that judge it are the game's at 16:9 only. Held while asked for each frame, and a few swaps
+	// after; Requested is then 16:9, latched at once (Forced)
+	void HoldBase();
+	bool Forced();
 	float Latch(float a);                          // the renderer, at a swap: the aspect from here on (Requested's, once
 	                                               // the window has held its size a moment: a drag resizes continuously)
 	float Current();                               // the latched aspect (the game's hooks, the renderer)
