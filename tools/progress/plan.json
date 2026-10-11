@@ -575,6 +575,12 @@
       "name": "Round 14: [6] Uncapped U5: presentation at N: pacing, the caps (90, 120; 144/165 by VRR or drop patterns like 40/50; 240 by frame generation over 120, the owner's list), VRR, the Frame rate setting"
     },
     {
+      "id": "b-lsfg",
+      "lane": "bottom",
+      "complexity": 6,
+      "name": "Round 14: [6] Lossless Scaling frame generation as an alternative to FSR 3's (the owner's ask): the setting Frame generation: off / FSR 3 / Lossless Scaling (x2, x3, x4), the latter through lsfg-vk (the Vulkan layer that runs Lossless Scaling's shaders on Linux; check its licence before bundling it, else detect an installed one) with the user's own Lossless.dll (a path setting or portable/; never shipped or committed: *.dll gitignored; the owner's copy for tests in /wwhd/data/lsfg on both workers); on the desktop and the Deck, with the HUD, pacing and VRR checked as for b-framegen"
+    },
+    {
       "id": "m-setup",
       "lane": "main",
       "complexity": 2,

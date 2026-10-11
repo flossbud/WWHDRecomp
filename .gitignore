@@ -6,6 +6,8 @@ orig/*
 *.wux
 *.rpx
 *.rpl
+# Lossless Scaling's Lossless.dll (frame generation, b-lsfg): the user supplies their own copy, never redistributed
+*.dll
 *.elf
 *.o
 
