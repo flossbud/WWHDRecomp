@@ -44,12 +44,14 @@ while f < end - 300:
         print(f"{g} {rnd.choice(['A', 'A', 'B', 'B', 'B', 'X', 'Y'])} {rnd.randint(2, 8)}")
     f += n + rnd.randint(0, 30)
 PY
-swaps=$((900 + 2 * (frames - 900)))
 fail=0
 for v in "${variants[@]}"; do
     name=${v%%:*}; envs=()
     IFS=, read -ra kvs <<< "$([[ $v == *:* ]] && echo "${v#*:}")"
     for kv in "${kvs[@]}"; do envs+=("$kv"); done
+    # frames a tick after the switch: a variant's WWHD_STEPS (U5: 3 at 90, 4 at 120), else 2; "display" counts as 2
+    steps=2; for kv in "${envs[@]}"; do [[ $kv =~ ^WWHD_STEPS=([3-8])$ ]] && steps=${BASH_REMATCH[1]}; done
+    swaps=$((900 + steps * (frames - 900)))
     d=$S/$name; rm -rf "$d"; mkdir -p "$d/bin"
     cp "${SOAK_BIN:-build/wwhd/wwhd-null}" "$d/bin/wwhd-null" || exit 2
     echo "soak.sh: $name: $minutes min ($frames game frames, swap $swaps), ${envs[*]}"

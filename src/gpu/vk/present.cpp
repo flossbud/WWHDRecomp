@@ -597,10 +597,16 @@ namespace wwhd::gpu
 		const char* e = getenv("WWHD_FRAMEGEN");
 		const char* cap = getenv("WWHD_FPS_CAP");
 		const char* sixty = getenv("WWHD_60FPS");
-		const float rate = cap && atoi(cap) > 0 ? (float)atoi(cap) : sixty && *sixty == '1' ? 60.0f : 30.0f;
 		const float hz = s_window.refresh ? s_window.refresh() : 0.0f;
+		// at N frames a tick (WWHD_STEPS; Frame rate 90/120/150), or at the display's: half its rate in frames a tick, which
+		// frame generation doubles (the 60 fps switch picks the same N, overrides/sixty.cpp; 240 Hz: 120 shown as 240)
+		const char* stepsEnv = getenv("WWHD_STEPS");
+		const int steps = !stepsEnv ? 2 : strcmp(stepsEnv, "display") == 0 ? std::clamp((int)(hz * 1.01f / 60.0f), 2, 5) :
+			std::clamp(atoi(stepsEnv), 2, 8);
+		const float rate = cap && atoi(cap) > 0 ? (float)atoi(cap) : sixty && *sixty == '1' ? 30.0f * steps : 30.0f;
 		const bool force = e && strcmp(e, "force") == 0;
 		s_decided = force || hz >= 2 * rate * 0.95f;
+		os::settings::SetFrameGen(s_decided != 0);
 		if (!s_decided)                                           // the settings page says why, not only the log
 			os::settings::SetNote("WWHD_FRAMEGEN", hz > 0 ? fmt::format("off: the display runs at {:.0f} Hz, under twice the game's {:.0f}",
 				hz, rate) : "off: the display's refresh rate is unknown");

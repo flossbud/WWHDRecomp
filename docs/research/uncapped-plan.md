@@ -156,6 +156,12 @@ So the half frame costs about what the whole does, not 0.78 of it (the draws are
   write-protecting the journaled pages (a fault on the first store to each) or by a separately generated half-frame
   copy of the code. A large job (the generator and the runtime), in session bottom's lane after U5 and b-lsfg. Its
   target: en-tn's half frame at the 90th percentile under 6.06 ms on the desktop worker, N 2 byte-identical.
+- **U5's first rates (session bottom, 2026-10-11):** from the 60 fps switch the vsync runs at 30 N, in real time and
+  under the virtual clock, so a frame a vsync is N frames a tick. The Frame rate setting offers 90, 120, 150 and "the
+  display's": the most frames a tick its refresh shows, up to 5 (144 Hz 120, 165 Hz 150; for VRR displays), or half
+  that with frame generation on (240 Hz: 120 shown as 240). Frame generation's check uses 30 N. Soaks on the quiet desktop
+  worker (3 minutes' route, WWHD_CORES=3): 60 at 60.1 fps (0.2% late), 90 at 90.1 (0.6%, game thread 53%), 120 at
+  120.0 (4.2%: keep-speed drops 1 frame in 24; game thread 70%).
 - **The Deck:** QA measured the Deck OLED at 36 fps on en-tn and ~50 at the start of continue at 60 (2026-10-11), so
   the OLED's 90 try is off; it's revisited when the Deck holds 60.
 

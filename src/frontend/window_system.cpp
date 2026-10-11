@@ -89,7 +89,10 @@ static void StorePixelSize(SDL_Window* window)
 	if (!mode || mode->refresh_rate <= 0)                         // some drivers know only the desktop's
 		mode = SDL_GetDesktopDisplayMode(display);
 	if (mode && mode->refresh_rate > 0)
+	{
 		s_refresh = mode->refresh_rate;
+		wwhd::os::settings::SetDisplayHz(mode->refresh_rate);   // Frame rate: the display's (overrides/sixty.cpp)
+	}
 }
 
 // ---- input: the keyboard and one gamepad, as the Pro Controller (src/os/input.cpp) ----------------

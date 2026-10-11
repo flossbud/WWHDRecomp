@@ -8,7 +8,7 @@ work began, the work until fw_waitForVsync (ms), of which GX2DrawDone waited for
 scheduler thread's CPU time and idle time during the work, the GPU thread's CPU time for the
 frame's swap, the vsyncs that came during the work (1 or more: the frame missed its vsync), the
 wait, and the half tick journal's stores seen and saved (thousands). For every --window frames
-(default 600, 10 s at 60 fps) this prints the frame rate, and for whole and half frames apart the
+(default 10 s: 600 at 60 fps, 300 x the log's "# steps N" at N frames a tick) this prints the frame rate, and for whole and half frames apart the
 median and 90th percentile of the work, the median GX2DrawDone wait, CPU and GPU time, and how
 many missed their vsync; the half frames' journal counts too. Timings only: no game data.
 """
@@ -40,12 +40,15 @@ def row(frames, label):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("log")
-    ap.add_argument("--window", type=int, default=600)
+    ap.add_argument("--window", type=int, default=0)
     ap.add_argument("--from", dest="first", type=int, default=0)
     ap.add_argument("--to", dest="last", type=int, default=1 << 31)
     args = ap.parse_args()
     frames = []
+    steps = 2
     for line in open(args.log):
+        if line.startswith("# steps "):
+            steps = int(line.split()[2])
         if line.startswith("#"):
             continue
         p = line.split()
@@ -55,7 +58,8 @@ def main():
             f["stores"], f["saved"] = int(p[10]), int(p[11])
         if args.first <= f["swap"] <= args.last:
             frames.append(f)
-    print(f"{len(frames)} frames")
+    print(f"{len(frames)} frames, {steps} a tick")
+    args.window = args.window or 300 * steps
     for i in range(0, len(frames), args.window):
         w = frames[i:i + args.window]
         span = (w[-1]["began"] + w[-1]["work"] + w[-1]["wait"] - w[0]["began"]) / 1000

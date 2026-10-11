@@ -65,6 +65,8 @@ sint32 activeThreadCount = 0;
 
 void nnNfp_update();
 
+uint32 LatteTiming_getVsyncSteps();               // gpu/null_gpu.cpp: frames a tick at N steps (U5)
+
 namespace coreinit
 {
 #ifdef __arm64__
@@ -1571,16 +1573,18 @@ namespace coreinit
 	static uint64 s_nextVirtualVsync = 0;
 	// wwhd: WWHD_VSYNC_HZ (default 60) sets the vsync rate, here and in real time (gpu/null_gpu.cpp):
 	// an experiment for 60 fps (M6), which runs the game's frames twice as often at 120
-	static const uint64 kVirtualVsyncCycles = ESPRESSO_CORE_CLOCK / [] {
-		const char* hz = getenv("WWHD_VSYNC_HZ");
-		return hz && atoi(hz) > 0 ? (uint64)atoi(hz) : 60ull;
-	}();
+	// and at N steps (U5, LatteTiming_setVsyncSteps from the 60 fps switch) at 30 N without it
+	static uint64 VirtualVsyncCycles()
+	{
+		static const uint64 hz = [] { const char* e = getenv("WWHD_VSYNC_HZ"); return e && atoi(e) > 0 ? (uint64)atoi(e) : 0ull; }();
+		return ESPRESSO_CORE_CLOCK / (hz ? hz : 30ull * LatteTiming_getVsyncSteps());
+	}
 
 	void __OSVirtualClockEvents(sint32 coreIndex)
 	{
 		uint64 now = PPCInterpreter_getMainCoreCycleCounter();
 		if (s_nextVirtualVsync == 0)
-			s_nextVirtualVsync = now + kVirtualVsyncCycles;
+			s_nextVirtualVsync = now + VirtualVsyncCycles();
 		if (now >= s_nextVirtualVsync)
 		{
 			if (LatteGPUState.gx2InitCalled)
@@ -1589,7 +1593,7 @@ namespace coreinit
 					std::this_thread::yield();
 			}
 			LatteTiming_signalVsync();
-			s_nextVirtualVsync += kVirtualVsyncCycles;
+			s_nextVirtualVsync += VirtualVsyncCycles();
 		}
 		bool anyRunnable = false;
 		for (sint32 i = 0; i < PPC_CORE_COUNT; i++)

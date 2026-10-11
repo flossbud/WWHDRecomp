@@ -59,12 +59,19 @@ namespace
 // ---- vsync (LatteTiming.cpp) --------------------------------------------------------------------
 static sint32 s_customVsyncFrequency = -1;
 
+// wwhd: frames a 30 Hz tick at N steps (U5, docs/research/uncapped-plan.md; set at the 60 fps switch, src/overrides/sixty.cpp):
+// the vsync runs at 30 N, in real time and with the virtual clock (os/coreinit/coreinit_Thread.cpp), so a frame a vsync is
+// N frames a tick. 2 (60) until the switch, and always without WWHD_STEPS
+static std::atomic<uint32> s_vsyncSteps = 2;
+void LatteTiming_setVsyncSteps(uint32 n) { s_vsyncSteps = n < 2 ? 2 : n; }
+uint32 LatteTiming_getVsyncSteps() { return s_vsyncSteps.load(); }
+
 static HRTick timeBetweenVSync()
 {
 	HRTick tick = HighResolutionTimer::getFrequency();
 	if (s_customVsyncFrequency > 0)
 		return tick / (uint64)s_customVsyncFrequency;
-	return tick * 1000ull / 1002ull / 60ull;
+	return tick * 1000ull / 1002ull / (30ull * s_vsyncSteps.load());
 }
 
 void LatteTiming_setCustomVsyncFrequency(sint32 frequency) { s_customVsyncFrequency = frequency; }

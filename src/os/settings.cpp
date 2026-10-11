@@ -5,10 +5,14 @@
 // option a preset covers takes its value from, first to last: the environment, the option's own line in the file,
 // the preset, the program's default. Changing such an option in the menu writes its own line (the preset then shows
 // "Custom"); choosing a preset again drops those lines. Frame rate, vsync and the display are no preset's. The frame
-// rate (WWHD_FRAMERATE 30/40/50/60, 60 by default) sets WWHD_60FPS and, at 40 and 50, WWHD_FPS_CAP (overrides/pacing.cpp).
+// rate (WWHD_FRAMERATE 30/40/50/60/90/120/150/display, 60 by default) sets WWHD_60FPS, at 40 and 50 WWHD_FPS_CAP
+// (overrides/pacing.cpp), at 90, 120 and 150 WWHD_STEPS (3, 4 and 5 frames a tick), and at "display" WWHD_STEPS=display: the
+// most frames a tick the display's refresh rate shows (the 60 fps switch reads it, overrides/sixty.cpp: 144 Hz 4, 165 Hz 5;
+// for VRR displays).
 #include "settings.h"
 #include <cstdio>
 #include <cstdlib>
+#include <atomic>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -31,9 +35,12 @@ namespace
 	};
 	const std::vector<Option> kOptions = {
 		// 40 and 50 run 60's logic with a fixed share of its half frames left out (pacing.cpp, WWHD_FPS_CAP): smoother at 30 or 60
-		// 60 by default (the owner's ask: new players start at 60); an ini line or WWHD_FRAMERATE/WWHD_60FPS still wins
+		// 60 by default (the owner's ask: new players start at 60); an ini line or WWHD_FRAMERATE/WWHD_60FPS still wins.
+		// 90, 120 and 150 (uncapped U5): 3, 4 and 5 frames a tick (WWHD_STEPS); for a display of that rate or more and a machine that
+		// keeps it (keep-speed drops what it can't, as at 60)
 		{ "WWHD_FRAMERATE", "Frame rate", { { "30", "30" }, { "40", "40 (smoother at 30 or 60)" }, { "50", "50 (smoother at 30 or 60)" },
-			{ "60", "60" } }, false, nullptr, 3 },
+			{ "60", "60" }, { "90", "90 (90 Hz+ displays, fast PCs)" }, { "120", "120 (120 Hz+ displays, fast PCs)" },
+			{ "150", "150 (150 Hz+ displays, fast PCs)" }, { "display", "The display's (30 x N up to its rate; VRR)" } }, false, nullptr, 3 },
 		{ "WWHD_VSYNC", "Vsync", { { "0", "off" }, { "1", "on" } }, true, nullptr },
 		{ "WWHD_VRR", "Variable refresh (FreeSync / G-Sync / VRR)", { { "0", "off" }, { "1", "on" } }, false, nullptr },
 		{ "WWHD_FULLSCREEN", "Display", { { "0", "window" }, { "1", "fullscreen" } }, true, nullptr },
@@ -259,10 +266,15 @@ namespace wwhd::os::settings
 		// a launcher's WWHD_60FPS or WWHD_FPS_CAP wins
 		if (const char* fr = getenv("WWHD_FRAMERATE"))
 		{
-			const int v = atoi(fr);
+			const bool display = strcmp(fr, "display") == 0;
+			const int v = display ? 60 : atoi(fr);
 			setenv("WWHD_60FPS", v >= 40 ? "1" : "0", 0);
 			if (v == 40 || v == 50)
 				setenv("WWHD_FPS_CAP", fr, 0);
+			if (v == 90 || v == 120 || v == 150)
+				setenv("WWHD_STEPS", v == 90 ? "3" : v == 120 ? "4" : "5", 0);
+			else if (display)
+				setenv("WWHD_STEPS", "display", 0);
 		}
 		s_startLog = "wwhd settings: preset " + preset + (preset == "auto" ? " -> " + s_autoChoice + " (" + s_autoWhy + ")" : "") +
 			(s_presetFromEnv ? " (from the environment)" : "");
@@ -279,10 +291,21 @@ namespace wwhd::os::settings
 		{
 			const char* sixty = getenv("WWHD_60FPS");
 			const char* cap = getenv("WWHD_FPS_CAP");
-			s_startLog += std::string("; frame rate ") + fr + " (WWHD_60FPS=" + (sixty ? sixty : "unset") + (cap ? std::string(", WWHD_FPS_CAP=") + cap : "") + ")";
+			const char* steps = getenv("WWHD_STEPS");
+			s_startLog += std::string("; frame rate ") + fr + " (WWHD_60FPS=" + (sixty ? sixty : "unset") + (cap ? std::string(", WWHD_FPS_CAP=") + cap : "") +
+				(steps ? std::string(", WWHD_STEPS=") + steps : "") + ")";
 		}
 		s_startLog += s_startLog2;
 	}
+
+	// the window's display's refresh rate (frontend/window_system.cpp; 0 unknown or no window)
+	static std::atomic<float> s_displayHz{ 0.0f };
+	void SetDisplayHz(float hz) { s_displayHz = hz; }
+	float DisplayHz() { return s_displayHz.load(); }
+	// frame generation's decision (gpu/vk/present.cpp, at the first present with a window, before the 60 fps switch)
+	static std::atomic<bool> s_frameGen{ false };
+	void SetFrameGen(bool on) { s_frameGen = on; }
+	bool FrameGen() { return s_frameGen.load(); }
 
 	std::string StartLog()
 	{

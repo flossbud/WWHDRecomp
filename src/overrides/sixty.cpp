@@ -29,6 +29,7 @@
 #include "../os/input.h"
 #include "../os/debug_menu.h"
 #include "../os/savestate.h"
+#include "../os/settings.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -48,6 +49,7 @@
 #include <vector>
 
 void wwhd_SetSwapInterval(uint32 interval);       // os/gx2/core/GX2_Misc.cpp
+void LatteTiming_setVsyncSteps(uint32 n);         // gpu/null_gpu.cpp: the vsync at 30 N from the switch (U5)
 
 extern thread_local const PPCInterpreter_t* g_rtJournalThread;   // the half tick journal's thread (runtime/diff.cpp)
 namespace coreinit
@@ -3302,10 +3304,33 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		g_rtStoreCensus = nullptr;
 		return;
 	}
+	// WWHD_STEPS read again at the first frame at 60: the settings (os/settings.cpp: the frame rate 90 and 120) set it
+	// after the runtime's static init read it (dispatch.cpp)
+	static const bool stepsRead = [] {
+		const char* e = getenv("WWHD_STEPS");
+		const int n = e ? atoi(e) : 2;
+		g_rtSteps = (uint32)(n < 2 ? 2 : n > 8 ? 8 : n);
+		return true;
+	}();
+	(void)stepsRead;
 	const uint32 swap = wwhd::os::SwapCount();
 	if (swap == from && from != 0)
 	{
 		wwhd_SetSwapInterval(1);                       // from here on the game presents every vsync
+		if (const char* e = getenv("WWHD_STEPS"); e && strcmp(e, "display") == 0)
+		{
+			// Frame rate: the display's (settings.cpp): the most frames a tick its refresh rate shows (a 1% margin:
+			// 59.94 Hz is 60's), or with frame generation on half that (it shows two a frame: gpu/vk/present.cpp
+			// picked the same), 2 to 5; unknown (no window), 60's 2
+			const float hz = wwhd::os::settings::DisplayHz();
+			const bool gen = wwhd::os::settings::FrameGen();
+			const int n = (int)(hz * 1.01f / (gen ? 60.0f : 30.0f));
+			g_rtSteps = (uint32)(n < 2 ? 2 : n > 5 ? 5 : n);
+			cemuLog_log(LogType::Force, "wwhd sixty: the display's frame rate: {:.0f} Hz, {} frames a tick{}", hz, g_rtSteps,
+				gen ? " (frame generation doubles them)" : "");
+		}
+		if (g_rtSteps != 2)
+			LatteTiming_setVsyncSteps(g_rtSteps);      // at N steps a vsync each 1/(30 N) s (U5): N frames a tick
 		cemuLog_log(LogType::Force, "wwhd sixty: 60 fps from swap {}{}", swap,
 			g_rtSteps == 2 ? std::string() : fmt::format(", {} steps a tick (WWHD_STEPS)", g_rtSteps));
 	}

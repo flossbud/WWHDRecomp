@@ -34,7 +34,8 @@
 // (w) or half (h) tick, when its work began (ms from the first), the work until the wait (ms), of
 // which GX2DrawDone waited for the GPU, the scheduler thread's CPU time and idle time during it,
 // the GPU thread's CPU time for the frame's swap, the vsyncs that came during the work, the wait
-// (ms), and the stores the half tick's journal saw and saved (thousands; sixty.cpp).
+// (ms), and the stores the half tick's journal saw and saved (thousands; sixty.cpp). A "# steps N" line first: the
+// frames a tick (WWHD_STEPS; "h" is any of a tick's frames after its first).
 #include "override.h"
 #include "../os/savestate.h"
 #include <chrono>
@@ -129,6 +130,7 @@ namespace
 		FILE* f = fopen(s_logPath, "w");
 		if (!f)
 			return;
+		fprintf(f, "# steps %u\n", g_rtSteps);           // frames a tick (U5: 3 at 90, 4 at 120): frames.py's window
 		fprintf(f, "# swap tick began_ms work_ms drawdone_ms cpu_ms idle_ms gpu_ms vsyncs wait_ms stores_k saved_k fence_ms core0_ms core2_ms\n");
 		for (const Frame& r : s_frames)
 			fprintf(f, "%u %c %.2f %.2f %.2f %.2f %.2f %.2f %u %.2f %u %u %.2f %.2f %.2f\n", r.swap, r.dropped ? 'd' : r.half ? 'h' : 'w', r.beganMs, r.workMs,
