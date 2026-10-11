@@ -651,6 +651,12 @@ startup time and CPU use matter (phones throttle when hot). Design D19 and D20 h
   - `tools/play/deploy.sh $WWHD_DESKTOP_SSH [DIR]` (from the editing machine, after `tools/recomp/build.sh && src/build.sh`: src/build.sh alone keeps the old generated code, so new tick rules would be missing while sixty.cpp converts their types)
     streams the build there. It replaces the binary by rename (a running game is untouched) and
     rewrites `play.sh`, `portable/settings.xml` and the game profile.
+  - **The deploy recipe (from t-codegen 1b): `PREDEPLOY_RT=0 tools/sixty/tests/predeploy.sh` on the worker, then
+    `WWHD_PGO=1 tools/play/deploy.sh $WWHD_DESKTOP_SSH`.** It ships wwhd-play (the real-time build) built with a profile
+    of the current code (`tools/recomp/pgo.sh`: build/wwhd-pgo; the profile stays in build/pgo, never in git), after
+    predeploy-rt passes on that binary, which is why predeploy runs without its own predeploy-rt; nothing is deployed if
+    either fails. ~6.5 min more than a plain deploy (pgo.sh; ~20 min the first time in a build directory). The profile
+    routes run headless, on either worker. Without `WWHD_PGO`: wwhd-play as built (run predeploy with its predeploy-rt).
   - Headless test: `cd ~/wwhd-test && WWHD_WINDOW=0 WWHD_SAVE=saves/wwhd_100
     CEMU_INPUT_SCRIPT=$PWD/routes/continue-100.txt WWHD_EXIT_FRAME=1800 ./play.sh`. With
     `WWHD_WINDOW=0` the sound goes to `/dev/null` (`WWHD_AUDIO_HASH`). Before that, a test played
@@ -4237,6 +4243,13 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   checks MATCH, regress identical): the worker game thread +0.3% (noise): the bigger store sites cost what the calls
   did. The patch: `rt_store_saved(pages, ea, size)` in ppc_ops.h doing rt_journal_store's first test (g_rtStoreBits,
   not g_rtStoreAll, not *g_rtStoreHold, the page's bits cover the store) before the call; easy to redo from that.
+- **t-30fps**: at 30 in real time the frames are paced by our own vsync slot (pacing.cpp `Paced30`; `WWHD_30_PACING=0`
+  the old way): every frame interval 2 vsyncs, the worker 25.6 -> 30.1 fps.
+- **t-codegen: wwhd-play**, the generated code built a second time with `WWHD_RT_LOOSE` (blocks charged, never
+  checked; `RT_LOOP` at function entries and loop headers yields), shipped by the deploys; wwhd-null (every check) is
+  unchanged. Game thread -7.2%. Then 1b, PGO (`WWHD_PGO=1`, recipe in Infrastructure): a further -11% game thread, +3.9%
+  fps render-bound. Not taken: -O3, ThinLTO, x86-64-v3 (noise). A possible step 3: guest registers in host registers
+  across calls (ctx is already `__restrict`).
 - **Open ideas**: t-bufcache's guard could be exact with write-watch on the vertex buffers (main's idea), but only
   textures are protected now, and protecting CPU-written vertex buffers costs a fault on every frame's writes: an A/B
   first. The frame skip's shown frames could come at even times under VRR (t-vrr's pacing is the existing one).
