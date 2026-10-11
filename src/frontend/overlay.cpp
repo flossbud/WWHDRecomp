@@ -9,6 +9,7 @@
 #include "../os/erreula.h"
 #include "../os/debug_menu.h"
 #include <SDL3/SDL.h>
+#include <chrono>
 
 namespace
 {
@@ -148,30 +149,74 @@ namespace
 		Show((1920 - w) / 2, (1080 - h) / 2, c, w, h);
 	}
 
-	// the debug menu's panel in the 1920x1080 TV frame: drawn by DrawDebugMenu, hit by the mouse
+	// the debug menu's panel in the 1920x1080 TV frame: laid out by MenuLayout (wide enough for its longest line, up
+	// to 1840 pixels; glyphs at 3 times 8 pixels, 2 when that doesn't fit, a line still too long cut with "..."; at
+	// most the rows that fit the frame, scrolled to keep the cursor in view), drawn by DrawDebugMenu, hit by the mouse
 	// (wwhd::DebugMenuItemAt)
-	constexpr int kMenuW = 900, kMenuTop = 100, kMenuRow = 40;
-	int MenuHeight(size_t items) { return 130 + (int)items * kMenuRow + 60; }
+	struct MenuLayout
+	{
+		int scale, w, h, top, row, first, rows;
+		size_t chars;                                   // an item's characters that fit, its "> " included
+		bool cut;                                       // the cursor's line was cut: shown whole in a hint line
+	};
+
+	int s_menuFirst = 0;                                // the first row shown, as last drawn (the event loop's thread)
+
+	MenuLayout LayOutMenu(const wwhd::os::debug_menu::View& v)
+	{
+		constexpr int kMaxW = 1840, kMaxH = 1040, kPad = 48;
+		MenuLayout l{};
+		size_t longest = v.title.size();
+		for (const std::string& i : v.items)
+			longest = std::max(longest, i.size() + 2);
+		l.scale = kPad * 2 + (int)longest * 24 <= kMaxW ? 3 : 2;
+		const int glyph = 8 * l.scale;
+		l.w = std::clamp(kPad * 2 + (int)longest * glyph, 900, kMaxW);
+		l.w = std::max(l.w, kPad * 2 + 16 * (int)v.hint.size());
+		l.w = std::min(l.w, kMaxW);
+		l.chars = (size_t)(l.w - kPad * 2) / glyph;
+		l.row = l.scale == 3 ? 40 : 30;
+		l.top = l.scale == 3 ? 100 : 90;
+		l.cut = v.cursor >= 0 && v.cursor < (int)v.items.size() && v.items[v.cursor].size() + 2 > l.chars;
+		const int bottom = 60 + (l.cut ? 36 : 0);
+		const int n = (int)v.items.size();
+		l.rows = std::min(n, std::max(1, (kMaxH - l.top - bottom) / l.row));
+		// scrolled only as far as the cursor needs (a list moving under the mouse would change what it hovers)
+		l.first = std::clamp(std::clamp(s_menuFirst, v.cursor - l.rows + 1, v.cursor), 0, std::max(0, n - l.rows));
+		l.h = l.top + l.rows * l.row + bottom;
+		return l;
+	}
+
+	std::string Cut(const std::string& s, size_t chars)
+	{
+		return s.size() <= chars ? s : s.substr(0, chars > 3 ? chars - 3 : 0) + "...";
+	}
 
 	void DrawDebugMenu(const wwhd::os::debug_menu::View& v)
 	{
-		constexpr int w = kMenuW;
-		const int h = MenuHeight(v.items.size());
+		const MenuLayout l = LayOutMenu(v);
+		s_menuFirst = l.first;
+		const int w = l.w, h = l.h;
 		Canvas c(w, h);
-		c.Text(40, 34, 3, v.title, kText);
-		int y = kMenuTop;
-		for (size_t i = 0; i < v.items.size(); i++)
+		std::string title = v.title;
+		if (l.rows < (int)v.items.size())               // scrolled: which rows are shown
+			title += fmt::format("  ({}-{} of {})", l.first + 1, l.first + l.rows, v.items.size());
+		c.Text(40, l.top - 66, 3, Cut(title, (size_t)(w - 80) / 24), kText);
+		int y = l.top;
+		for (int i = l.first; i < l.first + l.rows; i++)
 		{
-			if ((int)i == v.cursor)
+			if (i == v.cursor)
 			{
-				c.Fill(30, y - 8, w - 60, 38, kFrame);
-				c.Text(48, y, 3, "> " + v.items[i], kText);
+				c.Fill(30, y - 8, w - 60, l.row - 2, kFrame);
+				c.Text(48, y, l.scale, Cut("> " + v.items[i], l.chars), kText);
 			}
 			else
-				c.Text(48, y, 3, "  " + v.items[i], kHint);
-			y += kMenuRow;
+				c.Text(48, y, l.scale, Cut("  " + v.items[i], l.chars), kHint);
+			y += l.row;
 		}
-		c.Text(40, h - 50, 2, v.hint, kHint);
+		if (l.cut)
+			c.Text(40, h - 86, 2, Cut(v.items[v.cursor], (size_t)(w - 80) / 16), kText);
+		c.Text(40, h - 50, 2, Cut(v.hint, (size_t)(w - 80) / 16), kHint);
 		Show((1920 - w) / 2, (1080 - h) / 2, c, w, h);
 	}
 
@@ -181,6 +226,18 @@ namespace
 		Canvas c(w, h);
 		c.Text(24, 22, 2, "The HOME Menu can't be used now.", kText);
 		Show(1920 - w - 40, 40, c, w, h);
+	}
+
+	// the FPS overlay's panel: text on a dark band, at one pixel a glyph pixel (present.cpp scales it with the picture)
+	void DrawFps(const std::string& text)
+	{
+		const int w = 8 * (int)text.size() + 8, h = 8 + 6;
+		Canvas c(w, h);
+		if (!c.ok())
+			return;
+		c.Fill(0, 0, w, h, { 0, 0, 0 });
+		c.Text(4, 3, 1, text, { 255, 255, 255 });
+		wwhd::gpu::SetFpsPanel((uint32)w, (uint32)h, c.Pixels());
 	}
 }
 
@@ -196,14 +253,51 @@ namespace wwhd
 		const os::debug_menu::View v = os::debug_menu::Current();
 		if (!v.open)
 			return -1;
-		const int h = MenuHeight(v.items.size());
-		const float px = tvx - (1920 - kMenuW) / 2, py = tvy - (1080 - h) / 2;
-		if (px < 0 || py < 0 || px >= kMenuW || py >= h)
+		const MenuLayout l = LayOutMenu(v);
+		const float px = tvx - (1920 - l.w) / 2, py = tvy - (1080 - l.h) / 2;
+		if (px < 0 || py < 0 || px >= l.w || py >= l.h)
 			return -2;                                  // outside the panel
-		if (px < 30 || px >= kMenuW - 30 || py < kMenuTop - 8)
+		if (px < 30 || px >= l.w - 30 || py < l.top - 8)
 			return -1;                                  // on the panel, not on an item
-		const int i = (int)((py - (kMenuTop - 8)) / kMenuRow);
-		return i < (int)v.items.size() ? i : -1;
+		const int i = (int)((py - (l.top - 8)) / l.row);
+		return i < l.rows ? l.first + i : -1;
+	}
+
+	// The FPS overlay (the setting WWHD_FPS_OVERLAY: 1 FPS, 2 FPS + frame time; applied at once): the frames shown in
+	// the window a second, over each half second, frame generation's included (one number: the total shown, the owner's
+	// choice), and with the frame time their average and the longest gap. Only with a window, so never in the checks.
+	void UpdateFpsOverlay()
+	{
+		using Clock = std::chrono::steady_clock;
+		static int s_mode = 0;
+		static Clock::time_point s_since;
+		static uint64 s_frames = 0;
+		const char* e = getenv("WWHD_FPS_OVERLAY");
+		const int mode = e ? atoi(e) : 0;
+		const Clock::time_point now = Clock::now();
+		if (mode != s_mode)
+		{
+			s_mode = mode;
+			s_since = now;
+			s_frames = gpu::ShownFrames();
+			gpu::TakeLongestShownInterval();
+			if (mode == 1 || mode == 2)
+				DrawFps(mode == 1 ? "-- FPS" : "-- FPS  --.- ms");
+			else
+				gpu::SetFpsPanel(0, 0, {});
+			return;
+		}
+		if ((mode != 1 && mode != 2) || now - s_since < std::chrono::milliseconds(500))
+			return;
+		const uint64 frames = gpu::ShownFrames();
+		const double secs = std::chrono::duration<double>(now - s_since).count(), fps = (frames - s_frames) / secs;
+		const double longest = gpu::TakeLongestShownInterval();
+		s_since = now;
+		s_frames = frames;
+		if (mode == 1)
+			DrawFps(fmt::format("{:.0f} FPS", fps));
+		else
+			DrawFps(fmt::format("{:.0f} FPS  {:.1f} ms  max {:.1f}", fps, fps > 0 ? 1000.0 / fps : 0.0, longest));
 	}
 
 	void UpdateOverlay()

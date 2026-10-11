@@ -11,6 +11,7 @@ namespace wwhd
 	bool OpenAudio();               // the TV's sound on SDL3 in place of Cemu's device (audio_sdl.cpp, wwhd-null)
 	bool OpenAudioHash();           // WWHD_AUDIO_HASH=path: a device that hashes the sound instead (audio_sdl.cpp)
 	void UpdateOverlay();           // the system's keyboard and dialogs over the game (overlay.cpp, wwhd-null)
+	void UpdateFpsOverlay();        // the settings' FPS overlay (overlay.cpp)
 	// the debug menu's item at a point of the 1920x1080 TV frame: its index, -1 on the panel but no
 	// item, -2 outside the panel (overlay.cpp)
 	int DebugMenuItemAt(float tvx, float tvy);

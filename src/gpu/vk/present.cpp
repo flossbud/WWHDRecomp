@@ -7,10 +7,13 @@
 // when the presentation engine says it is out of date. Mailbox presentation when the device has it
 // (never waits, never tears), FIFO otherwise; WWHD_VSYNC=1 asks for FIFO, and so does WWHD_VRR=1 (variable refresh:
 // the display's refresh follows the presents; window_system.cpp asks the display system for it). The overlay (renderer.h)
-// is blitted over it, uploaded again whenever the frontend changes it.
+// is blitted over it, uploaded again whenever the frontend changes it, and the FPS overlay's panel at the picture's
+// bottom left (after the upscaler and frame generation, in the window's own pixels).
 #include "renderer_internal.h"
 #include "../../os/settings.h"
 #include <atomic>
+#include <chrono>
+#include <cmath>
 
 namespace wwhd::gpu
 {
@@ -36,17 +39,24 @@ namespace wwhd::gpu
 			uint32 first = UINT32_MAX;                           // frame generation: the frame between, presented before index
 		} w;
 
-		struct OverlayPixels
+		// a panel laid over the picture: the frontend's pixels, uploaded to its image when they change
+		struct Panel
 		{
+			std::mutex lock;
 			sint32 x = 0, y = 0;
 			uint32 w = 0, h = 0;
 			std::vector<uint32> rgba;
 			uint32 version = 0;
+			Image image;
+			uint32 uploaded = 0;                // the version in image
 		};
-		std::mutex s_overlayLock;
-		OverlayPixels s_overlay;
-		Image s_overlayImage;
-		uint32 s_overlayUploaded = 0;           // the version in s_overlayImage
+		Panel s_overlay;                        // the system's screens, in the TV image's 1920x1080 frame (SetOverlay)
+		Panel s_fps;                            // the FPS overlay, in the window's pixels (SetFpsPanel)
+		std::atomic<double> s_frameX{ 0 }, s_frameY{ 0 }, s_frameScale{ 0 };   // where the 1920x1080 frame was last drawn
+
+		std::atomic<uint64> s_shown{ 0 };       // frames presented (ShownFrames)
+		std::atomic<uint64> s_longestNs{ 0 };   // the longest interval between two since TakeLongestShownInterval
+		std::chrono::steady_clock::time_point s_lastShown;
 
 		bool IsSrgb(VkFormat f)
 		{
@@ -151,50 +161,65 @@ namespace wwhd::gpu
 		}
 	}
 
-	void SetOverlay(sint32 x, sint32 y, uint32 w, uint32 h, std::vector<uint32> rgba)
+	static void SetPanel(Panel& p, sint32 x, sint32 y, uint32 w, uint32 h, std::vector<uint32> rgba)
 	{
-		std::lock_guard lock(s_overlayLock);
-		s_overlay.x = x;
-		s_overlay.y = y;
-		s_overlay.w = rgba.empty() ? 0 : w;
-		s_overlay.h = rgba.empty() ? 0 : h;
-		s_overlay.rgba = std::move(rgba);
-		s_overlay.version++;
+		std::lock_guard lock(p.lock);
+		p.x = x;
+		p.y = y;
+		p.w = rgba.empty() ? 0 : w;
+		p.h = rgba.empty() ? 0 : h;
+		p.rgba = std::move(rgba);
+		p.version++;
 	}
 
-	// the overlay over the TV image's rectangle in the swapchain image (in TRANSFER_DST layout)
-	static void DrawOverlay(VkImage target, sint32 tvX, sint32 tvY, double scale)
+	void SetOverlay(sint32 x, sint32 y, uint32 w, uint32 h, std::vector<uint32> rgba)
 	{
-		std::unique_lock lock(s_overlayLock);
-		if (!s_overlay.w)
+		SetPanel(s_overlay, x, y, w, h, std::move(rgba));
+	}
+
+	void SetFpsPanel(uint32 w, uint32 h, std::vector<uint32> rgba)
+	{
+		SetPanel(s_fps, 0, 0, w, h, std::move(rgba));
+	}
+
+	uint64 ShownFrames() { return s_shown.load(std::memory_order_relaxed); }
+
+	double TakeLongestShownInterval() { return s_longestNs.exchange(0, std::memory_order_relaxed) / 1e6; }
+
+	// a panel into the swapchain image (in TRANSFER_DST layout): place(w, h, x0, y0, x1, y1) gives its rectangle there
+	template<typename Place>
+	static void DrawPanel(Panel& p, VkImage target, VkFilter filter, Place place)
+	{
+		std::unique_lock lock(p.lock);
+		if (!p.w)
 			return;
 		VkFormat format = w.srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;   // keep its bytes, like the TV image
-		Image& img = s_overlayImage;
-		if (!img.image || img.width != s_overlay.w || img.height != s_overlay.h || img.format != format)
+		Image& img = p.image;
+		if (!img.image || img.width != p.w || img.height != p.h || img.format != format)
 		{
 			if (img.image)
 			{
 				WaitPending();                                   // the lazy path: the last frame's submit may still blit it
 				DestroyImage(img);
 			}
-			img = CreateImage(format, VK_IMAGE_ASPECT_COLOR_BIT, s_overlay.w, s_overlay.h, 0);
-			s_overlayUploaded = 0;
+			img = CreateImage(format, VK_IMAGE_ASPECT_COLOR_BIT, p.w, p.h, 0);
+			p.uploaded = 0;
 		}
-		if (s_overlayUploaded != s_overlay.version)
+		if (p.uploaded != p.version)
 		{
-			VkDeviceSize bytes = (VkDeviceSize)s_overlay.w * s_overlay.h * 4;
+			VkDeviceSize bytes = (VkDeviceSize)p.w * p.h * 4;
 			VkDeviceSize at = RingAlloc(bytes, 16);
-			memcpy(s.ring.data + at, s_overlay.rgba.data(), bytes);
+			memcpy(s.ring.data + at, p.rgba.data(), bytes);
 			Transition(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 			VkBufferImageCopy c{};
 			c.bufferOffset = at;
 			c.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
-			c.imageExtent = { s_overlay.w, s_overlay.h, 1 };
+			c.imageExtent = { p.w, p.h, 1 };
 			vkCmdCopyBufferToImage(s.cmd, s.ring.buffer, img.image, img.layout, 1, &c);
-			s_overlayUploaded = s_overlay.version;
+			p.uploaded = p.version;
 		}
-		sint32 x0 = tvX + (sint32)(s_overlay.x * scale), y0 = tvY + (sint32)(s_overlay.y * scale);
-		sint32 x1 = tvX + (sint32)((s_overlay.x + (sint32)s_overlay.w) * scale), y1 = tvY + (sint32)((s_overlay.y + (sint32)s_overlay.h) * scale);
+		sint32 x0, y0, x1, y1;
+		place(p, x0, y0, x1, y1);
 		lock.unlock();
 		if (x1 <= x0 || y1 <= y0)
 			return;
@@ -204,7 +229,36 @@ namespace wwhd::gpu
 		b.srcOffsets[1] = { (sint32)img.width, (sint32)img.height, 1 };
 		b.dstOffsets[0] = { x0, y0, 0 };
 		b.dstOffsets[1] = { x1, y1, 1 };
-		vkCmdBlitImage(s.cmd, img.image, img.layout, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b, VK_FILTER_LINEAR);
+		vkCmdBlitImage(s.cmd, img.image, img.layout, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b, filter);
+	}
+
+	bool OverlayFrame(double& x, double& y, double& scale)
+	{
+		if (s_frameScale <= 0)
+			return false;
+		x = s_frameX, y = s_frameY, scale = s_frameScale;
+		return true;
+	}
+
+	// the overlay in the 1920x1080 frame at (tvX, tvY) and that scale in the swapchain image
+	static void DrawOverlay(VkImage target, sint32 tvX, sint32 tvY, double scale)
+	{
+		s_frameX = tvX, s_frameY = tvY, s_frameScale = scale;
+		DrawPanel(s_overlay, target, VK_FILTER_LINEAR, [&](const Panel& p, sint32& x0, sint32& y0, sint32& x1, sint32& y1) {
+			x0 = tvX + (sint32)(p.x * scale), y0 = tvY + (sint32)(p.y * scale);
+			x1 = tvX + (sint32)((p.x + (sint32)p.w) * scale), y1 = tvY + (sint32)((p.y + (sint32)p.h) * scale);
+		});
+	}
+
+	// the FPS overlay at the bottom left of the picture (x, y, dw x dh in the swapchain image), its pixels scaled by a
+	// whole number that follows the picture's height (8-pixel glyphs: 24 pixels high at 1080, 48 at 2160), so they stay sharp
+	static void DrawFps(VkImage target, sint32 x, sint32 y, sint32 dw, sint32 dh)
+	{
+		DrawPanel(s_fps, target, VK_FILTER_NEAREST, [&](const Panel& p, sint32& x0, sint32& y0, sint32& x1, sint32& y1) {
+			const sint32 k = std::max(1, (sint32)std::lround(dh / 360.0)), margin = std::max(4, dh / 60);
+			x0 = x + margin, y1 = y + dh - margin;
+			x1 = std::min(x + dw, x0 + (sint32)p.w * k), y0 = std::max(y, y1 - (sint32)p.h * k);
+		});
 	}
 
 	void SetWindow(Window window)
@@ -304,7 +358,10 @@ namespace wwhd::gpu
 		b.dstOffsets[0] = { x, y, 0 };
 		b.dstOffsets[1] = { x + dw, y + dh, 1 };
 		vkCmdBlitImage(s.cmd, scan.image, scan.layout, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b, VK_FILTER_LINEAR);
-		DrawOverlay(target, x, y, dw / 1920.0);
+		// the overlay's 1920x1080 frame fitted and centred in the picture (another aspect's picture is wider or taller)
+		const double fs = std::min(dw / 1920.0, dh / 1080.0);
+		DrawOverlay(target, x + (dw - (sint32)(1920 * fs)) / 2, y + (dh - (sint32)(1080 * fs)) / 2, fs);
+		DrawFps(target, x, y, dw, dh);
 		Barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	}
 
@@ -436,6 +493,15 @@ namespace wwhd::gpu
 				w.width = 0;                                      // rebuild at the next swap
 			else
 				Check(r, "vkQueuePresentKHR");
+			// the FPS overlay's count: every frame shown, frame generation's too
+			const auto now = std::chrono::steady_clock::now();
+			if (s_shown.fetch_add(1, std::memory_order_relaxed))
+			{
+				const uint64 ns = (uint64)std::chrono::duration_cast<std::chrono::nanoseconds>(now - s_lastShown).count();
+				if (ns > s_longestNs.load(std::memory_order_relaxed))
+					s_longestNs.store(ns, std::memory_order_relaxed);
+			}
+			s_lastShown = now;
 		}
 		w.first = UINT32_MAX;
 	}

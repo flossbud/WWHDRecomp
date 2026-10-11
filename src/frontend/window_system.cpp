@@ -399,6 +399,7 @@ static void PrepareShaders(SDL_Window* window)
 	{
 		// the system's keyboard and dialogs come and go with the game: look at least every 50 ms
 		wwhd::UpdateOverlay();
+		wwhd::UpdateFpsOverlay();
 		// the settings page's live changes (src/os/settings.h): the display and vsync
 		if (bool full, vsync; true)
 			if (int w, h; wwhd::os::settings::TakeWindowRequest(full, w, h, vsync))
@@ -482,11 +483,12 @@ static void PrepareShaders(SDL_Window* window)
 				const float density = SDL_GetWindowPixelDensity(window);
 				int pw = 0, ph = 0;
 				SDL_GetWindowSizeInPixels(window, &pw, &ph);
-				const double scale = std::min(pw / 1920.0, ph / 1080.0);
+				double scale = std::min(pw / 1920.0, ph / 1080.0), fx = (pw - 1920 * scale) / 2, fy = (ph - 1080 * scale) / 2;
+				wwhd::gpu::OverlayFrame(fx, fy, scale);       // where the renderer drew it (the picture's aspect)
 				if (scale <= 0)
 					break;
-				const float tx = (float)((mx * density - (pw - 1920 * scale) / 2) / scale);
-				const float ty = (float)((my * density - (ph - 1080 * scale) / 2) / scale);
+				const float tx = (float)((mx * density - fx) / scale);
+				const float ty = (float)((my * density - fy) / scale);
 				const int item = wwhd::DebugMenuItemAt(tx, ty);
 				if (ev.type == SDL_EVENT_MOUSE_MOTION)
 				{

@@ -63,6 +63,9 @@ namespace
 		// the game's ambient occlusion (gpu/vk/draw.cpp AoOff): off, the shading in corners and under things goes (the
 		// Performance preset: off, the design's "later AO off": gpu-plan.md, item 4)
 		{ "WWHD_AO", "Ambient occlusion", { { "1", "on" }, { "0", "off" } }, false, "0" },
+		// frontend/overlay.cpp UpdateFpsOverlay: the frames shown a second (with frame generation, the generated ones
+		// too: one number, the owner's choice), in the picture's bottom left
+		{ "WWHD_FPS_OVERLAY", "FPS overlay", { { "0", "off" }, { "1", "FPS" }, { "2", "FPS + frame time" } }, true, nullptr },
 		{ "WWHD_CORES", "CPU threads", { { "3", "3" }, { "1", "1" } }, false, "3" },
 		{ "WWHD_LAZY_DRAWDONE", "Lazy DrawDone", { { "1", "on" }, { "0", "off" } }, false, "1" },
 	};
@@ -388,8 +391,8 @@ namespace wwhd::os::settings
 			setenv(o.key, o.values[i].value, 1);
 			if (strcmp(o.key, "WWHD_VSYNC") == 0)
 				s_vsyncChanged = true;
-			else
-				s_windowChanged = true;
+			else if (strcmp(o.key, "WWHD_FULLSCREEN") == 0 || strcmp(o.key, "WWHD_WINDOW_SIZE") == 0)
+				s_windowChanged = true;                      // the FPS overlay's reads the switch itself
 		}
 	}
 
