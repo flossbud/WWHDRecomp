@@ -1,0 +1,15 @@
+# Route: the telescope with the 100% save (REF_SAVE=/wwhd/data/saves/wwhd_100), for t-wideaudit (session top: other
+# aspects): continue-100.txt's inputs, the Telescope put on R from the item screen (as menus-100.txt puts the
+# Pictograph Box there), then looked through and around. FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+900 PLUS 5     # pause menu: the item screen
+960 DOWN 3     # the cursor starts on the ITEMS tab: to "Save"
+990 RIGHT 3    # to the Telescope
+1020 R 3       # put it on R
+1050 PLUS 5    # close the menu
+1110 R 5       # the telescope
+1200 LRIGHT 30 # look around
+1350 B 5       # put it away

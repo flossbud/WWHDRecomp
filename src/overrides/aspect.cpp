@@ -114,6 +114,11 @@ namespace
 		for (auto e : kEdge)
 			if (n == e)
 				return true;
+		// the item buttons (Y, X, R, the A and B commands, ZR) are in a generic N_All_00, the name the message window's
+		// choice box and most layouts use too (moving every one misplaced the choice box's cursor in the rival): only one
+		// the layout places in a corner moves (the buttons' at 509,238; one at the top left), not a centred or a bottom one
+		if (n == "N_All_00")
+			return std::fabs(Rdf(pane + kTrans)) >= 300.0f && std::fabs(Rdf(pane + kTrans + 4)) >= 200.0f;
 		return false;
 	}
 	// the Pictograph Box's (and the telescope's) black frame around its viewfinder: four leaves of N_Frame_00, 0 top,
@@ -223,14 +228,14 @@ namespace
 			root = rd32(root + kParent);
 		static std::mutex lock;
 		static std::unordered_map<std::string, int> seen;
-		const std::string key = std::string(Name(root)) + "/" + std::string(Name(pane));
+		const std::string key = std::to_string(root) + "/" + std::string(Name(pane));   // every layout's root is RootPane
 		std::lock_guard guard(lock);
 		if (!seen.emplace(key, 0).second)
 			return;
 		const uint32 parent = rd32(pane + kParent);
 		const uint32 sentinel = pane + kChildren;
-		cemuLog_log(LogType::Force, "wwhd pane: {} parent {} root {}{}: t {:.0f},{:.0f} size {:.0f}x{:.0f} scale {:.2f},{:.2f}",
-			Name(pane), parent ? Name(parent) : std::string_view("-"), Name(root), rd32(sentinel) == sentinel ? " (leaf)" : "",
+		cemuLog_log(LogType::Force, "wwhd pane: {} parent {} root {:08x}{}: t {:.0f},{:.0f} size {:.0f}x{:.0f} scale {:.2f},{:.2f}",
+			Name(pane), parent ? Name(parent) : std::string_view("-"), root, rd32(sentinel) == sentinel ? " (leaf)" : "",
 			Rdf(pane + kTrans), Rdf(pane + kTrans + 4), Rdf(pane + kSize), Rdf(pane + kSize + 4), Rdf(pane + kScale), Rdf(pane + kScale + 4));
 	}
 }
@@ -244,7 +249,10 @@ void f_028766CC(PPCInterpreter_t* ctx)
 	// own at 16:9 (its camera, the quests that judge it), so the TV picture is 16:9 meanwhile (os::aspect::HoldBase; the
 	// window's sides black, as the viewfinder's frame is). (Dropped frames don't touch the picture: session qa found the
 	// saved JPEGs byte-identical with every half frame or every other whole frame dropped while the viewfinder was up.)
-	if (const char* n = (const char*)(memory_base + (uint32)ctx->gpr[3] + kName); n[0] == 'P' && n[1] == 'F' && IsViewfinder((uint32)ctx->gpr[3]))
+	// The telescope likewise: its round view is a screen-space mask (stretched into an ellipse at another aspect, its zoom
+	// gauge then off its rim), so it too is shown at 16:9 while its layout (its zoom gauge, P_TelescopeBar_00) is up
+	if (const char* n = (const char*)(memory_base + (uint32)ctx->gpr[3] + kName); n[0] == 'P' &&
+		((n[1] == 'F' && IsViewfinder((uint32)ctx->gpr[3])) || (n[1] == '_' && Name((uint32)ctx->gpr[3]) == "P_TelescopeBar_00")))
 		aspect::HoldBase();
 	static bool s_everOther = false;                             // another aspect was in use (else 16:9 touches nothing)
 	if (aspect::Same(a, aspect::kBase) && !t_anchor && !t_root)

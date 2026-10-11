@@ -9,11 +9,24 @@ wider or taller view breaks, with the fixes. Captures: `tools/sixty/tests/shots.
 
 | where | 4:3 | 16:10 | 21:9 | 32:9 | status |
 |---|---|---|---|---|---|
-| gameplay on the dock and the sea (cuta, sail, warp) | more above and below | more above and below | more at the sides | more at the sides | fine: the HUD at the corners |
-| the item menu, the sea chart | centred, background stretched | same | same | same | fine (the owner's choice: centred) |
+| gameplay on the dock, the sea and Ganon's Tower (sail, warp, tour3, gtower) | more above and below | more above and below | more at the sides | more at the sides | fine: the HUD at the corners |
+| the item buttons (Y, X, R, A, B, ZR) | kept their 16:9 place | same | inside the picture, not at its corner | same | **fixed**: at the corner (below) |
+| cutscenes (Ganon's Tower's arrival, the auction) | more above and below; text boxes centred | same | more at the sides; nothing unfinished seen at the edges | same | fine |
+| the item menu, its collection page (gear, Triforce, pearls, hearts), its MAP and BOTTLES tabs, the sea chart, Options, the save prompt (the GamePad's screens on the TV; routes menus, menus2) | centred, background stretched | same | same | same | fine: centred (recommended: spreading the menus' contents would take each screen's panes apart, for little) |
+| the telescope (route telescope) | its round view an upright ellipse, the zoom gauge off its rim | same | a wide ellipse | same | **fixed**: 16:9 while it's up, as the Pictograph Box (below) |
 | the Pictograph Box's viewfinder | the frame covered the 16:9 band only: the world showed above and below | same | the world showed at the sides | same | **fixed**: 16:9 while it's up (below) |
 | the Pictograph Box's picture | black | black | black | black | **fixed** (B79, at 16:9 too; below); the picture as at 16:9 |
 | the album | centred | same | same | same | fine |
+| the edges at 32:9: fog, the sky, shadows, culling (sail, warp's cyclone, Ganon's Tower's arrival, tour3 on Windfall) | - | - | - | the sky, the sea's horizon and fog continuous to the edges; shadows there; nothing culled, popping or unfinished seen in the stills | fine (stills only: a fast camera turn's pop-in not looked for) |
+
+## The item buttons
+
+They sit in a generic `N_All_00` (the name most layouts give their top node: the message window's choice box too; the
+rival moved every one and misplaced the choice box's cursor). The buttons' layout places its `N_All_00` at (509, 238),
+scale 0.8; of every `N_All_00` under a layout root in play (pane log at 32:9 on sail) only two are in a corner (that one,
+and one at (-597, 291)), the rest centred or at the bottom middle. So an `N_All_00` the layout places in a corner
+(|x| >= 300 and |y| >= 200) is an edge pane: it moves out with the hearts and the rupees (overrides/aspect.cpp
+`EdgePane`). Checked at 32:9, 21:9 and 4:3 on sail, and the save prompt's choice at 21:9.
 
 ## The Pictograph Box at other aspects: the game's 16:9
 
@@ -31,6 +44,11 @@ Its black frame is four leaf panes of `N_Frame_00`: `P_FramerT_00` (y 360 down t
 with its origin at its outer edge (found with `WWHD_PANE_LOG=1`: every pane's name, parent, root, translation, size and
 scale, once). At another aspect each piece's outer edge moves out to the picture's edge and the piece grows by as much
 (`FrameEdge`), drawn unclipped: for the frames before the 16:9 hold applies, and for any other layout using it.
+
+The telescope likewise: its round view is a screen-space mask (a wipe, `W_Wipe_00`, scaled 66 in `N_Mode_00`), stretched
+into an ellipse at another aspect with its zoom gauge off the rim. Its layout's own pane is the gauge, `P_TelescopeBar_00`
+(the pane log on route telescope at 21:9; `P_ZoomMask_00`, the first guess, is the map's); while it computes its matrix
+the picture is held at 16:9 too. Checked at 21:9 and 4:3: round, and the wider view back after B puts it away.
 
 ## B79: the Pictograph Box's black picture (at every aspect, 16:9 too): fixed
 

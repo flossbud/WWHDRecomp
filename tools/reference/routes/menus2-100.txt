@@ -1,0 +1,27 @@
+# Route: the pause menu's other screens with the 100% save (REF_SAVE=/wwhd/data/saves/wwhd_100), for t-wideaudit
+# (session top: other aspects): continue-100.txt's inputs, then the tabs along the top (ITEMS, MAP, BOTTLES: left and
+# right, A to open; B closes the menu) and the item screen's next page (the arrow at its right). FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection: Quest Log 1
+780 A 5        # Start; gameplay on the Outset dock from ~f870
+900 PLUS 5     # pause menu: the item screen (the cursor on the ITEMS tab)
+960 RIGHT 3    # to the MAP tab
+990 A 5        # the sea chart
+1080 RIGHT 3   # to the BOTTLES tab
+1110 A 5       # the bottles
+1200 A 5       # the first bottle
+1290 LEFT 3
+1320 LEFT 3    # back to the ITEMS tab
+1350 A 5
+1410 DOWN 3    # "Save"
+1440 RIGHT 3   # along the first row of items
+1470 RIGHT 3
+1500 RIGHT 3
+1530 RIGHT 3
+1560 RIGHT 3
+1590 RIGHT 3
+1620 RIGHT 3   # past the last: the arrow to the next page (the collection)
+1680 A 5
+1770 RIGHT 3
+1830 PLUS 5    # close (B anywhere closes the menu)

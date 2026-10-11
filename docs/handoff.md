@@ -4254,6 +4254,20 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
 - **Open ideas**: t-bufcache's guard could be exact with write-watch on the vertex buffers (main's idea), but only
   textures are protected now, and protecting CPU-written vertex buffers costs a fault on every frame's writes: an A/B
   first. The frame skip's shown frames could come at even times under VRR (t-vrr's pacing is the existing one).
+- **B79, the Pictograph Box's black picture** (e207424; the four renderer gaps in docs/research/wide-audit.md):
+  `tools/sixty/tests/picto.sh` in predeploy. Probes for picture chains like it: `WWHD_SURFACE_WATCH` (surfaces made,
+  cleared, twinned at an address), `WWHD_READBACK_LOG`, `WWHD_RENDER_DUMP_ALPHA`, `WWHD_RENDER_COPIES` ("cpu copy").
+- **B81, Doc Bandam's dishes tumbling at 60** (8f9b588): Obj_Mshokki's air spin split over the steps let a dish placed
+  on its shelf be "in the air" for the first step and then "roll to rest" for 16 s; the spin is `late` now. Finding a
+  bug's room from a Deck shot: `tools/stage_actors.py` over every stage (`ls .../content/Common/Stage`) for the NPC
+  you know (Doc Bandam is NPC_DS1 in Pdrgsh), then `area_test.sh STAGE,0,0,-1 FROM TO PROCS` ranks the types against 30
+  and `trial.py --target P` names the stores. `bandam.sh` in predeploy.
+- **t-wideaudit** (findings in docs/research/wide-audit.md): the item buttons to the corner, the Pictograph Box
+  and the telescope held at 16:9 while up (`os::aspect::HoldBase` from a pane of their layout); everything else seen
+  fine. `WWHD_PANE_LOG=1` (every layout pane's name, parent, root address, translation, size and scale, once) finds a
+  layout's own pane: run the route at another aspect and look at the panes first logged when the screen opens.
+  Routes `telescope`, `menus2` (the menu's tabs and collection page). Not looked for: a fast camera turn's pop-in at
+  the edges.
 
 ### Session bottom (week 2, WW-14): the GPU side
 
