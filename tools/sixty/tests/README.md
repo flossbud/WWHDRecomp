@@ -30,6 +30,8 @@ dir: its NAND, save and log; a test's `rm -rf` of its outputs would also hit the
 - `statetest.sh ROUTE SWAP [RATE]`: a save state carries the whole game (`src/os/savestate.h`): the route saved at
   SWAP and played on, against a fresh process that loads the state (`STATE_INPLACE=SWAP2`: plays to SWAP2 and loads
   there, the debug menu's way); every whole tick's actors after the load must be the same; predeploy runs two.
+  `STATE_RT=1`: in real time with wwhd-play, one run saving at SWAP and loading in place 600 swaps later (or at
+  `STATE_INPLACE`); no frame after the load may take over a second (B82); predeploy-rt runs it.
 - `validate.sh [ROUTE...]`: the renderer under Vulkan validation, every route (or those named), each route's messages
   in a file of its own (run.sh drops the game's output); `VALIDATE_ENV` adds options (upscalers, AO, FXAA).
 - `src_of.py DIR ADDR...`: where a store's value was computed (where a step rule goes).

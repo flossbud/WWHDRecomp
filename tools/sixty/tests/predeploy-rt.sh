@@ -10,6 +10,9 @@
 #    run has no track (a crash or a hang); late starts (the title) are left out, as rt_routes does.
 # 2. A soak (soak.sh, rendered): PREDEPLOY_RT_SOAK minutes (default 10; 0: none) of seeded random play with wwhd-play,
 #    at least PREDEPLOY_RT_SOAK_MIN fps (45; a WARN instead when the machine is busy).
+# 3. A save state in real time (statetest.sh STATE_RT=1, wwhd-play): sail saved at swap 1800 and loaded in place ten seconds
+#    later; FAIL when the save or the load didn't happen or a frame after the load takes over a second (B82: the pacing
+#    waited out the time between them). PREDEPLOY_RT_STATE=0: not.
 # RT_COMPARE_ONLY=1 (rt_routes.sh): the last runs judged again, nothing played.
 # Exit status 1 on a FAIL. Default routes: a dozen of predeploy's, the sound and loader threads busiest (warps, doors,
 # menus, the dungeons' and a fight). Run it as a job: tools/worker/job start prt tools/sixty/tests/predeploy-rt.sh
@@ -60,6 +63,10 @@ if [ "${PREDEPLOY_RT_SOAK:-10}" != 0 ]; then
             echo "FAIL  soak: $fps fps, under ${PREDEPLOY_RT_SOAK_MIN:-45} (load $load on $cpus CPUs)"; fail=1
         fi
     fi
+fi
+if [ "${PREDEPLOY_RT_STATE:-1}" != 0 ]; then
+    STATE_RT=1 STATE_RT_BIN="$play" tools/sixty/tests/statetest.sh sail 1800 > "$OUT/predeploy-rt-state.log" 2>&1 || fail=1
+    grep -h "statetest" "$OUT/predeploy-rt-state.log" | tail -1
 fi
 [ $fail = 0 ] && echo "predeploy-rt: ok" || echo "predeploy-rt: FAIL"
 exit $fail

@@ -1067,8 +1067,10 @@ bool g_vulkan_available = false;
 void Renderer::RequestScreenshot(ScreenshotSaveFunction) { }
 
 // wwhd: save states (os/savestate.h; the GPU thread has retired everything submitted, at rest): the command processor's
-// registers (the game sets most state each draw, not all), its context control, the flip and vsync counts and the swap
-// interval's phase, and predication. The renderer's own images aren't kept (they rebuild).
+// registers (the game sets most state each draw, not all), its context control, the flip count and the swap interval's
+// phase, and predication. The renderer's own images aren't kept (they rebuild). The vsync count is in the file but a load
+// keeps the process's: it's the host's (only pacing reads it, and pacing.cpp holds counts of it from before the load; set
+// back, the next half frame waited for it to climb to them again, the time between the save and an in-place load: B82)
 static void StateRecord(wwhd::state::Archive& ar)
 {
 	ar.Pod(LatteGPUState.contextRegister);
@@ -1086,6 +1088,5 @@ static void StateRecord(wwhd::state::Archive& ar)
 	if (!ar.Loading() || !ar.Ok())
 		return;
 	LatteGPUState.flipRequestCount = flips;
-	s_vsyncCount = vsyncs;
 }
 WWHD_STATE_RECORD("gpu", StateRecord);

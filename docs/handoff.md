@@ -4426,14 +4426,19 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
   - *The file*: "WWHDSTAT", the records (each module's host state, `WWHD_STATE_RECORD(tag, fn)` with a symmetric
     `Archive`: the scheduler's active list, timeslice PRNG, next core and virtual vsync; the guest clock and calendar
     (real time rebases so guest time goes on; a real-time state loads under the virtual clock); the guest alarms; GX2's
-    swap count, command buffers and the GPU's registers, flip and vsync counts and retire timestamp counter (TCL: without
+    swap count, command buffers and the GPU's registers, flip count and retire timestamp counter (TCL: without
     it a load hung, the game waiting for a timestamp the fresh count never reached); AX's voice lists, protections,
     callbacks and frame counters; the open files (path, slot, check value, position; reopened, never truncated); the
     controller's sampling; the 60 fps layer's carried values; pacing), then guest memory: every mapped range in 64 KiB
     blocks, zero ones flagged, written on a load only where they differ (untouched pages stay unbacked; the write watch
     unprotects first so the texture cache hashes again).
+  - *Not carried, on purpose*: the vsync count (in the file, not set back): it's the host's, pacing alone reads it and
+    holds counts of it from before a load (B82: set back, the next half frame waited for it to climb to them again, the
+    time between the save and an in-place load: 68 s on the Deck). Host counts that pacing or the renderer compare
+    across frames stay the process's.
   - *A load*: the same save point; the threads checked (the same set at the same addresses: the game makes all 32, 33 in
-    real time, by the title), memory, the records, then the game's threads built anew: each new fiber loads its saved
+    real time once play starts: NetBossThread, which the owner's file on the Deck never makes, so a Deck state loads on a
+    worker at the file select, no input before it), memory, the records, then the game's threads built anew: each new fiber loads its saved
     context and the dispatcher goes on from srr0 (mid-function: the interpreter fallback to the next function entry);
     one that waited in an OS call runs the call again when woken, without the cycles its first run was charged
     (`FiberStart`; OSReceiveMessage loops to the same check when woken). The system threads keep the fresh process's
@@ -4446,15 +4451,17 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
   - *Checks*: `tools/sixty/tests/statetest.sh ROUTE SWAP` (predeploy runs two: tour3 loaded fresh, sail loaded in place)
     compares every whole tick's actor hashes after the load with the run that saved and played on: sail 1290 ticks,
     tour3 740, warp 1799 (the Ballad's warp and stage loads after the load), in place sail (loaded at 3000 back to 2400)
-    and tour3 (1300 forward to 2000): all 0 differ. Rendered on the virtual clock: 7 captures after the load 0 pixels
+    and tour3 (1300 forward to 2000): all 0 differ. `STATE_RT=1` (predeploy-rt runs it, B82): real time, sail saved at
+    1800 and loaded in place at 2400, no frame after the load over a second (deploy 11's build: a 10.3 s frame). Rendered on the virtual clock: 7 captures after the load 0 pixels
     from the run that saved. Real time (wwhd-play, three host threads, Vulkan, sail): a save, a fresh load and an in-place
     one, 60 fps after the load where its shaders were compiled (a fresh process compiles the scene's on first use: ~320
     ms stalls, as any first visit); the debug menu driven by an input script saved slot 1, which a fresh process and an
     in-place load both played on from.
   - *Adding host state* that outlives a frame: give it a record, or statetest finds it (a run that diverges after the
     load). Not carried: an open directory, the OS layer's own host alarms (a sleep's or a timeout's: refused, none at a
-    frame's top), the renderer's images (they rebuild). A real-time state (33 threads: NetBossThread runs in real time
-    only) loads in real time only: carry a Deck state to a worker's wwhd-play of the same build.
+    frame's top), the renderer's images (they rebuild). A real-time state loads in real time only: carry a Deck state to a
+    worker's wwhd-play of the same build, loaded at the file select (WWHD_STATE_LOAD, no input script before the state's
+    frame: the owner's file makes 32 threads, a worker's play 33).
   - *Gates* (main 355fe1d + the change): checks all MATCH (traces, streams, sound, diff 0 mismatches of 1,118,003, 15
     captures PSNR inf); regress identical (da06a4ee); predeploy 51 ok, 0 FAIL, blacktest 4 ok, picto ok, statetest 2 ok
     (0 differ), the real-time routes ok, the soak 60.0 fps; gohmatail WARN 54.0 (as on main), gohmarock ok 4.8.
