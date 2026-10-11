@@ -53,6 +53,14 @@ namespace
 	// sign-extended as the game passes it. A per-tick amount s is split, s - s/2 then s/2, so the two
 	// add up to s; an approach's divisor s (x += d / s) becomes 2s - 1 then 2s, since
 	// (1 - 1/(2s - 1))(1 - 1/(2s)) = 1 - 1/s: two half steps approach as one tick does.
+	// At N steps (U3): the amount N ways (rt_step_split: step i takes s(N - i)/N - s(N - i - 1)/N), and the divisor
+	// N s - N + 1 + i at step i: the product of (1 - 1/(N s - N + 1 + i)) over the tick telescopes to 1 - 1/s.
+	sint32 ScaledDivisor(sint32 a)
+	{
+		const sint32 i = g_rtHalfTick ? (sint32)g_rtSubStep : 0;
+		return (sint32)g_rtSteps * a - (sint32)g_rtSteps + 1 + i;
+	}
+
 	uint32 ScaledInt(uint32 v, bool divisor)
 	{
 		const int s = (int)(sint16)v;
@@ -61,12 +69,11 @@ namespace
 		int r;
 		if (divisor)
 		{
-			const int a = std::abs(s);
-			r = g_rtHalfTick ? 2 * a : 2 * a - 1;
+			r = ScaledDivisor(std::abs(s));
 			r = s < 0 ? -r : r;
 		}
 		else
-			r = g_rtHalfTick ? s / 2 : s - s / 2;
+			r = (sint32)rt_step_split((uint32)(sint32)s);
 		return (uint32)(sint32)r;
 	}
 
@@ -78,18 +85,16 @@ namespace
 			return v;
 		if (divisor)
 		{
-			const sint32 a = s < 0 ? -s : s;
-			const sint32 r = g_rtHalfTick ? 2 * a : 2 * a - 1;
+			const sint32 r = ScaledDivisor(s < 0 ? -s : s);
 			return (uint32)(s < 0 ? -r : r);
 		}
-		return (uint32)(g_rtHalfTick ? s / 2 : s - s / 2);
+		return rt_step_split((uint32)s);
 	}
 
 	// the same for an unsigned byte (cLib_chaseUC's step)
 	uint32 ScaledByte(uint32 v)
 	{
-		const uint32 s = v & 0xFFu;
-		return g_rtHalfTick ? s / 2 : s - s / 2;
+		return rt_step_split(v & 0xFFu);
 	}
 
 	float rdf(uint32 ea) { return std::bit_cast<float>(rd32(ea)); }
@@ -103,6 +108,31 @@ namespace
 			return wwhd::os::SwapCount();              // 60 fps: a step a frame
 		return wwhd::os::SwapCount() * 2 + (g_rtHalfTick ? 1 : 0);
 	}
+
+	// What the last calls of consecutive steps read (U3: a tick's measure at N steps is N - 1 calls back; at 60 the
+	// call before): Push(v, step) at each call, then Back() is the value to measure from, or null after a pause (the
+	// first step after one measures from the last, as before)
+	template <typename T>
+	struct StepRing
+	{
+		T v[8];
+		uint32 count = 0, lastStep = 0;
+		const T* Back(uint32 step) const
+		{
+			if (count == 0 || step - lastStep != 1)
+				return nullptr;
+			const uint32 k = std::min<uint32>(count, g_rtSteps - 1);   // k calls back
+			return &v[(count - k) % 8];
+		}
+		void Push(const T& x, uint32 step)
+		{
+			if (count && step - lastStep != 1)
+				count = 0;
+			v[count % 8] = x;
+			count++;
+			lastStep = step;
+		}
+	};
 
 	// fopAcM_calcSpeed: what gravity added to each actor's speed.y in which step, for posMove's arc
 	// correction in the same step
@@ -694,7 +724,7 @@ void f_027F2FC4(PPCInterpreter_t* __restrict ctx)
 		static bool once = [] { atexit(AnimHoldStats); at_quick_exit(AnimHoldStats); return true; }();
 		auto it = s_ctrlWhole.find(frameCtrl);
 		const sint16 end = sint16(rd16(frameCtrl + 0xA));
-		const bool whole = it != s_ctrlWhole.end() && it->second.step == StepId() - 1;
+		const bool whole = it != s_ctrlWhole.end() && it->second.step == StepId() - g_rtSubStep;   // this tick's
 		// set up since its whole step's update; or not updated there (no animation of its own then: Link's
 		// upper body's controls), so set up after it
 		if (!whole || rdf(frameCtrl + 4) != it->second.frame || rate != it->second.rate || end != it->second.end)
@@ -726,13 +756,19 @@ void f_027F2FC4(PPCInterpreter_t* __restrict ctx)
 		s_ctrlWhole[frameCtrl] = { rdf(frameCtrl + 4), rdf(frameCtrl), sint16(rd16(frameCtrl + 0xA)), StepId() };
 		s_ctrlWhole[frameCtrl].start = before;
 	}
+	// at N > 2 an early step's frame is the one the next step's update starts from (its set-up test, above)
+	else if (link && g_rtEarlyStep)
+	{
+		if (const auto it = s_ctrlWhole.find(frameCtrl); it != s_ctrlWhole.end() && it->second.step == StepId() - g_rtSubStep)
+			it->second.frame = rdf(frameCtrl + 4);
+	}
 	// His half step's frame is 30's to the bit: the tick's start plus the tick's rate, one single add as 30's update
 	// makes, not two half adds (their rounding put a slash's frame at 16.0000048 where 30's 15.9999981 stays under its
 	// combo test, frame > 16: the next cut a tick early, route en-bl, session qa). When the tick's update ran plainly
 	// (no set-up, the same rate both steps, no end or wrap: within 0.01 of it). WWHD_60FPS_EXACTFRAME=0 off.
-	else if (link && ExactFrame() && pace == rate && rd8(frameCtrl + 0xF) == 0)
-		if (const auto it = s_ctrlWhole.find(frameCtrl); it != s_ctrlWhole.end() && it->second.step == StepId() - 1
-			&& it->second.rate == rate && it->second.held != StepId())
+	else if (link && ExactFrame() && pace == rate && rd8(frameCtrl + 0xF) == 0)   // (the tick's last step)
+		if (const auto it = s_ctrlWhole.find(frameCtrl); it != s_ctrlWhole.end() && it->second.step == StepId() - g_rtSubStep
+			&& it->second.rate == rate && it->second.held < it->second.step)
 		{
 			const float exact = it->second.start + rate;   // a single's add (fadds)
 			if (std::fabs(exact - rdf(frameCtrl + 4)) < 0.01f)
@@ -841,8 +877,9 @@ namespace
 		if (it == s_tickStart.end())
 			return Orig(ctx);
 		const TickStart t = it->second;
-		s_tickStart.erase(it);
-		if (t.step != StepId() - 1)
+		if (!g_rtEarlyStep)
+			s_tickStart.erase(it);                         // every step of the tick measures from its start (U3)
+		if (t.step != StepId() - g_rtSubStep)
 			return Orig(ctx);
 		if (At && g_rtActor && AtWhole(rd16(g_rtActor + 0x08)))
 			return;                                        // the whole step's place and vector stand
@@ -989,13 +1026,13 @@ void f_025E3EC8(PPCInterpreter_t* __restrict ctx)
 namespace
 {
 	// daPy_lk_c::posMoveFromFootPos's toe positions (mFootData[i].field_0x018, three floats at Link
-	// +0x7408 and +0x7520): the last two steps' for each Link, so a step's move is measured over a whole
+	// +0x7408 and +0x7520): the last N steps' for each Link (StepRing), so a step's move is measured over a whole
 	// tick
 	struct Toes { float pos[2][3]; };
 	// the model's matrices posMoveFromFootPos reads (m37B4, Link +0x73BC; the waist's, the left and the right foot's,
 	// joints 30, 34, 39 of the matrices at *(*(*(Link +0x448) +0x2C) +0x10), 0x30 bytes each), as the whole step saw them
 	struct FootMatrices { uint32 step = 0; uint8 base[0x30]; uint8 joint[3][0x30]; };
-	struct ToeHistory { Toes last, before; uint32 lastStep = 0; bool haveBefore = false; FootMatrices whole; float smooth = 0, stick = 0; };
+	struct ToeHistory { StepRing<Toes> toes; FootMatrices whole; float smooth = 0, stick = 0; };
 	constexpr uint32 kFootJoint[3] = { 0x5A0u, 0x660u, 0x750u };
 	uint32 FootJoints(uint32 link)
 	{
@@ -1041,7 +1078,7 @@ namespace
 
 // daPy_lk_c::posMoveFromFootPos(Link r3): Link's speed from his feet, the planted toe's move since the
 // last step (in model space, |dx dz|), then gravity and the move. With half steps a step's move is
-// measured from the toe of two steps before, a whole tick: at whole ticks that is the 30 Hz
+// measured from the toe of two steps before (N at N steps), a whole tick: at whole ticks that is the 30 Hz
 // measurement exactly, and the feet's small step-to-step jitter (their ground fitting) isn't
 // doubled as a half step's move divided by h would be (the speed ran 20-30% high). The first step
 // after a pause measures from the last one, half a tick. The toes come from the model's matrices as
@@ -1068,13 +1105,11 @@ void f_023FCB9C(PPCInterpreter_t* __restrict ctx)
 	const uint32 step = StepId();
 	ToeHistory& history = s_toes[link];
 	const Toes now = ReadToes(link);                 // as the last step left them
-	const bool continuing = history.lastStep != 0 && step - history.lastStep == 1;
-	if (!continuing)
-		history.haveBefore = false;
-	if (history.haveBefore)
-		WriteToes(link, history.before);               // the move is measured from a tick ago
+	const bool continuing = history.toes.count != 0 && step - history.toes.lastStep == 1;
+	if (const Toes* before = history.toes.Back(step))
+		WriteToes(link, *before);                      // the move is measured from a tick ago
 	const uint32 joints = FootJoints(link);
-	const bool wholeMatrices = g_rtHalfTick && continuing && history.whole.step == step - 1 && joints;
+	const bool wholeMatrices = g_rtHalfTick && continuing && history.whole.step == step - g_rtSubStep && joints;
 	const bool smoothFromWhole = g_rtHalfTick && continuing;
 	const float stickNow = rdf(link + 0x6A0C);
 	if (!g_rtHalfTick)
@@ -1101,9 +1136,7 @@ void f_023FCB9C(PPCInterpreter_t* __restrict ctx)
 		SwapFootMatrices(link, history.whole);         // ... and the half step's own back
 	if (smoothFromWhole)
 		wrf(link + 0x6A0C, stickNow);                  // the stick's own back
-	history.before = now;
-	history.haveBefore = true;
-	history.lastStep = step;
+	history.toes.Push(now, step);
 }
 
 // Link's walking speed (B61, session top; the main session's priority, found by session bottom on route tour): at
@@ -1135,8 +1168,35 @@ namespace
 // animated at 60), unless something else turned him between.
 namespace
 {
-	struct TurnHalf { uint32 step = 0; uint16 mid = 0, end = 0; };
+	struct TurnHalf { uint32 step = 0; uint16 mid = 0, end = 0, before = 0; };
 	std::unordered_map<uint32, TurnHalf> s_turnHalf;
+	// the facing drawn at step i of N (U3): (i + 1) / N of the tick's turn, the tick's at the last (at N 2: half way)
+	uint16 TurnAt(const TurnHalf& t, uint32 i)
+	{
+		if (i + 1 >= g_rtSteps)
+			return t.end;
+		return (uint16)(t.before + (sint32)(sint16)(t.end - t.before) * (sint32)(i + 1) / (sint32)g_rtSteps);
+	}
+	// a later step of the tick: Link's facing as the tick's turn left it (its end), if nothing turned him since the
+	// last step drew it
+	bool TurnLater(uint32 link, TurnHalf*& t)
+	{
+		const auto it = s_turnHalf.find(link);
+		if (it == s_turnHalf.end() || it->second.step != StepId() - g_rtSubStep || rd16(link + 0x32A) != it->second.mid)
+			return false;
+		t = &it->second;
+		wr16(link + 0x32A, t->end);
+		return true;
+	}
+	// ... and after the step's call, an early step's facing drawn, if the call left it there
+	void TurnDrawn(uint32 link, TurnHalf* t)
+	{
+		if (t && g_rtEarlyStep && rd16(link + 0x32A) == t->end)
+		{
+			t->mid = TurnAt(*t, g_rtSubStep);
+			wr16(link + 0x32A, t->mid);
+		}
+	}
 }
 void f_0241650C(PPCInterpreter_t* __restrict ctx)
 {
@@ -1145,9 +1205,9 @@ void f_0241650C(PPCInterpreter_t* __restrict ctx)
 	const uint32 link = GPR(3);
 	if (g_rtHalfTick)
 	{
-		const auto it = s_turnHalf.find(link);
-		if (it != s_turnHalf.end() && it->second.step == StepId() - 1 && rd16(link + 0x32A) == it->second.mid)
-			wr16(link + 0x32A, it->second.end);
+		TurnHalf* t = nullptr;
+		TurnLater(link, t);
+		TurnDrawn(link, t);
 		return;                                        // the whole step took the tick's turn and speed
 	}
 	const uint16 before = rd16(link + 0x32A);
@@ -1158,10 +1218,10 @@ void f_0241650C(PPCInterpreter_t* __restrict ctx)
 	orig_f_0241650C(ctx);
 	s_inNormalSpeed = outer;
 	g_rtStep = step;
-	const uint16 end = rd16(link + 0x32A);
-	const uint16 mid = (uint16)(before + (sint16)(end - before) / 2);
-	wr16(link + 0x32A, mid);
-	s_turnHalf[link] = TurnHalf{ StepId(), mid, end };
+	TurnHalf t{ StepId(), 0, rd16(link + 0x32A), before };
+	t.mid = TurnAt(t, 0);
+	wr16(link + 0x32A, t.mid);
+	s_turnHalf[link] = t;
 }
 
 // daPy_lk_c::procMoveTurn(Link r3): the turn while moving (0x18; the known issue "actions ending on an animation a tick
@@ -1178,10 +1238,14 @@ void f_0241B050(PPCInterpreter_t* __restrict ctx)
 	const uint32 link = GPR(3);
 	if (g_rtHalfTick)
 	{
-		const auto it = s_turnHalf.find(link);
-		if (it != s_turnHalf.end() && it->second.step == StepId() - 1 && rd16(link + 0x32A) == it->second.mid)
-			wr16(link + 0x32A, it->second.end);       // the tick's facing back for its end test
-		[[clang::musttail]] return orig_f_0241B050(ctx);
+		TurnHalf* t = nullptr;
+		TurnLater(link, t);                            // the tick's facing back for its end test
+		if (!g_rtEarlyStep)
+			[[clang::musttail]] return orig_f_0241B050(ctx);
+		orig_f_0241B050(ctx);
+		if (rd32(link + 0x65F0) == 0x18)
+			TurnDrawn(link, t);
+		return;
 	}
 	const uint16 before = rd16(link + 0x32A);
 	const float step = g_rtStep;
@@ -1190,10 +1254,10 @@ void f_0241B050(PPCInterpreter_t* __restrict ctx)
 	g_rtStep = step;
 	if (rd32(link + 0x65F0) != 0x18)
 		return;                                        // the turn ended: the next action's own facing
-	const uint16 end = rd16(link + 0x32A);
-	const uint16 mid = (uint16)(before + (sint16)(end - before) / 2);
-	wr16(link + 0x32A, mid);
-	s_turnHalf[link] = TurnHalf{ StepId(), mid, end };
+	TurnHalf t{ StepId(), 0, rd16(link + 0x32A), before };
+	t.mid = TurnAt(t, 0);
+	wr16(link + 0x32A, t.mid);
+	s_turnHalf[link] = t;
 }
 
 // daPy_lk_c::procAtnMove(Link r3): the L-targeting walk (B58, the owner's note N4): WWHD's setSpeedAndAngleAtn
@@ -1299,7 +1363,8 @@ void f_02043F34(PPCInterpreter_t* __restrict ctx)
 	if (it == s_waterIn.end())
 		[[clang::musttail]] return orig_f_02043F34(ctx);
 	const WaterIn in = it->second;
-	s_waterIn.erase(it);
+	if (!g_rtEarlyStep)
+		s_waterIn.erase(it);                           // (each of the tick's steps after the whole one keeps it, U3)
 	if (in.tick != tick)
 		[[clang::musttail]] return orig_f_02043F34(ctx);
 	orig_f_02043F34(ctx);
@@ -1323,10 +1388,10 @@ void f_02416230(PPCInterpreter_t* __restrict ctx)
 
 namespace
 {
-	// dCamera_c::updateMonitor's last player position (mMonitor.mPos, dCamera +0x22C): the last two
+	// dCamera_c::updateMonitor's last player position (mMonitor.mPos, dCamera +0x22C): the last N
 	// steps' for each camera
 	struct Position { float p[3]; };
-	struct PositionHistory { Position before; uint32 lastStep = 0; bool haveBefore = false; };
+	using PositionHistory = StepRing<Position>;
 	std::unordered_map<uint32, PositionHistory> s_monitor;
 
 	Position ReadPosition(uint32 ea)
@@ -1343,7 +1408,7 @@ namespace
 
 // dCamera_c::updateMonitor(camera r3): mMonitor.x (+0x238) = the player's horizontal move since the
 // last update, measured from mMonitor.mPos (+0x22C), then mPos = the player's position. With half
-// steps the move is measured from the position of two steps before, a whole tick: right at whole
+// steps the move is measured from the position of two steps before (N at N steps), a whole tick: right at whole
 // ticks, and right when something unconverted moves the player on whole ticks only (the boat moved
 // Link 33 units at a whole tick and none at the half tick: per step and divided by h, the camera
 // read 66 and 0 and held still through a turn). The first step after a pause measures from the last.
@@ -1359,14 +1424,10 @@ void f_024F9A48(PPCInterpreter_t* __restrict ctx)
 	PositionHistory& history = s_monitor[camera];
 	const uint32 mPos = camera + 0x22C;
 	const Position last = ReadPosition(mPos);
-	if (history.lastStep == 0 || step - history.lastStep != 1)
-		history.haveBefore = false;
-	if (history.haveBefore)
-		WritePosition(mPos, history.before);
+	if (const Position* before = history.Back(step))
+		WritePosition(mPos, *before);
 	orig_f_024F9A48(ctx);
-	history.before = last;
-	history.haveBefore = true;
-	history.lastStep = step;
+	history.Push(last, step);
 }
 
 // ---- particles (JParticle, d_particle.cpp) ----------------------------------------------------------

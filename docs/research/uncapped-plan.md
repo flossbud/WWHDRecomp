@@ -132,8 +132,8 @@ So the half frame costs about what the whole does, not 0.78 of it (the draws are
 **each frame has its own vsync's budget**: a tick's total isn't enough, every frame must fit 1/rate. Per rate:
 
 - **Desktop class (the desktop worker):** 90 (11.1 ms) and 120 (8.3 ms) fit with room, even at the 90th percentile;
-  144 (6.9 ms) is borderline (en-tn's 90th percentile 7.3); 165 (6.1 ms) doesn't, so 144/165 run with keep-speed's
-  drops or VRR below the refresh. The game thread at 120 is ~5.0 + 3 x 5.3 = 21 ms a tick (63% of a core).
+  144 (6.94 ms) fits at the median but not en-tn's 90th percentile (7.3); 165 (6.06 ms) fits neither 90th percentile,
+  so 144/165 run with keep-speed's drops or VRR below the refresh (below). The game thread at 120 is ~5.0 + 3 x 5.3 = 21 ms a tick (63% of a core).
 - **The speed worker** (iGPU and CPU under one power cap) is at its limit at 60 already (late 14-56%), and the Deck
   drops at 60 too: 90 and 120 are not for that class. Its half frame isn't the issue (journal off saves 1.5 ms, 12%);
   the frame is.
@@ -141,11 +141,21 @@ So the half frame costs about what the whole does, not 0.78 of it (the draws are
   machine can't (as at 60 today). The U0 gate's "half frame ≤ 6.5 ms on the worker" doesn't hold and can't by cutting
   the half frame alone: U1-U5 go ahead, verified at 90/120 on the desktop worker; the speed worker and the Deck stay
   at 60 (or 40/50).
-- **Left in the half frame:** the journal's remaining filter (~0.6 ms on the desktop, ~1.5 on the speed worker):
-  **cut 2**, queued after U1 (the owner wants 144/165). 144 then fits the desktop's 90th percentile (en-tn 7.3 -> ~6.7
-  against 6.9). 165 (6.06 ms) needs the 90th percentile frame ~1.2 ms lower still on en-tn, so besides cut 2 about
-  0.6 ms more out of a frame's draws or render lists (fpcM_Draw and RenderDisplay::draw are 56% of a half frame), or
-  165 runs with VRR (or drop patterns) below the refresh.
+- **Left in the half frame:** the journal's remaining filter (~0.6 ms on the desktop, ~1.5 on the speed worker).
+  **Cut 2 tried and dropped** (session bottom, 2026-10-11): RT_STORE's page table as a 128 KB bit per page instead of
+  the 4 MB table (so a frame's heap stores would stop missing the cache) was correct (checks MATCH, regress da06a4ee)
+  but bought nothing: on the speed worker, 4 rounds paired, continue's half frame 13.0-13.2 -> 13.1-13.6 ms and en-tn's
+  game-thread CPU +2.8% (higher in every run). The filter's cost is the per-store inline test itself (a TLS load and
+  branches in every store of the generated code), not the table's misses.
+- **So, with cut 1 only, on the desktop class:** 144 Hz (6.94 ms a frame) fits continue at its 90th percentile (half
+  frame 6.0 ms) but en-tn only at the median (5.1 ms): its 90th percentile (7.3 ms) is over, so on heavy scenes about
+  one frame in ten misses 144 and keep-speed drops it (or VRR shows it late). 165 (6.06 ms) fits both routes' medians
+  and neither 90th percentile (continue 6.0 is at the edge): it runs with VRR, or with drop patterns, below the refresh.
+- **Queued (u8-journal; the owner's go, 2026-10-11):** a steady 165, and 144 without drops on heavy scenes, need the
+  store journal redesigned so that a store carries no inline test: e.g. the half frame's stores journaled by
+  write-protecting the journaled pages (a fault on the first store to each) or by a separately generated half-frame
+  copy of the code. A large job (the generator and the runtime), in session bottom's lane after U5 and b-lsfg. Its
+  target: en-tn's half frame at the 90th percentile under 6.06 ms on the desktop worker, N 2 byte-identical.
 - **The Deck:** QA measured the Deck OLED at 36 fps on en-tn and ~50 at the start of continue at 60 (2026-10-11), so
   the OLED's 90 try is off; it's revisited when the Deck holds 60.
 

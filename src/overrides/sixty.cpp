@@ -2322,7 +2322,8 @@ namespace
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_MODEHOLD"); return !(e && atoi(e) == 0); }();
 		return on;
 	}
-	// a process, the steps (2 a tick: whole 2t, half 2t + 1) its last mode was set in and held until
+	// a process, the steps (N a tick: whole N t, then N t + i) its last mode was set in and held until: the rest of
+	// the tick when set in its whole step, all of the next tick when set in a later one (U3)
 	struct ModeSet { uint32 at, until; };
 	std::unordered_map<uint32, ModeSet> s_modeSet;
 }
@@ -2330,9 +2331,10 @@ void f_021412BC(PPCInterpreter_t* __restrict ctx)
 {
 	if (!g_rtSixty || !ModeHold())
 		[[clang::musttail]] return orig_f_021412BC(ctx);
-	const uint32 actor = GPR(3), step = 2 * wwhd::rt::GameFrame(wwhd::os::SwapCount()) + (g_rtHalfTick ? 1 : 0);
+	const uint32 n = g_rtSteps, tick = wwhd::rt::GameFrame(wwhd::os::SwapCount());
+	const uint32 actor = GPR(3), step = n * tick + (g_rtHalfTick ? g_rtSubStep : 0);
 	if (GPR(4) == 0)
-		s_modeSet[actor] = { step, g_rtHalfTick ? step + 2 : step + 1 };
+		s_modeSet[actor] = { step, g_rtHalfTick ? n * (tick + 1) + n - 1 : n * tick + n - 1 };
 	else if (GPR(4) == 1)
 		if (const auto it = s_modeSet.find(actor); it != s_modeSet.end() && step > it->second.at && step <= it->second.until)
 			return;
@@ -2420,11 +2422,11 @@ void f_0252012C(PPCInterpreter_t* __restrict ctx)
 void f_0283D514(PPCInterpreter_t* __restrict ctx);
 namespace
 {
-	bool s_demoHalf = false;                         // the values being evaluated at age - 1/2
+	uint32 s_demoBack = 0;                           // the values being evaluated at age - k/N (k of N steps; 1 of 2 at 60)
 	bool s_demoBehind = false;                       // the whole tick's cast got them at age - 1/2
 
-	// the cutscene's values evaluated again (forward(0)), at age - 1/2 if half; true if a cutscene runs
-	bool DemoEvaluate(PPCInterpreter_t* ctx, bool half)
+	// the cutscene's values evaluated again (forward(0)), at age - back/N; true if a cutscene runs
+	bool DemoEvaluate(PPCInterpreter_t* ctx, uint32 back)
 	{
 		const uint32 control = rd32(0x101D5FE8u);    // dDemo_manager_c's m_control (its create, f_025286E0)
 		if (!control || !rd32(0x101D6004u))          // no cutscene loaded (its current file)
@@ -2436,31 +2438,38 @@ namespace
 		ctx->gpr[1] = sp;
 		ctx->gpr[3] = control;
 		ctx->gpr[4] = 0;
-		s_demoHalf = half;
+		s_demoBack = back;
 		s_converting++;
 		f_0283D514(ctx);
 		s_converting--;
-		s_demoHalf = false;
+		s_demoBack = 0;
 		regs.Restore(ctx);
 		return true;
 	}
 
-	// a half tick's start: the values the whole tick's cast got at age - 1/2 are the tick's own again
+	// a half tick's start: the values the whole tick's cast got at age - 1/2 are the tick's own again (at N steps,
+	// step i's at age - (N - 1 - i)/N, the tick's own at the last)
 	void DemoHalfTick(PPCInterpreter_t* ctx)
 	{
 		if (!s_demoBehind)
 			return;
+		if (g_rtEarlyStep)
+		{
+			DemoEvaluate(ctx, g_rtSteps - 1 - g_rtSubStep);
+			return;
+		}
 		s_demoBehind = false;
-		DemoEvaluate(ctx, false);
+		DemoEvaluate(ctx, 0);
 	}
 
-	// a TVariableValue's update at age - 1/2: (2 age - 1) x spf / 2 (at age 0, age 0's)
+	// a TVariableValue's update at age - 1/2: (2 age - 1) x spf / 2 (at age 0, age 0's); at N steps age - k/N:
+	// (N age - k) x spf / N
 	void HalfAge(PPCInterpreter_t* ctx, void (*orig)(PPCInterpreter_t*))
 	{
 		const uint32 v = GPR(3);
 		const uint32 age = rd32(v + 4);
-		wr32(v + 4, age ? age * 2 - 1 : 0);
-		FPR(1).fp0 *= 0.5;
+		wr32(v + 4, age ? age * g_rtSteps - s_demoBack : 0);
+		FPR(1).fp0 *= 1.0 / (double)g_rtSteps;
 		FPR(1).fp1 = FPR(1).fp0;
 		orig(ctx);
 		wr32(v + 4, age);
@@ -2474,13 +2483,13 @@ void f_025291C8(PPCInterpreter_t* __restrict ctx)
 	orig_f_025291C8(ctx);
 	if (DemoSixty() && wwhd::rt::SixtyFrom() != ~0u && wwhd::os::SwapCount() >= wwhd::rt::SixtyFrom() && !g_rtHalfTick &&
 		StepInEvents())
-		s_demoBehind = DemoEvaluate(ctx, true);
+		s_demoBehind = DemoEvaluate(ctx, g_rtSteps - 1);
 }
 
 // JStudio::TVariableValue::update_time_ (its value: age x spf x its rate)
 void f_02839DB4(PPCInterpreter_t* __restrict ctx)
 {
-	if (!s_demoHalf)
+	if (!s_demoBack)
 		[[clang::musttail]] return orig_f_02839DB4(ctx);
 	HalfAge(ctx, orig_f_02839DB4);
 }
@@ -2488,7 +2497,7 @@ void f_02839DB4(PPCInterpreter_t* __restrict ctx)
 // JStudio::TVariableValue::update_functionValue_ (its value: its function at age x spf)
 void f_02839DF4(PPCInterpreter_t* __restrict ctx)
 {
-	if (!s_demoHalf)
+	if (!s_demoBack)
 		[[clang::musttail]] return orig_f_02839DF4(ctx);
 	HalfAge(ctx, orig_f_02839DF4);
 }
@@ -2604,11 +2613,11 @@ namespace
 			uint8 saved[0x30];
 			memcpy(saved, memory_base + t, sizeof(saved));
 			wr32(t + 0xC, a.frame);                      // from the frame the whole tick drew (its step came after)
-			wr32(t + 0x24, std::bit_cast<uint32>(std::bit_cast<float>(rd32(t + 0x24)) * 0.5f));
+			wr32(t + 0x24, std::bit_cast<uint32>(std::bit_cast<float>(rd32(t + 0x24)) * ((float)g_rtSubStep / (float)g_rtSteps)));   // i/N of it at step i
 			wr32(sp, regs.gpr[1]);                       // a back chain
 			ctx->gpr[1] = sp;
 			ctx->gpr[3] = t;
-			orig_f_02872DFC(ctx);                        // half its rate on
+			orig_f_02872DFC(ctx);                        // half its rate on (i/N at N steps)
 			memcpy(memory_base + t + 0x24, saved + 0x24, sizeof(saved) - 0x24);   // its rate, mode and events
 			ctx->gpr[1] = sp;
 			ctx->gpr[3] = t;
@@ -2749,6 +2758,12 @@ namespace
 			rd32(c.actor + 4) == c.id && rd16(c.actor + 8) == c.name;
 	}
 
+	// a step's share of a tick's push: half at 60, 1/N at N steps (U3; the late resolution's path)
+	inline float PushShare()
+	{
+		return 1.0f / (float)g_rtSteps;
+	}
+
 	// the resolution after the half step: a stepping process's push, half of it for the next whole step
 	void PushesResolved()
 	{
@@ -2763,7 +2778,7 @@ namespace
 			for (int i = 0; i < 3; i++)
 			{
 				c.move[i] = rd32(c.stts + 4 * i);
-				wr32(c.stts + 4 * i, std::bit_cast<uint32>(std::bit_cast<float>(c.move[i]) * 0.5f));
+				wr32(c.stts + 4 * i, std::bit_cast<uint32>(std::bit_cast<float>(c.move[i]) * PushShare()));
 			}
 			c.halved = true;
 		}
@@ -2774,11 +2789,11 @@ namespace
 	{
 		if (ResolveLate())
 		{
-			for (CoPush& c : s_coPushes)               // the other half, for the half step
+			for (CoPush& c : s_coPushes)               // the other half, for the half step (its share, each step at N)
 				if (c.halved && LiveActor(c))
 				{
 					for (int i = 0; i < 3; i++)
-						wr32(c.stts + 4 * i, std::bit_cast<uint32>(std::bit_cast<float>(c.move[i]) * 0.5f));
+						wr32(c.stts + 4 * i, std::bit_cast<uint32>(std::bit_cast<float>(c.move[i]) * PushShare()));
 					c.second = true;
 				}
 			return;
@@ -2816,9 +2831,11 @@ namespace
 					if (it == s_stepping.end() || !it->second)
 						for (int i = 0; i < 3; i++)
 							wr32(c.actor + 0x314 + 4 * i, std::bit_cast<uint32>(std::bit_cast<float>(rd32(c.actor + 0x314 + 4 * i)) +
-								std::bit_cast<float>(c.move[i]) * 0.5f));
+								std::bit_cast<float>(c.move[i]) * PushShare()));
 				}
-				c.halved = c.second = false;
+				c.second = false;
+				if (!g_rtEarlyStep)                    // the tick's last step: its push is spent
+					c.halved = false;
 			}
 			return;
 		}
@@ -3095,6 +3112,7 @@ namespace
 		return on;
 	}
 	std::unordered_map<uint32, std::vector<uint32>> s_rndHalf;   // a stepping process's half-step draws (callers)
+	std::unordered_map<uint32, std::vector<uint32>> s_rndStep;   // ... this step's (merged into them after it)
 	thread_local uint32 s_rndExec = 0;                          // the converted process whose execute runs (f_025DE58C), or 0
 	uint64 s_rndMadeUp = 0;
 	FILE* RndLog()
@@ -3130,6 +3148,28 @@ namespace
 		RndAdvance((uint32)it->second.size());
 		s_rndHalf.erase(it);
 	}
+	// a process's step after its whole one is over: its draws merged into the tick's (s_rndHalf), each caller as many
+	// times as the most any of those steps drew from it (at N > 2 a draw each step is one tick's draw at 30; U3)
+	void RndMerge(uint32 proc)
+	{
+		const auto it = s_rndStep.find(proc);
+		if (it == s_rndStep.end())
+			return;
+		auto& tick = s_rndHalf[proc];
+		std::vector<uint32> step = std::move(it->second);
+		s_rndStep.erase(it);
+		std::sort(step.begin(), step.end());
+		for (size_t i = 0; i < step.size();)
+		{
+			size_t j = i;
+			while (j < step.size() && step[j] == step[i])
+				j++;
+			const size_t had = (size_t)std::count(tick.begin(), tick.end(), step[i]);
+			for (size_t k = had; k < j - i; k++)
+				tick.push_back(step[i]);
+			i = j;
+		}
+	}
 	void RndFlushAll()
 	{
 		for (const auto& [proc, callers] : s_rndHalf)
@@ -3159,7 +3199,7 @@ void f_02019788(PPCInterpreter_t* __restrict ctx)
 	if (const uint32 exec = s_drawing == 0 ? s_rndExec : 0; exec && RndSync() && g_rtSixty)
 	{
 		if (g_rtHalfTick)
-			s_rndHalf[exec].push_back(lr);
+			s_rndStep[exec].push_back(lr);
 		else if (const auto it = s_rndHalf.find(exec); it != s_rndHalf.end())
 		{
 			// drawn in its whole step too: a draw a step, nothing to make up
@@ -3621,7 +3661,7 @@ bool rt_decision_hold(PPCInterpreter_t* ctx, void (*fn)(PPCInterpreter_t*))
 		return false;
 	}
 	for (DecisionCall& d : s_decisions)
-		if (d.actor == g_rtActor && d.lr == ctx->spr.LR && d.swap + 1 == swap)
+		if (d.actor == g_rtActor && d.lr == ctx->spr.LR && d.swap + g_rtSubStep == swap)   // this tick's whole step's
 		{
 			d.half = true;
 			return false;
@@ -3648,7 +3688,7 @@ namespace
 	{
 		const uint32 swap = wwhd::os::SwapCount();
 		for (const DecisionCall& d : s_decisions)
-			if (d.actor == proc && d.swap + 1 == swap && !d.half)
+			if (d.actor == proc && d.swap + g_rtSubStep == swap && !d.half)
 			{
 				Registers regs;
 				regs.Save(ctx);
@@ -3668,6 +3708,13 @@ namespace
 				regs.Restore(ctx);
 				s_decisionsMade++;
 			}
+		if (g_rtEarlyStep)                              // at N > 2 the tick's later steps take theirs too (U3)
+		{
+			for (DecisionCall& d : s_decisions)
+				if (d.actor == proc)
+					d.half = false;
+			return;
+		}
 		s_decisions.erase(std::remove_if(s_decisions.begin(), s_decisions.end(),
 			[&](const DecisionCall& d) { return d.actor == proc; }), s_decisions.end());
 	}
@@ -3717,9 +3764,10 @@ namespace
 		if (it == s_acchNotes.end())
 			return;
 		for (const AcchNote& n : it->second)
-			if (n.swap + 1 == wwhd::os::SwapCount() && !n.bit)   // a landing only: the ground left stays left (its
+			if (n.swap + g_rtSubStep == wwhd::os::SwapCount() && !n.bit)   // a landing only: the ground left stays left (its
 				wr32(n.acch + 0x28, rd32(n.acch + 0x28) & ~0x20u); // jump's next call reads it so at 30 too)
-		s_acchNotes.erase(it);
+		if (!g_rtEarlyStep)                             // (hidden from each of the tick's later steps, U3)
+			s_acchNotes.erase(it);
 	}
 }
 
@@ -4020,6 +4068,8 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	s_rndExec = rndOuter;
 	if (!g_rtHalfTick && RndSync())
 		RndFlush(proc);                             // its half step's draws its whole step didn't make again
+	else if (g_rtHalfTick && RndSync())
+		RndMerge(proc);
 	if (camTick)
 		CamTickAfter();
 	if (notes)
@@ -4375,7 +4425,7 @@ namespace
 			{
 				const float a = std::bit_cast<float>(c.prev[k]), b = std::bit_cast<float>(c.curr[k]);
 				saved.emplace_back(ea + 4 * k, now[k]);
-				wr32(ea + 4 * k, std::bit_cast<uint32>(b + 0.5f * (b - a)));
+				wr32(ea + 4 * k, std::bit_cast<uint32>(b + ((float)g_rtSubStep / (float)g_rtSteps) * (b - a)));   // i/N on at step i
 			}
 		}
 	}
@@ -4413,7 +4463,7 @@ namespace
 					saved.emplace_back(ea + 4 * (k / 2), now[k / 2]);
 				}
 				const sint16 a = half(c.prev, k), b = half(c.curr, k);
-				wr16(ea + 2 * k, (uint16)(sint16)(b + (sint16)(b - a) / 2));
+				wr16(ea + 2 * k, (uint16)(sint16)(b + (sint32)(sint16)(b - a) * (sint32)g_rtSubStep / (sint32)g_rtSteps));
 			}
 		}
 	}
@@ -4613,16 +4663,21 @@ namespace
 	constexpr uint32 kEnvTime = 0x10475A68 + 0x1020;
 	uint32 s_sunTimeLast = 0;                           // the time the last whole tick's frame drew (its bits)
 	uint32 s_sunTimeHeld = 0;                           // the time put back after the call
+	uint32 s_sunTimeFrom = 0;                           // the last tick's time, for all the tick's frames (U3)
+	// at N steps step i (all but the last) draws it (i + 1) / N of the way
 	bool SunHalfWay()
 	{
-		if (!g_rtSixty || g_rtHalfTick)
+		if (!g_rtSixty || (g_rtHalfTick && !g_rtEarlyStep))
 			return false;
+		if (!g_rtHalfTick)
+			s_sunTimeFrom = s_sunTimeLast;
 		const uint32 now = rd32(kEnvTime);
-		const float t = std::bit_cast<float>(now), last = std::bit_cast<float>(s_sunTimeLast);
+		const float t = std::bit_cast<float>(now), last = std::bit_cast<float>(s_sunTimeFrom);
 		s_sunTimeHeld = now;
 		if (t == last || !(std::fabs(t - last) < 1.0f))
 			return false;
-		wr32(kEnvTime, std::bit_cast<uint32>(last + (t - last) * 0.5f));
+		const float part = (float)((g_rtHalfTick ? g_rtSubStep : 0) + 1) / (float)g_rtSteps;
+		wr32(kEnvTime, std::bit_cast<uint32>(last + (t - last) * part));
 		return true;
 	}
 	void SunBack(bool halfway)
@@ -4657,7 +4712,7 @@ void f_02557834(PPCInterpreter_t* __restrict ctx)
 // mFadeSpeed 0x101F4814, clamped) and another of calcFade's form (f_0252F5A0: while 0x101D616C, 0x101D6160 +=
 // 0x101D6164: the warp pots' fade, called once a tick there, left as it is). At 60 the colour fader stepped every swap: the title's fade to black took 27 swaps (half 30's 0.9 s),
 // the black between the scenes, which waits on ticks, 49 swaps (30's 12 frames), the fade in 26 (the owner's B74).
-// At 60 its length is doubled for the call and its delay counts whole ticks: the fades as smooth as the frames,
+// At 60 its length is doubled for the call (N times at N steps) and its delay counts whole ticks: the fades as smooth as the frames,
 // their length 30's.
 // WWHD_60FPS_FADE=0 off.
 namespace
@@ -4689,7 +4744,7 @@ void f_027ECED4(PPCInterpreter_t* __restrict ctx)
 	// tick it's out of the call (-1: the state steps on), then back (route warppot: its warp came a tick early)
 	const bool hold = g_rtHalfTick && delay >= 0;
 	if (length != 0 && length < 0x8000)
-		wr16(fader + 0x4, (uint16)(length * 2));
+		wr16(fader + 0x4, (uint16)(length * g_rtSteps));   // N times its length at N steps
 	if (hold)
 		wr32(fader + 0x1C, 0xFFFFFFFFu);
 	orig_f_027ECED4(ctx);
