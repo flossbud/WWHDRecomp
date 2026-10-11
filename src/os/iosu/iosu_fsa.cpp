@@ -18,6 +18,7 @@
 
 #include "Cafe/HW/MMU/MMU.h"
 #include "../../runtime/write_watch.h"
+#include "../savestate.h"
 
 using namespace iosu::kernel;
 
@@ -184,6 +185,8 @@ namespace iosu
 				bool isAllocated{false};
 				FSCVirtualFile* fscFile;
 				uint16 handleCheckValue;
+				std::string path;                     // wwhd: save states reopen it (the translated path; Note)
+				FSC_ACCESS_FLAG access{};
 			};
 
 		public:
@@ -237,6 +240,75 @@ namespace iosu
 				return it.fscFile;
 			}
 
+			// wwhd: save states (os/savestate.cpp): the handles open now
+			uint32 CountAllocated() const
+			{
+				uint32 n = 0;
+				for (auto& it : m_handleTable)
+					n += it.isAllocated ? 1 : 0;
+				return n;
+			}
+
+			// wwhd: what a handle was opened as, for save states
+			void Note(FSResHandle handle, std::string path, FSC_ACCESS_FLAG access)
+			{
+				const uint16 index = (uint16)((uint32)handle >> 16);
+				if (index < m_handleTable.size())
+					m_handleTable[index].path = std::move(path), m_handleTable[index].access = access;
+			}
+
+			// wwhd: save states (os/savestate.h): each open file's slot, check value, path, access and position; a load
+			// closes this process's and opens the state's again in the same slots, at the same positions
+			void StateRecord(wwhd::state::Archive& ar)
+			{
+				struct Open
+				{
+					uint32 index, check, access;
+					uint64 seek;
+				};
+				std::vector<Open> open;
+				std::vector<std::string> paths;
+				for (uint32 i = 0; i < m_handleTable.size(); i++)
+					if (m_handleTable[i].isAllocated)
+					{
+						auto& it = m_handleTable[i];
+						open.push_back({ i, it.handleCheckValue, (uint32)it.access, it.fscFile ? fsc_getFileSeek(it.fscFile) : 0 });
+						paths.push_back(it.path);
+					}
+				ar.Pod(m_currentCounter);
+				ar.Vec(open);
+				uint32 n = (uint32)paths.size();
+				ar.Pod(n);
+				paths.resize(ar.Ok() ? n : 0);
+				for (auto& p : paths)
+					ar.Str(p);
+				if (!ar.Loading() || !ar.Ok() || open.size() != paths.size())
+					return;
+				for (auto& it : m_handleTable)
+					if (it.isAllocated)
+					{
+						if (it.fscFile)
+							fsc_close(it.fscFile);
+						it = _FSAHandleResource{};
+					}
+				for (size_t k = 0; k < open.size(); k++)
+				{
+					// opened again as it was, but never created or truncated anew (the state's file is the one on disk)
+					const FSC_ACCESS_FLAG access = (FSC_ACCESS_FLAG)(open[k].access & ~(uint32)FSC_ACCESS_FLAG::FILE_ALWAYS_CREATE);
+					sint32 status;
+					FSCVirtualFile* f = paths[k].empty() ? nullptr : fsc_open(paths[k].c_str(), access, &status);
+					if (!f || open[k].index >= m_handleTable.size())
+						return ar.Fail("can't open " + paths[k] + " again");
+					fsc_setFileSeek(f, open[k].seek);
+					auto& it = m_handleTable[open[k].index];
+					it.isAllocated = true;
+					it.fscFile = f;
+					it.handleCheckValue = (uint16)open[k].check;
+					it.path = paths[k];
+					it.access = (FSC_ACCESS_FLAG)open[k].access;
+				}
+			}
+
 		private:
 			uint32 m_currentCounter = 1;
 			std::array<_FSAHandleResource, 0x3C0> m_handleTable;
@@ -244,6 +316,24 @@ namespace iosu
 
 		_FSAHandleTable sFileHandleTable;
 		_FSAHandleTable sDirHandleTable;
+
+		// wwhd: save states (os/savestate.cpp): the files and directories the game has open
+		void CountOpen(uint32& files, uint32& dirs)
+		{
+			files = sFileHandleTable.CountAllocated();
+			dirs = sDirHandleTable.CountAllocated();
+		}
+
+		// wwhd: save states (os/savestate.h): the open files (an open directory can't be carried: refused)
+		static void StateRecord(wwhd::state::Archive& ar)
+		{
+			uint32 dirs = sDirHandleTable.CountAllocated();
+			ar.Pod(dirs);
+			if (ar.Loading() && ar.Ok() && dirs)
+				return ar.Fail("a directory open in the state");
+			sFileHandleTable.StateRecord(ar);
+		}
+		WWHD_STATE_RECORD("iosu.fsa", StateRecord);
 
 		FSA_RESULT __FSAOpenFile(FSAClient* client, const char* path, const char* accessModifierStr, sint32* fileHandle)
 		{
@@ -302,6 +392,8 @@ namespace iosu
 				fsc_setFileSeek(fscFile, fsc_getFileSize(fscFile));
 			FSResHandle fsFileHandle;
 			FSA_RESULT r = sFileHandleTable.AllocateHandle(fsFileHandle, fscFile);
+			if (r == FSA_RESULT::OK)
+				sFileHandleTable.Note(fsFileHandle, __FSATranslatePath(client, path), accessModifier);   // wwhd: save states
 			if (r != FSA_RESULT::OK)
 			{
 				cemuLog_log(LogType::Force, "Exceeded maximum number of FSA file handles");

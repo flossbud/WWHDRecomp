@@ -15,6 +15,7 @@
 #include "os.h"
 #include "input.h"
 #include "debug_menu.h"
+#include "savestate.h"
 #include "Cafe/OS/libs/padscore/padscore.h"
 #include "Cafe/OS/libs/vpad/vpad.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
@@ -197,6 +198,19 @@ namespace wwhd::os::input
 		std::lock_guard lock(s_liveLock);
 		s_live = pad;
 	}
+
+	// save states (savestate.h): the controller's sampling (the 1 ms gate's last reads, absolute guest times), the last
+	// buttons (trigger and release edges come from them) and KPADInitEx's buffer
+	static void StateRecord(wwhd::state::Archive& ar)
+	{
+		ar.Pod(s_lastRead);
+		ar.Pod(s_prevHold);
+		ar.Pod(s_lastPad);
+		ar.Pod(s_ringBuffer);
+		ar.Pod(s_ringLength);
+		ar.Pod(s_kpadInitialized);
+	}
+	WWHD_STATE_RECORD("input", StateRecord);
 
 	void SetRumble(std::function<void(bool)> rumble) { s_rumble = std::move(rumble); }
 

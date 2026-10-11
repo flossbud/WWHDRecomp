@@ -3,6 +3,7 @@
 // so an input script drives it as a player does.
 #include "debug_menu.h"
 #include "settings.h"
+#include "savestate.h"
 #include <mutex>
 
 namespace
@@ -55,7 +56,7 @@ namespace
 		{ "Keese", 215, 0, 0 }, { "ReDead", 224, 0, 0 }, { "Kargaroc", 181, 0, 0 },
 	};
 
-	enum Page { kTop, kIslandPage, kDungeonPage, kBossPage, kFoePage, kSettingsPage };
+	enum Page { kTop, kIslandPage, kDungeonPage, kBossPage, kFoePage, kSettingsPage, kStatePage };
 	struct List { const Dest* dests; int count; const char* title; };
 	List ListOf(Page p)
 	{
@@ -66,6 +67,7 @@ namespace
 		case kBossPage: return { kBosses, (int)std::size(kBosses), "Warp: bosses (refights on)" };
 		case kFoePage: return { nullptr, (int)std::size(kFoes), "Spawn an enemy ahead of Link" };
 		case kSettingsPage: return { nullptr, 0, "Settings" };
+		case kStatePage: return { nullptr, 0, "Save states" };
 		default: return { nullptr, 0, "Debug menu" };
 		}
 	}
@@ -119,8 +121,18 @@ namespace
 		if (s_page == kTop)
 			return { "Islands", "Dungeons", "Bosses (refights on)", "Boss rush (all, in order)", "Spawn an enemy",
 				"Test arena (Gohma's room, no warp)", std::string("Boss refights: ") + (wwhd::debug::BossRefight() ? "ON" : "OFF"),
-				"Settings", "Close" };
+				"Save states", "Settings", "Close" };
 		std::vector<std::string> items;
+		if (s_page == kStatePage)
+		{
+			// the whole game at a frame's top (os/savestate.h): to test from a moment again, here or on another machine
+			for (int i = 1; i <= wwhd::state::kSlots; i++)
+				items.push_back("Save to slot " + std::to_string(i) + " (" + wwhd::state::SlotInfo(i) + ")");
+			for (int i = 1; i <= wwhd::state::kSlots; i++)
+				items.push_back("Load slot " + std::to_string(i) + " (" + wwhd::state::SlotInfo(i) + ")");
+			items.push_back("Back");
+			return items;
+		}
 		if (s_page == kSettingsPage)
 		{
 			for (int i = 0; i < wwhd::os::settings::Count(); i++)
@@ -145,7 +157,7 @@ namespace
 	// a page's item on the top page (its cursor on the way back)
 	int TopIndex(Page p)
 	{
-		return p == kFoePage ? 4 : p == kSettingsPage ? 7 : (int)p - 1;
+		return p == kFoePage ? 4 : p == kStatePage ? 7 : p == kSettingsPage ? 8 : (int)p - 1;
 	}
 
 	// the stick as a D-pad, so that either moves the cursor
@@ -171,7 +183,8 @@ namespace
 			case 4: s_page = kFoePage; s_cursor = 0; break;
 			case 5: StartArena(); s_open = false; break;
 			case 6: wwhd::debug::SetBossRefight(!wwhd::debug::BossRefight()); break;
-			case 7: s_page = kSettingsPage; s_cursor = 0; break;
+			case 7: s_page = kStatePage; s_cursor = 0; break;
+			case 8: s_page = kSettingsPage; s_cursor = 0; break;
 			default: s_open = false; break;
 			}
 			return;
@@ -185,6 +198,18 @@ namespace
 		if (s_page == kSettingsPage)
 		{
 			wwhd::os::settings::Cycle(s_cursor, 1);     // its next value (left and right step too)
+			return;
+		}
+		if (s_page == kStatePage)
+		{
+			// taken at the next whole tick's top; the menu closes so the game gets there
+			if (s_cursor < wwhd::state::kSlots)
+				wwhd::state::RequestSave(s_cursor + 1);
+			else if (wwhd::state::SlotInfo(s_cursor - wwhd::state::kSlots + 1) != "empty")
+				wwhd::state::RequestLoad(s_cursor - wwhd::state::kSlots + 1);
+			else
+				return;
+			s_open = false;
 			return;
 		}
 		if (s_page == kFoePage)
@@ -390,6 +415,7 @@ namespace wwhd::os::debug_menu
 		v.cursor = s_cursor;
 		v.hint = s_page == kTop ? "Move: D-pad/mouse   Choose: A/click   Close: B/F1"
 		       : s_page == kSettingsPage ? "Move: D-pad/mouse   Change: A/click/left/right   Back: B"
+		       : s_page == kStatePage && !wwhd::state::Status().empty() ? wwhd::state::Status()
 		                                 : "Move: D-pad/mouse   Pick: A/click   Back: B/right click";
 		return v;
 	}

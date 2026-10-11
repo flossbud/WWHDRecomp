@@ -8,6 +8,7 @@
 // Derived from Cemu (src/Cafe/HW/Latte/Core/LatteCommandProcessor.cpp, LatteThread.cpp,
 // LatteTiming.cpp, including the wwhd-reference virtual-clock change); Mozilla Public License 2.0.
 #include "Cafe/HW/Latte/Core/Latte.h"
+#include "../os/savestate.h"
 #include "Cafe/HW/Latte/Core/LattePM4.h"
 #include "Cafe/HW/Latte/ISA/RegDefines.h"
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
@@ -79,10 +80,10 @@ bool LatteTiming_getCustomVsyncFrequency(sint32& f)
 // wwhd: vsyncs signalled so far, for 60 fps pacing (src/overrides/pacing.cpp); counted before waiters
 // are woken, so one that checks it under the scheduler lock never misses one
 static std::atomic<uint64> s_vsyncCount = 0;
+static uint32 s_vsyncIntervalCounter = 0;          // vsyncs since the last flip (the swap interval's phase)
 
 void LatteTiming_signalVsync()
 {
-	static uint32 s_vsyncIntervalCounter = 0;
 	if (!LatteGPUState.gx2InitCalled)
 		return;
 	s_vsyncCount.fetch_add(1);
@@ -1064,3 +1065,27 @@ int BreathOfTheWildChildProcessMain() { return 0; }
 // (GX2's screenshot hook checks g_renderer first).
 bool g_vulkan_available = false;
 void Renderer::RequestScreenshot(ScreenshotSaveFunction) { }
+
+// wwhd: save states (os/savestate.h; the GPU thread has retired everything submitted, at rest): the command processor's
+// registers (the game sets most state each draw, not all), its context control, the flip and vsync counts and the swap
+// interval's phase, and predication. The renderer's own images aren't kept (they rebuild).
+static void StateRecord(wwhd::state::Archive& ar)
+{
+	ar.Pod(LatteGPUState.contextRegister);
+	ar.Pod(LatteGPUState.contextRegisterShadowAddr);
+	ar.Pod(LatteGPUState.contextControl0);
+	ar.Pod(LatteGPUState.contextControl1);
+	ar.Pod(LatteGPUState.frameCounter);
+	ar.Pod(LatteGPUState.flipCounter);
+	uint64 flips = LatteGPUState.flipRequestCount.load(), vsyncs = s_vsyncCount.load();
+	ar.Pod(flips);
+	ar.Pod(vsyncs);
+	ar.Pod(s_vsyncIntervalCounter);
+	ar.Pod(s_predicationActive);
+	ar.Expect(LatteGPUState.gx2InitCalled, "GX2Init's count");
+	if (!ar.Loading() || !ar.Ok())
+		return;
+	LatteGPUState.flipRequestCount = flips;
+	s_vsyncCount = vsyncs;
+}
+WWHD_STATE_RECORD("gpu", StateRecord);

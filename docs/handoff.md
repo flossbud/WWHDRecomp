@@ -4392,6 +4392,58 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
     as before: Link 0.0 on tour3 and en-bo, 16.5 on sail (13.3 with the frame skip), the seagull parting. Then rebased
     on 66c2c46 (t-fpsoverlay: present.cpp's Draw merged by hand, the probe's window sample after the FPS panel),
     rebuilt, checks and blacktest again: all MATCH (15 captures PSNR inf), blacktest 4 ok.
+- **q-savestate, save states (the owner's ask, 2026-10-11, after B16 showed on the Deck once and couldn't be carried to
+  a worker).** The whole game to a file and back, in the same process or a fresh one, on any machine with the same
+  build: `src/os/savestate.{h,cpp}`. The debug menu (both sticks) has a page "Save states": save to slot 1-4, load slot
+  1-4 (`portable/states/slotN.state`, ~250 MB each, zstd; game memory: never in git, `.gitignore` has `*.state`). Tests
+  and other machines: `WWHD_STATE_SAVE=SWAP:PATH` (save at the first whole tick from that swap, play on),
+  `WWHD_STATE_LOAD=PATH` (a fresh process loads it as soon as it has come as far: its threads and the OS calls
+  registered match, swap ~9 on the virtual clock, ~825 in real time), `WWHD_STATE_LOAD_AT=SWAP:PATH` (in place, the
+  menu's way), `WWHD_STATE_CENSUS=SWAP,...` (a probe: every thread at the save point, the host alarms, the open files).
+  - *The save point*: the top of a whole tick's frame (fw_procFrame, f_0274C264, before anything of it). The main
+    thread suspends itself there; the main core's idle loop takes the save when the game is at rest: no thread on a
+    core, the GPU has retired everything submitted, and every thread resumable from guest memory alone: waiting in an
+    OS call entered from the game's code (srr0 its trampoline; at a frame's top all 17 game threads wait in
+    OSReceiveMessage), a system thread (its body the OS layer's: srr0 and LR trampolines) waiting, or ready in the
+    game's code with its last switch-out exact (the dispatcher's yield or the interpreter's slice end, `TakeExactSwitch`;
+    anywhere else its IP is stale) and no callback from the OS layer under it. OliveOperationMgrThread polls its queue
+    without ever waiting, so "every thread waiting" never comes. Not at rest within half a second of guest time: no save,
+    a census in the log, the game goes on. A save takes ~0.65 s (593 MB in use, 246 MB written).
+  - *The file*: "WWHDSTAT", the records (each module's host state, `WWHD_STATE_RECORD(tag, fn)` with a symmetric
+    `Archive`: the scheduler's active list, timeslice PRNG, next core and virtual vsync; the guest clock and calendar
+    (real time rebases so guest time goes on; a real-time state loads under the virtual clock); the guest alarms; GX2's
+    swap count, command buffers and the GPU's registers, flip and vsync counts and retire timestamp counter (TCL: without
+    it a load hung, the game waiting for a timestamp the fresh count never reached); AX's voice lists, protections,
+    callbacks and frame counters; the open files (path, slot, check value, position; reopened, never truncated); the
+    controller's sampling; the 60 fps layer's carried values; pacing), then guest memory: every mapped range in 64 KiB
+    blocks, zero ones flagged, written on a load only where they differ (untouched pages stay unbacked; the write watch
+    unprotects first so the texture cache hashes again).
+  - *A load*: the same save point; the threads checked (the same set at the same addresses: the game makes all 32, 33 in
+    real time, by the title), memory, the records, then the game's threads built anew: each new fiber loads its saved
+    context and the dispatcher goes on from srr0 (mid-function: the interpreter fallback to the next function entry);
+    one that waited in an OS call runs the call again when woken, without the cycles its first run was charged
+    (`FiberStart`; OSReceiveMessage loops to the same check when woken). The system threads keep the fresh process's
+    fibers, waiting in the same place. The renderer keeps nothing of the state: the next frame draws the display lists
+    the state's memory holds (the first frame after a load matched the run that saved, 0 pixels apart).
+  - *The task loop* (task_loop.cpp, real time's fast path) mirrors the game's frame in host code: a rebuilt thread
+    interpreting its way back into the game's loop (from a handler, from the receive) reaches one of its three return
+    addresses, where resume entries (`wwhd::rt::AddResume`) go on in the override with its idle waits (the game's loop
+    interpreted spins). While a save or load waits for rest its idle wait is skipped, so Olive keeps to exact points.
+  - *Checks*: `tools/sixty/tests/statetest.sh ROUTE SWAP` (predeploy runs two: tour3 loaded fresh, sail loaded in place)
+    compares every whole tick's actor hashes after the load with the run that saved and played on: sail 1290 ticks,
+    tour3 740, warp 1799 (the Ballad's warp and stage loads after the load), in place sail (loaded at 3000 back to 2400)
+    and tour3 (1300 forward to 2000): all 0 differ. Rendered on the virtual clock: 7 captures after the load 0 pixels
+    from the run that saved. Real time (wwhd-play, three host threads, Vulkan, sail): a save, a fresh load and an in-place
+    one, 60 fps after the load where its shaders were compiled (a fresh process compiles the scene's on first use: ~320
+    ms stalls, as any first visit); the debug menu driven by an input script saved slot 1, which a fresh process and an
+    in-place load both played on from.
+  - *Adding host state* that outlives a frame: give it a record, or statetest finds it (a run that diverges after the
+    load). Not carried: an open directory, the OS layer's own host alarms (a sleep's or a timeout's: refused, none at a
+    frame's top), the renderer's images (they rebuild). A real-time state (33 threads: NetBossThread runs in real time
+    only) loads in real time only: carry a Deck state to a worker's wwhd-play of the same build.
+  - *Gates* (main 355fe1d + the change): checks all MATCH (traces, streams, sound, diff 0 mismatches of 1,118,003, 15
+    captures PSNR inf); regress identical (da06a4ee); predeploy 51 ok, 0 FAIL, blacktest 4 ok, picto ok, statetest 2 ok
+    (0 differ), the real-time routes ok, the soak 60.0 fps; gohmatail WARN 54.0 (as on main), gohmarock ok 4.8.
 
 ## Waiting on the owner
 

@@ -9,6 +9,7 @@
 #include "Cafe/HW/Espresso/PPCCallback.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
 #include "Cafe/OS/libs/coreinit/coreinit_MessageQueue.h"
+#include "../savestate.h"
 
 namespace snd_core
 {
@@ -1075,4 +1076,16 @@ namespace snd_core
 	{
 		return __AXIstIsProcessingFrame.load();
 	}
+
+	// wwhd: save states (os/savestate.h): the frame callbacks the game registered, the upsampling stages and the final
+	// mix's channel counts
+	static void StateRecordIst(wwhd::state::Archive& ar)
+	{
+		ar.Pod(__AXDeviceUpsampleStage);
+		ar.Pod(__AXFinalMixOutputChannelCount);
+		ar.Pod(__AXFrameCallback);
+		ar.Pod(__AXAppFrameCallback);
+		ar.Pod(__AXDeviceFinalMixCallback);
+	}
+	WWHD_STATE_RECORD("snd.ist", StateRecordIst);
 }

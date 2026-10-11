@@ -18,6 +18,7 @@
 #include "GX2_Shader.h"
 #include "GX2_Misc.h"
 #include "OS/libs/coreinit/coreinit_MEM.h"
+#include "../../savestate.h"
 
 namespace GX2
 {
@@ -585,4 +586,32 @@ namespace GX2
 		s_cbBufferIsInternallyAllocated = false;
     }
 
+
+	extern uint32 sGX2MainCoreIndex;                 // GX2_Misc.cpp
+
+	// wwhd: save states (os/savestate.h): each core's open command buffer or display list (where the next GX2 command
+	// is written; host pointers into guest memory, kept as guest addresses), the main core's last one, the core GX2Init
+	// ran on, and whether the pool is GX2's own
+	static void StateRecord(wwhd::state::Archive& ar)
+	{
+		auto cb = [&](GX2PerCoreCBState& c) {
+			uint32 buffer = c.bufferPtr ? memory_getVirtualOffsetFromPointer(c.bufferPtr) : 0;
+			uint32 write = c.currentWritePtr ? memory_getVirtualOffsetFromPointer(c.currentWritePtr) : 0;
+			ar.Pod(buffer);
+			ar.Pod(c.bufferSizeInU32s);
+			ar.Pod(write);
+			ar.Pod(c.isDisplayList);
+			if (ar.Loading() && ar.Ok())
+			{
+				c.bufferPtr = buffer ? (uint32be*)memory_getPointerFromVirtualOffset(buffer) : nullptr;
+				c.currentWritePtr = write ? (uint32be*)memory_getPointerFromVirtualOffset(write) : nullptr;
+			}
+		};
+		for (auto& c : s_perCoreCBState)
+			cb(c);
+		cb(s_mainCoreLastCommandState);
+		ar.Pod(sGX2MainCoreIndex);
+		ar.Pod(s_cbBufferIsInternallyAllocated);
+	}
+	WWHD_STATE_RECORD("gx2.command", StateRecord);
 }

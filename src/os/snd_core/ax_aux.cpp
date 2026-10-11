@@ -6,6 +6,7 @@
 #include "Cafe/OS/libs/snd_core/ax.h"
 #include "Cafe/OS/libs/snd_core/ax_internal.h"
 #include "Cafe/HW/Espresso/PPCState.h"
+#include "../savestate.h"
 
 namespace snd_core
 {
@@ -299,4 +300,19 @@ namespace snd_core
 		return 0;
 	}
 
+
+	// wwhd: save states (os/savestate.h): the AUX callbacks and the AUX frame's index
+	static void StateRecordAux(wwhd::state::Archive& ar)
+	{
+		ar.Pod(__AXOldAuxDRCCallbackFunc);
+		ar.Pod(__AXOldAuxDRCCallbackUserParam);
+		ar.Pod(__AXOldAuxTVCallbackFunc);
+		ar.Pod(__AXOldAuxTVCallbackUserParam);
+		ar.Pod(__AXAuxDRCCallbackFunc);
+		ar.Pod(__AXAuxDRCCallbackUserParam);
+		ar.Pod(__AXAuxTVCallbackFunc);
+		ar.Pod(__AXAuxTVCallbackUserParam);
+		ar.Pod(__AXCurrentAuxInputFrameIndex);
+	}
+	WWHD_STATE_RECORD("snd.aux", StateRecordAux);
 }

@@ -24,3 +24,6 @@ __pycache__/
 # the machines' addresses and logins (tools/worker/hosts.sh; desktop.env is the older file)
 /tools/worker/hosts.env
 /tools/worker/desktop.env
+# save states are game memory (src/os/savestate.h): never in git
+*.state
+states/

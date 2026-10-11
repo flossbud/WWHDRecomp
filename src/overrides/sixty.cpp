@@ -28,6 +28,7 @@
 #include "override.h"
 #include "../os/input.h"
 #include "../os/debug_menu.h"
+#include "../os/savestate.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -3223,6 +3224,9 @@ namespace
 void f_0274C264(PPCInterpreter_t* __restrict ctx)
 {
 	const uint32 from = wwhd::rt::SixtyFrom();      // ~0 when 60 fps is off
+	// save states' save point (os/savestate.h): a whole tick's frame, before anything of it runs
+	if (from == ~0u || wwhd::os::SwapCount() < from || (wwhd::os::SwapCount() - from) % g_rtSteps == 0)
+		wwhd::state::AtFrameTop(ctx);
 	if (from == ~0u)
 	{
 		wwhd::pacing::FrameStart30(wwhd::os::SwapCount());   // the frame skip below 30 (pacing.cpp; real time)
@@ -4846,3 +4850,105 @@ void f_027F1174(PPCInterpreter_t* __restrict ctx)
 		J3dLoopCheck(ctx);
 	[[clang::musttail]] return orig_f_027F1174(ctx);
 }
+
+// save states (os/savestate.h): what the 60 fps layer carries from one tick to the next (the census in the save state
+// inventory: actors seen, Link, a grab, the boss refights, mode holds, the Co pushes a half tick halves, the half
+// steps' random draws, Link's reset flags, the fades); the rest is rebuilt at each whole tick's start
+static void StateRecordSixty(wwhd::state::Archive& ar)
+{
+	ar.Map(s_knownActors);
+	ar.Pod(s_link);
+	ar.Pod(s_grabbed);
+	ar.Pod(s_grabbedId);
+	ar.Pod(s_grabbedPos);
+	int arena = s_arena, refight = s_bossRefight;
+	bool beatenHere = s_beatenHere, beatenLeaving = s_beatenLeaving;
+	ar.Pod(arena);
+	ar.Pod(refight);
+	ar.Pod(beatenHere);
+	ar.Pod(beatenLeaving);
+	ar.Map(s_modeSet);
+	ar.Vec(s_coPushes);
+	ar.Pod(s_coPushesSwap);
+	ar.Pod(s_resolveCcs);
+	{
+		std::vector<uint32> keys, flat;               // s_rndHalf: each key, its count, its callers
+		for (auto& [k, v] : s_rndHalf)
+			keys.push_back(k);
+		std::sort(keys.begin(), keys.end());
+		for (uint32 k : keys)
+		{
+			flat.push_back(k);
+			flat.push_back((uint32)s_rndHalf[k].size());
+			flat.insert(flat.end(), s_rndHalf[k].begin(), s_rndHalf[k].end());
+		}
+		ar.Vec(flat);
+		if (ar.Loading() && ar.Ok())
+		{
+			s_rndHalf.clear();
+			for (size_t i = 0; i + 1 < flat.size();)
+			{
+				const uint32 k = flat[i], n = flat[i + 1];
+				i += 2;
+				if (i + n > flat.size())
+					return ar.Fail("s_rndHalf is damaged");
+				s_rndHalf[k].assign(flat.begin() + i, flat.begin() + i + n);
+				i += n;
+			}
+		}
+	}
+	ar.Pod(s_rfLink);
+	ar.Pod(s_rfWhole);
+	ar.Pod(s_rfHalf);
+	ar.Pod(s_rfHalfTerm);
+	ar.Pod(s_rfLast);
+	ar.Pod(s_rfHalfRan);
+	ar.Pod(s_rfTickSwap);
+	ar.Pod(s_rfLinkSwap);
+	{
+		std::vector<uint32> keys;                     // s_modeLate: each key, its before and after fields
+		std::vector<uint16> flat;
+		for (auto& [k, v] : s_modeLate)
+			keys.push_back(k);
+		std::sort(keys.begin(), keys.end());
+		for (uint32 k : keys)
+		{
+			const auto& m = s_modeLate[k];
+			flat.push_back((uint16)m.before.size());
+			flat.insert(flat.end(), m.before.begin(), m.before.end());
+			flat.push_back((uint16)m.after.size());
+			flat.insert(flat.end(), m.after.begin(), m.after.end());
+		}
+		ar.Vec(keys);
+		ar.Vec(flat);
+		if (ar.Loading() && ar.Ok())
+		{
+			s_modeLate.clear();
+			size_t i = 0;
+			for (uint32 k : keys)
+			{
+				auto take = [&](std::vector<uint16>& v) {
+					if (i >= flat.size() || i + 1 + flat[i] > flat.size())
+						return false;
+					v.assign(flat.begin() + i + 1, flat.begin() + i + 1 + flat[i]);
+					i += 1 + v.size();
+					return true;
+				};
+				auto& m = s_modeLate[k];
+				if (!take(m.before) || !take(m.after))
+					return ar.Fail("s_modeLate is damaged");
+			}
+		}
+	}
+	ar.Pod(s_fadeLastSwap);
+	ar.Pod(s_fadePerSwap);
+	ar.Pod(s_fadeHoldAtWhole);
+	if (ar.Loading() && ar.Ok())
+	{
+		s_arena = arena;
+		s_bossRefight = refight;
+		s_beatenHere = beatenHere;
+		s_beatenLeaving = beatenLeaving;
+	}
+}
+WWHD_STATE_RECORD("sixty", StateRecordSixty);

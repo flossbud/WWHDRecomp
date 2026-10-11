@@ -10,6 +10,7 @@
 #include "Cafe/OS/libs/snd_core/ax_internal.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
 #include "util/helpers/fspinlock.h"
+#include "../savestate.h"
 
 namespace snd_core
 {
@@ -1232,4 +1233,31 @@ namespace snd_core
 		vpbLoopTracker_prevCurrentOffset[voiceIndex] = currentOffset;
 		return vpbLoopTracker_loopCount[voiceIndex];
 	}
+
+	// wwhd: save states (os/savestate.h): the voices' host lists (by priority, and the free ones: their order is the
+	// mixing's), the protections and the loop trackers; the voices themselves are in guest memory
+	static void StateRecordVoices(wwhd::state::Archive& ar)
+	{
+		auto list = [&](std::vector<AXVPB*>& v) {
+			std::vector<MPTR> m;
+			for (AXVPB* p : v)
+				m.push_back(memory_getVirtualOffsetFromPointer(p));
+			ar.Vec(m);
+			if (ar.Loading() && ar.Ok())
+			{
+				v.clear();
+				for (MPTR a : m)
+					v.push_back(MEMPTR<AXVPB>(a).GetPtr());
+			}
+		};
+		for (auto& v : __AXVoicesPerPriority)
+			list(v);
+		list(__AXFreeVoices);
+		ar.Pod(__AXUserProtectionArraySize);
+		ar.Pod(__AXUserProtectionArray);
+		ar.Pod(__AXVoiceProtection);
+		ar.Pod(vpbLoopTracker_loopCount);
+		ar.Pod(vpbLoopTracker_prevCurrentOffset);
+	}
+	WWHD_STATE_RECORD("snd.voice", StateRecordVoices);
 }

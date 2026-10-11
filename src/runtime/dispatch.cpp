@@ -95,6 +95,51 @@ namespace wwhd::rt
 	static std::mutex s_callbackMutex;
 
 	static bool s_fastPaths = false;          // real time, native, one host thread (see the top)
+
+	// save states (os/savestate.cpp): a guest thread running a callback from the OS layer has host frames of it under the
+	// guest code (PPCCore_executeCallbackInternal), so it can't be resumed from its saved context alone
+	bool InCallback(PPCInterpreter_t* hCPU)
+	{
+		std::unique_lock _l(s_callbackMutex);
+		return s_callbackDepth.count(hCPU) != 0;
+	}
+
+	// save states: did this host thread's guest thread just stop at an exact point (its slice ran out before the
+	// instruction at its IP: Yield, or the interpreter's loop), rather than in the OS layer or an override's host code,
+	// where its IP is stale? Read and cleared by the scheduler at each switch-out
+	static thread_local bool t_exactSwitch = false;
+	bool TakeExactSwitch()
+	{
+		const bool exact = t_exactSwitch;
+		t_exactSwitch = false;
+		return exact;
+	}
+
+	// save states: a resume entry for an address inside a function an override replaces with host code that mirrors the
+	// game's (task_loop.cpp): a thread a load rebuilt, interpreting its way back to that address, goes on in the
+	// override's code from there instead of the game's. Few, registered at start
+	struct Resume
+	{
+		uint32 addr;
+		bool (*fn)(PPCInterpreter_t*);               // false: not now (the game's code runs on, interpreted)
+	};
+	static Resume s_resume[8];
+	static uint32 s_resumes = 0;
+	void AddResume(uint32 addr, bool (*fn)(PPCInterpreter_t*))
+	{
+		if (s_resumes < std::size(s_resume))
+			s_resume[s_resumes++] = { addr, fn };
+	}
+	static inline bool RunResume(PPCInterpreter_t* hCPU, uint32 ip)
+	{
+		for (uint32 k = 0; k < s_resumes; k++)
+			if (s_resume[k].addr == ip && s_resume[k].fn(hCPU))
+			{
+				hCPU->instructionPointer = hCPU->spr.LR & ~3u;   // it returned as a function would: to LR
+				return true;
+			}
+		return false;
+	}
 	static std::atomic<uint64> s_idleWaits{ 0 }, s_idleWaitsByMessage{ 0 };
 
 	// ---- the quiet watch (D19's fast paths) ---------------------------------------------------------
@@ -286,8 +331,13 @@ namespace wwhd::rt
 				hCPU->instructionPointer = hCPU->spr.LR & ~3u;   // where its blr went
 				continue;
 			}
+			if (s_resumes && RunResume(hCPU, ip)) [[unlikely]]
+				continue;
 			if ((--hCPU->remainingCycles) < 0)
+			{
+				t_exactSwitch = true;                    // stopped before the instruction at ip (save states)
 				break;
+			}
 			if (((ip - g_codeBase) >> 2) < g_codeWords) [[unlikely]]
 			{
 				if (Bump(s_fallbackInsns) < 20)
@@ -362,7 +412,10 @@ namespace wwhd::rt
 		ctx->instructionPointer = pc;                // the thread's saved context shows where it stopped
 		Bump(s_yields);
 		do
+		{
+			t_exactSwitch = true;                    // (save states: exact here; TakeExactSwitch clears it)
 			EndTimeslice(ctx);
+		}
 		while (--ctx->remainingCycles < 0);          // the new slice pays for the instruction at pc
 	}
 

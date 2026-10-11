@@ -50,6 +50,9 @@ namespace wwhd::rt
 
 	// for the real-time log: a thread slept through an idle round, woken by a message or not
 	void CountIdleWait(bool byMessage);
+	// save states: a resume entry at an address inside a function an override replaces with code that mirrors the
+	// game's (task_loop.cpp; runtime/dispatch.cpp); fn returns false when it doesn't take over (the game's code runs)
+	void AddResume(uint32 addr, bool (*fn)(PPCInterpreter_t*));
 }
 
 // The 60 fps tools (src/overrides/sixty.cpp): while set, with g_rtJournalOn, every store generated

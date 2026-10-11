@@ -12,6 +12,7 @@
 #include "Cafe/OS/libs/coreinit/coreinit_Time.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
 #include "Cafe/CafeSystem.h"
+#include "../../savestate.h"
 #include "Cafe/HW/Latte/Core/LattePM4.h"
 #include "input/InputManager.h"
 
@@ -56,6 +57,18 @@ uint64 lastSwapTime = 0;
 // wwhd-reference: frame counter for scripted input (counts GX2SwapScanBuffers calls)
 static std::atomic<uint32> s_refSwapCount{0};
 uint32 GX2_RefSwapCount() { return s_refSwapCount.load(); }
+
+// wwhd: save states (os/savestate.h): the swap count is the frame number everything counts by (input scripts,
+// GameFrame, the 60 fps layer's steps)
+static void StateRecord(wwhd::state::Archive& ar)
+{
+	uint32 swaps = s_refSwapCount.load();
+	ar.Pod(swaps);
+	ar.Pod(lastSwapTime);
+	if (ar.Loading() && ar.Ok())
+		s_refSwapCount = swaps;
+}
+WWHD_STATE_RECORD("gx2.swap", StateRecord);
 
 // wwhd-reference: frame-indexed screenshots. CEMU_SHOT_FRAMES=120,300,450 (or A-B/STEP ranges)
 // requests a capture when that frame is presented; images go to $CEMU_SHOT_DIR (default ".") as

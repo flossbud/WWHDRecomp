@@ -10,6 +10,7 @@
 #include "Cafe/OS/libs/coreinit/coreinit_Alarm.h"
 #include "Cafe/HW/Espresso/Recompiler/PPCRecompiler.h"
 #include "Cafe/OS/RPL/rpl.h"
+#include "../savestate.h"
 
 // #define ALARM_LOGGING
 
@@ -24,6 +25,8 @@ namespace coreinit
 
 	class OSHostAlarm 
 	{
+		// wwhd: save states (os/savestate.cpp) read the pending alarms
+		friend void __OSHostAlarmsForEach(void (*fn)(uint64, uint64, void*, void*, OSAlarm_t*, void*), void* user);
 	public:
 		OSHostAlarm(uint64 nextFire, uint64 period, void(*callbackFunc)(uint64 currentTick, void* context), void* context) : m_nextFire(nextFire), m_period(period), m_callbackFunc(callbackFunc), m_context(context)
 		{
@@ -209,6 +212,21 @@ namespace coreinit
 
 	std::unordered_map<OSAlarm_t*, OSHostAlarm*> g_activeAlarms;
 
+	// wwhd: save states (os/savestate.cpp): every pending host alarm, soonest first, and the guest alarm it stands for
+	// (null: one of the OS layer's own, a sleep's or a wait's timeout); scheduler lock held
+	void __OSHostAlarmsForEach(void (*fn)(uint64 nextFire, uint64 period, void* callback, void* context, OSAlarm_t* guest, void* user), void* user)
+	{
+		cemu_assert_debug(__OSHasSchedulerLock());
+		for (OSHostAlarm* a : OSHostAlarm::g_activeAlarmList)
+		{
+			OSAlarm_t* guest = nullptr;
+			for (auto& [g, h] : g_activeAlarms)
+				if (h == a)
+					guest = g;
+			fn(a->m_nextFire, a->m_period, (void*)a->m_callbackFunc, a->m_context, guest, user);
+		}
+	}
+
 	bool OSCancelAlarm(OSAlarm_t* alarm)
 	{
 		__OSLockScheduler();
@@ -389,4 +407,42 @@ namespace coreinit
 		strcpy(_g_alarmThreadName.GetPtr(), "Alarm Thread");
 		coreinit::OSSetThreadName(g_alarmThread.GetPtr(), _g_alarmThreadName.GetPtr());
 	}
+
+	// wwhd: save states (os/savestate.h): the guest alarms pending, each its next fire and period (the guest side, the
+	// OSAlarm_t, is in guest memory). The OS layer's own host alarms (a sleep's wake, a wait's timeout) carry host
+	// pointers: a state with one pending can't be loaded (none at a frame's top: the census)
+	static void StateRecord(wwhd::state::Archive& ar)
+	{
+		struct Saved
+		{
+			MPTR alarm;
+			uint64 nextFire, period;
+		};
+		struct Walk
+		{
+			std::vector<Saved> guest;
+			uint32 others = 0;
+		} walk;
+		__OSHostAlarmsForEach([](uint64 fire, uint64 period, void*, void*, OSAlarm_t* guest, void* user) {
+			Walk& w = *(Walk*)user;
+			if (guest)
+				w.guest.push_back({ memory_getVirtualOffsetFromPointer(guest), fire, period });
+			else
+				w.others++;
+		}, &walk);
+		std::sort(walk.guest.begin(), walk.guest.end(), [](const Saved& a, const Saved& b) { return a.alarm < b.alarm; });
+		const uint32 othersHere = walk.others;
+		ar.Pod(walk.others);
+		ar.Vec(walk.guest);
+		if (!ar.Loading() || !ar.Ok())
+			return;
+		if (walk.others || othersHere)
+			return ar.Fail(fmt::format("the OS layer's own alarms pending ({} in the state, {} here)", walk.others, othersHere));
+		for (auto& [g, h] : g_activeAlarms)
+			OSHostAlarmDestroy(h);
+		g_activeAlarms.clear();
+		for (const Saved& a : walk.guest)
+			g_activeAlarms[MEMPTR<OSAlarm_t>(a.alarm).GetPtr()] = OSHostAlarmCreate(a.nextFire, a.period, __OSHostAlarmTriggered, nullptr);
+	}
+	WWHD_STATE_RECORD("coreinit.alarm", StateRecord);
 }

@@ -11,6 +11,7 @@
 #include "tcl_host.h"
 #include <condition_variable>
 #include <mutex>
+#include "../savestate.h"
 
 namespace TCL
 {
@@ -226,4 +227,16 @@ namespace TCL
 	{
 		return &s_COStclModule;
 	}
+
+	// wwhd: save states (os/savestate.h): the next submission's timestamp counts on from the state's (the game keeps
+	// timestamps in its memory and waits for the GPU to retire them: a count from the fresh boot's never gets there).
+	// The ring itself is empty at the save point (the GPU has retired everything submitted)
+	static void StateRecord(wwhd::state::Archive& ar)
+	{
+		ar.Pod(s_currentRetireMarker);
+		const bool empty = tclRingBufferA_readIndex.load() == tclRingBufferA_writeIndex.load();
+		if (!empty)
+			ar.Fail("the GPU's command ring isn't empty");
+	}
+	WWHD_STATE_RECORD("tcl", StateRecord);
 }

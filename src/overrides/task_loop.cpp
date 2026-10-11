@@ -22,7 +22,14 @@
 // looks as if the thread had been preempted for a while: the messages, their order and every write
 // are the same; something only memory or the clock tells the handler is seen at most 1 ms later.
 // With the virtual clock (every check) the game's loop runs, orig_f_0275FFCC.
+//
+// Save states (os/savestate.h): this frame mirrors the game's (its stack frame, r31 the task, r3 the message), so a
+// thread a load rebuilt, which interprets the game's loop from wherever it stopped (in a handler, in the receive),
+// comes back to one of the game's return addresses in it: resume entries there (wwhd::rt::AddResume) go on in this
+// code from that point, with its idle waits (the game's loop interpreted would spin, as on the Wii U). While a save
+// or load waits for the game to come to rest the idle wait is skipped, so this thread keeps to exact points.
 #include "override.h"
+#include "../os/savestate.h"
 
 namespace
 {
@@ -39,53 +46,98 @@ namespace
 	}
 }
 
+namespace
+{
+	// where the game's loop is when this code takes over: its entry, or one of its return addresses (a load's resume)
+	enum class At { Entry, FirstReceived, Handled, Received };
+
+	void Run(PPCInterpreter_t* __restrict ctx, At at)
+	{
+		uint32 stop = 0;
+		if (at == At::Entry)
+		{
+			GPR(0) = ctx->spr.LR;                          // mflr r0
+			wr32(GPR(1) - 16, GPR(1));                     // stwu r1, -16(r1)
+			GPR(1) -= 16;
+			wr32(GPR(1) + 12, GPR(31));                    // stw r31, 12(r1)
+			GPR(31) = GPR(3);                              // mr r31, r3: the task
+			wr32(GPR(1) + 20, GPR(0));                     // stw r0, 20(r1)
+			Receive(ctx, 0x0275FFECu);
+			at = At::FirstReceived;
+		}
+		if (at == At::FirstReceived)                       // 0275FFEC
+		{
+			GPR(10) = rd32(GPR(31) + 120);                 // the stop message
+			cr_compare<uint32>(ctx, 0, GPR(3), GPR(10));
+			stop = GPR(10);
+		}
+		if (at == At::Handled)                             // 02760014: the handler returned
+		{
+			Receive(ctx, 0x02760020u);
+			at = At::Received;
+		}
+		if (at == At::Received)                            // 02760020
+		{
+			GPR(0) = rd32(GPR(31) + 120);                  // lwz r0, 120(r31)
+			cr_compare<uint32>(ctx, 0, GPR(3), GPR(0));
+			stop = GPR(0);
+		}
+		bool idle = false;                                 // the last call only posted its message back
+		uint32 idleMessage = 0;
+		while (GPR(3) != stop)
+		{
+			const uint32 message = GPR(3), queue = GPR(31) + kQueue;
+			if (idle && message == idleMessage && !wwhd::state::Pending())
+			{
+				wwhd::os::QueueView v = wwhd::os::ViewQueue(queue, message);
+				if (v.allSame)
+					wwhd::rt::CountIdleWait(wwhd::os::WaitQueueChange(queue, v.used, kIdleWaitNs));
+			}
+			GPR(12) = rd32(GPR(31) + 12);                  // lwz r12, 12(r31): the vtable
+			GPR(0) = rd32(GPR(12) + 124);                  // lwz r0, 124(r12): the handler
+			GPR(4) = GPR(3);                               // mr r4, r3
+			ctx->spr.CTR = GPR(0);                         // mtctr r0
+			GPR(3) = GPR(31);                              // mr r3, r31
+			ctx->spr.LR = 0x02760014u;                     // bctrl
+			const uint32 before = wwhd::os::ViewQueue(queue, message).used;
+			// dead once the handler returns: the stack below this frame, and 4(r1), where callees save
+			// their return address (the EABI's LR save word, which this function never reads)
+			const uint64 watch = wwhd::rt::QuietBegin(ctx, wwhd::os::CurrentThreadStackEnd(), GPR(1) + 8);
+			RT_CALL_CTR();
+			const sint32 osCalls = wwhd::rt::QuietEnd(watch);
+			const wwhd::os::QueueView after = wwhd::os::ViewQueue(queue, message);
+			idle = osCalls == 1 && after.used == before + 1 && after.last == message;
+			idleMessage = message;
+			Receive(ctx, 0x02760020u);
+			GPR(0) = rd32(GPR(31) + 120);                  // lwz r0, 120(r31)
+			cr_compare<uint32>(ctx, 0, GPR(3), GPR(0));
+			stop = GPR(0);
+		}
+		GPR(0) = rd32(GPR(1) + 20);                        // lwz r0, 20(r1)
+		GPR(31) = rd32(GPR(1) + 12);                       // lwz r31, 12(r1)
+		ctx->spr.LR = GPR(0);                              // mtlr r0
+		GPR(1) += 16;                                      // addi r1, r1, 16; blr
+	}
+
+	// the resume entries (real time only: with the virtual clock the game's own loop runs on, interpreted)
+	template <At at> bool ResumeAt(PPCInterpreter_t* ctx)
+	{
+		if (!wwhd::rt::FastPaths())
+			return false;
+		Run(ctx, at);
+		return true;
+	}
+	const bool s_resumes = [] {
+		wwhd::rt::AddResume(0x0275FFECu, ResumeAt<At::FirstReceived>);
+		wwhd::rt::AddResume(0x02760014u, ResumeAt<At::Handled>);
+		wwhd::rt::AddResume(0x02760020u, ResumeAt<At::Received>);
+		return true;
+	}();
+}
+
 void f_0275FFCC(PPCInterpreter_t* __restrict ctx)
 {
 	if (!wwhd::rt::FastPaths())
 		[[clang::musttail]] return orig_f_0275FFCC(ctx);
-	GPR(0) = ctx->spr.LR;                                  // mflr r0
-	wr32(GPR(1) - 16, GPR(1));                             // stwu r1, -16(r1)
-	GPR(1) -= 16;
-	wr32(GPR(1) + 12, GPR(31));                            // stw r31, 12(r1)
-	GPR(31) = GPR(3);                                      // mr r31, r3: the task
-	wr32(GPR(1) + 20, GPR(0));                             // stw r0, 20(r1)
-	Receive(ctx, 0x0275FFECu);
-	GPR(10) = rd32(GPR(31) + 120);                         // the stop message
-	cr_compare<uint32>(ctx, 0, GPR(3), GPR(10));
-	uint32 stop = GPR(10);
-	bool idle = false;                                     // the last call only posted its message back
-	uint32 idleMessage = 0;
-	while (GPR(3) != stop)
-	{
-		const uint32 message = GPR(3), queue = GPR(31) + kQueue;
-		if (idle && message == idleMessage)
-		{
-			wwhd::os::QueueView v = wwhd::os::ViewQueue(queue, message);
-			if (v.allSame)
-				wwhd::rt::CountIdleWait(wwhd::os::WaitQueueChange(queue, v.used, kIdleWaitNs));
-		}
-		GPR(12) = rd32(GPR(31) + 12);                      // lwz r12, 12(r31): the vtable
-		GPR(0) = rd32(GPR(12) + 124);                      // lwz r0, 124(r12): the handler
-		GPR(4) = GPR(3);                                   // mr r4, r3
-		ctx->spr.CTR = GPR(0);                             // mtctr r0
-		GPR(3) = GPR(31);                                  // mr r3, r31
-		ctx->spr.LR = 0x02760014u;                         // bctrl
-		const uint32 before = wwhd::os::ViewQueue(queue, message).used;
-		// dead once the handler returns: the stack below this frame, and 4(r1), where callees save
-		// their return address (the EABI's LR save word, which this function never reads)
-		const uint64 watch = wwhd::rt::QuietBegin(ctx, wwhd::os::CurrentThreadStackEnd(), GPR(1) + 8);
-		RT_CALL_CTR();
-		const sint32 osCalls = wwhd::rt::QuietEnd(watch);
-		const wwhd::os::QueueView after = wwhd::os::ViewQueue(queue, message);
-		idle = osCalls == 1 && after.used == before + 1 && after.last == message;
-		idleMessage = message;
-		Receive(ctx, 0x02760020u);
-		GPR(0) = rd32(GPR(31) + 120);                      // lwz r0, 120(r31)
-		cr_compare<uint32>(ctx, 0, GPR(3), GPR(0));
-		stop = GPR(0);
-	}
-	GPR(0) = rd32(GPR(1) + 20);                            // lwz r0, 20(r1)
-	GPR(31) = rd32(GPR(1) + 12);                           // lwz r31, 12(r1)
-	ctx->spr.LR = GPR(0);                                  // mtlr r0
-	GPR(1) += 16;                                          // addi r1, r1, 16; blr
+	Run(ctx, At::Entry);
 }

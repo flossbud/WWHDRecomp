@@ -4,6 +4,8 @@
 // Route traces, GPU commands and sound must stay as Cemu's (tools/reference/stream_check.sh).
 #include "Cafe/HW/Espresso/Const.h"
 #include "config/ActiveSettings.h"
+#include "Cafe/HW/Espresso/PPCState.h"
+#include "../../os/savestate.h"
 #include <chrono>
 #include <cstdio>
 #include <unistd.h>
@@ -113,3 +115,29 @@ uint64 PPCTimer_getFromRDTSC()
 	uint64 cycles = ns / 1000000000ULL * Espresso::CORE_CLOCK + ns % 1000000000ULL * Espresso::CORE_CLOCK / 1000000000ULL;
 	return (cycles << 3) >> ActiveSettings::GetTimerShiftFactor();
 }
+
+// wwhd: save states (os/savestate.h): guest time goes on from the state's, whichever clock either process runs on (a
+// state saved in real time on the Steam Deck loads under the virtual clock on a worker: guest time is the timer's value
+// either way), and the calendar is the state's
+static void StateRecord(wwhd::state::Archive& ar)
+{
+	uint64 now = PPCTimer_getFromRDTSC(), remainder = s_virtualRemainder;
+	ar.Pod(now);
+	ar.Pod(remainder);
+	ar.Pod(ppcCyclesSince2000);
+	ar.Pod(ppcCyclesSince2000TimerClock);
+	ar.Pod(ppcCyclesSince2000_UTC);
+	if (!ar.Loading() || !ar.Ok())
+		return;
+	if (s_virtualClockEnabled)
+	{
+		s_virtualCycles = now;
+		s_virtualRemainder = remainder;
+		return;
+	}
+	// real time: the start such that PPCTimer_getFromRDTSC reads `now` at this moment
+	const uint64 cycles = (now << ActiveSettings::GetTimerShiftFactor()) >> 3;
+	const uint64 ns = cycles / Espresso::CORE_CLOCK * 1000000000ULL + cycles % Espresso::CORE_CLOCK * 1000000000ULL / Espresso::CORE_CLOCK;
+	s_startNanoseconds = HostNanoseconds() - ns;
+}
+WWHD_STATE_RECORD("timer", StateRecord);

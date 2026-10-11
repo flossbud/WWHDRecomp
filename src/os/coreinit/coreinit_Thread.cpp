@@ -21,6 +21,8 @@ void LatteTiming_signalVsync();
 #include "util/helpers/ConcurrentQueue.h"
 #include "util/Fiber/Fiber.h"
 #include "../../runtime/write_watch.h"
+#include "../savestate.h"
+namespace wwhd::rt { bool TakeExactSwitch(); }     // runtime/dispatch.cpp
 
 #include "util/helpers/helpers.h"
 #include <map>
@@ -108,6 +110,29 @@ namespace coreinit
 	};
 
 	std::unordered_map<OSThread_t*, OSHostThread*> s_threadToFiber;
+
+	// wwhd: save states (os/savestate.cpp): the CPU state a guest thread runs on (its host thread's), or null
+	PPCInterpreter_t* __OSHostThreadInstance(OSThread_t* thread)
+	{
+		auto it = s_threadToFiber.find(thread);
+		return it == s_threadToFiber.end() ? nullptr : &it->second->ppcInstance;
+	}
+
+	void __OSCreateHostThread(OSThread_t* thread);
+
+	// wwhd: a load (os/savestate.cpp): the thread's fiber anew, which starts from its context in guest memory (the one it
+	// had is dropped with its host stack; the thread is switched out, the scheduler's lock held)
+	void __OSReplaceHostThread(OSThread_t* thread)
+	{
+		cemu_assert_debug(__OSHasSchedulerLock());
+		auto it = s_threadToFiber.find(thread);
+		if (it != s_threadToFiber.end())
+		{
+			delete it->second;
+			s_threadToFiber.erase(it);
+		}
+		__OSCreateHostThread(thread);
+	}
 
 	bool __CemuIsMulticoreMode()
 	{
@@ -1256,6 +1281,7 @@ namespace coreinit
 	}
 
 	uint32 s_lehmer_lcg[PPC_CORE_COUNT] = { 0 };
+	static uint32 s_coreCounter = 0;                 // one host thread: the core whose run queue is looked at next (save states keep it)
 	sint32 s_sliceBudget[PPC_CORE_COUNT] = { 0 }; // wwhd-reference: timeslice size, to count executed instructions
 
 	// WWHD_THREAD_STATS=path (a probe, real time): at exit, each guest thread's host CPU time over its timeslices,
@@ -1528,6 +1554,16 @@ namespace coreinit
 
 	Fiber* g_idleLoopFiber[3]{};
 
+	// wwhd: save states (os/savestate.cpp): no guest thread on a core (lock held)
+	bool __OSNoThreadOnACore()
+	{
+		cemu_assert_debug(__OSHasSchedulerLock());
+		for (sint32 i = 0; i < PPC_CORE_COUNT; i++)
+			if (__currentCoreThread[i])
+				return false;
+		return true;
+	}
+
 	// wwhd-reference: timed events driven by the virtual clock (see PPCTimer.cpp).
 	// Vsync fires every 1/60 s of guest time, after the GPU has retired everything submitted so
 	// far, so flip bookkeeping never depends on how far the GPU thread happened to get. When no
@@ -1598,6 +1634,8 @@ namespace coreinit
 			}
 			if (isMainCore)
 			{
+				if (wwhd::state::Idle())
+					continue;                            // wwhd: the save point, taken before time moves on (savestate.h)
 				if (PPCTimer_isVirtualClock())
 					__OSVirtualClockEvents(coreIndex);
 				__OSCheckSystemEvents();
@@ -1641,6 +1679,8 @@ namespace coreinit
 			s_sliceBudget[core] = 0;
 		}
 		threadstats::Stop();
+		// wwhd: save states (savestate.h): whether it stopped where its saved IP is exact
+		wwhd::state::NoteSwitchOut(OSGetCurrentThread(), wwhd::rt::TakeExactSwitch());
 		// store context of current thread
 		__OSStoreThread(OSGetCurrentThread(), &hostThread->ppcInstance);
 		cemu_assert_debug(PPCInterpreter_getCurrentInstance() == nullptr);
@@ -1651,15 +1691,13 @@ namespace coreinit
 			Fiber::Switch(*t_schedulerFiber); // switch back to original thread entry for it to exit
 		}
 		// choose core
-		static uint32 _coreCounter = 0;
-
 		sint32 coreIndex;
 		if (g_isMulticoreMode)
 			coreIndex = t_assignedCoreIndex;
 		else
 		{
-			coreIndex = _coreCounter;
-			_coreCounter = (_coreCounter + 1) % 3;
+			coreIndex = s_coreCounter;
+			s_coreCounter = (s_coreCounter + 1) % 3;
 		}
 
 		// if main thread then dont forget to do update checks
@@ -1703,6 +1741,7 @@ namespace coreinit
 		__OSLoadThread(hostThread->m_thread, hCPU, hostThread->selectedCore);
 		__OSThreadStartTimeslice(hostThread->m_thread, &hostThread->ppcInstance);
 		__OSUnlockScheduler(); // lock is always held when switching to a fiber, so we need to unlock it here
+		wwhd::state::FiberStart(hCPU);                 // wwhd: a thread a load built anew (savestate.h)
 		while (true)
 		{
 			if (hCPU->remainingCycles > 0)
@@ -2019,4 +2058,32 @@ namespace coreinit
 		__OSInitDefaultThreads();
 		__OSInitTerminatorThreads();
 	}
+}
+
+// wwhd: save states (os/savestate.h): the scheduler's host side. The threads' own state is in guest memory (their
+// OSThread_t, the run and wait queues); here the order of the active list, the timeslices' jitter, the next core one
+// host thread looks at, the virtual clock's next vsync, and on a load the run queues' counts from the queues themselves
+namespace coreinit
+{
+	static void StateRecord(wwhd::state::Archive& ar)
+	{
+		ar.Pod(s_lehmer_lcg);
+		ar.Pod(s_coreCounter);
+		ar.Pod(s_nextVirtualVsync);
+		std::vector<MPTR> active(activeThread, activeThread + activeThreadCount);
+		ar.Vec(active);
+		if (!ar.Loading() || !ar.Ok())
+			return;
+		if (active.size() > 256)
+			return ar.Fail("too many threads");
+		std::copy(active.begin(), active.end(), activeThread);
+		activeThreadCount = (sint32)active.size();
+		for (sint32 i = 0; i < PPC_CORE_COUNT; i++)
+		{
+			g_coreRunQueueThreadCount[i].reset();
+			for (OSThread_t* t = g_coreRunQueue.GetPtr()[i].head.GetPtr(); t; t = t->linkRun[i].next.GetPtr())
+				g_coreRunQueueThreadCount[i].increment();
+		}
+	}
+	WWHD_STATE_RECORD("coreinit.thread", StateRecord);
 }

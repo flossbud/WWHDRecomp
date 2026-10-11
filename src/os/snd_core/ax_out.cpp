@@ -10,6 +10,7 @@
 #include "audio/IAudioAPI.h"
 //#include "ax.h"
 #include "config/CemuConfig.h"
+#include "../savestate.h"
 
 namespace snd_core
 {
@@ -576,4 +577,17 @@ namespace snd_core
 		}
 	}
 
+
+	// wwhd: save states (os/savestate.h): the frames mixed and queued (the game's sound threads count by them), the
+	// devices' modes and channel counts, and the virtual clock's next AX frame (real time: its own timers start anew)
+	static void StateRecordOut(wwhd::state::Archive& ar)
+	{
+		ar.Pod(numProcessedFrames);
+		ar.Pod(numQueuedFramesSndGeneric);
+		ar.Pod(__AXMode);
+		ar.Pod(__AXOutTVOutputChannelCount);
+		ar.Pod(__AXOutDRCOutputChannelCount);
+		ar.Pod(s_virtualNextAxFrame);
+	}
+	WWHD_STATE_RECORD("snd.out", StateRecordOut);
 }

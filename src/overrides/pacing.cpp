@@ -36,6 +36,7 @@
 // the GPU thread's CPU time for the frame's swap, the vsyncs that came during the work, the wait
 // (ms), and the stores the half tick's journal saw and saved (thousands; sixty.cpp).
 #include "override.h"
+#include "../os/savestate.h"
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -447,3 +448,16 @@ void f_0272AD80(PPCInterpreter_t* __restrict ctx)
 	if (!wwhd::pacing::g_dropFrame)
 		[[clang::musttail]] return orig_f_0272AD80(ctx);
 }
+
+// save states (os/savestate.h): whether the frame about to run draws and presents (a dropped frame's picture is the
+// next frame's to skip), and the frame skip's scene gate; the real-time schedule starts anew
+static void StateRecordPacing(wwhd::state::Archive& ar)
+{
+	ar.Pod(wwhd::pacing::g_dropFrame);
+	ar.Pod(s_capDrop);
+	ar.Pod(s_noPicture);
+	ar.Pod(s_noPictureCap);
+	ar.Pod(wwhd::pacing::s_scene);
+	ar.Pod(wwhd::pacing::s_shownSinceScene);
+}
+WWHD_STATE_RECORD("sixty.pacing", StateRecordPacing);

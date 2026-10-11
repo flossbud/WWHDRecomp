@@ -114,6 +114,16 @@ if [ "$named" = 0 ] && [ "${PREDEPLOY_PICTO:-1}" != 0 ]; then
     echo "== picto (the Pictograph Box's pictures)"
     tools/sixty/tests/picto.sh || status=1
 fi
+# save states carry the whole game (statetest.sh, q-savestate): tour3 saved at swap 2000 and loaded by a fresh process,
+# sail saved at 2400 and loaded in place at 3000 (the debug menu's way); every actor after the load as in the run that
+# saved; with the default routes only. PREDEPLOY_STATE=0: not
+if [ "$named" = 0 ] && [ "${PREDEPLOY_STATE:-1}" != 0 ]; then
+    echo "== statetest (save states: a fresh load and an in-place one)"
+    tools/sixty/tests/statetest.sh tour3 2000 > "$OUT/predeploy-state-tour3.log" 2>&1 &
+    STATE_INPLACE=3000 tools/sixty/tests/statetest.sh sail 2400 > "$OUT/predeploy-state-sail.log" 2>&1 &
+    for j in $(jobs -p); do wait "$j" || status=1; done
+    grep -h "statetest:" "$OUT/predeploy-state-tour3.log" "$OUT/predeploy-state-sail.log"
+fi
 # wwhd-play, the real-time build deploys ship (t-codegen), refuses the virtual clock these routes run on: its real-time
 # check (predeploy-rt.sh) follows on the default routes when the build made one. PREDEPLOY_RT=0: not
 if [ "$named" = 0 ] && [ -x build/wwhd/wwhd-play ] && [ "${PREDEPLOY_RT:-1}" != 0 ]; then

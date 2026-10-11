@@ -19,6 +19,7 @@
 // D21 ("Where the per-tick steps are"); the GameCube decomp has their source (c_lib.cpp,
 // f_op_actor_mng.cpp, J3DAnimation.cpp).
 #include "override.h"
+#include "../os/savestate.h"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -1412,13 +1413,17 @@ void f_0281F878(PPCInterpreter_t* __restrict ctx)
 // of the tide read the level the tag's step before it left, half a tick old: smooth, but ~0.6 tick ahead of 30's
 // water, and each change ended 1.5 ticks early (88.5 ticks against 90). A stepped tide reads the level and state
 // as its own last step saw them, a step older: at half ticks 30's water, at whole ticks halfway to it.
+namespace
+{
+	struct TideSeen { uint32 now, state, step; };
+	std::unordered_map<uint32, TideSeen> s_tideSeen;    // each tide's last step's level and state (save states keep it)
+}
 void f_023A14A8(PPCInterpreter_t* __restrict ctx)
 {
 	if (!Stepped())
 		[[clang::musttail]] return orig_f_023A14A8(ctx);
 	constexpr uint32 kNow = 0x101D5F28u, kState = 0x101D5F2Cu;
-	struct Seen { uint32 now, state, step; };
-	static std::unordered_map<uint32, Seen> s_seen;
+	auto& s_seen = s_tideSeen;
 	const uint32 tide = GPR(3), step = StepId(), now = rd32(kNow), state = rd32(kState);
 	const auto it = s_seen.find(tide);
 	const bool older = it != s_seen.end() && step - it->second.step == 1;
@@ -1435,3 +1440,13 @@ void f_023A14A8(PPCInterpreter_t* __restrict ctx)
 	}
 	s_seen[tide] = { now, state, step };
 }
+
+// save states (os/savestate.h): the step rules' histories that carry from one step to the next (Link's toes, the
+// camera's position, the tides' levels)
+static void StateRecordStep(wwhd::state::Archive& ar)
+{
+	ar.Map(s_toes);
+	ar.Map(s_monitor);
+	ar.Map(s_tideSeen);
+}
+WWHD_STATE_RECORD("sixty.step", StateRecordStep);

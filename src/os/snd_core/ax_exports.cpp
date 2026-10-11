@@ -9,6 +9,7 @@
 #include "Cafe/OS/common/OSCommon.h"
 #include "Cafe/OS/libs/coreinit/coreinit_MessageQueue.h"
 #include "OS/libs/coreinit/coreinit_DynLoad.h"
+#include "../savestate.h"
 
 namespace snd_core
 {
@@ -647,4 +648,11 @@ namespace snd_core
 		return &s_COSsndcore2Module;
 	}
 
+
+	// wwhd: save states (os/savestate.h): AXInit's parameters
+	static void StateRecordInit(wwhd::state::Archive& ar)
+	{
+		ar.Pod(sndGeneric);
+	}
+	WWHD_STATE_RECORD("snd.init", StateRecordInit);
 }

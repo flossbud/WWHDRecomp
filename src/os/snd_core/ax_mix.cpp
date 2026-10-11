@@ -7,6 +7,7 @@
 #include "Cafe/OS/libs/snd_core/ax_internal.h"
 #include "Cafe/HW/MMU/MMU.h"
 #include "config/ActiveSettings.h"
+#include "../savestate.h"
 
 void mic_updateOnAXFrame();
 
@@ -1035,4 +1036,14 @@ namespace snd_core
 		mic_updateOnAXFrame();
 	}
 
+
+	// wwhd: save states (os/savestate.h): the mixer's selection and volumes
+	static void StateRecordMix(wwhd::state::Archive& ar)
+	{
+		ar.Pod(__AXDefaultMixerSelect);
+		ar.Pod(__AXTVAuxReturnVolume);
+		ar.Pod(__AXMasterVolume);
+		ar.Pod(__AXDRCMasterVolume);
+	}
+	WWHD_STATE_RECORD("snd.mix", StateRecordMix);
 }
