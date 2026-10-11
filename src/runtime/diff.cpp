@@ -46,11 +46,11 @@
 // The store journal's switches are per host thread (thread_local): with Cemu's three host threads (real time,
 // docs/research/threads.md) a quiet watch or the half tick's journal is its own host thread's, and the other cores'
 // stores never pay for it. With one host thread (every check) that is today's meaning exactly.
-thread_local bool g_rtJournalOn = false;
+thread_local constinit bool g_rtJournalOn = false;
 thread_local void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc) = nullptr;
-thread_local const uint32* g_rtStorePages = nullptr;
+thread_local constinit const uint32* g_rtStorePages = nullptr;
 thread_local const PPCInterpreter_t* g_rtJournalThread = nullptr;
-thread_local bool g_rtStoreAll = false;
+thread_local constinit bool g_rtStoreAll = false;
 thread_local uint64 g_rtStoresPassed = 0;
 const uint64* g_rtStoreBits = nullptr;
 const int* g_rtStoreHold = nullptr;

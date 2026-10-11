@@ -10,7 +10,7 @@
 // found near the stack pointer, read with process_vm_readv, which cannot fault: the likely caller. Samples go into a buffer allocated up front; at exit (normal or quick_exit, which the
 // trace's exit frame uses) the file gets the program's load address, every thread's name and CPU
 // time from /proc, every loaded object's executable segments, and the samples as hex addresses. tools/profile_report.py symbolizes and sums
-// them. Nothing here touches guest state: traces are the same with the profiler on.
+// them. A sample taken during a 60 fps half frame is written as "h", not "s" (profile_report.py --half/--whole). Nothing here touches guest state: traces are the same with the profiler on.
 #include "runtime.h"
 #include <algorithm>
 #include <atomic>
@@ -33,6 +33,7 @@
 // src/runtime/fiber/FiberUnix.cpp; weak: without our forks (WWHD_FORKS=OFF) both are 0, and no pc is in between
 extern "C" __attribute__((weak)) char wwhd_fiber_switch[], wwhd_fiber_switch_end[];
 #endif
+extern bool g_rtHalfTick;                          // dispatch.cpp: a 60 fps half frame (sixty.cpp)
 
 namespace wwhd::rt
 {
@@ -45,7 +46,7 @@ namespace wwhd::rt
 		// its callers
 		struct Sample
 		{
-			uintptr_t tid;
+			uintptr_t tid;                         // bit 32: taken during a half frame (g_rtHalfTick)
 			uintptr_t depth;
 			uintptr_t pc[];                        // s_depth of them
 		};
@@ -70,7 +71,7 @@ namespace wwhd::rt
 				return;
 			Sample& s = At(i);
 			const greg_t* regs = ((ucontext_t*)context)->uc_mcontext.gregs;
-			s.tid = (uintptr_t)syscall(SYS_gettid);
+			s.tid = (uintptr_t)syscall(SYS_gettid) | (uintptr_t)g_rtHalfTick << 32;
 			s.pc[0] = (uintptr_t)regs[REG_RIP];
 			s.depth = 1;
 			if (!s_stacks)
@@ -167,7 +168,7 @@ namespace wwhd::rt
 			for (uint64_t i = 0; i < n; i++)
 			{
 				const Sample& s = At(i);
-				fprintf(f, "s %u", (unsigned)s.tid);
+				fprintf(f, "%c %u", s.tid >> 32 ? 'h' : 's', (unsigned)s.tid);   // h: in a half frame
 				for (uintptr_t k = 0; k < s.depth; k++)
 					fprintf(f, " %lx", (unsigned long)s.pc[k]);
 				fputc('\n', f);

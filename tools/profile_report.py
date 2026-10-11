@@ -1,13 +1,14 @@
 """Summarise a wwhd-null CPU profile (src/runtime/profile.cpp, WWHD_PROFILE=path).
 
 Usage:
-    python3 tools/profile_report.py PROFILE [--top N]
+    python3 tools/profile_report.py PROFILE [--top N] [--half | --whole]
 
 Symbolizes every sampled address with llvm-symbolizer (the program and every shared object it
 loaded) and prints: CPU time per thread (from /proc, exact), then per thread group the share of
 samples by category (the leaf: where the time is spent) and by the categories on the stack (what
 the time is spent under), and the top functions, self and inclusive. Recompiled guest functions
-(f_XXXXXXXX) are named from config/US_v0/symbols.csv where it has a name. Run it on the worker.
+(f_XXXXXXXX) are named from config/US_v0/symbols.csv where it has a name. --half keeps only the samples
+taken during 60 fps half frames (the profile's "h" lines), --whole only the others. Run it on the worker.
 """
 import collections
 import csv
@@ -19,14 +20,15 @@ import sys
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 
 
-def load(path):
+def load(path, keep=('s', 'h')):
     info, threads, segments, samples = {}, {}, [], []
     for line in open(path):
         parts = line.split()
         if not parts:
             continue
-        if parts[0] == 's':
-            samples.append((int(parts[1]), [int(x, 16) for x in parts[2:]]))
+        if parts[0] in ('s', 'h'):
+            if parts[0] in keep:
+                samples.append((int(parts[1]), [int(x, 16) for x in parts[2:]]))
         elif parts[0] == 'thread':
             threads[int(parts[1])] = (' '.join(parts[4:]), int(parts[2]), int(parts[3]))
         elif parts[0] == 'segment':
@@ -118,7 +120,8 @@ def group(thread_name):
 def main():
     path = sys.argv[1]
     top = int(sys.argv[sys.argv.index('--top') + 1]) if '--top' in sys.argv else 25
-    info, threads, segments, samples = load(path)
+    keep = ('h',) if '--half' in sys.argv else ('s',) if '--whole' in sys.argv else ('s', 'h')
+    info, threads, segments, samples = load(path, keep)
     tick = int(info.get('ticks_per_second', 100))
     names = symbolize(info, segments, {a for _, st in samples for a in st})
     gnames = guest_names()

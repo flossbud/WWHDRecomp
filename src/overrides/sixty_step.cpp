@@ -576,7 +576,7 @@ namespace
 // checked before its set-up (procHangMove passing frame 0 set itself up again every tick; session top).
 // Under a `tick` rule (g_rtTickWindow, its call made in the whole step only) the window is the whole tick's: from
 // where the whole step's starts, a tick's rate long (Link's slash while moving: its speed drop on 30's tick).
-thread_local bool g_rtTickWindow = false;
+thread_local constinit bool g_rtTickWindow = false;
 void f_027F2BF8(PPCInterpreter_t* __restrict ctx)
 {
 	if (!Stepped())

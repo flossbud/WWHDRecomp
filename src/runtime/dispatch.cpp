@@ -47,11 +47,11 @@ bool g_rtHalfTick = false;
 // The values set around one converted step (the step, its notes, hold) are per host thread: with Cemu's three host
 // threads (real time, docs/research/threads.md) the game's sound and job threads on the other cores never run inside
 // the frame thread's step. g_rtHalfTick is the frame's and stays shared (render jobs on other cores see it as before).
-thread_local float g_rtStep = 1.0f;
+thread_local constinit float g_rtStep = 1.0f;
 bool g_rtSixty = false;
-thread_local float g_rtNote = 0.0f;
-thread_local bool g_rtLateNotes = false;
-thread_local bool g_rtHold = false;
+thread_local constinit float g_rtNote = 0.0f;
+thread_local constinit bool g_rtLateNotes = false;
+thread_local constinit bool g_rtHold = false;
 
 namespace wwhd::rt
 {
