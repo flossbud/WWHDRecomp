@@ -166,6 +166,9 @@ namespace wwhd::gpu
 			// WWHD_MOTION (motion.cpp): this shader's variant writing motion vectors, made at its first scene draw
 			Shader* motion = nullptr, *reactive = nullptr;
 			bool motionTried = false, reactiveTried = false, isMotion = false;   // isMotion: a vertex variant's bindings + kPrevBinding too
+			// WWHD_AO=0 (b-gfxopts): the ambient occlusion pass's variant that finds nothing occluded
+			Shader* aoOff = nullptr;
+			bool aoOffTried = false;
 		};
 		std::unordered_map<uint64, Shader*> s_shaders;
 		std::unordered_map<uint64, LatteFetchShader*> s_fetchShaders;
@@ -454,11 +457,48 @@ namespace wwhd::gpu
 		}
 		// WWHD_MOTION: the shader's motion variant (motion.cpp), from the decompiler again (a shader from the cache has no
 		// GLSL); null if it can't be made (logged once): the draw then writes no motion
-		Shader* MotionShader(Shader* sh, bool vertex, const uint8* code, uint32 size, LatteFetchShader* fetch, bool reactive = false)
+		// ---- ambient occlusion off (WWHD_AO=0; b-gfxopts) -------------------------------------------------
+		// The game's AO (docs/research/gpu-plan.md, "Graphics options"): after the depth prepass the scene's depth is
+		// taken down to a half-size R32F target, and one pass (below) samples it around each pixel, with a 4x4 noise
+		// texture, into the red channel of a half-size RGBA8 target (1: nothing occluded); the shadow pass fills its
+		// other channels, two blurs follow, and the scene's lighting multiplies by it. Off: that pass's variant writes 1.
+		const uint64 kAoShaders[] = { 0x16ea6f47e7ef5b41ull };
+
+		bool AoOff()
 		{
-			if (reactive ? sh->reactiveTried : sh->motionTried)
-				return reactive ? sh->reactive : sh->motion;
-			(reactive ? sh->reactiveTried : sh->motionTried) = true;
+			static const bool off = [] {
+				const char* e = getenv("WWHD_AO");
+				const bool v = e && strcmp(e, "0") == 0;
+				if (v)
+					Log("ao: the game's ambient occlusion off (WWHD_AO=0)");
+				return v;
+			}();
+			return off;
+		}
+
+		// the pixel shader's last colour export with its red (the occlusion) 1
+		bool AoOffVariant(const char* src, std::string& out)
+		{
+			out = src;
+			const size_t at = out.rfind("passPixelColor0 = ");
+			const size_t end = at == std::string::npos ? at : out.find(';', at);
+			if (end == std::string::npos)
+				return false;
+			out.insert(end + 1, "\npassPixelColor0.x = 1.0;");
+			return true;
+		}
+
+		// a variant of a shader, from its GLSL: the motion vectors' (motion.cpp), the reactive mask's, or AO off's (AoOffVariant)
+		enum class Variant { Motion, Reactive, AoOff };
+
+		Shader* VariantShader(Shader* sh, bool vertex, const uint8* code, uint32 size, LatteFetchShader* fetch, Variant kind)
+		{
+			const bool reactive = kind == Variant::Reactive, aoOff = kind == Variant::AoOff;
+			Shader*& made = aoOff ? sh->aoOff : reactive ? sh->reactive : sh->motion;
+			bool& tried = aoOff ? sh->aoOffTried : reactive ? sh->reactiveTried : sh->motionTried;
+			if (tried)
+				return made;
+			tried = true;
 			LatteDecompilerOptions opt;
 			opt.usesGeometryShader = false;
 			opt.useTFViaSSBO = false;
@@ -472,27 +512,33 @@ namespace wwhd::gpu
 			std::string glsl, log;
 			std::vector<uint32> spirv;
 			const bool ok = out.shader && !out.shader->hasError && out.shader->strBuf_shaderSource &&
-				(vertex ? motion::VertexVariant(out.shader->strBuf_shaderSource->c_str(), glsl) : reactive ?
+				(aoOff ? AoOffVariant(out.shader->strBuf_shaderSource->c_str(), glsl) :
+					vertex ? motion::VertexVariant(out.shader->strBuf_shaderSource->c_str(), glsl) : reactive ?
 					motion::ReactiveVariant(out.shader->strBuf_shaderSource->c_str(), glsl) : motion::PixelVariant(out.shader->strBuf_shaderSource->c_str(), glsl)) &&
 				CompileSpirv(glsl, vertex ? EShLangVertex : EShLangFragment, spirv, log);
 			if (!ok)
 			{
-				LogOnce(fmt::format("motion{:x}", sh->key), [&] { return fmt::format("motion: no variant of {} shader {:016x}{}", vertex ? "vertex" : "pixel",
-					sh->key, log.empty() ? "" : " (" + log.substr(0, 200) + ")"); });
+				LogOnce(fmt::format("variant{}-{:x}", (int)kind, sh->key), [&] { return fmt::format("{}: no variant of {} shader {:016x}{}",
+					aoOff ? "ao" : "motion", vertex ? "vertex" : "pixel", sh->key, log.empty() ? "" : " (" + log.substr(0, 200) + ")"); });
 				return nullptr;
 			}
 			Shader* m = new Shader;
-			m->key = sh->key ^ (reactive ? 0x7265616374000000ull : 0x6D6F74696F6E0000ull);
+			m->key = sh->key ^ (aoOff ? 0x616F6F6666000000ull : reactive ? 0x7265616374000000ull : 0x6D6F74696F6E0000ull);
 			m->dec = out.shader;
 			m->uniforms = out.uniformOffsetsVK;
 			m->mapping = out.resourceMappingVK;
-			m->isMotion = !reactive;
+			m->isMotion = kind == Variant::Motion;
 			VkShaderModuleCreateInfo mi{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
 			mi.codeSize = spirv.size() * 4;
 			mi.pCode = spirv.data();
 			Check(vkCreateShaderModule(s.device, &mi, nullptr, &m->module), "vkCreateShaderModule");
 			m->layout = CreateLayout(*m, vertex ? VK_SHADER_STAGE_VERTEX_BIT : VK_SHADER_STAGE_FRAGMENT_BIT);
-			return (reactive ? sh->reactive : sh->motion) = m;
+			return made = m;
+		}
+
+		Shader* MotionShader(Shader* sh, bool vertex, const uint8* code, uint32 size, LatteFetchShader* fetch, bool reactive = false)
+		{
+			return VariantShader(sh, vertex, code, size, fetch, reactive ? Variant::Reactive : Variant::Motion);
 		}
 
 
@@ -2051,6 +2097,9 @@ namespace wwhd::gpu
 		// one that writes depth writes motion with its shaders' variants
 		Shader* dvs = vs, *dps = ps;
 		bool scene = false;
+		if (AoOff() && std::find(std::begin(kAoShaders), std::end(kAoShaders), ps->key) != std::end(kAoShaders))
+			if (Shader* a = VariantShader(ps, false, psCode, psSize, nullptr, Variant::AoOff))
+				dps = a;
 		if (motion::On() && t.depth && t.depth->gw >= 1280 && t.depth->gh >= 720 && t.depth->layers == 1 && !t.color[motion::kSlot] &&
 			!HudActive())
 		{

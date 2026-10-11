@@ -42,7 +42,7 @@ Weaker hardware (phones, the Deck in heavy scenes) needs more. The owner's order
   transitions: not worth doing (barriers and gaps 0.05 ms a frame on the worker).
 - Item 3: **fixed scales and dynamic resolution built, off by default** (`WWHD_RENDER_SCALE=0.75|0.5|auto`; Auto in the
   Performance preset, the owner's choice of 2026-10-09). The worker on en-tn at 60: 100% 49.9 fps, 75% 56.6, 50% 59.7, Auto 59.2 (`b-scale`, below).
-- Item 4: **first round and presets landed** (below). Left: the AO toggle, AF, FXAA (`b-gfxopts`).
+- Item 4: **first round and presets landed** (below); **the AO toggle, AF and FXAA landed** (`b-gfxopts`, below).
 - Item 5: **measured, parked** (`b-shaders`, below): the shaders' instructions are at most ~5% of the worker's
   GPU frame, and only inexactly; SPIRV-Tools' optimiser gains nothing.
 
@@ -385,6 +385,40 @@ frame shows one refresh later than without it (8 ms at 120 Hz), plus the interpo
   them, which are 26.9 dB apart); Link, the wake and the HUD clean, no ghosting seen.
 - **Not done:** VRR (t-vrr, top's lane) would let it pace on any refresh above twice the rate; a present thread
   (AMD's way) would let it run with mailbox. Not on the worker's iGPU: FSR 3 alone costs 18.5 ms there.
+
+## Graphics options: ambient occlusion off, anisotropic filtering, FXAA (b-gfxopts, session bottom, 2026-10-11)
+
+Three settings (os/settings.cpp), each a switch, all off by default (no switch: the picture as before, the checks
+unchanged by construction):
+
+**Ambient occlusion: `WWHD_AO=0`** (draw.cpp `AoOff`; the Performance preset turns it off, item 4's "later AO off").
+The pass, found with `WWHD_RENDER_TRACE=FRAME:0` (every draw of a frame, its targets and textures): after the depth
+prepass the scene's depth goes down to a half-size R32F target (960x544), and one pixel shader samples it around each
+pixel with a 4x4 noise texture into the **red** channel of a half-size RGBA8 target (write mask RG; 1 means nothing
+occluded: its last lines are `1 - clamp((sum - 0.5) * k)`). The shadow pass writes that target's G, B and A next, two
+blurs ping-pong it, and the scene's lighting multiplies by it. Off: the draw runs a variant of that shader whose
+export's red is 1 (`AoOffVariant`, built like the motion variants: `VariantShader`), so the blurs and the shadows are
+untouched and only the occlusion goes. One shader, key `16ea6f47e7ef5b41`, on every route surveyed (land, en-tn,
+gohmarock, house, tour3, sail); a new key would show in the same trace (a mask-3 draw into a 960x544 format-1a target
+sampling the R32F one and a 4x4 texture). The driver drops the variant's dead sampling, so the pass costs next to
+nothing. Measured on the worker (its iGPU; continue at 60, 4 rounds paired, `worker-ab.sh`): the wait on the GPU
+(drawdone) 0.64 -> 0.39 ms a frame, the frame's work 14.27 -> 13.80 ms (-3.7%, every run below every run), late
+frames 13% -> 5%; fps 60.0 -> 60.1 (the route was at 60 already).
+
+**Anisotropic filtering: `WWHD_ANISO=4|8|16`** (texture.cpp `Sampler`). The game's mipmapped textures from memory
+(not render targets: their sampling is the game's effects') with linear minification get at least that much
+anisotropy; a sampler that asks for more keeps its own. The ground and the sea at a slant keep their detail.
+Its cost on the worker's iGPU at 16x: the GPU wait 0.64 -> 4.34 ms a frame, 60.0 -> 55.8 fps (-7.0%,
+every run below every run): an option for desktop GPUs (neither preset turns it on).
+
+**FXAA: `WWHD_FXAA=1`** (fxaa.cpp). FXAA 3.11 "quality" (luma contrast test, the edge's direction, a 12-step search
+for its ends, the sub-pixel blend) on the TV's scene at the HUD split, so the HUD stays sharp; at the scan copy on a
+frame without a split. Before FSR 1 (EASU wants clean edges), and not where FSR 3 upscales (its temporal AA does that
+job). It draws into a scratch image and copies back. Its cost on the worker's iGPU: the GPU wait 0.64 -> 2.80 ms a frame, 60.0 -> 57.8 fps (-3.7%); the
+copy back is part of it (drawing the HUD into the scratch image instead is a later saving).
+
+Checked: validation clean on the land route with all three plus FSR 1 at 50% (only the known 1D-view error,
+b-1dviews). Capture: the progress page (b-gfxopts).
 
 ## Item 5, shaders optimised: measured, little to gain on the iGPU (b-shaders, session bottom, 2026-10-10)
 

@@ -4269,7 +4269,13 @@ Every item's evidence is in docs/research/gpu-plan.md (a section each) and its c
   resize makes the targets again once, after the window held its size 12 swaps. Validation: run with
   `VK_KHRONOS_VALIDATION_LOG_FILENAME` (run.sh drops the game's own output); left, 1D views of 2D images from the
   game's texture path.
-- **Next in the lane:** b-gfxopts (AO, AF, FXAA), b-uncapped-plan (research and a plan only).
+- **b-gfxopts** (landed): `WWHD_AO=0` (the game's one AO shader, key 16ea6f47e7ef5b41 on every route surveyed, runs
+  a variant that writes "nothing occluded"; off in the Performance preset), `WWHD_ANISO=4|8|16` (the game's mipmapped
+  textures, not render targets), `WWHD_FXAA=1` (the scene at the HUD split; not where FSR 3 upscales). To find a pass:
+  `WWHD_RENDER_TRACE=FRAME:0` lists every draw of that frame with its targets and textures, `WWHD_RENDER_SHADERS=DIR`
+  writes each shader's GLSL (both stay on the worker). gpu-plan.md, "Graphics options".
+- **Next in the lane:** b-1dviews (the 1D views, a validation pass of every route), b-uncapped-plan (research and a
+  plan only).
 
 ### Session qa (week 2, WW-15): the problems top and bottom are stuck on
 

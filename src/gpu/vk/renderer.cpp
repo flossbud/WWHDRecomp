@@ -945,7 +945,7 @@ namespace wwhd::gpu
 
 	Image* TvSurface()
 	{
-		if (!s_tvKnown || !(fsr1::On() || fsr3::On()))
+		if (!s_tvKnown || !(fsr1::On() || fsr3::On() || fxaa::On()))
 			return nullptr;
 		auto it = s.surfaces.find(s_tvKey);
 		return it == s.surfaces.end() || !it->second.image ? nullptr : &it->second;
@@ -961,7 +961,10 @@ namespace wwhd::gpu
 		Image* tv = TvSurface();
 		if (!tv || s_hudActive)
 			return;
-		if (!Promote(s_tvKey, *tv, true))
+		const bool upscaler = fsr1::On() || fsr3::On();
+		// FXAA on the scene (fxaa.cpp): before FSR 1, not where FSR 3 upscales (its own anti-aliasing)
+		const bool smoothed = fxaa::On() && !(fsr3::On() && tv->scale < s_display) && fxaa::Apply(*tv);
+		if (!(upscaler && Promote(s_tvKey, *tv, true)) && !smoothed)
 			return;
 		s_hudActive = true;
 		(atScanCopy ? s_hudStats.atScan : s_hudStats.split)++;
@@ -1519,7 +1522,7 @@ namespace wwhd::gpu
 		SurfaceRead(src, h);
 		if (target == 1 && motion::Debug())                         // WWHD_MOTION=debug: the motion over the TV image
 			motion::DrawDebug(src);
-		if (target == 1 && (fsr1::On() || fsr3::On()))             // the TV surface (the upscalers' HUD split)
+		if (target == 1 && (fsr1::On() || fsr3::On() || fxaa::On()))   // the TV surface (the upscalers' and FXAA's HUD split)
 		{
 			s_tvKey = KeyOf(src), s_tvKnown = true;
 			if (!s_hudActive)

@@ -236,8 +236,10 @@ namespace wwhd::gpu
 		// ---- samplers (draw_getOrCreateDescriptorSet) -------------------------------------------------
 		std::unordered_map<uint64, VkSampler> s_samplers;
 		bool s_customBorder = false, s_anisotropy = false;
+		float s_af = 0.0f;                                             // WWHD_ANISO: at least this much anisotropy (0: the game's)
 
-		VkSampler Sampler(const LatteDecompilerShader* dec, bool vertex, uint32 unit, bool compare)
+		// af: the game's textures with mipmaps get at least WWHD_ANISO's anisotropy (b-gfxopts); render targets keep the game's
+		VkSampler Sampler(const LatteDecompilerShader* dec, bool vertex, uint32 unit, bool compare, bool af = false)
 		{
 			uint32 stageIndex = dec->textureUnitSamplerAssignment[unit];
 			VkSamplerCreateInfo si{ VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
@@ -271,6 +273,12 @@ namespace wwhd::gpu
 				{
 					si.anisotropyEnable = VK_TRUE;
 					si.maxAnisotropy = std::min((float)(1 << aniso), s.props.limits.maxSamplerAnisotropy);
+				}
+				if (af && s_af > 1.0f && !compare && mip != W0::E_Z_FILTER::NONE && !pointMin && si.maxLod > 0.0f
+					&& si.maxAnisotropy < s_af)
+				{
+					si.anisotropyEnable = VK_TRUE;
+					si.maxAnisotropy = std::min(s_af, s.props.limits.maxSamplerAnisotropy);
 				}
 				si.mipLodBias = (float)w.WORD1.get_LOD_BIAS() / 64.0f;
 				if (compare)
@@ -874,6 +882,11 @@ namespace wwhd::gpu
 			Log("the device can't sample BC formats; compressed textures will fail");
 		s_customBorder = s.customBorder;
 		s_anisotropy = s.anisotropy;
+		if (const char* e = getenv("WWHD_ANISO"); e && s_anisotropy)
+			s_af = std::clamp((float)atof(e), 0.0f, 16.0f);
+		if (s_af > 1.0f)
+			Log(fmt::format("anisotropic filtering: at least {}x on the game's mipmapped textures (WWHD_ANISO; the device's most {}x)",
+				s_af, s.props.limits.maxSamplerAnisotropy));
 	}
 
 	Sampled SampleTexture(const LatteDecompilerShader* dec, bool vertex, uint32 unit, std::span<Image* const> attachments)
@@ -1006,6 +1019,8 @@ namespace wwhd::gpu
 		else if (viewType == VK_IMAGE_VIEW_TYPE_2D || viewType == VK_IMAGE_VIEW_TYPE_1D)
 			numSlices = 1;
 		VkImageView v = View(t->img.image, t->img.format, t->img.aspect, viewType, firstMip, mips, firstSlice, numSlices, comp, t->views);
+		if (s_af > 1.0f && mips > 1)
+			sampler = Sampler(dec, vertex, unit, compare, true);
 		return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
 	}
 

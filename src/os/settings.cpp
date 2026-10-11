@@ -54,6 +54,15 @@ namespace
 		// upscaler only. Its input lag: each real frame shows one refresh later, after the generated one (8 ms at 120 Hz)
 		{ "WWHD_FRAMEGEN", "Frame generation (FSR 3: generated in-between frames, adds input lag; 120 Hz+ displays)",
 			{ { "0", "off" }, { "1", "on" } }, false, nullptr },
+		// at least this much anisotropy on the game's mipmapped textures (gpu/vk/texture.cpp Sampler; render targets keep
+		// the game's own): the ground and the sea sharper at a slant
+		{ "WWHD_ANISO", "Anisotropic filtering", { { "0", "the game's" }, { "4", "4x" }, { "8", "8x" }, { "16", "16x" } },
+			false, "0" },
+		// FXAA on the scene, the HUD left sharp (gpu/vk/fxaa.cpp); with FSR 3 upscaling, FSR 3's own anti-aliasing instead
+		{ "WWHD_FXAA", "FXAA (smooths the edges; not where FSR 3 upscales)", { { "0", "off" }, { "1", "on" } }, false, nullptr },
+		// the game's ambient occlusion (gpu/vk/draw.cpp AoOff): off, the shading in corners and under things goes (the
+		// Performance preset: off, the design's "later AO off": gpu-plan.md, item 4)
+		{ "WWHD_AO", "Ambient occlusion", { { "1", "on" }, { "0", "off" } }, false, "0" },
 		{ "WWHD_CORES", "CPU threads", { { "3", "3" }, { "1", "1" } }, false, "3" },
 		{ "WWHD_LAZY_DRAWDONE", "Lazy DrawDone", { { "1", "on" }, { "0", "off" } }, false, "1" },
 	};

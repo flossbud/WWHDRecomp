@@ -241,6 +241,12 @@ namespace wwhd::gpu
 		// `src` (a scaled image) upscaled into `dst` (the guest's size, a colour attachment); false: couldn't (logged)
 		bool Upscale(Image& src, Image& dst);
 	}
+	// fxaa.cpp: FXAA on the TV's scene (WWHD_FXAA=1; b-gfxopts), at the HUD split like the upscalers
+	namespace fxaa
+	{
+		bool On();
+		bool Apply(Image& img);                                    // in place; false: couldn't (logged)
+	}
 	// fsr1.cpp: a full-screen pass of a fragment shader (GLSL, "src" a sampler2D at binding 0, push constants uvec4
 	// c0..c3) from `src` into `dst` (a colour attachment); its pipelines made per target format
 	namespace fullscreen
