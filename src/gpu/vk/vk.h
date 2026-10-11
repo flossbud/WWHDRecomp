@@ -13,7 +13,7 @@ namespace wwhd::vk
 	X(vkCreateInstance) X(vkEnumerateInstanceVersion)
 #define WWHD_VK_INSTANCE(X) \
 	X(vkEnumeratePhysicalDevices) X(vkGetPhysicalDeviceProperties) X(vkGetPhysicalDeviceQueueFamilyProperties) \
-	X(vkGetPhysicalDeviceMemoryProperties) X(vkGetPhysicalDeviceFormatProperties) X(vkGetPhysicalDeviceFeatures2) \
+	X(vkGetPhysicalDeviceMemoryProperties) X(vkGetPhysicalDeviceFormatProperties) X(vkGetPhysicalDeviceImageFormatProperties) X(vkGetPhysicalDeviceFeatures2) \
 	X(vkCreateDevice) X(vkGetDeviceProcAddr) X(vkDestroyInstance) X(vkEnumerateDeviceExtensionProperties) \
 	X(vkDestroySurfaceKHR) X(vkGetPhysicalDeviceSurfaceSupportKHR) X(vkGetPhysicalDeviceSurfaceCapabilitiesKHR) \
 	X(vkGetPhysicalDeviceSurfaceFormatsKHR) X(vkGetPhysicalDeviceSurfacePresentModesKHR)

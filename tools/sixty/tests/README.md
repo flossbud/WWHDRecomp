@@ -27,6 +27,8 @@ dir: its NAND, save and log; a test's `rm -rf` of its outputs would also hit the
 - `blacktest.sh [ROUTE]`: dropped frames (keep-speed, the 40 cap, the frame skip at 60 and 30) show no black
   pictures: each present's scan buffer against the plain run's at the same swap (`WWHD_PRESENT_PROBE`); predeploy
   runs it.
+- `validate.sh [ROUTE...]`: the renderer under Vulkan validation, every route (or those named), each route's messages
+  in a file of its own (run.sh drops the game's output); `VALIDATE_ENV` adds options (upscalers, AO, FXAA).
 - `src_of.py DIR ADDR...`: where a store's value was computed (where a step rule goes).
 
 The workflow per actor type is in docs/handoff.md ("Converting an actor").

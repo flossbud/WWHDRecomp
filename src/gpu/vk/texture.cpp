@@ -174,58 +174,76 @@ namespace wwhd::gpu
 		}
 
 		// ---- placeholders: for units with no texture, or one this renderer can't provide ----------------
-		struct Placeholder { Image img; VkImageView view[8]{}; };
+		struct Placeholder { Image img, img1d, img3d; VkImageView view[8]{}; };
 		Placeholder s_nullColor, s_nullDepth;
 
-		void CreatePlaceholder(Placeholder& p, VkFormat format, VkImageAspectFlags aspect)
+		// a 1x1 image of that type, cleared to zero, in GENERAL; false: the device can't make it (a 1D or 3D depth image)
+		bool CreateNullImage(Image& img, VkImageType type, VkFormat format, VkImageAspectFlags aspect)
 		{
-			// one 1x1 image with 6 layers serves 2D, 2D array and cube views (a 3D view would need a 3D image;
-			// it falls back to 2D, which doesn't match the shader, so a 3D texture unit must never get here)
+			const uint32 layers = type == VK_IMAGE_TYPE_2D ? 6 : 1;
+			VkImageFormatProperties fp;
+			if (vkGetPhysicalDeviceImageFormatProperties(s.physical, format, type, VK_IMAGE_TILING_OPTIMAL,
+				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, type == VK_IMAGE_TYPE_2D ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0,
+				&fp) != VK_SUCCESS)
+				return false;
 			VkImageCreateInfo ci{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
-			ci.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-			ci.imageType = VK_IMAGE_TYPE_2D;
+			ci.flags = type == VK_IMAGE_TYPE_2D ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
+			ci.imageType = type;
 			ci.format = format;
 			ci.extent = { 1, 1, 1 };
 			ci.mipLevels = 1;
-			ci.arrayLayers = 6;
+			ci.arrayLayers = layers;
 			ci.samples = VK_SAMPLE_COUNT_1_BIT;
 			ci.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-			Check(vkCreateImage(s.device, &ci, nullptr, &p.img.image), "vkCreateImage");
+			Check(vkCreateImage(s.device, &ci, nullptr, &img.image), "vkCreateImage");
 			VkMemoryRequirements req;
-			vkGetImageMemoryRequirements(s.device, p.img.image, &req);
+			vkGetImageMemoryRequirements(s.device, img.image, &req);
 			VkMemoryAllocateInfo ai{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
 			ai.allocationSize = req.size;
 			ai.memoryTypeIndex = MemoryType(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-			Check(vkAllocateMemory(s.device, &ai, nullptr, &p.img.memory), "vkAllocateMemory");
-			vkBindImageMemory(s.device, p.img.image, p.img.memory, 0);
-			p.img.aspect = aspect;
-			p.img.format = format;
+			Check(vkAllocateMemory(s.device, &ai, nullptr, &img.memory), "vkAllocateMemory");
+			vkBindImageMemory(s.device, img.image, img.memory, 0);
+			img.aspect = aspect;
+			img.format = format;
 			VkImageMemoryBarrier b{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
 			b.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 			b.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			b.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 			b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			b.image = p.img.image;
-			b.subresourceRange = { aspect, 0, 1, 0, 6 };
+			b.image = img.image;
+			b.subresourceRange = { aspect, 0, 1, 0, layers };
 			vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
 			if (aspect & VK_IMAGE_ASPECT_DEPTH_BIT)
 			{
 				VkClearDepthStencilValue v{};
-				vkCmdClearDepthStencilImage(s.cmd, p.img.image, VK_IMAGE_LAYOUT_GENERAL, &v, 1, &b.subresourceRange);
+				vkCmdClearDepthStencilImage(s.cmd, img.image, VK_IMAGE_LAYOUT_GENERAL, &v, 1, &b.subresourceRange);
 			}
 			else
 			{
 				VkClearColorValue v{};
-				vkCmdClearColorImage(s.cmd, p.img.image, VK_IMAGE_LAYOUT_GENERAL, &v, 1, &b.subresourceRange);
+				vkCmdClearColorImage(s.cmd, img.image, VK_IMAGE_LAYOUT_GENERAL, &v, 1, &b.subresourceRange);
 			}
-			p.img.layout = VK_IMAGE_LAYOUT_GENERAL;
+			img.layout = VK_IMAGE_LAYOUT_GENERAL;
+			return true;
+		}
+
+		void CreatePlaceholder(Placeholder& p, VkFormat format, VkImageAspectFlags aspect)
+		{
+			// a 1x1 image with 6 layers serves 2D, 2D array and cube views; 1D and 3D views need images of their own
+			// type (b-1dviews: a 1D view of a 2D image is invalid, VUID-VkImageViewCreateInfo-subResourceRange-01021).
+			// A type the device can't make (depth in 1D or 3D) has no view: SampleTexture falls back to the 2D one
+			CreateNullImage(p.img, VK_IMAGE_TYPE_2D, format, aspect);
+			const bool has1d = CreateNullImage(p.img1d, VK_IMAGE_TYPE_1D, format, aspect);
+			const bool has3d = !(aspect & VK_IMAGE_ASPECT_DEPTH_BIT) && CreateNullImage(p.img3d, VK_IMAGE_TYPE_3D, format, aspect);
 			for (uint32 d = 0; d < 8; d++)
 			{
 				VkImageViewType type = ViewType((Latte::E_DIM)d);
-				if (type == VK_IMAGE_VIEW_TYPE_3D)
+				const bool is1d = type == VK_IMAGE_VIEW_TYPE_1D || type == VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+				const bool is3d = type == VK_IMAGE_VIEW_TYPE_3D;
+				if ((is1d && !has1d) || (is3d && !has3d))
 					continue;
 				VkImageViewCreateInfo vi{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-				vi.image = p.img.image;
+				vi.image = is1d ? p.img1d.image : is3d ? p.img3d.image : p.img.image;
 				vi.viewType = type;
 				vi.format = format;
 				vi.subresourceRange = { aspect, 0, 1, 0, type == VK_IMAGE_VIEW_TYPE_CUBE ? 6u : 1u };
