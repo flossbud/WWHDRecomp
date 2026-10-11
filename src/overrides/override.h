@@ -9,8 +9,8 @@
 namespace wwhd::pacing
 {
 	// Frame dips without slowdown (src/overrides/pacing.cpp; docs/research/gpu-plan.md): a half tick's frame that would
-	// make the next tick late runs its logic but not its draws, render jobs or present (g_dropFrame, set by FrameStart
-	// at each frame's start, on the frame thread)
+	// make the next tick late runs its logic and its draws but not its render jobs, and the frame after it draws and
+	// presents nothing (g_dropFrame, set by FrameStart at each frame's start, on the frame thread)
 	extern bool g_dropFrame;
 	// a dropped frame's actor draws too (WWHD_60FPS_DROPDRAWS=1; off by default: half-tick draws take numbers from the
 	// game's random stream, so leaving them out moves every later draw of it: a seagull's flight, then the sea)

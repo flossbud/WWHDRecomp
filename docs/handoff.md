@@ -4235,7 +4235,8 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   t-frameskip, full speed below 30 (whole frames dropped when behind, play only; `WWHD_FRAMESKIP=0`, `_LATE`, `_TEST`;
   at 30 a dropped frame's own swap is suppressed, GX2_SuppressNextSwap); t-skipcost, a dropped frame's screen-sized
   draws left out (a 0xFC marker in the command stream; `WWHD_FRAMESKIP_DRAWS=0`): the worker at 30 render-bound 20.4 fps
-  at 100% speed; t-lazy, the lazy GX2DrawDone on by default (after qa's e4e8271: a dropped frame keeps its DrawDone);
+  at 100% speed (the suppression and t-skipcost's marker are gone since qa's q-deckblack, below: a dropped frame now
+  presents the frame before's picture and the frame after draws nothing); t-lazy, the lazy GX2DrawDone on by default (after qa's e4e8271: a dropped frame keeps its DrawDone);
   t-vrr, `WWHD_VRR=1` (FIFO and X11's _VARIABLE_REFRESH; the owner checks it on a VRR monitor); t-writewatch, texture
   write-watch on by default in real time; t-bufcache, a vertex buffer's ring copy reused within the frame (a 64-byte
   guard; the worker's render thread -17% at 60).
@@ -4348,6 +4349,49 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
   - *Gates* (main c160216 + the fix; then rebased on 73392e9, b-fsr3, without conflicts, rebuilt, the 40-cap runs
     again): checks all MATCH (traces, streams, sound, diff 0 mismatches, 15 captures PSNR inf); regress identical
     (da06a4ee); predeploy 50 ok, 0 FAIL, gohmatail WARN 54.0 (as on main), gohmarock ok 4.8.
+- **q-deckblack (B77), the Steam Deck flickering to full black, title and loading screens included (fixed): every
+  dropped frame was followed by a black one.** Four quick fixes had failed (vsync, the display model, the lazy DrawDone,
+  t-skipcost's marker off); the owner's PC never drops, so it never showed.
+  - *Seen*: on the Deck itself (Game Mode, gamescope), `gamescopectl screenshot` bursts were up to 2 in 3 fully black;
+    forced drops at the title (`WWHD_60FPS_DROPTEST=2`) 10 black in 30 against 0 without, native 30 fps 0, the render
+    jobs kept (`WWHD_60FPS_DROPRENDER=0`, as it was then) 0, the gamescope WSI layer off (`DISABLE_GAMESCOPE_WSI=1`)
+    still 10 in 30: ours, not gamescope's. The probe `WWHD_PRESENT_PROBE` (present.cpp: each present's scan buffer
+    sampled, 8x8 points, read back two swaps later) then showed our own scan buffer black in 200 of 600 presents, every
+    third one, the frame after each dropped one; `WWHD_RENDER_TRACE` on it: the scene's draws missing.
+  - *The cause*: the game draws a frame's picture in the next frame. sead's fw_procFrame runs fw_procDraw (f_0274C67C,
+    vtable slot 0xd4) first: the TV's and GamePad's draw passes from the lists RenderDisplay draw and calcGPU built in
+    the frame before, and the copies to the scan buffers; then the frame body (the tick, RenderDisplay); then the present.
+    A dropped frame left out its RenderDisplay and its own present, so the frame after it drew from lists never built and
+    presented black (RenderDisplay draw alone left out: the same; calcGPU alone: every frame black, its buffer flip out of
+    step). Keep-speed, the 40/50 caps and the frame skip all drop this way.
+  - *The fix* (pacing.cpp): a dropped frame still leaves out its RenderDisplay (the CPU it saves: running it costs a
+    dropped frame 35 ms on the Deck's en-tn, more than a tick, and the frame skip then dropped nearly everything: 11 fps)
+    but draws and presents the frame before's picture, on time; the frame after it (`s_noPicture`) leaves out its
+    fw_procDraw and its present (`SkipSwap`, its GX2DrawDone kept). Pictures keep their own times (game time between two
+    shown pictures = their display time). t-skipcost's 0xFC marker is gone (it would now drop a shown picture's draws;
+    with the fix it left out 0 draws), and so is gx2's `GX2_SuppressNextSwap`: at 30 it ate the next frame's real
+    present (gfx_EndFrame is GX2SwapScanBuffers' only caller; one swap a frame, logged), and without it the frame skip at
+    30 shows the plain run's pictures at the same swaps (PSNR inf, or 46-57 dB where the random stream moves particles).
+    worker_absum.py's game speed now counts every frame (it read 34% for the game's 93% when whole frames were skipped).
+  - *The check* `tools/sixty/tests/blacktest.sh` (predeploy runs it; `PREDEPLOY_BLACK=0` not): slash on the virtual
+    clock, rendered, plain and with keep-speed's drops, the 40 cap and the frame skip at 60 and at 30, each present's
+    scan buffer against the plain run's at the same swap (`WWHD_PRESENT_PROBE_OUT`; gx2 queues each swap's number for
+    the renderer, `NoteGuestSwap`); FAIL on a present black where the plain one isn't (the same probe on the Deck: the
+    old code's forced drops made every third present black). The Deck stand-in never caught it: droptest.sh compares game state, the A/Bs fps, and the captures run without drops.
+  - *On the Deck* (Game Mode, the 100% save, launched through Steam; the old drop and the fix in one probe build each):
+    en-tn (Outset's Darknut fight), 3 rounds: 36.3 against 36.0 fps, 100% speed both, half frames dropped alike; black
+    presents in the fight's last 600: 274 against 0 (the old build's 36 fps were ~45% black: ~20 pictures a second, now
+    36). The cost of the move: the game thread +0.44 ms a frame (+3.6%), the render thread +1.9 ms (it now draws the
+    picture the old code replaced with black). Windfall with the camera turning (the owner's case), gamescope's
+    captures: 18 black in 40 against 0. The only black presents left are the game's own fades, unbroken stretches (the
+    boot, the stage load, a warp). Also: forcing every frame's RenderDisplay instead (fw_procDraw left out) was black-free
+    but 11 fps at 95% on en-tn.
+  - *Gates* (main 3639ada + the fix): checks all MATCH (traces, streams, sound, diff 0 mismatches, 15 captures PSNR
+    inf); regress identical (da06a4ee); predeploy 50 ok, the 12 real-time routes ok, the 10-minute soak ok, blacktest 4
+    ok, 0 FAIL; gohmatail WARN 54.0 (as on main), gohmarock ok 4.8; droptest (keep-speed's drops, and the frame skip's)
+    as before: Link 0.0 on tour3 and en-bo, 16.5 on sail (13.3 with the frame skip), the seagull parting. Then rebased
+    on 66c2c46 (t-fpsoverlay: present.cpp's Draw merged by hand, the probe's window sample after the FPS panel),
+    rebuilt, checks and blacktest again: all MATCH (15 captures PSNR inf), blacktest 4 ok.
 
 ## Waiting on the owner
 
@@ -4405,6 +4449,9 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
 - **A frame that isn't presented must still call GX2DrawDone.** The game writes its display lists again in later
   frames and relies on the present's DrawDone to know the GPU thread has read them (q-lazyring, session qa above).
   Anything that skips game_procPresent keeps the wait; `WWHD_CP_GUARD=1` shows a list rewritten too early.
+- **A frame's picture is drawn in the next frame** (fw_procDraw, sead's first step, from the lists RenderDisplay built
+  the frame before). Anything that drops a frame must leave out the next frame's draw and present, not its own present,
+  or the frame after it shows black (q-deckblack, session qa above); `tools/sixty/tests/blacktest.sh` checks it.
 - **The title loads the game's permanent packs** (Pack/szs_permanent0-2.pack, f_025B1F54: the title is a play scene).
   Anything that skips it must start that preload itself and wait for it (`WWHD_DEBUG_BOOT` does): an archive asked
   for while the packs load is called done at once and isn't there (q-boot3, session qa above). One host thread hides it.

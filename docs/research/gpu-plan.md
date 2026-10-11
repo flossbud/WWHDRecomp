@@ -527,10 +527,13 @@ the uncapped phase (D21 step 4); 30 and the checks (virtual clock, never behind)
 
 **Built (session cloud), opt-in: `WWHD_60FPS_KEEPSPEED=1`** (src/overrides/pacing.cpp). The ticks keep a schedule
 (33.3 ms each, resynced after a hitch of over 250 ms); a half tick's frame that would end after the next tick is due
-(the half frames' average work from now) is dropped: its logic and actor draws run, the game's render jobs
-(RenderDisplay draw and calcGPU) and its present don't (but its GX2DrawDone does: the game rewrites its display lists
-in later frames, q-lazyring in handoff.md); its swap is counted, so the frame numbers and the whole/half
-rhythm stay. The actor draws stay because half-tick draws take numbers from the game's random stream
+(the half frames' average work from now) is dropped: its logic and actor draws run, its render jobs (RenderDisplay
+draw and calcGPU, which build its picture's lists) don't. The game draws a frame's picture in the next frame
+(fw_procDraw, sead's first step) and presents it at that frame's end, so the dropped frame still draws and presents the
+frame before's picture, and the frame after it draws and presents nothing (but keeps its GX2DrawDone: the game rewrites
+its display lists in later frames, q-lazyring in handoff.md); every swap is counted, so the frame numbers and the
+whole/half rhythm stay. (Until q-deckblack the dropped frame left out its own present and the frame after it drew from
+lists never built: a black frame for every dropped one, the Steam Deck's flicker, handoff.md.) The actor draws stay because half-tick draws take numbers from the game's random stream
 (`WWHD_60FPS_DROPDRAWS=1` drops them too: on the virtual clock the seagull's flight then parts at once).
 `WWHD_60FPS_DROPTEST=k` forces every k-th half frame dropped (a test); `tools/sixty/tests/droptest.sh` compares
 routes on the virtual clock with and without (Link 0.0 apart on tour3 and en-bo, 16 units on sail; the seagull parts:

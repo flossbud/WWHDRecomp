@@ -102,6 +102,12 @@ for r in sys.argv[4:]:
 sys.exit(1 if bad else 0)
 PY
 status=$?
+# dropped frames show no black pictures (blacktest.sh, q-deckblack: keep-speed, the 40 cap and the frame skip, rendered,
+# each present's scan buffer against the plain run's); with the default routes only. PREDEPLOY_BLACK=0: not
+if [ "$named" = 0 ] && [ "${PREDEPLOY_BLACK:-1}" != 0 ]; then
+    echo "== blacktest (dropped frames: no black pictures)"
+    tools/sixty/tests/blacktest.sh || status=1
+fi
 # wwhd-play, the real-time build deploys ship (t-codegen), refuses the virtual clock these routes run on: its real-time
 # check (predeploy-rt.sh) follows on the default routes when the build made one. PREDEPLOY_RT=0: not
 if [ "$named" = 0 ] && [ -x build/wwhd/wwhd-play ] && [ "${PREDEPLOY_RT:-1}" != 0 ]; then

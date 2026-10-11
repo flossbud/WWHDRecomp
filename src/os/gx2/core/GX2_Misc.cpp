@@ -96,18 +96,6 @@ void gx2Export_GX2SampleBottomGPUCycle(PPCInterpreter_t* hCPU)
 	osLib_returnFromFunction(hCPU, 0);
 }
 
-// wwhd: a frame the pacing drops (src/overrides/pacing.cpp: keep-speed, the cap, the frame skip) is marked in the command
-// stream, written on the frame's own core at its start: 0xFC (an opcode Latte doesn't use) with 1, and with 0 at the next
-// shown frame's start. The renderer leaves out its draws into screen-sized targets (draw.cpp, t-skipcost)
-void GX2_WriteFrameDropMarker(bool dropped)
-{
-	if (!LatteGPUState.gx2InitCalled)
-		return;
-	GX2::GX2ReserveCmdSpace(2);
-	gx2WriteGather_submitU32AsBE(pm4HeaderType3(0xFC, 1));
-	gx2WriteGather_submitU32AsBE(dropped ? 1 : 0);
-}
-
 // wwhd: the HUD at another aspect ratio (b-wide, os/aspect.h): 0xFD (an opcode neither Latte nor Cemu uses; 0xFB is its occlusion query end) with a kind and a
 // value, written only when the picture isn't 16:9 (so no check's stream sees one). 1, REG: the vertex uniform registers
 // from REG (16 of them) that follow are a layout's projection; 2, PANE: a layout root's draw begins (the renderer

@@ -1170,10 +1170,12 @@ scenery (clouds, waves, sparkle) follows the clock instead and is already right 
 `symbols.csv` where named):
 * sead's `GameFrameworkCafe` ("FrameworkCafe", created in main `f_02005EA8` with a vblank interval
   of 2; main also calls `GX2SetSwapInterval(2)` once) runs `fw_runLoop` (`f_0274C00C`), which calls
-  `fw_procFrame` (`f_0274C264`, vtable 0x10004E88 slot 0xcc) forever: slot 0xd4, slot 0xdc
-  `game_procFrameBody`, slot 0x6c, slot 0xec `game_procPresent` unless paused (`gfx_EndFrame`: the
-  outputs' copies, flush, `GX2SwapScanBuffers`; ProcUI), the frame's duration (+0x78) and start
-  (+0x80), slot 0xe4 `fw_waitForVsync`.
+  `fw_procFrame` (`f_0274C264`, vtable 0x10004E88 slot 0xcc) forever: slot 0xd4 `fw_procDraw`
+  (`f_0274C67C`: the TV's and GamePad's draw passes and the copies to the scan buffers, from the lists
+  RenderDisplay built in the frame before, so a frame presents the picture of the frame before's
+  tick; q-deckblack), slot 0xdc `game_procFrameBody`, slot 0x6c, slot 0xec `game_procPresent` unless
+  paused (`gfx_EndFrame`: the outputs' copies, flush, `GX2SwapScanBuffers`; ProcUI), the frame's
+  duration (+0x78) and start (+0x80), slot 0xe4 `fw_waitForVsync`.
 * `game_procFrameBody` (`f_02034FFC`): `f_02746790(root)` = sead's method tree calc
   (`f_02747C6C(root + 0x40)`, recursing through `f_02747BDC`), then `RenderDisplay_draw` and
   `RenderDisplay_calcGPU` (render job lists; the TV's view matrix is copied to `DAT_104b45f8`).

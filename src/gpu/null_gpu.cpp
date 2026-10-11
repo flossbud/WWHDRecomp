@@ -792,10 +792,6 @@ namespace
 			if (wwhd::gpu::RendererOn() && nWords >= 2)
 				wwhd::gpu::RendererLayoutMark(body[0], body[1]);
 			break;
-		case 0xFC:                                          // wwhd: a dropped frame's mark (gx2's GX2_WriteFrameDropMarker)
-			if (wwhd::gpu::RendererOn())
-				wwhd::gpu::RendererFrameDropped((uint32)body[0] != 0);
-			break;
 		default:
 			if (cpguard::On())
 				cpguard::Bad(depth, "unknown packet", op, nWords, 0);

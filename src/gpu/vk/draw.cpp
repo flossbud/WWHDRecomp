@@ -1912,10 +1912,6 @@ namespace wwhd::gpu
 
 	// IT_DRAW_INDEX_2 (body: ?, index address, ?, count, ?) and IT_DRAW_INDEX_AUTO (body: count, ?),
 	// as LatteCP_itDrawIndex2/Auto and DrawPassContext::executeDraw read them
-	// a dropped frame's mark (null_gpu.cpp's 0xFC): set from its start to the next shown frame's (the GPU thread's own)
-	static bool s_frameDropped = false;
-	static uint64 s_droppedDraws = 0;
-
 	// 0xFD (gx2's GX2_WriteLayoutMarker, b-wide): 1, REG: a layout's projection follows at vertex uniform register REG;
 	// 2, PANE: a layout root is drawn now, into the target bound now: whether it is a widened one goes to the game's
 	// layout hooks (src/overrides/aspect.cpp anchors only the TV's layouts)
@@ -1951,14 +1947,6 @@ namespace wwhd::gpu
 		}
 		else if (p.valid && reg < p.base + 16 && reg + count > p.base)
 			p.valid = false;
-	}
-
-	void RendererFrameDropped(bool dropped)
-	{
-		static uint32 marks = 0;
-		if (dropped && ++marks % 300 == 0)
-			Log(fmt::format("frame skip: {} draws of dropped frames left out (screen-sized targets) over {} dropped stretches", s_droppedDraws, marks));
-		s_frameDropped = dropped;
 	}
 
 	void RendererDraw(uint32 op, const uint32be* body, uint32 nWords)
@@ -2048,24 +2036,6 @@ namespace wwhd::gpu
 		}
 		if (!colorMask && !t.depth)
 			return skip("nothing to draw into");
-		// a frame the pacing dropped (keep-speed, the cap, the frame skip; its mark, RendererFrameDropped): nothing of it
-		// is shown, so its draws into the screen-sized targets (the TV image and its full-screen chain, which the next
-		// shown frame draws anew) are left out; offscreen ones (shadow maps, reflections, render-to-texture, the half-size
-		// effect buffers), which later frames may read, are kept (t-skipcost)
-		if (s_frameDropped && colorMask)
-		{
-			bool screen = true;
-			for (Image* c : t.color)
-				screen = screen && (!c || (c->gw >= 1280 && c->gh >= 720));
-			if (t.depth)
-				screen = screen && t.depth->gw >= 1280 && t.depth->gh >= 720;
-			if (screen)
-			{
-				s_droppedDraws++;
-				return;
-			}
-		}
-
 		// textures first: they may end rendering, upload, or submit
 		Image* attachments[9];
 		uint32 nAttachments = 0;

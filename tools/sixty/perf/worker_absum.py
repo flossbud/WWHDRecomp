@@ -35,7 +35,9 @@ def run(path, rate):
     if len(fr) < 10:
         return None
     span = (fr[-1]["began"] + fr[-1]["work"] + fr[-1]["wait"] - fr[0]["began"]) / 1000
-    ticks = sum(1 for f in fr if not f["half"] and not f["dropped"]) if rate == 60 else len(fr)
+    # the game's ticks: every frame is half a tick at 60 (dropped or not: its swap is counted), a tick at 30 (the frame
+    # log's d replaces w or h, so counting the whole frames left out the frame skip's dropped ones: 34% for 93%)
+    ticks = len(fr) / 2 if rate == 60 else len(fr)
     shown = [f for f in fr if not f["dropped"]]
     m = lambda k: statistics.mean(f[k] for f in shown)
     r = dict(fps=len(shown) / span, speed=100 * ticks / span / 30, sched=sum(f["cpu"] for f in fr) / span / 10, render=sum(f["gpu"] for f in fr) / span / 10,

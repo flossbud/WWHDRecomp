@@ -14,6 +14,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <deque>
 
 namespace wwhd::gpu
 {
@@ -61,6 +62,171 @@ namespace wwhd::gpu
 		bool IsSrgb(VkFormat f)
 		{
 			return f == VK_FORMAT_R8G8B8A8_SRGB || f == VK_FORMAT_B8G8R8A8_SRGB;
+		}
+
+		// WWHD_PRESENT_PROBE=1 (a test, q-deckblack; tools/sixty/tests/blacktest.sh): at every present, with a window or
+		// without, an 8x8 grid of the TV image's pixels (the scan buffer) copied out and read back two swaps later (its submit
+		// done: the lazy path's slot waited for); a black one logged with its frame, the game's swap it presents (gx2's
+		// NoteGuestSwap) and the time since the present before, and a summary every 600 presents.
+		// WWHD_PRESENT_PROBE_OUT=path: a line a present there, "SWAP FRAME BLACK" (1 black, 0 not). =2: the window image's
+		// grid too, after the blit and the overlay (the swapchain then made with TRANSFER_SRC)
+		namespace probe
+		{
+			constexpr uint32 kGrid = 8, kPoints = kGrid * kGrid, kSlots = 8, kStride = 16;
+			constexpr VkDeviceSize kSlotBytes = 2 * kPoints * kStride;
+			int Mode()
+			{
+				static const int m = [] { const char* e = getenv("WWHD_PRESENT_PROBE"); return e ? atoi(e) : 0; }();
+				return m;
+			}
+			VkBuffer s_buf = VK_NULL_HANDLE;
+			VkDeviceMemory s_mem = VK_NULL_HANDLE;
+			const uint8* s_data = nullptr;
+			FILE* s_out = nullptr;
+			struct Rec { uint32 frame = 0, guest = 0, image = 0; bool window = false; double since = 0; };
+			Rec s_recs[kSlots];
+			uint32 s_presents = 0, s_scanBlack = 0, s_windowBlack = 0, s_logged = 0, s_from = 0, s_alphaMin = 255, s_alphaMax = 0;
+			std::chrono::steady_clock::time_point s_last{};
+			bool s_swapSrc = false;                                  // the swapchain was made with TRANSFER_SRC
+			std::mutex s_guestLock;
+			std::deque<uint32> s_guest;                              // the swaps gx2 sent, not presented yet
+
+			bool Eight(VkFormat f)
+			{
+				return f == VK_FORMAT_R8G8B8A8_UNORM || f == VK_FORMAT_R8G8B8A8_SRGB || f == VK_FORMAT_B8G8R8A8_UNORM || f == VK_FORMAT_B8G8R8A8_SRGB;
+			}
+
+			void Copy(VkImage image, VkImageLayout layout, sint32 x0, sint32 y0, sint32 cw, sint32 ch, VkDeviceSize at)
+			{
+				VkBufferImageCopy r[kPoints];
+				for (uint32 i = 0; i < kPoints; i++)
+				{
+					r[i] = {};
+					r[i].bufferOffset = at + i * kStride;
+					r[i].imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+					r[i].imageOffset = { x0 + (sint32)(((i % kGrid) * 2 + 1) * cw / (2 * kGrid)), y0 + (sint32)(((i / kGrid) * 2 + 1) * ch / (2 * kGrid)), 0 };
+					r[i].imageExtent = { 1, 1, 1 };
+				}
+				vkCmdCopyImageToBuffer(s.cmd, image, layout, s_buf, kPoints, r);
+			}
+
+			bool Black(const uint8* p)
+			{
+				for (uint32 i = 0; i < kPoints; i++)
+					if (p[i * kStride] > 4 || p[i * kStride + 1] > 4 || p[i * kStride + 2] > 4)
+						return false;
+				return true;
+			}
+
+			// the records whose submit is done (two swaps back), counted and the black ones logged
+			void Read()
+			{
+				for (Rec& r : s_recs)
+				{
+					if (!r.frame || r.frame + 2 > s.frame)
+						continue;
+					const uint8* p = s_data + (r.frame % kSlots) * kSlotBytes;
+					const bool scanBlack = Black(p), windowBlack = r.window && Black(p + kPoints * kStride);
+					if (r.window)
+						for (uint32 i = 0; i < kPoints; i++)
+							s_alphaMin = std::min<uint32>(s_alphaMin, p[kPoints * kStride + i * kStride + 3]),
+							s_alphaMax = std::max<uint32>(s_alphaMax, p[kPoints * kStride + i * kStride + 3]);
+					if (s_out)
+						fprintf(s_out, "%u %u %d\n", r.guest, r.frame, scanBlack ? 1 : 0);
+					if (!s_presents)
+						s_from = r.frame;
+					s_presents++, s_scanBlack += scanBlack, s_windowBlack += windowBlack;
+					if ((scanBlack || windowBlack) && s_logged < 300)
+					{
+						s_logged++;
+						Log(fmt::format("present probe: frame {} (swap {}) black: the scan buffer {}, the window image {}; image {}, {:.1f} ms after "
+							"the present before", r.frame, r.guest, scanBlack ? "black" : "not", r.window ? (windowBlack ? "black" : "not") : "not sampled",
+							r.image, r.since));
+					}
+					if (s_presents >= 600)
+					{
+						Log(fmt::format("present probe: frames {}-{}: {} presents, {} with a black scan buffer, {} with a black window image{}", s_from,
+							r.frame, s_presents, s_scanBlack, s_windowBlack, s_swapSrc ? fmt::format(" (its alpha {}..{})", s_alphaMin, s_alphaMax) : ""));
+						s_presents = s_scanBlack = s_windowBlack = 0, s_alphaMin = 255, s_alphaMax = 0;
+					}
+					r.frame = 0;
+				}
+			}
+
+			// at each present, before the window (headless too): the scan buffer's grid; false: not probing
+			bool Begin(Image& scan)
+			{
+				if (!Mode() || !scan.image)
+					return false;
+				if (!s_buf)
+				{
+					if (!Eight(scan.format))
+					{
+						static bool once = (Log(fmt::format("present probe: the scan buffer's format {} isn't 8 bits a channel: off", (int)scan.format)), true);
+						(void)once;
+						return false;
+					}
+					VkBufferCreateInfo bci{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+					bci.size = kSlots * kSlotBytes;
+					bci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+					Check(vkCreateBuffer(s.device, &bci, nullptr, &s_buf), "vkCreateBuffer");
+					VkMemoryRequirements req;
+					vkGetBufferMemoryRequirements(s.device, s_buf, &req);
+					VkMemoryAllocateInfo ai{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+					ai.allocationSize = req.size;
+					ai.memoryTypeIndex = MemoryType(req.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+					Check(vkAllocateMemory(s.device, &ai, nullptr, &s_mem), "vkAllocateMemory");
+					vkBindBufferMemory(s.device, s_buf, s_mem, 0);
+					void* mapped = nullptr;
+					Check(vkMapMemory(s.device, s_mem, 0, VK_WHOLE_SIZE, 0, &mapped), "vkMapMemory");
+					s_data = (const uint8*)mapped;
+					if (const char* out = getenv("WWHD_PRESENT_PROBE_OUT"); out && *out && (s_out = fopen(out, "w")))
+					{
+						atexit([] { fflush(s_out); });
+						at_quick_exit([] { fflush(s_out); });
+					}
+					Log(fmt::format("present probe: on (WWHD_PRESENT_PROBE={}), the scan buffer {}x{} format {}{}", Mode(), scan.width, scan.height,
+						(int)scan.format, s_swapSrc ? ", the window image too" : ""));
+				}
+				Read();
+				const auto now = std::chrono::steady_clock::now();
+				Rec& r = s_recs[s.frame % kSlots];
+				r = {};
+				r.frame = s.frame;
+				{
+					std::lock_guard lock(s_guestLock);
+					if (!s_guest.empty())
+						r.guest = s_guest.front(), s_guest.pop_front();
+				}
+				r.since = s_last == std::chrono::steady_clock::time_point{} ? 0.0 : std::chrono::duration<double, std::milli>(now - s_last).count();
+				s_last = now;
+				Transition(scan, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+				Copy(scan.image, scan.layout, 0, 0, (sint32)scan.width, (sint32)scan.height, (s.frame % kSlots) * kSlotBytes);
+				HostReadBarrier();
+				return true;
+			}
+
+			// =2, after the blit and the overlay (the window image in TRANSFER_DST): its grid within the picture
+			void End(VkImage target, sint32 x, sint32 y, sint32 dw, sint32 dh)
+			{
+				s_recs[s.frame % kSlots].image = w.index;
+				if (!s_swapSrc)
+					return;
+				VkImageMemoryBarrier b{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+				b.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+				b.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+				b.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+				b.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+				b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				b.image = target;
+				b.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+				vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+				Copy(target, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, x, y, dw, dh, (s.frame % kSlots) * kSlotBytes + kPoints * kStride);
+				std::swap(b.oldLayout, b.newLayout);
+				vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+				s_recs[s.frame % kSlots].window = true;
+				HostReadBarrier();
+			}
 		}
 
 		void Barrier(VkImage image, VkImageLayout from, VkImageLayout to)
@@ -127,7 +293,8 @@ namespace wwhd::gpu
 			ci.imageColorSpace = chosen.colorSpace;
 			ci.imageExtent = extent;
 			ci.imageArrayLayers = 1;
-			ci.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+			probe::s_swapSrc = probe::Mode() >= 2 && (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+			ci.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | (probe::s_swapSrc ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0);
 			ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 			ci.preTransform = caps.currentTransform;
 			ci.compositeAlpha = (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) ? VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR
@@ -340,7 +507,7 @@ namespace wwhd::gpu
 	}
 
 	// the image scaled to fit and centred in the acquired window image, the overlay over it, ready to present
-	static void Draw(Image& scan)
+	static void Draw(Image& scan, bool probing = false)
 	{
 		VkImage target = w.images[w.index];
 		Barrier(target, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -362,13 +529,25 @@ namespace wwhd::gpu
 		const double fs = std::min(dw / 1920.0, dh / 1080.0);
 		DrawOverlay(target, x + (dw - (sint32)(1920 * fs)) / 2, y + (dh - (sint32)(1080 * fs)) / 2, fs);
 		DrawFps(target, x, y, dw, dh);
+		if (probing)
+			probe::End(target, x, y, dw, dh);
 		Barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	}
+
+	void NoteGuestSwap(uint32 swap)
+	{
+		if (!probe::Mode())
+			return;
+		std::lock_guard lock(probe::s_guestLock);
+		if (probe::s_guest.size() < 4096)                         // nothing takes them without the renderer
+			probe::s_guest.push_back(swap);
 	}
 
 	void PresentRecord(Image& scan, Image* between)
 	{
 		w.pending = false;
 		w.first = UINT32_MAX;
+		const bool probing = probe::Begin(scan);                   // WWHD_PRESENT_PROBE: the scan buffer's grid, headless too
 		if (!s_hasWindow || !scan.image)
 			return;
 		if (between && Acquire(IsSrgb(scan.format)))              // frame generation: the frame between, presented first
@@ -383,7 +562,7 @@ namespace wwhd::gpu
 		}
 		else if (!Acquire(IsSrgb(scan.format)))
 			return;
-		Draw(scan);
+		Draw(scan, probing);
 	}
 
 	bool WindowExtent(uint32& width, uint32& height)

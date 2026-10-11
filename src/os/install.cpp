@@ -9,8 +9,6 @@
 extern HLECALL s_ppcHleTable[];    // Cemu's HLE handler table (PPCInterpreterHLE.cpp), indexed by HLE id
 uint32 GX2_RefSwapCount();         // Cemu's gx2 (cemu-patches/0007)
 void GX2_SkipSwap();
-void GX2_SuppressNextSwap();
-void GX2_WriteFrameDropMarker(bool dropped);
 void GX2_WriteLayoutMarker(uint32 kind, uint32 value);
 struct changeStringParam_t { uint32be beginIndex, endIndex; };
 extern SysAllocator<changeStringParam_t> _changeStringParam;   // Cemu's swkbd.cpp: its slot in guest memory
@@ -23,8 +21,6 @@ namespace wwhd::os
 	uint32 CurrentThread() { return MEMPTR<OSThread_t>(coreinit::OSGetCurrentThread()).GetMPTR(); }
 	uint32 SwapCount() { return GX2_RefSwapCount(); }
 	void SkipSwap() { GX2_SkipSwap(); }
-	void SuppressNextSwap() { GX2_SuppressNextSwap(); }
-	void FrameDropMarker(bool dropped) { GX2_WriteFrameDropMarker(dropped); }
 	void LayoutMarker(uint32 kind, uint32 value) { GX2_WriteLayoutMarker(kind, value); }
 	void SleepTicks(uint64 ticks) { coreinit::OSSleepTicks(ticks); }
 	uint32 AllocSystemArea(uint32 size, uint32 alignment) { return coreinit_allocFromSysArea(size, alignment); }
