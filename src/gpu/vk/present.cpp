@@ -110,11 +110,17 @@ namespace wwhd::gpu
 				vkCmdCopyImageToBuffer(s.cmd, image, layout, s_buf, kPoints, r);
 			}
 
+			// black: the grid's middle 4x4 (the scene; the HUD at its edges can stand over a black world, B80)
 			bool Black(const uint8* p)
 			{
 				for (uint32 i = 0; i < kPoints; i++)
+				{
+					const uint32 x = i % kGrid, y = i / kGrid;
+					if (x < 2 || x > 5 || y < 2 || y > 5)
+						continue;
 					if (p[i * kStride] > 4 || p[i * kStride + 1] > 4 || p[i * kStride + 2] > 4)
 						return false;
+				}
 				return true;
 			}
 

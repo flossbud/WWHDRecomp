@@ -4,7 +4,7 @@
 # tools/sixty/compare.py. ROUTE is a name from tools/reference/routes.sh. At 60 the route plays at 30
 # up to swap SIXTY_FROM (default 900: the routes from the 100% save are on the dock by then), then the
 # game presents every vsync (WWHD_60FPS=1, WWHD_60FPS_FROM) and each game frame takes two swaps, so
-# the run ends at FROM + 2 (frames - FROM). SIXTY_TRACE=FILTER also writes each run's OS-call trace
+# the run ends at FROM + 2 (frames - FROM) (N with WWHD_STEPS=N). SIXTY_TRACE=FILTER also writes each run's OS-call trace
 # of the functions FILTER names (CEMU_HLE_TRACE_FILTER prefixes) to OUT/RATE/trace.zst, for
 # tools/sixty/sound.py. Both rates run with WWHD_VIRTUAL_SPEED (default 3 here):
 # the emulated CPU that fast, so that a 60 fps frame fits in one vsync of guest time and both runs
@@ -39,7 +39,8 @@ for rate in "${rates[@]}"; do
     dir=$out/$rate
     rm -rf "$dir" && mkdir -p "$dir"
     from=${SIXTY_FROM:-900}
-    if [ "$rate" = 60 ]; then sixty=1 exit_frame=$((from + 2 * (frames - from))); else sixty= exit_frame=$frames; fi
+    steps=${WWHD_STEPS:-2}                         # frames a tick (U1: WWHD_STEPS=N, 30 N fps): the same game frames
+    if [ "$rate" = 60 ]; then sixty=1 exit_frame=$((from + steps * (frames - from))); else sixty= exit_frame=$frames; fi
     echo "run.sh: $which at $rate ticks a second, to swap $exit_frame, state in $dir"
     start=$(date +%s)
     # the trace ends the run itself (and closes its file); otherwise WWHD_EXIT_FRAME does

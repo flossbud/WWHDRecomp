@@ -3267,8 +3267,9 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		s_uiScreens.clear();
 		s_cam = CamSave{};                           // the camera's whole step (above) keeps its bytes anew
 	}
-	else if (CamTick())
-		CamTickRestore();                            // the half tick reads the tick-start camera (above)
+	else if (CamTick() && !g_rtEarlyStep)
+		CamTickRestore();                            // the half tick reads the tick-start camera (above); at N > 2 the
+	                                                 // tick's last frame (its early steps step the camera for show too)
 	// WWHD_STATE_CENSUS=2 watches whole ticks' frames too (from the switch on), for the trace
 	static const bool censusAll = [] { const char* e = getenv("WWHD_STATE_CENSUS"); return Probe() && e && atoi(e) == 2; }();
 	if (!g_rtHalfTick && censusAll && swap >= from)
@@ -3952,9 +3953,11 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	const float step = g_rtStep;
 	g_rtStep = 1.0f / g_rtSteps;                     // a tick's step of N (0.5 at 60)
 	s_converting++;
-	const bool camTick = CamTick() && !g_rtHalfTick && rd16(proc + 0x08) == 476;
-	if (camTick)
-		CamTickBefore(proc);                        // its whole tick's half step is for show (the camera's tick)
+	const bool camTick = CamTick() && (!g_rtHalfTick || g_rtEarlyStep) && rd16(proc + 0x08) == 476;
+	if (camTick && !g_rtHalfTick)
+		CamTickBefore(proc);                        // its whole tick's half step is for show (the camera's tick); at
+	                                                // N > 2 its early steps too, on from it (B80: each ran a 30 fps tick
+	                                                // over a part-restored camera, which went NaN: a black world)
 	if (link && !g_rtHalfTick)
 	{
 		s_linkActionChanged = false;                // until his action call changes it (rt_hold_leave)
