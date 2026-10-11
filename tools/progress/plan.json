@@ -581,6 +581,12 @@
       "name": "Round 14: [6] Lossless Scaling frame generation as an alternative to FSR 3's (the owner's ask): the setting Frame generation: off / FSR 3 / Lossless Scaling (x2, x3, x4), the latter through lsfg-vk (the Vulkan layer that runs Lossless Scaling's shaders on Linux; check its licence before bundling it, else detect an installed one) with the user's own Lossless.dll (a path setting or portable/; never shipped or committed: *.dll gitignored; the owner's copy for tests in /wwhd/data/lsfg on both workers); on the desktop and the Deck, with the HUD, pacing and VRR checked as for b-framegen"
     },
     {
+      "id": "q-savestate",
+      "lane": "qa",
+      "complexity": 9,
+      "name": "Round 14: [9] Save states (the owner's ask, design approved 2026-10-11): save and load the whole game at the top of a whole tick (the main thread parked, the others in their OS waits, the clock frozen): game memory, thread contexts and the host-side records; a load boots fresh, parks at the same point, swaps the memory in, recreates the threads and flushes the renderer. M1 headless on the virtual clock, gated by determinism (save at swap N, load in a fresh run, actor states equal to the run that never stopped); M2 real time with Vulkan, audio and debug-menu slots, then a Deck test. For one-off repros like B16 first, testing second"
+    },
+    {
       "id": "m-setup",
       "lane": "main",
       "complexity": 2,
