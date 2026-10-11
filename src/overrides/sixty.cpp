@@ -2709,7 +2709,11 @@ namespace
 		if (s_cam.proc)
 			s_cam.after.assign(memory_base + s_cam.proc, memory_base + s_cam.proc + s_cam.size);
 	}
-	// the half tick's frame begins: what the camera's whole step changed goes back to the tick's start
+	// base_process_class (f_pc_base.h: its layer, line and delete tags, the process manager's): not the camera's own
+	constexpr uint32 kBaseProcessSize = 0xB8;
+	// the half tick's frame begins: what the camera's whole step changed goes back to the tick's start, but its
+	// process header (at N > 2 a scene change deleting the camera between its steps: its delete tag put back left
+	// its layer null, a crash in fpcDt's delete, f_025DDFA8, 27 ticks after a stage warp)
 	void CamTickRestore()
 	{
 		if (!s_cam.proc || s_cam.after.size() != s_cam.size || rd32(s_cam.proc + 0x04) != s_cam.id || rd16(s_cam.proc + 0x08) != 476)
@@ -2718,7 +2722,7 @@ namespace
 			return;
 		}
 		uint8* const p = memory_base + s_cam.proc;
-		for (uint32 i = 0; i < s_cam.size; i++)
+		for (uint32 i = kBaseProcessSize; i < s_cam.size; i++)
 			if (p[i] == s_cam.after[i] && s_cam.after[i] != s_cam.before[i])
 				p[i] = s_cam.before[i];
 		s_cam.restored = true;
