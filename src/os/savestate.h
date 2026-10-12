@@ -46,6 +46,11 @@ namespace wwhd::state
 	void RequestSave(int slot);                    // 1..kSlots
 	void RequestLoad(int slot);
 	std::string SlotInfo(int slot);                // "empty", or when it was saved
+	// The pause menu (t-pausemenu): RequestHold(true) parks the game at the next whole tick's top, as a save does, and
+	// keeps it there (Held) until RequestHold(false); a slot's save or load asked for meanwhile is made there and the
+	// game stays held after it. While held the sound is silent (ax_out.cpp) and the game reads no input
+	void RequestHold(bool on);
+	bool Held();
 	std::string Status();                          // the last request's outcome ("" none yet)
 
 	// One module's host-side state, written and read by the same function (a record): on a save Pod/Bytes append what

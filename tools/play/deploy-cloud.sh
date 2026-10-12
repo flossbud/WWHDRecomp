@@ -24,5 +24,7 @@ r put portable/controllerProfiles/controller0.xml < "$ref/controller0.xml"
 tar -c -C "$ref/routes" . | r routes
 list=$here/../../config/US_v0/shader_list.txt
 [ -f "$list" ] && r put cemu/wwhd/shader_list.txt < "$list"
+# the pause menu's assets (t-pausemenu: the design's fonts, images and copy), file by file next to the program
+( cd "$here/../.." && find assets/pause_menu -type f ) | while read -r f; do r put "$f" < "$here/../../$f"; done
 r put play.sh < "$here/play.sh"
 echo "deployed to $host:wwhd-play ($(r du))"

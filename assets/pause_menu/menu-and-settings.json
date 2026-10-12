@@ -1,0 +1,534 @@
+{
+  "pauseMenu": [
+    {
+      "id": "resume",
+      "label": "Resume",
+      "opens": "closes menu",
+      "caption": "Return to your voyage."
+    },
+    {
+      "id": "enh",
+      "label": "Enhancements",
+      "opens": "Enhancements screen",
+      "caption": "Quality-of-life and gameplay tweaks."
+    },
+    {
+      "id": "settings",
+      "label": "Settings",
+      "opens": "Settings screen (Graphics tab)",
+      "caption": "Graphics, display and advanced options."
+    },
+    {
+      "id": "save",
+      "label": "Save",
+      "opens": "Save screen (or Save dialog if save states are disabled)",
+      "caption": "Last saved {ago}."
+    },
+    {
+      "id": "quit",
+      "label": "Quit",
+      "opens": "Quit dialog",
+      "caption": "Return to the title screen or close the game."
+    }
+  ],
+  "menuGroups": [
+    [
+      "resume",
+      "enh",
+      "settings"
+    ],
+    [
+      "save"
+    ],
+    [
+      "quit"
+    ]
+  ],
+  "presets": {
+    "auto": "Picks Performance on Steam Deck, on battery, on integrated graphics, or with 8 or fewer CPU threads; otherwise Quality.",
+    "values": {
+      "Performance": {
+        "renderScale": 6,
+        "cpuThreads": 0,
+        "lazyDD": true
+      },
+      "Quality": {
+        "renderScale": 0,
+        "cpuThreads": 0,
+        "lazyDD": true
+      }
+    },
+    "customRule": "If any preset-controlled value differs from the resolved preset, Preset shows \"Custom\"."
+  },
+  "saveScreen": {
+    "gameFile": {
+      "id": "file1",
+      "label": "File 1",
+      "actions": [
+        "Save"
+      ]
+    },
+    "saveStates": {
+      "slots": 4,
+      "actions": [
+        "Save",
+        "Load"
+      ],
+      "emptyLoad": "disabled (toast \"Slot N is empty.\")",
+      "overwriteConfirm": true,
+      "loadConfirm": true
+    }
+  },
+  "dialogs": {
+    "save": {
+      "title": "Save your progress?",
+      "body": "This overwrites File 1. Last saved {ago}.",
+      "options": [
+        "Save",
+        "Cancel"
+      ],
+      "then": [
+        "Saving…",
+        "Save data has been updated."
+      ]
+    },
+    "quit": {
+      "title": "Quit to…",
+      "body": {
+        "unsaved": "Your progress since the last save ({ago}) isn’t saved yet.",
+        "saved": "All progress is saved."
+      },
+      "options": [
+        "Title Screen",
+        "Desktop",
+        "Cancel"
+      ]
+    },
+    "quitTitleUnsaved": {
+      "title": "Return to the title screen?",
+      "body": "Progress since your last save ({ago}) will be lost.",
+      "options": [
+        "Save & Quit",
+        "Don’t Save",
+        "Cancel"
+      ]
+    },
+    "quitDesktopUnsaved": {
+      "title": "Quit to desktop?",
+      "body": "Progress since your last save ({ago}) will be lost.",
+      "options": [
+        "Save & Quit",
+        "Don’t Save",
+        "Cancel"
+      ]
+    },
+    "stateOverwrite": {
+      "title": "Overwrite Slot {n}?",
+      "body": "It holds a state saved {ago}.",
+      "options": [
+        "Overwrite",
+        "Cancel"
+      ]
+    },
+    "stateLoad": {
+      "title": "Load Slot {n}?",
+      "body": "You’ll go back to the moment saved {ago}. Anything since then is lost unless it’s saved.",
+      "options": [
+        "Load",
+        "Cancel"
+      ]
+    }
+  },
+  "toasts": [
+    "Progress saved to File 1.",
+    "Saved to Slot {n}.",
+    "Slot {n} is empty.",
+    "{Category} reset to defaults.",
+    "{Lock reason}."
+  ],
+  "settingsCategories": [
+    {
+      "name": "Graphics",
+      "shownIn": "Settings screen tab",
+      "rows": [
+        {
+          "id": "preset",
+          "label": "Preset",
+          "type": "choice",
+          "options": [
+            "Auto",
+            "Performance",
+            "Quality"
+          ],
+          "default": "Auto",
+          "applies": "next game start",
+          "description": "Auto picks Performance on Steam Deck, on battery, on integrated graphics, or with 8 or fewer CPU threads. Otherwise it picks Quality. Changing a preset option switches this to Custom."
+        },
+        {
+          "id": "fps",
+          "label": "Frame Rate",
+          "type": "choice",
+          "options": [
+            "30",
+            "40",
+            "50",
+            "60",
+            {
+              "value": "90",
+              "planned": "In progress (U5)"
+            },
+            {
+              "value": "120",
+              "planned": "In progress (U5)"
+            },
+            {
+              "value": "144",
+              "planned": "After U5 · variable refresh or a fixed frame pattern"
+            },
+            {
+              "value": "165",
+              "planned": "After U5 · variable refresh or a fixed frame pattern"
+            },
+            {
+              "value": "240",
+              "planned": "Frame generation on top of 120"
+            }
+          ],
+          "default": "30 (or 60 — see frameDefault)",
+          "applies": "next game start",
+          "description": "The game always runs at full speed — this only changes smoothness. On most displays, 30 or 60 looks smoother than 40 or 50."
+        },
+        {
+          "id": "renderScale",
+          "label": "Render Scale",
+          "type": "choice",
+          "options": [
+            "100%",
+            "75%",
+            "67%",
+            "50%",
+            "150%",
+            "200%",
+            "Auto"
+          ],
+          "default": "100%",
+          "applies": "next game start",
+          "setByPreset": {
+            "Performance": "Auto",
+            "Quality": "100%"
+          },
+          "description": "Draws the 3D world at a different resolution than your screen. Below 100% is faster; 150% and 200% are sharper but much heavier. Auto adjusts on the fly to hold 60 fps. The HUD always stays sharp."
+        },
+        {
+          "id": "upscaler",
+          "label": "Upscaler",
+          "type": "choice",
+          "options": [
+            "Bilinear",
+            "FSR 1",
+            "FSR 3"
+          ],
+          "default": "Bilinear",
+          "applies": "next game start",
+          "description": "How a lowered render scale is scaled back up to your screen. Only used when Render Scale is below 100%. FSR 3 needs a desktop GPU."
+        },
+        {
+          "id": "frameGen",
+          "label": "Frame Generation",
+          "type": "choice",
+          "options": [
+            "Off",
+            "FSR 3",
+            {
+              "value": "Lossless ×2",
+              "planned": "Uses your own Lossless Scaling copy"
+            },
+            {
+              "value": "Lossless ×3",
+              "planned": "Uses your own Lossless Scaling copy"
+            },
+            {
+              "value": "Lossless ×4",
+              "planned": "Uses your own Lossless Scaling copy"
+            }
+          ],
+          "default": "Off",
+          "applies": "next game start",
+          "description": "Smoother motion from generated in-between frames. FSR 3 needs the FSR 3 upscaler and a display at twice the frame rate. Adds about one refresh of input lag."
+        },
+        {
+          "id": "aniso",
+          "label": "Anisotropic Filtering",
+          "type": "choice",
+          "options": [
+            "Default",
+            "4×",
+            "8×",
+            "16×"
+          ],
+          "default": "Default",
+          "applies": "not confirmed",
+          "description": "Keeps textures sharp at steep angles, like the ground ahead of you."
+        },
+        {
+          "id": "fxaa",
+          "label": "FXAA",
+          "type": "toggle",
+          "default": false,
+          "applies": "not confirmed",
+          "description": "Smooths jagged edges for a small cost. Can soften fine detail."
+        },
+        {
+          "id": "ao",
+          "label": "Ambient Occlusion",
+          "type": "toggle",
+          "default": true,
+          "applies": "not confirmed",
+          "description": "Soft shading where surfaces meet, like under ledges and in corners."
+        }
+      ]
+    },
+    {
+      "name": "Display",
+      "shownIn": "Settings screen tab",
+      "rows": [
+        {
+          "id": "display",
+          "label": "Display",
+          "type": "choice",
+          "options": [
+            "Window",
+            "Fullscreen"
+          ],
+          "default": "Window",
+          "applies": "immediately",
+          "description": "Play in a window or fill the whole screen."
+        },
+        {
+          "id": "resolution",
+          "label": "Resolution",
+          "type": "choice",
+          "options": [
+            "1920 × 1080",
+            "1280 × 720",
+            "1280 × 800",
+            "1600 × 900",
+            "2560 × 1440",
+            "3840 × 2160"
+          ],
+          "default": "1920 × 1080",
+          "applies": "immediately",
+          "description": "The resolution the game outputs. 1280 × 800 matches Steam Deck."
+        },
+        {
+          "id": "aspect",
+          "label": "Aspect Ratio",
+          "type": "choice",
+          "options": [
+            "16:9",
+            "Auto",
+            "4:3"
+          ],
+          "default": "16:9",
+          "applies": "not confirmed",
+          "description": "Auto fills your screen, including ultrawide 21:9 and 32:9. The HUD stays pinned to the picture’s corners. On a widescreen, 4:3 adds bars at the sides."
+        },
+        {
+          "id": "vsync",
+          "label": "V-Sync",
+          "type": "toggle",
+          "default": false,
+          "applies": "immediately",
+          "description": "Syncs frames to your display to stop screen tearing. Can add a little input lag."
+        },
+        {
+          "id": "vrr",
+          "label": "Variable Refresh",
+          "type": "toggle",
+          "default": false,
+          "applies": "next game start",
+          "description": "For FreeSync, G-Sync and other VRR displays. Turn VRR on in your monitor and desktop settings too. Usually works in fullscreen only."
+        }
+      ]
+    },
+    {
+      "name": "Advanced",
+      "shownIn": "Settings screen tab",
+      "rows": [
+        {
+          "id": "fpsOverlay",
+          "label": "FPS Overlay",
+          "type": "choice",
+          "options": [
+            "Off",
+            "FPS",
+            "FPS + frame time"
+          ],
+          "default": "Off",
+          "applies": "immediately",
+          "description": "Shows the frame rate in a corner. Frame time shows how long each frame took — handy for spotting stutter."
+        },
+        {
+          "id": "cpuThreads",
+          "label": "CPU Threads",
+          "type": "choice",
+          "options": [
+            "3",
+            "1"
+          ],
+          "default": "3",
+          "applies": "next game start",
+          "setByPreset": {
+            "Performance": "3",
+            "Quality": "3"
+          },
+          "description": "How many threads run the game’s three console CPU cores. 3 is fastest."
+        },
+        {
+          "id": "lazyDD",
+          "label": "Lazy DrawDone",
+          "type": "toggle",
+          "default": true,
+          "applies": "next game start",
+          "setByPreset": {
+            "Performance": true,
+            "Quality": true
+          },
+          "description": "A speed option for slower GPUs."
+        }
+      ]
+    },
+    {
+      "name": "Diagnostics",
+      "shownIn": "Settings screen tab",
+      "note": "Developer switches; can be hidden in release builds.",
+      "rows": [
+        {
+          "id": "writeWatch",
+          "label": "Texture Write-Watch",
+          "type": "toggle",
+          "default": true,
+          "applies": "next game start",
+          "envVar": "WWHD_WRITE_WATCH",
+          "description": "Developer speed switch. Leave it on unless you’re testing."
+        },
+        {
+          "id": "vtxDedupe",
+          "label": "Vertex De-duplication",
+          "type": "toggle",
+          "default": true,
+          "applies": "next game start",
+          "envVar": "WWHD_VTX_DEDUPE",
+          "description": "Developer speed switch. Leave it on unless you’re testing."
+        },
+        {
+          "id": "surfaceFit",
+          "label": "Surface Fit",
+          "type": "toggle",
+          "default": true,
+          "applies": "next game start",
+          "envVar": "WWHD_SURFACE_FIT",
+          "description": "Developer speed switch. Leave it on unless you’re testing."
+        },
+        {
+          "id": "barriers",
+          "label": "GPU Barriers",
+          "type": "toggle",
+          "default": true,
+          "applies": "next game start",
+          "envVar": "WWHD_BARRIERS",
+          "description": "Developer speed switch. Leave it on unless you’re testing."
+        },
+        {
+          "id": "clearLoadop",
+          "label": "Clears as Load Ops",
+          "type": "toggle",
+          "default": true,
+          "applies": "next game start",
+          "envVar": "WWHD_CLEAR_LOADOP",
+          "description": "Developer speed switch. Leave it on unless you’re testing."
+        },
+        {
+          "id": "keepSpeed",
+          "label": "Keep Game Speed",
+          "type": "toggle",
+          "default": true,
+          "applies": "next game start",
+          "envVar": "WWHD_60FPS_KEEPSPEED",
+          "description": "Keeps the game at full speed when frames drop. Turning it off is for testing only and writes a warning to the log."
+        },
+        {
+          "id": "motion",
+          "label": "Motion Vectors & Jitter",
+          "type": "info",
+          "applies": "next game start",
+          "envVar": "WWHD_MOTION, WWHD_JITTER",
+          "description": "Extra data FSR 3 needs. Switched on automatically whenever the FSR 3 upscaler is in use."
+        }
+      ]
+    },
+    {
+      "name": "Enhancements",
+      "shownIn": "Enhancements screen (pause menu item)",
+      "rows": [
+        {
+          "id": "swiftSail",
+          "label": "Swift Sail",
+          "type": "toggle",
+          "default": false,
+          "applies": "immediately",
+          "description": "Sail at double speed, and the wind always blows your way."
+        },
+        {
+          "id": "textSpeed",
+          "label": "Text Speed",
+          "type": "choice",
+          "options": [
+            "Original",
+            "Fast",
+            "Instant"
+          ],
+          "default": "Original",
+          "applies": "immediately",
+          "description": "How quickly dialogue text appears."
+        },
+        {
+          "id": "quickSongs",
+          "label": "Quick Conducting",
+          "type": "toggle",
+          "default": false,
+          "applies": "immediately",
+          "description": "Songs you already know play instantly instead of being conducted beat by beat."
+        },
+        {
+          "id": "shortFanfare",
+          "label": "Short Item Fanfares",
+          "type": "toggle",
+          "default": false,
+          "applies": "immediately",
+          "description": "Shortens the item-get sequence for rupees, hearts and repeat pickups."
+        },
+        {
+          "id": "lockStyle",
+          "label": "Target Lock Style",
+          "type": "choice",
+          "options": [
+            "Hold",
+            "Toggle"
+          ],
+          "default": "Hold",
+          "applies": "immediately",
+          "description": "Hold to keep the lock, or press once to lock and again to release."
+        },
+        {
+          "id": "hero",
+          "label": "Hero Mode",
+          "type": "toggle",
+          "default": false,
+          "applies": "immediately",
+          "description": "Enemies deal double damage and hearts never drop. Can be switched off at any time."
+        }
+      ]
+    }
+  ]
+}

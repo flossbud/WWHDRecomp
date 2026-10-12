@@ -114,8 +114,10 @@ get_target_property(options wwhd_main COMPILE_OPTIONS)
 list(REMOVE_ITEM options -O2)                              # Cemu's -O3
 set_property(TARGET wwhd_main PROPERTY COMPILE_OPTIONS "${options}")
 
-add_library(wwhd_frontend OBJECT frontend/cemu_boot.cpp frontend/window_system.cpp frontend/audio_sdl.cpp frontend/overlay.cpp)
+add_library(wwhd_frontend OBJECT frontend/cemu_boot.cpp frontend/window_system.cpp frontend/audio_sdl.cpp frontend/overlay.cpp
+	frontend/pause_menu.cpp frontend/ui_draw.cpp)
 wwhd_like_cemu(wwhd_frontend)
+target_include_directories(wwhd_frontend PRIVATE "${CEMU_SRC}/dependencies/imgui")   # imstb_truetype.h (the pause menu's text)
 target_link_libraries(wwhd_frontend PRIVATE SDL3::SDL3 CemuAudio)   # SDL3 for the window, sound and gamepad; CemuAudio: cubeb, to close it
 set_source_files_properties(frontend/window_system.cpp PROPERTIES COMPILE_DEFINITIONS WWHD_NULL_GPU)
 

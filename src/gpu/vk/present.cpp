@@ -11,6 +11,7 @@
 // bottom left (after the upscaler and frame generation, in the window's own pixels).
 #include "renderer_internal.h"
 #include "../../os/settings.h"
+#include "../../os/savestate.h"
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -53,6 +54,8 @@ namespace wwhd::gpu
 		};
 		Panel s_overlay;                        // the system's screens, in the TV image's 1920x1080 frame (SetOverlay)
 		Panel s_fps;                            // the FPS overlay, in the window's pixels (SetFpsPanel)
+		Panel s_menu;                           // the pause menu, the whole window (SetMenuPanel)
+		uint32 s_menuShown = 0;                 // the menu panel's version last presented while held
 		std::atomic<double> s_frameX{ 0 }, s_frameY{ 0 }, s_frameScale{ 0 };   // where the 1920x1080 frame was last drawn
 
 		std::atomic<uint64> s_shown{ 0 };       // frames presented (ShownFrames)
@@ -355,6 +358,11 @@ namespace wwhd::gpu
 		SetPanel(s_fps, 0, 0, w, h, std::move(rgba));
 	}
 
+	void SetMenuPanel(uint32 w, uint32 h, std::vector<uint32> rgba)
+	{
+		SetPanel(s_menu, 0, 0, w, h, std::move(rgba));
+	}
+
 	uint64 ShownFrames() { return s_shown.load(std::memory_order_relaxed); }
 
 	double TakeLongestShownInterval() { return s_longestNs.exchange(0, std::memory_order_relaxed) / 1e6; }
@@ -431,6 +439,14 @@ namespace wwhd::gpu
 			const sint32 k = std::max(1, (sint32)std::lround(dh / 360.0)), margin = std::max(4, dh / 60);
 			x0 = x + margin, y1 = y + dh - margin;
 			x1 = std::min(x + dw, x0 + (sint32)p.w * k), y0 = std::max(y, y1 - (sint32)p.h * k);
+		});
+	}
+
+	// the pause menu over the whole window image (drawn at the window's size: a resize redraws it)
+	static void DrawMenu(VkImage target)
+	{
+		DrawPanel(s_menu, target, VK_FILTER_LINEAR, [&](const Panel& p, sint32& x0, sint32& y0, sint32& x1, sint32& y1) {
+			x0 = 0, y0 = 0, x1 = (sint32)w.width, y1 = (sint32)w.height;
 		});
 	}
 
@@ -535,6 +551,7 @@ namespace wwhd::gpu
 		const double fs = std::min(dw / 1920.0, dh / 1080.0);
 		DrawOverlay(target, x + (dw - (sint32)(1920 * fs)) / 2, y + (dh - (sint32)(1080 * fs)) / 2, fs);
 		DrawFps(target, x, y, dw, dh);
+		DrawMenu(target);
 		if (probing)
 			probe::End(target, x, y, dw, dh);
 		Barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
@@ -629,6 +646,27 @@ namespace wwhd::gpu
 		vkCmdClearColorImage(s.cmd, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1, &range);
 		double scale = std::min(w.width / 1920.0, w.height / 1080.0);
 		DrawOverlay(target, ((sint32)w.width - (sint32)(1920 * scale)) / 2, ((sint32)w.height - (sint32)(1080 * scale)) / 2, scale);
+		Barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+		SubmitAndWait();
+		PresentQueue();
+	}
+
+	// while the pause menu holds the game: its panel alone, presented when it changed (the GPU thread, between commands)
+	void ServeHeldPresent()
+	{
+		if (!RendererOn() || !s_hasWindow || !wwhd::state::Held())
+			return;
+		{
+			std::lock_guard lock(s_menu.lock);
+			if (!s_menu.w || s_menu.version == s_menuShown)
+				return;
+			s_menuShown = s_menu.version;
+		}
+		if (!Acquire(w.chain ? w.srgb : false))
+			return;
+		VkImage target = w.images[w.index];
+		Barrier(target, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		DrawMenu(target);
 		Barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 		SubmitAndWait();
 		PresentQueue();

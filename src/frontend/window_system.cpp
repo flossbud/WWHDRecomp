@@ -22,6 +22,7 @@
 #include "../os/settings.h"
 #include "../os/aspect.h"
 #include "../os/erreula.h"
+#include "pause_menu.h"
 #include "input/InputManager.h"
 #include "audio/CubebAPI.h"
 #include "audio/CubebInputAPI.h"
@@ -199,10 +200,13 @@ static void PublishInput()
 	pad.ly = (float)key[SDL_SCANCODE_I] - key[SDL_SCANCODE_K];
 	pad.rx = (float)key[SDL_SCANCODE_H] - key[SDL_SCANCODE_F];
 	pad.ry = (float)key[SDL_SCANCODE_T] - key[SDL_SCANCODE_G];
+	Pad gamepad;                                         // the pad alone (the pause menu's: it reads the keyboard as keys)
 	{
 		std::lock_guard lock(s_gamepadLock);
 		if (SDL_Gamepad* g = s_gamepad)
 		{
+			const Pad keyboard = pad;
+			pad = Pad{};
 			for (SDL_GamepadButton b : { SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_WEST, SDL_GAMEPAD_BUTTON_NORTH })
 				if (SDL_GetGamepadButton(g, b))
 					pad.buttons |= FaceButton(SDL_GetGamepadButtonLabel(g, b));
@@ -220,6 +224,12 @@ static void PublishInput()
 				pad.buttons |= ZR;
 			Stick(g, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY, pad.lx, pad.ly);
 			Stick(g, SDL_GAMEPAD_AXIS_RIGHTX, SDL_GAMEPAD_AXIS_RIGHTY, pad.rx, pad.ry);
+			gamepad = pad;
+			// the game's: the keyboard and the pad together (the sticks added, as Stick adds to what the keys set)
+			pad = keyboard;
+			pad.buttons |= gamepad.buttons;
+			Stick(g, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY, pad.lx, pad.ly);
+			Stick(g, SDL_GAMEPAD_AXIS_RIGHTX, SDL_GAMEPAD_AXIS_RIGHTY, pad.rx, pad.ry);
 		}
 	}
 	if (SystemScreenUp())
@@ -229,6 +239,16 @@ static void PublishInput()
 	}
 	else
 		SystemScreenInput(0, key);
+	// the pause menu takes the pad while it is up (and the buttons held when it closed, until released); its SELECT (−)
+	// opens and closes it, and the game never sees − (the owner's choice: without the GamePad it does nothing useful)
+	wwhd::pause_menu::Pad(gamepad);
+	pad.buttons &= ~MINUS;
+	if (const uint32 swallowed = wwhd::pause_menu::Swallowed())
+	{
+		pad.buttons &= ~swallowed;
+		if (swallowed == ~0u)
+			pad = Pad{};
+	}
 	SetLive(pad);
 }
 
@@ -456,8 +476,10 @@ static void PrepareShaders(SDL_Window* window)
 				wwhd::sixty::FlightDump();         // the flight recorder's last frames (WWHD_FLIGHT)
 			else if (!ev.key.repeat && (ev.key.key == SDLK_F1 || (ev.key.key == SDLK_ESCAPE && wwhd::os::debug_menu::IsOpen())))
 				wwhd::os::debug_menu::Toggle();    // the debug menu, as clicking both sticks opens it
+			else if (!wwhd::os::swkbd::Current().open && wwhd::pause_menu::Key((uint32)ev.key.key, ev.key.repeat))
+				;                                  // the pause menu (Esc, F2; and its keys while it is up)
 			else if (!ev.key.repeat && ev.key.key == SDLK_F2)
-				wwhd::os::debug_menu::ToggleSettings();   // its settings page on its own
+				wwhd::os::debug_menu::ToggleSettings();   // its settings page on its own (without the pause menu's assets)
 			else if (wwhd::os::swkbd::Current().open)
 			{
 				if (ev.key.key == SDLK_BACKSPACE)
@@ -472,7 +494,15 @@ static void PrepareShaders(SDL_Window* window)
 		case SDL_EVENT_MOUSE_MOTION:
 		case SDL_EVENT_MOUSE_BUTTON_DOWN:
 		case SDL_EVENT_MOUSE_WHEEL:
-			if (wwhd::os::debug_menu::IsOpen())
+			if (wwhd::pause_menu::Up() && ev.type != SDL_EVENT_MOUSE_WHEEL)
+			{
+				// the pause menu, in the window's pixels: hover focuses, a left click chooses, a right click goes back
+				const float density = SDL_GetWindowPixelDensity(window);
+				const bool move = ev.type == SDL_EVENT_MOUSE_MOTION;
+				wwhd::pause_menu::Mouse((move ? ev.motion.x : ev.button.x) * density, (move ? ev.motion.y : ev.button.y) * density,
+					move ? 0 : ev.button.button == SDL_BUTTON_LEFT ? 1 : ev.button.button == SDL_BUTTON_RIGHT ? 2 : -1);
+			}
+			else if (wwhd::os::debug_menu::IsOpen())
 			{
 				if (ev.type == SDL_EVENT_MOUSE_WHEEL)
 				{

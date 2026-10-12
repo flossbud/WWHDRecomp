@@ -1451,7 +1451,8 @@ namespace wwhd::gpu
 
 	// ---- frame capture (as the reference's screenshots: an RGBA8 copy of the TV image) --------
 	// WWHD_SHOT_DRC=1 writes the GamePad's image too (fNNNNNN.drc.ppm), though nothing shows it
-	static void WritePPM(const Image& tv, uint32 frame, const char* screen = "tv")
+	// an RGBA8 image's pixels (the TV image's copy), the frame so far submitted and waited for
+	static std::vector<uint8> ReadRgba8(const Image& tv)
 	{
 		VkDeviceSize size = (VkDeviceSize)tv.width * tv.height * 4;
 		VkBufferCreateInfo bci{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
@@ -1477,6 +1478,16 @@ namespace wwhd::gpu
 		SubmitAndWait();
 		uint8* px;
 		vkMapMemory(s.device, mem, 0, size, 0, (void**)&px);
+		std::vector<uint8> out(px, px + size);
+		vkUnmapMemory(s.device, mem);
+		vkDestroyBuffer(s.device, buf, nullptr);
+		vkFreeMemory(s.device, mem, nullptr);
+		return out;
+	}
+
+	static void WritePPM(const Image& tv, uint32 frame, const char* screen = "tv")
+	{
+		const std::vector<uint8> px = ReadRgba8(tv);
 		std::string path = fmt::format("{}/f{:06}.{}.ppm", s.shotDir, frame, screen);
 		if (FILE* f = fopen((path + ".part").c_str(), "wb"))
 		{
@@ -1488,9 +1499,49 @@ namespace wwhd::gpu
 			fclose(f);
 			rename((path + ".part").c_str(), path.c_str());
 		}
-		vkUnmapMemory(s.device, mem);
-		vkDestroyBuffer(s.device, buf, nullptr);
-		vkFreeMemory(s.device, mem, nullptr);
+	}
+
+	// the pause menu's backdrop: the TV image as the next swap presents it (RequestTvPicture, TakeTvPicture)
+	namespace
+	{
+		std::atomic<bool> s_tvWanted{ false };
+		std::mutex s_tvLock;
+		std::vector<uint32> s_tvPicture;
+		uint32 s_tvW = 0, s_tvH = 0;
+		bool s_tvReady = false;
+	}
+
+	void RequestTvPicture()
+	{
+		s_tvWanted.store(true, std::memory_order_release);
+	}
+
+	// between commands on the GPU thread (null_gpu.cpp): the scan buffer then holds the picture last presented, the
+	// HUD and the world composed (at a swap's start it doesn't yet: the picture at the render scale comes in at HudEnds)
+	void ServeTvPicture()
+	{
+		if (!s_tvWanted.load(std::memory_order_acquire) || !RendererOn())
+			return;
+		s_tvWanted.store(false, std::memory_order_relaxed);
+		if (!s.scan[0].image)
+			return;
+		EndRendering();                                  // mid-frame: its pass ends here, as a readback's does
+		const std::vector<uint8> px = ReadRgba8(s.scan[0]);
+		std::lock_guard lock(s_tvLock);
+		s_tvPicture.resize(px.size() / 4);
+		memcpy(s_tvPicture.data(), px.data(), px.size());
+		s_tvW = s.scan[0].width, s_tvH = s.scan[0].height, s_tvReady = true;
+	}
+
+	bool TakeTvPicture(std::vector<uint32>& rgba, uint32& w, uint32& h)
+	{
+		std::lock_guard lock(s_tvLock);
+		if (!s_tvReady)
+			return false;
+		s_tvReady = false;
+		rgba = std::move(s_tvPicture);
+		w = s_tvW, h = s_tvH;
+		return true;
 	}
 
 	// ---- readbacks: what the GPU drew into a linear colour buffer, copied into guest memory --------------------------

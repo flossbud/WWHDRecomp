@@ -182,10 +182,14 @@ namespace snd_core
 
 		const uint32 channels = g_tvAudio ? g_tvAudio->GetChannels() : AX_TV_CHANNEL_COUNT;
 		sint16* outputChannel = tempTVChannelData + AX_SAMPLES_PER_3MS_48KHZ * tempAudioBlockCounter * channels;
-		for (sint32 i = 0; i < sampleCount; ++i)
-		{
-			outputChannel[i] = _swapEndianS16(sampleData[i]);
-		}
+		// wwhd: silent while the pause menu holds the game (savestate.h Held: the sound threads go on, the device gets 0s)
+		if (wwhd::state::Held())
+			memset(outputChannel, 0, sampleCount * sizeof(sint16));
+		else
+			for (sint32 i = 0; i < sampleCount; ++i)
+			{
+				outputChannel[i] = _swapEndianS16(sampleData[i]);
+			}
 
 		tempAudioBlockCounter++;
 		if (tempAudioBlockCounter == AX_FRAMES_PER_GROUP)

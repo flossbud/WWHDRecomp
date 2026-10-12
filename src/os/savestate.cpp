@@ -75,7 +75,7 @@ namespace wwhd::state
 		constexpr uint32 kVersion = 3;
 		constexpr uint32 kBlock = 0x10000;
 
-		enum class Action { None, Census, Save, Load };
+		enum class Action { None, Census, Save, Load, Hold };
 		std::atomic<OSThread_t*> s_parked{ nullptr };   // the main thread, parked at the save point (Idle takes it)
 		Action s_action = Action::None;
 		uint64 s_parkedAt = 0;                          // when (guest time): the game gets half a second to come to rest
@@ -87,6 +87,9 @@ namespace wwhd::state
 		std::string s_status;
 		std::string s_slotPath;                         // the slot the menu's request is for (the main thread: AtFrameTop, Idle)
 		bool s_fromMenu = false;
+		std::atomic<bool> s_holdWanted{ false };       // the pause menu's: the game held at the save point (RequestHold)
+		std::atomic<bool> s_held{ false };             // it is held there now
+		std::atomic<bool> s_holdIdle{ false };         // held with nothing to save or load (Pending: no; the task loop's thread reads it)
 
 		std::string SlotPath(int slot)
 		{
@@ -681,6 +684,16 @@ namespace wwhd::state
 			s_request = -slot, s_status = "Loading slot " + std::to_string(slot) + "...";
 	}
 
+	void RequestHold(bool on)
+	{
+		s_holdWanted.store(on, std::memory_order_release);
+	}
+
+	bool Held()
+	{
+		return s_held.load(std::memory_order_acquire);
+	}
+
 	std::string SlotInfo(int slot)
 	{
 		std::error_code ec;
@@ -749,6 +762,8 @@ namespace wwhd::state
 				nextCensus++;
 			action = Action::Census;
 		}
+		else if (s_holdWanted.load(std::memory_order_acquire))
+			action = Action::Hold;                     // the pause menu: parked until it lets go (Idle)
 		if (action == Action::None)
 			return;
 		OSThread_t* self = coreinit::OSGetCurrentThread();
@@ -771,6 +786,42 @@ namespace wwhd::state
 			__OSUnlockScheduler();
 			return false;
 		}
+		if (s_action == Action::Hold)
+		{
+			// held for the pause menu: a slot's save or load asked for meanwhile is made from here (and the game stays
+			// held after it); let go, the game goes on. Otherwise the core idles as usual (false: its system events and
+			// idle wait go on, and Pending stays false, so the game's task loop waits instead of spinning)
+			int request = 0;
+			{
+				std::lock_guard lock(s_slotLock);
+				std::swap(request, s_request);
+				if (request)
+					s_slotPath = SlotPath(std::abs(request)), s_fromMenu = true;
+			}
+			if (request)
+			{
+				s_holdIdle.store(false, std::memory_order_release);   // the task loop stops waiting, so the game comes to rest
+				s_action = request > 0 ? Action::Save : Action::Load;
+				s_parkedAt = coreinit::OSGetTime();
+				s_busy.clear();
+			}
+			else if (s_holdWanted.load(std::memory_order_acquire))
+			{
+				s_held.store(true, std::memory_order_release);
+				s_holdIdle.store(true, std::memory_order_release);
+				__OSUnlockScheduler();
+				return false;
+			}
+			else
+			{
+				s_held.store(false, std::memory_order_release);
+				s_holdIdle.store(false, std::memory_order_release);
+				s_parked.store(nullptr, std::memory_order_relaxed);
+				coreinit::__OSResumeThreadInternal(parked, 1);
+				__OSUnlockScheduler();
+				return true;
+			}
+		}
 		if (!AtRest(parked))
 		{
 			// never at rest (a thread that never comes to a resumable point): nothing saved or loaded, the game goes on
@@ -778,6 +829,15 @@ namespace wwhd::state
 			if (giveUp)
 			{
 				Census(parked, " (never at rest: nothing saved or loaded)");
+				if (s_fromMenu)
+					SetStatus("Couldn't save or load: the game didn't come to rest");
+				if (s_holdWanted.load(std::memory_order_acquire))
+				{
+					s_fromMenu = false;
+					s_action = Action::Hold;               // still held: the menu stays up (idle again at the next look)
+					__OSUnlockScheduler();
+					return true;
+				}
 				s_parked.store(nullptr, std::memory_order_relaxed);
 				coreinit::__OSResumeThreadInternal(parked, 1);
 			}
@@ -841,6 +901,14 @@ namespace wwhd::state
 			break;
 		}
 		s_fromMenu = false;
+		if (s_holdWanted.load(std::memory_order_acquire) && s_parked.load(std::memory_order_relaxed) == parked)
+		{
+			s_action = Action::Hold;                   // the pause menu's save or load: the game stays held after it
+			__OSUnlockScheduler();
+			return true;
+		}
+		s_held.store(false, std::memory_order_release);
+		s_holdIdle.store(false, std::memory_order_release);
 		s_parked.store(nullptr, std::memory_order_relaxed);
 		coreinit::__OSResumeThreadInternal(parked, 1);
 		__OSUnlockScheduler();
@@ -855,7 +923,8 @@ namespace wwhd::state
 
 	bool Pending()
 	{
-		return s_parked.load(std::memory_order_relaxed) != nullptr;
+		// held with nothing to save or load: no (the game's task loop waits as usual); a save or load from the hold: yes
+		return s_parked.load(std::memory_order_relaxed) != nullptr && !s_holdIdle.load(std::memory_order_acquire);
 	}
 
 	void FiberStart(PPCInterpreter_t* hCPU)

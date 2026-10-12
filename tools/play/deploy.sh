@@ -37,5 +37,7 @@ tar -c -C "$ref/routes" . | on "tar -x -C $dir/routes"
 # the shader list (D20: what to prepare on a first start; no game content), where the game reads it
 list=$here/../../config/US_v0/shader_list.txt
 [ -f "$list" ] && on "mkdir -p $dir/cemu/wwhd && cat > $dir/cemu/wwhd/shader_list.txt" < "$list"
+# the pause menu's assets (t-pausemenu: the design's fonts, images and copy; no game content), next to the program
+on "mkdir -p $dir/assets" && tar -c -C "$here/../../assets" pause_menu | on "tar -x -C $dir/assets"
 on "cat > $dir/play.sh && chmod +x $dir/play.sh" < "$here/play.sh"
 echo "deployed to $host:$dir ($(on "du -sh $dir | cut -f1"))"

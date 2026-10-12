@@ -873,6 +873,8 @@ namespace
 			if (!s_running)
 				threadExit();
 			ServeSourceReadback();
+			wwhd::gpu::ServeTvPicture();               // the pause menu's backdrop
+			wwhd::gpu::ServeHeldPresent();             // the pause menu while it holds the game (no swaps then)
 			handleTimedVsync();
 			if (spins < 64)
 				std::this_thread::yield();

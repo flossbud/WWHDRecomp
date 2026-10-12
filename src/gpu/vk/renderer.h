@@ -37,6 +37,17 @@ namespace wwhd::gpu
 	uint64 ShownFrames();                                          // frames presented to the window, frame generation's included
 	double TakeLongestShownInterval();                             // the longest time between two since the last call, in ms
 
+	// The pause menu (frontend/pause_menu.cpp, t-pausemenu): a panel of its own in the window's pixels, over the picture
+	// and the other panels (never in captures; no pixels: none). RequestTvPicture asks for the next swap's TV image as
+	// RGBA8, TakeTvPicture hands it over once. While the game is held (os/savestate.h Held: no swaps) the GPU thread's
+	// idle loop presents the panel alone (ServeHeldPresent, null_gpu.cpp), when it changed
+	void SetMenuPanel(uint32 w, uint32 h, std::vector<uint32> rgba);
+	void RequestTvPicture();
+	bool TakeTvPicture(std::vector<uint32>& rgba, uint32& w, uint32& h);
+	void ServeHeldPresent();
+	void ServeTvPicture();                                         // RequestTvPicture's, between commands (null_gpu.cpp)
+	bool WindowExtent(uint32& w, uint32& h);                       // the window's drawable size; false: no window yet
+
 	bool RendererOn();                                             // WWHD_RENDER=vk, and Vulkan came up
 
 	// The shader cache (docs/recompiler-design.md D20). Before the game starts, PrepareShaders builds
