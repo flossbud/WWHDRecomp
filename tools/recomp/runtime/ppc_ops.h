@@ -338,7 +338,9 @@ static inline void psq_write(uint32 ea, sint32 type, uint32 v, uint32 pc)
 	}
 }
 
-static inline void psq_load(PPCInterpreter_t* ctx, int frD, uint32 ea, int gqr, bool single)
+// the quantized types (4-7: u8, u16, s8, s16) out of line; psq_load / psq_store test the type inline and do the
+// float types (0-3, where dequantize and quantize copy the bits and ignore the scale) as plain word accesses
+[[gnu::noinline]] static void psq_load_q(PPCInterpreter_t* ctx, int frD, uint32 ea, int gqr, bool single)
 {
 	sint32 type = (ctx->spr.UGQR[gqr] >> 16) & 7;
 	uint8 scale = (ctx->spr.UGQR[gqr] >> 24) & 0x3F;
@@ -354,13 +356,30 @@ static inline void psq_load(PPCInterpreter_t* ctx, int frD, uint32 ea, int gqr, 
 	ctx->fpr[frD].fp1 = (double)dequantize(d1, type, scale);
 }
 
-static inline void psq_store(PPCInterpreter_t* ctx, int frS, uint32 ea, int gqr, bool single, uint32 pc = 0)
+[[gnu::noinline]] static void psq_store_q(PPCInterpreter_t* ctx, int frS, uint32 ea, int gqr, bool single, uint32 pc)
 {
 	sint32 type = ctx->spr.UGQR[gqr] & 7;
 	uint8 scale = (ctx->spr.UGQR[gqr] >> 8) & 0x3F;
 	psq_write(ea, type, quantize((float)ctx->fpr[frS].fp0, type, scale), pc);
 	if (!single)
 		psq_write(ea + psq_size(type), type, quantize((float)ctx->fpr[frS].fp1, type, scale), pc);
+}
+
+static inline void psq_load(PPCInterpreter_t* ctx, int frD, uint32 ea, int gqr, bool single)
+{
+	if (ctx->spr.UGQR[gqr] & 0x40000) [[unlikely]]
+		return psq_load_q(ctx, frD, ea, gqr, single);
+	ctx->fpr[frD].fp0 = (double)std::bit_cast<float>(rd32(ea));
+	ctx->fpr[frD].fp1 = single ? 1.0 : (double)std::bit_cast<float>(rd32(ea + 4));
+}
+
+static inline void psq_store(PPCInterpreter_t* ctx, int frS, uint32 ea, int gqr, bool single, uint32 pc = 0)
+{
+	if (ctx->spr.UGQR[gqr] & 4) [[unlikely]]
+		return psq_store_q(ctx, frS, ea, gqr, single, pc);
+	wr32(ea, std::bit_cast<uint32>((float)ctx->fpr[frS].fp0), pc);
+	if (!single)
+		wr32(ea + 4, std::bit_cast<uint32>((float)ctx->fpr[frS].fp1), pc);
 }
 
 // ---- things the runtime provides (not the generated code) --------------------------------------

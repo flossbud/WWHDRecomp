@@ -720,6 +720,9 @@ desktop. `REF_SAVE=dir` (run.sh) or `WWHD_SAVE=dir` (play.sh) installs it. It is
 - `emit.py`: one instruction to C++, mirroring Cemu's interpreter, quirks included.
 - `fuzz/`: emitted code against Cemu's interpreter. Run `tools/recomp/fuzz/build.sh`, then
   `build/fuzz/fuzz ITER MNEMONIC`; record forms are fuzzed under the base mnemonic.
+  Cemu's interpreter has no `psq_lux`/`psq_stux` (opcode 4's dispatch maps only `PSQ_LX`/`PSQ_STX`), so those two
+  always "fail" on the rA update: a gap in the reference, not the game's code (ours updates rA with rA + rB, as the
+  architecture does; session bottom, 2026-10-12). It limits the fuzzer, not the game.
 - `generate.py`: 39,720 functions, 0 errors, with exact per-basic-block cycle counting (D6 as
   built). It also emits purity (12,968 pure functions), code hashes, call edges, import sites and
   a store census.

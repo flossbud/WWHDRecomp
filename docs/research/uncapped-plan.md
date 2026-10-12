@@ -260,3 +260,22 @@ building. U1 is the critical one: N 2 byte-identical keeps everything D21 proved
 - **The Deck:** try 90 on the OLED after U0's cuts.
 - **Who:** session bottom U0 (`u0-cost`), U1 (`u1-runtime`), U3 (`u3-overrides`), U5 (`u5-present`); session top U2
   (`u2-rules`), U4 (`u4-checks`), U6 (`u6-fixes`, with the Deck OLED 90 try). U1's gate: N 2 byte-identical.
+
+## U9: the draw side, the main core's profile (session bottom, 2026-10-12)
+
+The desktop worker, real time, en-tn:1800, `WWHD_CORES=3`, `WWHD_PROFILE_DEPTH=64`, reported for the game's main core
+only (`tools/profile_report.py --thread core=1`; `--under f_XXXXXXXX` keeps a subtree, as shares of the core's samples).
+The virtual clock's profile on the worker put 12% in the message queues; on the main core in real time it's 0.9%: that
+was the other threads and the virtual clock's waits. The main core, the whole frame:
+
+| subtree | share | its biggest self |
+|---|---|---|
+| `fpcM_Draw` (`f_025DF908`) | 25% | flat: no function over 1.2% (`f_028E8F64`, `psq_load`, `f_02555E0C`, `f_0246C5E8`) |
+| `RenderDisplay::draw` (`f_0272A8C4`) | 21% | `f_02759564` 2.5%: a wait for the render jobs' counters (the other cores' `job_RunBatch`), not work |
+| a loader thread's decompressor (`f_0275EBC0`, under `Run`) | 4.7% | not the frame's: a byte loop of Yaz0-style groups, on core 1 beside the game |
+
+Below the two draws the profile is flat guest code (85% of the core), so the cuts are the emitter's, for every function
+at once. The first: `psq_l`/`psq_st` with a float GQR type (0-3, where Cemu's `dequantize`/`quantize` copy the bits and
+ignore the scale) are two word accesses inline (`ppc_ops.h`); the quantized types (4-7) stay out of line. The two
+helpers were 3.7% of the main core. A/B, 4 rounds paired: the work a frame 6.22 -> 6.03 ms (-3.5%, lower in every run),
+the whole frame's median / p90 6.25 / 7.0 -> 6.05 / 6.9 ms, the half frame's 6.5 / 7.3 -> 6.35 / 7.0 ms.

@@ -1,14 +1,17 @@
 """Summarise a wwhd-null CPU profile (src/runtime/profile.cpp, WWHD_PROFILE=path).
 
 Usage:
-    python3 tools/profile_report.py PROFILE [--top N] [--half | --whole]
+    python3 tools/profile_report.py PROFILE [--top N] [--half | --whole] [--thread TEXT] [--under TEXT]
 
 Symbolizes every sampled address with llvm-symbolizer (the program and every shared object it
 loaded) and prints: CPU time per thread (from /proc, exact), then per thread group the share of
 samples by category (the leaf: where the time is spent) and by the categories on the stack (what
 the time is spent under), and the top functions, self and inclusive. Recompiled guest functions
 (f_XXXXXXXX) are named from config/US_v0/symbols.csv where it has a name. --half keeps only the samples
-taken during 60 fps half frames (the profile's "h" lines), --whole only the others. Run it on the worker.
+taken during 60 fps half frames (the profile's "h" lines), --whole only the others. --thread TEXT keeps only the
+threads whose name has TEXT in it (e.g. "core=1": in real time with WWHD_CORES=3, the game's main thread's core; a
+frame's work is that core's). --under TEXT keeps only the samples with a function whose name has TEXT in it on the
+stack (e.g. "f_025DF908", fpcM_Draw), as shares of all the thread group's samples. Run it on the worker.
 """
 import collections
 import csv
@@ -140,13 +143,21 @@ def main():
         if t:
             print(f'  {t / tick:9.1f} s  {t / total * 100:5.1f}%  {name}')
 
+    only = sys.argv[sys.argv.index('--thread') + 1] if '--thread' in sys.argv else None
     groups = collections.defaultdict(list)
     for tid, stack in samples:
         name = threads.get(tid, (f'tid {tid}', 0, 0))[0]
+        if only and only not in name:
+            continue
         groups[group(name)].append(stack)
+    under = sys.argv[sys.argv.index('--under') + 1] if '--under' in sys.argv else None
     for g, stacks in sorted(groups.items(), key=lambda kv: -len(kv[1])):
         n = len(stacks)
-        print(f'\n== {g}: {n} samples')
+        if under:
+            stacks = [st for st in stacks if any(under in label(a) for a in st)]
+            print(f'\n== {g}: {n} samples, {len(stacks)} ({len(stacks) / n * 100:.1f}%) under {under}')
+        else:
+            print(f'\n== {g}: {n} samples')
         attributed = collections.Counter(category([names.get(a, '?') for a in st]) for st in stacks)
         under_import = sum(1 for st in stacks if any(names.get(a, '?').startswith('rt_import') for a in st))
         print(f'  by category (libc time counted for its caller); {under_import / n * 100:.1f}% of samples inside an OS call:')
