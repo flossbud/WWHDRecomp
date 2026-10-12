@@ -590,7 +590,14 @@
       "id": "u8-journal",
       "lane": "bottom",
       "complexity": 8,
-      "name": "Round 14: [8] A steady 144 and 165 (the owner's go 2026-10-11): the store journal without its per-store inline test (cut 2 showed the filter's ~1.5 ms a half frame is the test itself, not the table), e.g. write-protected journaled pages or a separate half-frame copy of the code; target en-tn's half-frame p90 under 6.06 ms on the desktop (7.3 now), N 2 byte-identical as always"
+      "name": "Round 14: [8] A steady 144 and 165, the journal (the owner's go 2026-10-11): the desktop probe (en-tn, half frame median / p90 6.9 / 7.5-7.8 ms; journal off 5.4 / 6.0) puts the whole 1.5 ms in the journal: its per-half-frame setup, the rollback, and the stores into journaled pages (the census: of ~1.04M stores a half frame on en-tn, 72% near the stack and ~40k into journaled pages, ~43 pages written, 3.6k of them by other threads); cut each (page-protect isn't byte-exact); the stack-store skip (WWHD_STACK_SKIP, ~0.2 ms) only if it comes along free; target the half frame's p90 under 6.06 ms on the desktop, N 2 byte-identical as always"
+    },
+    {
+      "id": "u9-draw",
+      "lane": "bottom",
+      "complexity": 7,
+      "name": "Round 14: [7] A steady 165, the draw side (after u8-journal): the whole frame's p90 is 6.7-7.1 ms on en-tn even with the journal off (a frame's draws cost a frame, whatever its step): the processes' draws (fpcM_Draw, 31% of a half frame) and RenderDisplay::draw's render lists (25%); profile them on the desktop, cut the exact wins, and measure each against 6.06 ms; N 2 byte-identical"
+
     },
     {
       "id": "q-savestate",
