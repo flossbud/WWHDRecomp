@@ -962,8 +962,13 @@
 0212C0F8    *h@f7       fadds           dr2 move: current.pos.y += 100 (the rock's rise back)
 0212BFF4    eqwhole     cmpi            dr2 move: btd->m02F6 (+0x41E) == 0, Gohma let the rock go: its rise (mode 3). Gohma clears it in a
 #                                       whole step, after the rock's; 30 reads it on the next tick, so the half step waits
-0212C110    gtwhole     fcmpu           dr2 move: the rising rock's y > home - 50: at rest (mode -1, the tail's 130-tick wait
-#                                       from it). Its y follows Gohma's joint, which moves on both steps: crossed on a whole step
+# The rise's two tests read the rock's y, Gohma's joint + 100 (Gohma executes after the tail: the whole step reads the
+# joint as 30's tick does, the half step half a tick on). Taken on whole steps only (gtwhole), the rest came after the
+# whole step's half of the tick's rise: the tail rested 50 units below 30's for its wait (route gohmarock, B83, session
+# qa). Both the whole step's: the rise on both steps or neither, the rest at the tick's end after the whole rise.
+0212C0D4    latch:all   fcmpu           dr2 move: the rising rock's y > home - 1200: the tail's rise, the tick's
+0212C110    latch:lt    fcmpu           dr2 move: the rising rock's y > home - 50: at rest (mode -1, the tail's 130-tick wait
+#                                       from it), the tick's, at its end
 0212C8B4    whole       sth             dr2 dr_move: unk_4C6 (+0x5E2) - 1
 #
 # ---- step rules: Forbidden Woods enemies, found with the trial in their rooms (stage kindan).

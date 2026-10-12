@@ -102,10 +102,20 @@ rules, for the code of processes that run every frame with a time step h
   gtwhole      on a compare (fcmpu, cmpi...) whose next reader is a branch on its GT bit (bgt, ble): a
                threshold crossed by a value that moves on both steps (`if (y > top) { stop; start a wait }`)
                is crossed on the half step a tick sooner than at 30's ticks: on a stepping process's half
-               step the compare reads less, so what hangs on it happens on a whole step, as at 30
+               step the compare reads less, so what hangs on it happens on a whole step, as at 30 (unused: its
+               one site, the Gohma tail's rest, stopped the rise after the whole step's half: latch:lt now)
   ltwhole      gtwhole's mirror, on a compare whose next reader is a branch on its LT bit (blt, bge): on a
                stepping process's half step a less compare reads greater (a random start, `cM_rnd() < p`, taken
                on whole steps at 30's p: the half step's draw is put back, so the starts come on 30's ticks)
+  latch:OUT    on a compare whose next reader is a branch: a test 30 makes once a tick, of what the tick's whole
+               step reads (its start), is taken by every step of a stepping process's tick (rt_step_latch,
+               sixty_step.cpp): its whole step notes the outcome. latch:all, the steps after it read that outcome
+               (a move's test: both half moves or neither, as 30's one move). latch:lt, gt or eq, a test whose
+               action ends the tick (`if (d <= 2 speed)` start the swing, after the tick's move toward the point:
+               the swing's rope as long as he is from it then): the whole step and the steps after it read OUT
+               (the outcome that doesn't act) up to the tick's last step, which reads the noted one: the action at
+               the tick's end, after its whole move, as at 30 (tested on its own steps, the half step started the
+               swing after half a tick's move, half a move farther out: Link's grappling hook, procRopeReady)
   drawsplit@REG a per-tick add in a converted actor's draw (a joint callback: a fan's spin): in a draw at 60
                (step 1) REG - REG/2 in the whole tick's draw, REG/2 in the half tick's, so its two draws add
                a tick's amount (an unconverted actor's half-tick draw is put back after the frame: only for
@@ -337,6 +347,9 @@ class Program:
                 if kind in ("spliti", "lagi", "drawlagi", "eqwhole", "gtwhole", "ltwhole"):
                     assert not arg, f"tick_rules.txt:{n}: {kind} takes no argument"
                     value = None
+                elif kind == "latch":
+                    assert arg in ("lt", "gt", "eq", "all"), f"tick_rules.txt:{n}: latch:OUT takes lt, gt or eq (the outcome that doesn't act) or all"
+                    value = arg
                 elif kind == "halfadd":
                     m = re.fullmatch(r"(-?(?:0x[0-9a-fA-F]+|[0-9]+))(?:/(on|back|key))?", arg)
                     assert m, f"tick_rules.txt:{n}: halfadd:N[/on|/back|/key] takes a signed constant"
@@ -391,10 +404,12 @@ class Program:
                 return f"{ea:08X}: lagi applies to mulli rD, rA, IMM, not {i.op}"
             if kind == "drawlagi" and i.op != "mulli":
                 return f"{ea:08X}: drawlagi applies to mulli rD, rA, IMM, not {i.op}"
-            if kind in ("eqwhole", "gtwhole", "ltwhole"):
+            if kind in ("eqwhole", "gtwhole", "ltwhole", "latch"):
                 # the field's next reader must be a branch on that bit alone (EQ: beq/bne; GT: bgt/ble): a half
-                # step's "not equal" made "greater" would change an ordering test (blt, bge...)
+                # step's "not equal" made "greater" would change an ordering test (blt, bge...); latch's on any bit
+                # (the field is set whole)
                 ops, bit, name = (("cmp", "cmpl", "cmpi", "cmpli"), 2, "EQ") if kind == "eqwhole" else \
+                    (("cmp", "cmpl", "cmpi", "cmpli", "fcmpu", "fcmpo"), None, "any") if kind == "latch" else \
                     (("cmp", "cmpl", "cmpi", "cmpli", "fcmpu", "fcmpo"), 1 if kind == "gtwhole" else 0, kind[:2].upper())
                 if i.op not in ops:
                     return f"{ea:08X}: {kind} applies to a compare ({', '.join(ops)}), not {i.op}"
@@ -404,7 +419,7 @@ class Program:
                         return f"{ea:08X}: {kind}: undecodable instruction after the compare"
                     if j.op in ("bc", "bclr", "bcctr"):
                         if (j.bo & 0x10) == 0 and j.bi // 4 == i.crfD:
-                            if j.bi % 4 != bit:
+                            if bit is not None and j.bi % 4 != bit:
                                 return f"{ea:08X}: {kind}: cr{i.crfD} is read for another bit than {name} ({ea + 4 * k:08X})"
                             break
                         if j.op != "bc" or (j.bo & 0x14) == 0x14:
@@ -684,8 +699,8 @@ def step_call(op, x):
     return fn.format(x) if "{}" in fn else f"{fn}({x})"
 
 
-def apply_tick_rule(rule, i, lines):
-    """An instruction's generated lines with its tick or step rule (see the docstring)."""
+def apply_tick_rule(rule, i, lines, ea=0):
+    """An instruction's generated lines with its tick or step rule (see the docstring); ea, its address (latch's key)."""
     kind, arg, _, what = rule
     if kind == "hook":                         # at every rate: the runtime's function first, with the registers as they are
         return [f"{{ void {arg}(PPCInterpreter_t*); {arg}(ctx); }}   // hook: {what}"] + lines
@@ -735,6 +750,12 @@ def apply_tick_rule(rule, i, lines):
         # on a stepping process's half step a less compare reads greater: its blt/bge act on whole steps
         return lines + [f"if (RT_STEPPED() && !RT_WHOLE_TICK()) {{ uint8* c_ = ctx->cr + {i.crfD} * 4; if (c_[CR_BIT_LT]) {{ c_[CR_BIT_LT] = 0; "
                         f"c_[CR_BIT_GT] = 1; }} }}   // step rule: {what}"]
+    if kind == "latch":
+        # a stepping process's whole step notes the outcome; the steps after it read it (all), or it and they read arg
+        # until the tick's last step, which reads the note
+        idle = {"lt": "CR_BIT_LT", "gt": "CR_BIT_GT", "eq": "CR_BIT_EQ", "all": "-1"}[arg]
+        return lines + [f"if (RT_STEPPED()) {{ void rt_step_latch(uint8*, uint32, int); rt_step_latch(ctx->cr + {i.crfD} * 4, "
+                        f"{emit.hx(ea)}, {idle}); }}   // step rule: {what}"]
     if kind == "spliti":
         imm = emit.hx(i.simm & 0xFFFFFFFF)
         return lines + [f"if (RT_STEPPED()) GPR({i.rD}) = GPR({i.rD}) - {imm} + rt_step_split({imm});   // step rule: {what}"]
@@ -841,7 +862,7 @@ def generate_function(prog, em, start, end, errors):
             if problem:
                 errors.append(problem)
             else:
-                lines = apply_tick_rule(prog.tick_rules[ea], i, lines)
+                lines = apply_tick_rule(prog.tick_rules[ea], i, lines, ea)
         body.append((ea, i.op, lines))
         last = i
     # __restrict: guest memory (memory_base) never overlaps the register state, so the compiler may

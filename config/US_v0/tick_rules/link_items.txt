@@ -82,6 +82,18 @@
 # cleared by posMove itself); procHookshotFly adds the hookshot's mMoveVec (a step's: the hookshot's
 # rules). The rope's is ruled from the decomp (no rope target on the routes).
 02435410    vec@r4      bl 028e8d88     link rope ready: current.pos += toward the rope's point, m35A0 a tick
+# The rest of procRopeReady (proc 0x77, WWHD's own pull up under the hook: B83, route gohmatail; session qa): each call
+# measures d, his distance to the point, chases the speed m35A0 up a step, moves by it while d > m35A0 and starts the
+# swing (procRopeSwing_init: its rope as long as he is from the stake then, its swing's pace from that) once d <= 2
+# m35A0, d as the call began. At 60 the chase's step was h of itself, so the moves summed v + 3/4 of the step against
+# 30's v + all of it (5 units short by the top), and the half step tested d half a move nearer: the swing started a
+# half step's move out (18 units: Link hung lower on a longer, slower rope; gohmatail 54 units from 30's). Now the
+# speed takes the tick's whole step once (both steps move by the tick's speed, as 30's tick does), and the two tests
+# are the whole step's (d as the tick began): the move on both steps or neither, the swing at the tick's end.
+02435388    /h:f2       lfs             link rope ready: the chase's step a tick (cLib_chaseF's override takes h of it)
+02435398    whole       bl 0200f5c8     link rope ready: m35A0 (+0x69F8) chased toward the most a tick, once a tick
+024353E0    latch:all   fcmpu           link rope ready: d > m35A0, the move: the tick's (d as it began)
+0243541C    latch:gt    fcmpu           link rope ready: d <= 2 m35A0, the swing: the tick's (d as it began), at its end
 # Link hanging from a ledge and moving along it (procHangMove f_02428CB4, proc 0x2F): mNormalSpeed is the
 # hands' spread change since the last call (|d - m35A0|), and posMove then moves him by it as a speed a
 # tick (h of it a step): at 60 the change is a step's, so he went half as far (the crawl route: off the

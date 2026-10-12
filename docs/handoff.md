@@ -2799,7 +2799,8 @@ it in a window; D21 "Step 2"):**
     over the sea off the Outset dock on Link's first-person sight line
     (`WWHD_DEBUG_SPAWN=950:250,ffff0400,-201481,751,311511`; inputs 1000 Y 3, 1020 RUP 12, 1070 Y 3,
     1130 LUP 70; the scratch script bin/rswing.sh in session bottom's worker dir): the hook wraps, Link
-    is pulled under it (proc 0x77) and swings (0x78) with the stick's pump, then the swing dies down. The
+    is pulled under it (proc 0x77, procRopeReady: its swing's start and rope length ruled since B83) and swings
+    (0x78) with the stick's pump, then the swing dies down. The
     swing's phases add 1 + a little a tick in four copies the compiler made (by the quadrants' cases):
     with all four and the pump ruled the phase stays within 0.04 rad of 30's over 200 ticks (it ran 1.4x
     to 2x before). The boomerang's lock-ons: three ChuChus (CC 206) spawned on the dock ahead, Y held, the
@@ -3739,8 +3740,10 @@ it in a window; D21 "Step 2"):**
     (explicit Euler), Gohma's pinned sequence (two state changes run by the half step after the whole step set them)
     and the rise now on 30's ticks. New step rule `gtwhole` (generate.py): a threshold on a value that moves on both
     steps (`if (y > top)`) is only taken on whole steps, so what hangs on it (here the rock's rest and the tail's
-    130-tick wait) starts on 30's tick. Left: the tail rests 50 units below 30's (the rise's last tick stops after its
-    whole step's half), and Gohma's behaviour before the hit follows its random draws.
+    130-tick wait) starts on 30's tick. The tail then rested 50 units below 30's (route gohmarock: the rest came after
+    the whole step's half of the tick's rise); since B83 (session qa, below) the rise's two tests are `latch` rules and
+    it rests at 30's height. gohmatail's long WARN (54 units) was Link's pull up under the hook, not the tail (B83).
+    Left: Gohma's behaviour before the hit follows its random draws.
   - The Ganon's Tower trial's magma rocks (known issue: their bob differs; route gtrock, WWHD_DEBUG_RNDLOG at both
     rates and tools like rndcmp/rndseq: the first frame whose stream differs, and each frame's draws by process and
     caller). The rocks follow the lava, whose bubbles draw from the random stream, and 60's stream parts from 30's
@@ -4485,6 +4488,35 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
   - *Gates* (main 355fe1d + the change): checks all MATCH (traces, streams, sound, diff 0 mismatches of 1,118,003, 15
     captures PSNR inf); regress identical (da06a4ee); predeploy 51 ok, 0 FAIL, blacktest 4 ok, picto ok, statetest 2 ok
     (0 differ), the real-time routes ok, the soak 60.0 fps; gohmatail WARN 54.0 (as on main), gohmarock ok 4.8.
+- **B83, predeploy's gohmatail WARN (54 units): the grappling hook's pull up (fixed).** Not Valoo's tail (N20 above):
+  on gohmatail the tail never leaves its rest. After the hook wraps, Link's procRopeReady (proc 0x77, f_024352F4,
+  WWHD's own: the GameCube's ROPE_READY doesn't move him) pulls him toward the hook: each call measures d, his
+  distance to it, chases the speed m35A0 up by a step (cLib_chaseF), moves by it while d > m35A0, and starts the swing
+  once d <= 2 m35A0, d as the call began; procRopeSwing_init takes the rope's length from where he is then, and the
+  swing's pace from the length (m35A4 = sqrt(2 / m35A0)).
+  - *At 60*: the half step tested d half a move nearer, so the swing started a half step's move farther out, and the
+    chase's h-stepped ramp summed v + 3/4 of a step a tick against 30's whole step: the rope 820.6 long against 30's
+    802.4, Link 19 units lower, the swing slower and out of phase, 54 units off by the route's end.
+  - *The fix* (tick_rules/link_items.txt): the chase once a tick, the tick's whole step (`whole` on the call, `/h` on
+    its step's load: cLib_chaseF's override takes h of it), so both steps move by the tick's speed; the move's test
+    and the swing's are the whole step's (d as the tick began), the swing at the tick's end, after the whole move. New
+    step rule `latch:OUT` (generate.py, rt_step_latch in sixty_step.cpp): a test 30 makes once a tick from what the
+    whole step reads; `all`, every step takes its outcome; lt/gt/eq, the steps before the last read that outcome (the
+    one that doesn't act) and the last step the whole step's. The tail's rise (N20) has the same shape: Gohma
+    executes after the tail, so its whole step reads Gohma's joint as 30's tick does, and the rest came after the
+    whole step's half of the tick's rise (gtwhole): rise and rest are `latch` rules now, the tail rests at 30's height
+    (3952.72, was 3902.72) with its wait on 30's ticks. gtwhole is unused.
+  - *Found, not fixed (B84)*: letting go of the swing (route gohmarock, f1360, action 0x27), Link's speed.y is 1.29
+    over 30's from the release on (half a tick of gravity: his half step at the release doesn't run, the track has no
+    half-tick key there), so he rises higher and lands later; the swing's old offset hid it.
+  - *Checked*: gohmatail 54.0 WARN -> 6.4 ok (the rope 801.7 long against 30's 802.4, the swing from the tick's end);
+    grapple 7.2 -> 1.9 (farthest 26.7 -> 10.0); gtgrapple 6.6 -> 8.3 (it starts the pull 4.5 units nearer the hook
+    than 30, the aim's offset before it: the rope as far off as that); gohmarock 4.8 -> 6.2 (the swing 5-10 units
+    off, was 20-24; B84's fall after it). Every other predeploy route byte-identical at 60 with the change (each
+    actor's hashes and Link's track, 48 of 52); the four that differ first differ on the tick Link starts 0x77. Gates
+    (main 02c5de52 + the change, the desktop): checks all MATCH (diff 0 mismatches of 1,118,003, 15 captures PSNR
+    inf); regress identical (da06a4ee); predeploy 50 ok, 0 WARN, 0 FAIL, blacktest 6 ok, picto ok, statetest 2 ok (0
+    differ), bandam ok, the real-time routes ok, the soak 60.1 fps, the real-time state gate 17 ms.
 
 ## Waiting on the owner
 

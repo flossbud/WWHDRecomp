@@ -168,6 +168,42 @@ float rt_vnote(float v)
 	return f.dv;
 }
 
+// latch step rules (tools/recomp/generate.py): a test 30 makes once a tick, from what the tick's whole step reads (its
+// start), taken by every step of a stepping process's tick. A whole step notes the compare's outcome (cr, the field's
+// bits) by the process and the rule. idle -1 (latch:all): the steps after it read that outcome (a move's test: both
+// half moves or neither, as 30's one). Else (a test whose action ends the tick: Link's pull up to a grappling hook's
+// swing, `if (d <= 2 speed)` the swing, its rope as long as he is from the point after the tick's move) the whole step
+// and the steps after it read idle (CR_BIT_LT, _GT or _EQ: the outcome that doesn't act) up to the tick's last step,
+// which reads the noted outcome. A step whose whole step noted none this tick (a procedure begun on a half step) reads
+// its own.
+namespace
+{
+	struct Latch { uint32 tick; uint8 cr[4]; };
+	std::unordered_map<uint64, Latch> s_latch;
+}
+void rt_step_latch(uint8* cr, uint32 site, int idle)
+{
+	const uint64 key = (uint64)g_rtActor << 32 | site;
+	// the tick: its whole step's swap at 60 (a step a frame), the swap in the trial (both half steps in one)
+	const uint32 tick = wwhd::rt::SixtyFrom() != ~0u ? wwhd::os::SwapCount() - g_rtSubStep : wwhd::os::SwapCount();
+	if (!g_rtHalfTick)
+	{
+		Latch& l = s_latch[key];
+		l.tick = tick;
+		memcpy(l.cr, cr, 4);
+		if (idle < 0)
+			return;
+	}
+	else if (idle < 0 || !g_rtEarlyStep)
+	{
+		if (const auto it = s_latch.find(key); it != s_latch.end() && it->second.tick == tick)
+			memcpy(cr, it->second.cr, 4);
+		return;
+	}
+	cr[CR_BIT_LT] = cr[CR_BIT_GT] = cr[CR_BIT_EQ] = 0;
+	cr[idle] = 1;
+}
+
 // surf step rules (tools/recomp/generate.py): a height put back on a surface (the water's) that the actor's
 // posMove then moves off by speed.y (+0x340). At 30 the tick puts it back and moves it a tick: speed.y + gravity
 // (+0x374), at least maxFallSpeed (+0x378). Sinking (speed.y <= 0: each step ends under the surface again and is
