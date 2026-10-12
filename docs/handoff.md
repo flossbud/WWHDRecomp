@@ -4268,6 +4268,22 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   layout's own pane: run the route at another aspect and look at the panes first logged when the screen opens.
   Routes `telescope`, `menus2` (the menu's tabs and collection page). Not looked for: a fast camera turn's pop-in at
   the edges.
+- **The frame rate is 60 by default** (the owner's ask; settings.cpp `Option::def`): settings apply only windowed in
+  real time, so every test keeps its own rate; an ini line or the launcher's WWHD_FRAMERATE/WWHD_60FPS wins.
+- **u2-rules** (docs/research/uncapped-plan.md "U2"): the lags and halfadd's three kinds at N steps, the trial at N
+  (`WWHD_STEPS=N` at 30), `tools/sixty/tests/trial_n.sh ROUTE FROM TO [N]` (what differs at N but not at 2).
+- **t-pausemenu M1-M3** (the owner's design: assets/pause_menu, its README the spec; frontend/pause_menu.cpp,
+  ui_draw.cpp): Esc/F2 or the pad's SELECT (−, no longer the game's) opens it; the game held at a whole tick's top
+  (os/savestate RequestHold), silent, over its blurred last frame; the menu drawn in software at the window's size from
+  cached layers (3-8 ms a frame at 1080p, ~2 at the Deck's 1280x800, 14-17 at 4K) and shown as the renderer's menu
+  panel (ServeHeldPresent while held, from the GPU thread's idle). Settings on os/settings' OptionView (the design's
+  JSON for the copy). Save: the four save-state slots (thumbnails beside the states) and File 1 through the game's
+  own save (cking's SaveMgr, symbols.csv: the parked main thread is woken to call saveInGame, SetGameSave). Tests (on
+  the worker, windowed, real time): `tools/sixty/tests/pausehold.sh` (the hold and the release's frames); the
+  scratch scripts that drove the menu by keys (xdotool on our own Xvfb, a window grab a step) are easy to redo from
+  pausehold.sh's pattern. Left for M4: Quit -> Title Screen (a toast says later), the Enhancements list (the design's
+  rows are placeholders), the Closed-state "Pause" prompt (it would sit on the item buttons: the owner's call), 4K
+  speed, motion polish.
 
 ### Session bottom (week 2, WW-14): the GPU side
 

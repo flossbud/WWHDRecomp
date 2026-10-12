@@ -90,6 +90,11 @@ namespace wwhd::state
 		std::atomic<bool> s_holdWanted{ false };       // the pause menu's: the game held at the save point (RequestHold)
 		std::atomic<bool> s_held{ false };             // it is held there now
 		std::atomic<bool> s_holdIdle{ false };         // held with nothing to save or load (Pending: no; the task loop's thread reads it)
+		std::atomic<bool> s_gameSaveWanted{ false };   // the pause menu's File 1 save (RequestGameSave)
+		std::atomic<bool> s_runGameSave{ false };      // the parked main thread is woken to make it (AtFrameTop)
+		void (*s_gameSave)(PPCInterpreter_t*) = nullptr;
+		uint32 s_gameSaveMgr = 0;                       // where the game's save manager's pointer is (its +0x1C busy, +0x24 outcome)
+		std::atomic<int> s_gameSaveStage{ 0 };          // 0 none, 1 asked for, 2 called (the write going on or done)
 
 		std::string SlotPath(int slot)
 		{
@@ -689,9 +694,38 @@ namespace wwhd::state
 		s_holdWanted.store(on, std::memory_order_release);
 	}
 
+	void SetGameSave(void (*fn)(PPCInterpreter_t*), uint32 managerAt)
+	{
+		s_gameSave = fn, s_gameSaveMgr = managerAt;
+	}
+
+	void RequestGameSave()
+	{
+		if (s_gameSave && s_gameSaveStage.load() == 0)
+			s_gameSaveStage.store(1), s_gameSaveWanted.store(true, std::memory_order_release);
+	}
+
+	int GameSaveStatus()
+	{
+		const int stage = s_gameSaveStage.load(std::memory_order_acquire);
+		if (stage != 2)
+			return stage;                               // 0 none, 1 waiting for the main thread
+		const uint32 mgr = memory_readU32(s_gameSaveMgr);
+		if (!mgr || memory_readU32(mgr + 0x1C) != 0)
+			return 1;                                   // the save thread still writing
+		s_gameSaveStage.store(0);
+		return (sint32)memory_readU32(mgr + 0x24) == 0 ? 2 : -1;
+	}
+
 	bool Held()
 	{
 		return s_held.load(std::memory_order_acquire);
+	}
+
+	std::string SlotFile(int slot)
+	{
+		std::lock_guard lock(s_slotLock);
+		return s_dir.empty() ? std::string() : SlotPath(slot);
 	}
 
 	std::string SlotInfo(int slot)
@@ -773,6 +807,16 @@ namespace wwhd::state
 		s_action = action;
 		s_parked.store(self, std::memory_order_release);
 		coreinit::OSSuspendThread(self);               // Idle resumes it once the game is at rest (after a load, a fiber anew)
+		// woken during a hold for the pause menu's File 1 save: the game's own save, here on the main thread at the tick's
+		// top, then parked again (its write goes on in the game's save thread meanwhile)
+		while (s_runGameSave.exchange(false, std::memory_order_acq_rel))
+		{
+			if (s_gameSave)
+				s_gameSave(ctx);
+			s_gameSaveStage.store(2, std::memory_order_release);
+			ctx->instructionPointer = kSavePoint;
+			coreinit::OSSuspendThread(self);
+		}
 	}
 
 	bool Idle()
@@ -797,6 +841,14 @@ namespace wwhd::state
 				std::swap(request, s_request);
 				if (request)
 					s_slotPath = SlotPath(std::abs(request)), s_fromMenu = true;
+			}
+			if (!request && s_gameSaveWanted.exchange(false, std::memory_order_acq_rel))
+			{
+				// File 1: the main thread runs the game's save and parks again (still held: the menu stays up, silent)
+				s_runGameSave.store(true, std::memory_order_release);
+				coreinit::__OSResumeThreadInternal(parked, 1);
+				__OSUnlockScheduler();
+				return true;
 			}
 			if (request)
 			{

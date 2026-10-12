@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # pausehold.sh OUT RATE (t-pausemenu, session top): the pause menu held in real time (windowed, on our own Xvfb, the
-# save route, WWHD_FRAME_LOG): opened (F2) OPEN_AT seconds in (40; in play on llvmpipe: 160-200), held HOLD_S (62), then
-# closed (Esc). ok: the release's first five frames no longer than the frames before the hold (their 99th percentile, at
-# least 35 ms) and no burst in the first second (session qa's review: the guest clock runs on while held). Run it on
-# the worker: tools/worker/job start hold tools/sixty/tests/pausehold.sh /wwhd/tmp/hold 60
+# save route, WWHD_FRAME_LOG): opened (F2) OPEN_AT seconds in (40; on llvmpipe in play 160-200, on the worker's GPU 70),
+# held HOLD_S (62), then closed (Esc). ok: the release's first five frames at most a quarter longer than the worst of the
+# 300 frames before the hold (at least 35 ms: a GPU idle for a minute clocks back up over a few frames), and no burst
+# in the first second (session qa's review: the guest clock runs on while held). Run it on the worker:
+# tools/worker/job start hold tools/sixty/tests/pausehold.sh /wwhd/tmp/hold 60
 set -uo pipefail
 out=$1; rate=$2
 rm -rf "$out"; mkdir -p "$out"; export DISPLAY=${PAUSEHOLD_DISPLAY:-:95}
@@ -25,11 +26,11 @@ i = hold[1] + 1                                    # the first frame after the r
 before = sorted(rows[j + 1][1] - rows[j][1] for j in range(max(0, i - 301), i - 2))
 after = [rows[j + 1][1] - rows[j][1] for j in range(i, min(len(rows) - 1, i + 300))]
 first = after[:5]                                  # the release's own frames, against the frames before the hold
-limit = max(before[int(len(before) * 0.99)] if before else 0, 35)
+limit = max(before[-1] if before else 0, 35) * 1.25   # the worst frame before the hold, a quarter on (a GPU clocking back up)
 first_sec = sum(1 for r in rows[i:] if r[1] - rows[i][1] <= 1000)
 bad = hold[0] < held_s * 800 or not after or max(first) > limit or first_sec > rate * 1.25
 print(f"{'FAIL' if bad else 'ok':5s} hold at {rate}: held {hold[0] / 1000:.1f} s (swap {rows[hold[1]][0]}); the release's first frames "
-      f"{[round(x) for x in first]} ms against the frames before it (p99 {limit:.0f}, median {before[len(before) // 2] if before else 0:.0f}); "
+      f"{[round(x) for x in first]} ms against the frames before it (limit {limit:.0f}, median {before[len(before) // 2] if before else 0:.0f}); "
       f"{first_sec} in the first second (at most {rate * 1.25:.0f})")
 sys.exit(1 if bad else 0)
 PY

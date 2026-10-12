@@ -5045,3 +5045,22 @@ static void StateRecordSixty(wwhd::state::Archive& ar)
 	}
 }
 WWHD_STATE_RECORD("sixty", StateRecordSixty);
+
+// The pause menu's File 1 save (t-pausemenu M3; os/savestate.h SetGameSave): the game's own in-game save, cking's save
+// manager's (its instance's pointer at 0x101F852C): f_02721D48 keeps the restart point by the game's rules (a boss
+// room's own), fills File 1's data and posts the write to the manager's thread (SaveMgrThread); the manager's +0x1C is
+// non-zero until the write is done, +0x24 its outcome (0: saved). Called on the main thread at a whole tick's top, as
+// the hold parks it there (the game's save screen calls it from its UI's update, f_026DAB18, when the manager is idle)
+void f_02721D48(PPCInterpreter_t*);
+namespace
+{
+	void GameSave(PPCInterpreter_t* ctx)
+	{
+		Registers regs;
+		regs.Save(ctx);
+		ctx->gpr[3] = rd32(0x101F852Cu);
+		f_02721D48(ctx);
+		regs.Restore(ctx);
+	}
+	const bool s_gameSaveSet = [] { wwhd::state::SetGameSave(GameSave, 0x101F852Cu); return true; }();
+}

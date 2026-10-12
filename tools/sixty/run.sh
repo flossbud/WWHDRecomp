@@ -27,7 +27,8 @@ while IFS= read -r line; do
     kv=${line#\#env }; name=${kv%%=*}
     if [ -z "${!name:-}" ]; then export "$name=${kv#*=}"; fi
 done < <(grep '^#env [A-Z_0-9]*=' "$ref/routes/$route" || true)
-[ -n "$save" ] && export REF_SAVE=$save
+# SIXTY_SAVE=DIR: the route from another save (a folder of the game's save files: the pause menu's File 1 test)
+[ -n "$save" ] && export REF_SAVE=${SIXTY_SAVE:-$save}
 export CEMU_BIN=${CEMU_BIN:-$(cd "$here/../.." && pwd)/build/wwhd/wwhd-null} WWHD_NATIVE=${WWHD_NATIVE:-on}
 # SIXTY_REALTIME=1: real time instead of the virtual clock (no virtual speed): for comparing real-time modes
 # (tools/sixty/tests/rt_routes.sh); the checks never use it

@@ -283,7 +283,7 @@ namespace wwhd::pause_menu
 		}
 
 		enum class Phase { Closed, Waiting, Opening, Open, Closing };
-		enum class Dialog { None, Quit, QuitDesktop };
+		enum class Dialog { None, Quit, QuitDesktop, Overwrite, Load, SaveFile, Saving, Saved };
 
 		struct Toast { std::string text; Clock::time_point at; };
 
@@ -320,6 +320,13 @@ namespace wwhd::pause_menu
 			int cat = 0, row = 0;
 			Clock::time_point rowSince;                 // the focused row's highlight cross-fades in over 140 ms
 			int prevRow = -1;
+			int sub = 0;                                // the sub-screen up (with settings set): 0 Settings, 1 Save (M3)
+			int saveRow = 0, saveAct = 0;               // Save: the row (File 1, slots 1-4), Save (0) or Load (1)
+			int dialogSlot = 0;                         // the slot an Overwrite or Load dialog is about
+			bool quitAfterSave = false;                 // Save & Quit: to the desktop once File 1 is saved
+			Image thumbs[5];                            // the slots' thumbnails (1-4), as loaded when Save opens
+			int busySlot = 0;                           // a slot's save (> 0) or load (< 0) asked for, waiting for its outcome
+			std::string blackout;                       // the blackout's line while a slot loads ("" none)
 			std::string toggled;                        // the toggle last flipped, and when (its knob slides over 220 ms)
 			Clock::time_point toggledSince;
 			Image backdrop, blurred;                    // the window's picture when it opened, and blurred
@@ -552,17 +559,45 @@ namespace wwhd::pause_menu
 		}
 
 		struct DialogSpec { std::string title, body; std::vector<std::string> buttons; std::vector<bool> enabled; };
-		DialogSpec Spec(Dialog d)
+		// File 1 counts as saved for 20 s after its last write (the design prototype's rule: the game's own "unsaved" flag
+		// isn't known)
+		bool JustSaved()
+		{
+			std::error_code ec;
+			const auto t = std::filesystem::last_write_time(File1(), ec);
+			return !ec && std::filesystem::file_time_type::clock::now() - t < std::chrono::seconds(20);
+		}
+
+		// a save state's age, as the slots show it ("" when empty)
+		std::string SlotAgo(int slot)
+		{
+			const std::string f = wwhd::state::SlotFile(slot);
+			return f.empty() ? "" : Ago(f);
+		}
+
+		DialogSpec Spec(Dialog d, int slot)
 		{
 			const std::string ago = Ago(File1());
-			const std::string since = ago.empty() ? "isn't saved yet." : "(" + ago + ") isn't saved yet.";
+			const std::string since = ago.empty() ? "isn't saved yet." : "(" + ago + ") isn\xE2\x80\x99t saved yet.";
 			switch (d)
 			{
 			case Dialog::Quit:
-				return { "Quit to\xE2\x80\xA6", "Your progress since the last save " + since, { "Title Screen", "Desktop", "Cancel" }, { true, true, true } };
+				return { "Quit to\xE2\x80\xA6", JustSaved() ? "All progress is saved." : "Your progress since the last save " + since,
+					{ "Title Screen", "Desktop", "Cancel" }, { true, true, true } };
 			case Dialog::QuitDesktop:
 				return { "Quit to desktop?", "Progress since your last save" + (ago.empty() ? std::string() : " (" + ago + ")") + " will be lost.",
-					{ "Save & Quit", "Don't Save", "Cancel" }, { false, true, true } };
+					{ "Save & Quit", "Don\xE2\x80\x99t Save", "Cancel" }, { true, true, true } };
+			case Dialog::SaveFile:
+				return { "Save your progress?", "This overwrites File 1." + (ago.empty() ? std::string() : " Last saved " + ago + "."), { "Save", "Cancel" }, { true, true } };
+			case Dialog::Saving:
+				return { "Saving\xE2\x80\xA6", "Please don\xE2\x80\x99t close the game.", {}, {} };
+			case Dialog::Saved:
+				return { "Save data has been updated.", "Your progress is safe in File 1.", {}, {} };
+			case Dialog::Overwrite:
+				return { fmt::format("Overwrite Slot {}?", slot), "It holds a state saved " + SlotAgo(slot) + ".", { "Overwrite", "Cancel" }, { true, true } };
+			case Dialog::Load:
+				return { fmt::format("Load Slot {}?", slot), "You\xE2\x80\x99ll go back to the moment saved " + SlotAgo(slot) +
+					". Anything since then is lost unless it\xE2\x80\x99s saved.", { "Load", "Cancel" }, { true, true } };
 			default:
 				return {};
 			}
@@ -620,11 +655,11 @@ namespace wwhd::pause_menu
 			if (st.dialog == Dialog::None)
 				return;
 			const float s = f.s;
-			const DialogSpec d = Spec(st.dialog);
+			const DialogSpec d = Spec(st.dialog, st.dialogSlot);
 			Layers& l = L();
-			if (l.dialogKind != (int)st.dialog)
+			if (l.dialogKind != (int)st.dialog * 8 + st.dialogSlot)
 			{
-				l.dialog = DialogLayer(s, d), l.dialogKind = (int)st.dialog, l.under = {};
+				l.dialog = DialogLayer(s, d), l.dialogKind = (int)st.dialog * 8 + st.dialogSlot, l.under = {};
 				l.dialogButtons.clear();
 				for (const std::string& b : d.buttons)
 					l.dialogButtons.push_back({ ButtonLayer(s, "dialog_280x72", 280, 72, 27, b, false),
@@ -643,6 +678,22 @@ namespace wwhd::pause_menu
 			f.c.Fill(fx * s, (fy + 20) * s, kDialogW * s, kDialogH * s, { 10, 40, 20, 255 }, 0.2f * op);
 			f.c.Draw(l.dialog, fx * s, fy * s, op);
 			const int n = (int)d.buttons.size();
+			if (n == 0)
+			{
+				// Saving: the compass needle spins (1.2 s a turn); Saved: the check
+				const float cx = fx + kDialogW / 2, cy = fy + 42 + 260 + 24 + 55;
+				if (st.dialog == Dialog::Saving)
+				{
+					const float t = std::fmod(dms, 1200.0f) / 1200.0f;
+					f.c.DrawRotated(A().Get("spinner_compass-needle"), cx * s, cy * s, 360 * Bezier(.45f, 0, .55f, 1, t), op);
+				}
+				else
+				{
+					const Image& ck = A().Get("icon_saved-check");
+					f.c.Draw(ck, cx * s - ck.w / 2.0f, cy * s - ck.h / 2.0f, op);
+				}
+				return;
+			}
 			for (int i = 0; i < n; i++)
 			{
 				float box[4];
@@ -658,7 +709,7 @@ namespace wwhd::pause_menu
 		bool UnderDialog(State& st, ui::Canvas& c)
 		{
 			Layers& l = L();
-			if (st.dialog == Dialog::None || l.dialogKind != (int)st.dialog || l.under.w != c.W() || l.under.h != c.H())
+			if (st.dialog == Dialog::None || l.dialogKind != (int)st.dialog * 8 + st.dialogSlot || l.under.w != c.W() || l.under.h != c.H())
 				return false;
 			c.Copy(l.under);
 			return true;
@@ -897,6 +948,168 @@ namespace wwhd::pause_menu
 			}
 		}
 
+		// ---- Save (M3): the slots' thumbnails, 320x180 RGBA beside each state (slotN.thumb: "WWTH", w, h, pixels; a
+		// picture of the game: never in git) ----
+		std::string ThumbPath(int slot)
+		{
+			std::string f = wwhd::state::SlotFile(slot);
+			return f.empty() ? f : f.substr(0, f.size() - 6) + ".thumb";
+		}
+		void WriteThumb(int slot, const Image& picture)
+		{
+			const std::string p = ThumbPath(slot);
+			if (p.empty() || picture.Empty())
+				return;
+			std::error_code ec;
+			std::filesystem::create_directories(std::filesystem::path(p).parent_path(), ec);
+			const Image t = ui::Scaled(picture, 320, 180);
+			if (FILE* f = fopen(p.c_str(), "wb"))
+			{
+				const uint32 head[3] = { 0x48545757u, (uint32)t.w, (uint32)t.h };   // "WWTH"
+				fwrite(head, 4, 3, f);
+				fwrite(t.px.data(), 4, t.px.size(), f);
+				fclose(f);
+			}
+		}
+		Image ReadThumb(int slot)
+		{
+			Image t;
+			const std::string p = ThumbPath(slot);
+			if (p.empty() || SlotAgo(slot).empty())
+				return t;
+			if (FILE* f = fopen(p.c_str(), "rb"))
+			{
+				uint32 head[3] = {};
+				if (fread(head, 4, 3, f) == 3 && head[0] == 0x48545757u && head[1] <= 1024 && head[2] <= 1024)
+				{
+					t.w = (int)head[1], t.h = (int)head[2];
+					t.px.resize((size_t)t.w * t.h);
+					if (fread(t.px.data(), 4, t.px.size(), f) != t.px.size())
+						t = {};
+				}
+				fclose(f);
+			}
+			return t;
+		}
+
+		// Save's buttons, in the sheet at 84,150: File 1's Save at 538,102, slot k's Save and Load at 538 and 680, 296 + 134 (k - 1)
+		void SaveButtonAt(int row, int act, float out[2])
+		{
+			out[0] = 84 + (act ? 680 : 538), out[1] = 150 + (row == 0 ? 102 : 296 + 134 * (row - 1));
+		}
+		void SaveCursorFor(int row, int act, float out[4])
+		{
+			float b[2];
+			SaveButtonAt(row, row == 0 ? 0 : act, b);
+			out[0] = b[0] - 13, out[1] = b[1] - 13, out[2] = 130 + 26, out[3] = 60 + 26;
+		}
+
+		void DrawSaves(Frame& f, State& st, Clock::time_point now, float dx, float op)
+		{
+			Assets& a = A();
+			const float s = f.s;
+			f.c.Text(a.reggae, 46 * s, (90 + dx) * s, (50 * s) + a.reggae.Ascent(46 * s), "Save", kInk, op);
+			const float sx = 84 + dx, sy = 150, sw = 860, sh = 816;
+			float offs[4] = { -30, -80, 10, -40 };
+			DrawSheet(f, sx, sy, sw, sh, offs, op);
+			const auto label = [&](float y, const std::string& l, const std::string& r) {
+				f.c.Text(a.reggae, 24 * s, (sx + 26) * s, (y + 26) * s, l, kInk, op);
+				f.c.Text(a.rocknroll, 18 * s, (sx + sw - 26) * s - a.rocknroll.Width(r, 18 * s), (y + 26) * s, r, kInkMuted, op);
+			};
+			label(sy + 26, "Game File", "Your real progress");
+			label(sy + 220, "Save States", "Quick snapshots \xC2\xB7 separate from File 1");
+			const float rms = std::chrono::duration<float, std::milli>(now - st.rowSince).count();
+			for (int row = 0; row < 5; row++)
+			{
+				const float ry = sy + (row == 0 ? 70 : 264 + 134 * (row - 1)), rx = sx + 26;
+				const bool focus = row == st.saveRow;
+				const float hl = focus ? Linear(rms, 0, 140) : (row == st.prevRow ? 1 - Linear(rms, 0, 140) : 0);
+				if (hl > 0)
+					f.c.Draw(a.Get("row_save_808x124_focused"), rx * s, ry * s, op * hl);
+				const std::string ago = row == 0 ? Ago(File1()) : SlotAgo(row);
+				// the tile: File 1's "1", a slot's thumbnail, or an empty slot's hatching
+				const float tx = rx + 20, ty = ry + 17;
+				if (row == 0 || ago.empty())
+				{
+					f.c.Fill(tx * s, (ty + 3) * s, 160 * s, 90 * s, { 58, 104, 32, 255 }, 0.35f * op);
+					f.c.Fill(tx * s, ty * s, 160 * s, 90 * s, row == 0 ? kFrame : kTabIdle, op);
+					if (row == 0)
+						TextCentred(f, a.reggae, 48, tx + 80, ty + 45, "1", kButtonRim, op);
+					else
+					{
+						for (float d = -90; d < 160; d += 12)       // the hatching
+							for (float t = 0; t < 90; t += 1)
+								if (tx + d + t >= tx && tx + d + t < tx + 160)
+									f.c.Fill((tx + d + t) * s, (ty + t) * s, 2 * s, 1 * s, kTabRim, op * 0.6f);
+						TextCentred(f, a.rocknroll, 20, tx + 80, ty + 45, "Empty", kInkMuted, op);
+					}
+				}
+				else
+				{
+					const Image& th = st.thumbs[row];
+					if (!th.Empty())
+					{
+						const Image sc = ui::Scaled(th, (int)std::lround(160 * s), (int)std::lround(90 * s));
+						f.c.Draw(sc, tx * s, ty * s, op);
+					}
+					else
+						f.c.Fill(tx * s, ty * s, 160 * s, 90 * s, kFrame, op);
+				}
+				if (row == 0 || !ago.empty())
+				{
+					const float b = 4;                            // its 4 px border
+					f.c.Fill(tx * s, ty * s, 160 * s, b * s, kButtonRim, op), f.c.Fill(tx * s, (ty + 90 - b) * s, 160 * s, b * s, kButtonRim, op);
+					f.c.Fill(tx * s, ty * s, b * s, 90 * s, kButtonRim, op), f.c.Fill((tx + 160 - b) * s, ty * s, b * s, 90 * s, kButtonRim, op);
+				}
+				const std::string title = row == 0 ? "File 1" : fmt::format("Slot {}", row);
+				const std::string sub = row == 0 ? (ago.empty() ? "Not saved yet" : "Saved " + ago) : ago.empty() ? "No state saved" : "Saved " + ago;
+				f.c.Text(a.reggae, 28 * s, (tx + 184) * s, (ry + 56) * s, title, kInk, op);
+				f.c.Text(a.rocknroll, 21 * s, (tx + 184) * s, (ry + 90) * s, sub, focus ? kInk : kInkMuted, op);
+				// the buttons
+				for (int act = 0; act < (row == 0 ? 1 : 2); act++)
+				{
+					float b[2];
+					SaveButtonAt(row, act, b);
+					const bool on = focus && (row == 0 || st.saveAct == act);
+					const float bop = op * (act == 1 && ago.empty() ? 0.45f : 1.0f);
+					f.c.Silhouette(a.Get("button_slot_130x60_idle"), (b[0] + dx) * s, (b[1] + 4) * s, { 58, 104, 32, 89 }, bop);
+					f.c.Draw(a.Get(on ? "button_slot_130x60_focused" : "button_slot_130x60_idle"), (b[0] + dx) * s, b[1] * s, bop);
+					TextCentred(f, a.rocknroll, 25, b[0] + dx + 65, b[1] + 30, act ? "Load" : "Save", kInk, bop);
+				}
+			}
+			// the info pane at 966,150
+			{
+				const int row = st.saveRow;
+				const std::string ago = row == 0 ? Ago(File1()) : SlotAgo(row);
+				std::string title, desc, note;
+				if (row == 0)
+					title = "File 1", desc = "Your real progress, the same save the game makes at a save point. Last saved " +
+						(ago.empty() ? std::string("never") : ago) + ".", note = "Saving overwrites File 1.";
+				else
+				{
+					title = fmt::format("Slot {}", row);
+					desc = ago.empty() ? "Empty. Save here to capture this exact moment." : "Saved " + ago + ". Load it to jump straight back to that moment.";
+					note = "Save states don\xE2\x80\x99t touch File 1.";
+				}
+				const float px = 966 + dx, py = 150, pw = 310, inner = pw - 64;
+				const std::vector<std::string> d = WrapText(a.rocknroll, 21 * s, inner * s, desc), n = WrapText(a.rocknroll, 17 * s, inner * s, note);
+				const float h = 36 + 40 + 14 + 6 + 14 + d.size() * 21 * 1.55f + 12 + n.size() * 17 * 1.4f + 32;
+				float offs2[4] = { 20, -70, -30, 50 };
+				DrawSheet(f, px, py, pw, h, offs2, op);
+				float y = py + 36;
+				f.c.Text(a.reggae, 28 * s, (px + 32) * s, y * s + a.reggae.Ascent(28 * s), title, kInk, op);
+				y += 40 + 14;
+				for (int i = 0; i < 10; i++)
+					f.c.Fill((px + 32 + i * 12) * s, y * s, 4 * s, 4 * s, kDot, op);
+				y += 6 + 14;
+				for (const std::string& line : d)
+					f.c.Text(a.rocknroll, 21 * s, (px + 32) * s, (y + 21) * s, line, kInk, op), y += 21 * 1.55f;
+				y += 12;
+				for (const std::string& line : n)
+					f.c.Text(a.rocknroll, 17 * s, (px + 32) * s, (y + 17) * s, line, kInkMuted, op), y += 17 * 1.4f;
+			}
+		}
+
 		void BuildLayers(Layers& l, int w, int h, float s)
 		{
 			Assets& a = A();
@@ -974,8 +1187,11 @@ namespace wwhd::pause_menu
 				std::chrono::duration<float, std::milli>(now - st.rowSince).count() > 160 &&
 				std::chrono::duration<float, std::milli>(now - st.toggledSince).count() > 240)
 			{
-				skey = fmt::format("{}x{} {} {} {}", c.W(), c.H(), st.cat, st.row, st.pad ? 1 : 0);
-				if (st.cat < (int)Categories().size())
+				skey = fmt::format("{}x{} {} {} {} {} {} {}", c.W(), c.H(), st.sub, st.cat, st.row, st.pad ? 1 : 0, st.saveRow, st.saveAct);
+				if (st.sub == 1)
+					for (int r = 0; r <= 4; r++)
+						skey += "|" + (r ? SlotAgo(r) : Ago(File1())) + (st.thumbs[r].Empty() ? "" : "t");
+				else if (st.cat < (int)Categories().size())
 					for (const Row& r : Categories()[st.cat].rows)
 					{
 						const Look k = LookAt(r);
@@ -1048,7 +1264,7 @@ namespace wwhd::pause_menu
 					c.Draw(l.button[i][1], bx, byy, bp * focus);
 			}
 			if (setOp > 0)
-				DrawSettings(f, st, now, setDx, setOp);
+				st.sub == 1 ? DrawSaves(f, st, now, setDx, setOp) : DrawSettings(f, st, now, setDx, setOp);
 			if (!skey.empty())                            // drawn still: kept for the frames after
 			{
 				l.settings.w = (int)pw, l.settings.h = c.H();
@@ -1087,20 +1303,33 @@ namespace wwhd::pause_menu
 				// Settings: Change (Toggle on a toggle; none on a locked or an info row), the categories, the defaults, back
 				std::vector<std::pair<std::string, std::string>> pr;
 				const auto& cats = Categories();
-				if (st.cat < (int)cats.size() && st.row < (int)cats[st.cat].rows.size())
+				if (st.sub == 1)
+				{
+					pr.push_back({ st.pad ? "A" : "Enter", st.saveRow > 0 && st.saveAct == 1 ? "Load" : "Save" });
+					pr.push_back({ st.pad ? "B" : "Esc", "Back" });
+				}
+				else if (st.cat < (int)cats.size() && st.row < (int)cats[st.cat].rows.size())
 				{
 					const Row& r = cats[st.cat].rows[st.row];
 					const Look k = LookAt(r);
 					if (!k.locked && r.type != "info")
 						pr.push_back({ st.pad ? "A" : "Enter", r.type == "toggle" ? "Toggle" : "Change" });
 				}
-				pr.push_back({ st.pad ? "LB RB" : "Q E", "Category" });
-				pr.push_back({ st.pad ? "Y" : "R", "Defaults" });
-				pr.push_back({ st.pad ? "B" : "Esc", "Back" });
+				if (st.sub == 0)
+				{
+					pr.push_back({ st.pad ? "LB RB" : "Q E", "Category" });
+					pr.push_back({ st.pad ? "Y" : "R", "Defaults" });
+					pr.push_back({ st.pad ? "B" : "Esc", "Back" });
+				}
 				DrawPrompts(f, pr, st.pad, pp);
 			}
 			DrawDialog(f, st, now, ms);
 			DrawToast(f, st, now);
+			if (!st.blackout.empty())                       // a slot loading: black, its line (a placeholder in the design)
+			{
+				c.Fill(0, 0, (float)c.W(), (float)c.H(), { 0, 0, 0, 255 });
+				TextCentred(f, a.rocknroll, 36, c.W() / s / 2, c.H() / s / 2, st.blackout, kWhite);
+			}
 		}
 
 		// ---- the actions ----
@@ -1159,6 +1388,71 @@ namespace wwhd::pause_menu
 			float box[4];
 			RowCursorFor(row, box);
 			GlideTo(st, box);
+		}
+
+		void FocusSave(State& st, int row, int act)
+		{
+			if (row != st.saveRow)
+				st.prevRow = st.saveRow, st.rowSince = Clock::now();
+			st.saveRow = row, st.saveAct = row == 0 ? 0 : act;
+			float box[4];
+			SaveCursorFor(row, st.saveAct, box);
+			GlideTo(st, box);
+			TurnCompass(st, 45 + row * 72.0f);
+		}
+
+		// a slot saved now: the state from the hold, its thumbnail the picture behind the menu
+		void SaveSlot(State& st, int slot)
+		{
+			WriteThumb(slot, st.backdrop);
+			st.thumbs[slot] = ReadThumb(slot);
+			wwhd::state::RequestSave(slot);
+			st.busySlot = slot;
+		}
+
+		// Save's input: File 1 and the four slots, Save or Load, their dialogs
+		void ActSaves(State& st, Input in)
+		{
+			switch (in)
+			{
+			case Input::Up: FocusSave(st, (st.saveRow + 4) % 5, st.saveAct); return;
+			case Input::Down: FocusSave(st, (st.saveRow + 1) % 5, st.saveAct); return;
+			case Input::Left: case Input::Right: if (st.saveRow > 0) FocusSave(st, st.saveRow, 1 - st.saveAct); return;
+			case Input::Back:
+			{
+				st.settings = false, st.screenSince = Clock::now();
+				float box[4];
+				CursorFor(st.item, box);
+				GlideTo(st, box);
+				TurnCompass(st, st.item * -52.0f);
+				return;
+			}
+			case Input::Confirm:
+			{
+				if (st.busySlot)
+					return;
+				const int slot = st.saveRow;
+				if (slot == 0)
+				{
+					st.dialog = Dialog::SaveFile, st.dialogItem = 0, st.dialogSince = Clock::now();
+					return;
+				}
+				const bool filled = !SlotAgo(slot).empty();
+				if (st.saveAct == 0)
+				{
+					if (!filled)
+						SaveSlot(st, slot);
+					else
+						st.dialog = Dialog::Overwrite, st.dialogSlot = slot, st.dialogItem = 0, st.dialogSince = Clock::now();
+				}
+				else if (!filled)
+					ShowToast(st, fmt::format("Slot {} is empty.", slot));
+				else
+					st.dialog = Dialog::Load, st.dialogSlot = slot, st.dialogItem = 0, st.dialogSince = Clock::now();
+				return;
+			}
+			default: return;
+			}
 		}
 
 		// Settings' input: rows, values, categories, the category's defaults, back to the menu
@@ -1266,15 +1560,19 @@ namespace wwhd::pause_menu
 			}
 			if (st.phase != Phase::Open && st.phase != Phase::Opening)
 				return;
+			if (!st.blackout.empty())
+				return;                                     // a slot loading: nothing until it's done
 			if (st.settings && st.dialog == Dialog::None)
 			{
-				ActSettings(st, in);
+				st.sub == 1 ? ActSaves(st, in) : ActSettings(st, in);
 				st.dirty = true;
 				return;
 			}
+			if (st.dialog == Dialog::Saving || st.dialog == Dialog::Saved)
+				return;                                     // File 1 being saved: nothing until it's done
 			if (st.dialog != Dialog::None)
 			{
-				const DialogSpec d = Spec(st.dialog);
+				const DialogSpec d = Spec(st.dialog, st.dialogSlot);
 				const int n = (int)d.buttons.size();
 				if (in == Input::Left || in == Input::Up)
 					st.dialogItem = (st.dialogItem + n - 1) % n;
@@ -1288,11 +1586,33 @@ namespace wwhd::pause_menu
 					if (b == "Cancel")
 						st.dialog = Dialog::None;
 					else if (b == "Desktop")
+					{
+						if (JustSaved())
+							QuitToDesktop();                    // nothing unsaved: straight away
 						st.dialog = Dialog::QuitDesktop, st.dialogItem = 0, st.dialogSince = Clock::now();
-					else if (b == "Don't Save")
+					}
+					else if (b == "Don\xE2\x80\x99t Save")
 						QuitToDesktop();
+					else if (b == "Save & Quit" || b == "Save")
+					{
+						st.quitAfterSave = b == "Save & Quit";
+						st.dialog = Dialog::Saving, st.dialogItem = 0, st.dialogSince = Clock::now();
+						wwhd::state::RequestGameSave();
+					}
 					else if (b == "Title Screen")
 						ShowToast(st, "Returning to the title screen comes in a later update.");
+					else if (b == "Overwrite")
+					{
+						st.dialog = Dialog::None;
+						SaveSlot(st, st.dialogSlot);
+					}
+					else if (b == "Load")
+					{
+						st.dialog = Dialog::None;
+						st.blackout = fmt::format("Loading Slot {}\xE2\x80\xA6", st.dialogSlot);
+						st.busySlot = -st.dialogSlot;
+						wwhd::state::RequestLoad(st.dialogSlot);
+					}
 				}
 				if (st.dialog == Dialog::None)
 					L().dialogKind = -1;                    // the next one's layers and the frame under it anew
@@ -1312,9 +1632,17 @@ namespace wwhd::pause_menu
 					st.dialog = Dialog::Quit, st.dialogItem = 0, st.dialogSince = Clock::now();
 					// the Save & Quit choice needs File 1's save from the menu (M3): Desktop opens the unsaved dialog
 				}
+				else if (st.item == 3)
+				{
+					st.settings = true, st.sub = 1, st.screenSince = Clock::now();
+					for (int r = 1; r <= 4; r++)
+						st.thumbs[r] = ReadThumb(r);
+					st.prevRow = -1, st.saveRow = -1, st.rowSince = Clock::now();
+					FocusSave(st, 0, 0);
+				}
 				else if (st.item == 2 && !Categories().empty())
 				{
-					st.settings = true, st.screenSince = Clock::now();
+					st.settings = true, st.sub = 0, st.screenSince = Clock::now();
 					st.cat = 0, st.prevRow = -1, st.row = 0, st.rowSince = Clock::now();
 					FocusRow(st, 0);
 					TurnCompass(st, 0);
@@ -1384,6 +1712,50 @@ namespace wwhd::pause_menu
 				{
 					st.backdrop = ui::Scaled(st.backdrop, (int)ww, (int)wh), st.blurred = ui::Scaled(st.blurred, (int)ww, (int)wh);
 					st.bw = (int)ww, st.bh = (int)wh;
+				}
+				// File 1's save: "Saving..." until the game's save thread has written it, "Saved" for 850 ms, then the toast
+				if (st.dialog == Dialog::Saving)
+				{
+					const int g = wwhd::state::GameSaveStatus();
+					if (g == 2)
+						st.dialog = Dialog::Saved, st.dialogSince = Clock::now(), L().dialogKind = -1;
+					else if (g == -1)
+						st.dialog = Dialog::None, L().dialogKind = -1, st.quitAfterSave = false, ShowToast(st, "Couldn\xE2\x80\x99t save File 1.");
+				}
+				else if (st.dialog == Dialog::Saved && now - st.dialogSince > std::chrono::milliseconds(850))
+				{
+					st.dialog = Dialog::None, L().dialogKind = -1;
+					if (st.quitAfterSave)
+						QuitToDesktop();
+					ShowToast(st, "Progress saved to File 1.");
+				}
+				// a slot's save or load from the hold: its outcome (savestate's status) when it's done
+				if (st.busySlot)
+				{
+					const std::string status = wwhd::state::Status();
+					const int slot = std::abs(st.busySlot);
+					if (st.busySlot > 0 && status.rfind("Saved", 0) == 0)
+					{
+						ShowToast(st, fmt::format("Saved to Slot {}.", slot));
+						st.thumbs[slot] = ReadThumb(slot);         // its state is there now
+						st.busySlot = 0, st.dirty = true;
+					}
+					else if (st.busySlot < 0 && status.rfind("Loaded", 0) == 0)
+					{
+						// the game is the state's now: the menu goes at once (its picture is from before), the game goes on
+						st.busySlot = 0, st.blackout.clear();
+						st.phase = Phase::Closed, st.closedAt = Clock::now(), st.settings = false;
+						gpu::SetMenuPanel(0, 0, {});
+						wwhd::state::RequestHold(false);
+						continue;
+					}
+					else if (status.rfind("Couldn't", 0) == 0)
+					{
+						ShowToast(st, status + ".");
+						if (st.busySlot > 0)
+							std::filesystem::remove(ThumbPath(slot)), st.thumbs[slot] = ReadThumb(slot);
+						st.busySlot = 0, st.blackout.clear(), st.dirty = true;
+					}
 				}
 				const float ms = std::chrono::duration<float, std::milli>(Clock::now() - st.since).count();
 				if (st.phase == Phase::Opening && ms > 1000)
@@ -1556,7 +1928,7 @@ namespace wwhd::pause_menu
 		};
 		if (st.dialog != Dialog::None)
 		{
-			const DialogSpec d = Spec(st.dialog);
+			const DialogSpec d = Spec(st.dialog, st.dialogSlot);
 			const int n = (int)d.buttons.size();
 			const float fw = 1040, fh = 42 + 260 + 24 + 110 + 30, fx = (ww / s - fw) / 2, fy = (wh / s - fh) / 2;
 			for (int i = 0; i < n; i++)
