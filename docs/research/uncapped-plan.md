@@ -156,6 +156,41 @@ So the half frame costs about what the whole does, not 0.78 of it (the draws are
   write-protecting the journaled pages (a fault on the first store to each) or by a separately generated half-frame
   copy of the code. A large job (the generator and the runtime), in session bottom's lane after U5 and b-lsfg. Its
   target: en-tn's half frame at the 90th percentile under 6.06 ms on the desktop worker, N 2 byte-identical.
+- **u8's census (session bottom, 2026-10-12; a store census probe, not landed: the virtual clock at 60, per half
+  frame):** what a test-free journal would have to keep.
+
+  | route | stores | near the stack | into journaled pages | live | hand-written | journaled pages written | other threads' into them | journaled bytes changed unsaved |
+  |---|---|---|---|---|---|---|---|---|
+  | en-tn | 1,035,000 | 72% | 40,100 (3.9%) | 2,500 | 1,250 | 43 (of ~850 journaled) | 3,560 | 856 |
+  | sail | 775,000 | 68% | 33,900 (4.4%) | 1,800 | 1,200 | 42 | 2,780 | 551 |
+
+  **Write-protecting the journaled pages** (a fault on a page's first store, a copy, the page put back at the frame's
+  end) would take ~43 faults a frame, but it doesn't keep today's meaning. Other threads write those pages (3,600
+  stores a frame: in real time from other host threads), and live stores, the OS layer's and >32-byte stores change
+  ~850 journaled bytes a frame that the journal leaves alone. A page copy put back would undo them all. Byte-exact
+  versions (single-stepping a foreign fault, or diffing pages against a second copy) cost more than they save.
+- **Where the journal's 1.5 ms goes (the desktop worker, wwhd-play, en-tn:1800, 4 rounds paired; a frame's work,
+  median / 90th percentile, ms; probes on session bottom's work branch):**
+
+  | variant | whole | half |
+  |---|---|---|
+  | as now | 6.5-6.7 | 7.3-7.5 / 8.0-8.3 |
+  | the journal kept but not put back (a probe) | 6.6-6.7 | 7.4-7.5 |
+  | the journal off (`WWHD_60FPS_ROLLBACK=0`, a probe) | 6.5-6.6 | 5.8-5.9 / 6.0-6.4 |
+
+  Not putting the journal back costs nothing less: the rollback makes the next frame redo no work. A timing probe
+  puts the frame's fixed parts at 34 us (the ~850 pages' table and bits) and 2.4 us (the rollback), with ~21,000
+  calls into rt_journal_store and ~380 saves a half frame. So the cost is the inline test on the ~1M stores of a half
+  frame: each jumped out of line to read three TLS switches and a global, look up two words of the 4 MB page table
+  and jump back. An earlier probe that let the r1-based 70% of the stores skip the lookups saved only 0.2 ms: the switches were
+  still read.
+- **Cut 3 (u8, landed):** RT_STORE's test is one TLS pointer, `g_rtStoreTable`: a byte per 4 KB page, null while
+  the journal is off, every byte set for a journal that takes every store (a diff run's, a quiet watch's), else the
+  half tick's pages (`g_rtStorePageBytes`, kept beside its word table). The runtime sets it from the switches whenever
+  one changes (diff.cpp `rt_store_table_update`). A store under the journal is one TLS load, two byte loads and a
+  branch. Byte-identical by construction (checks MATCH, regress da06a4ee, statetest 0 differ). The desktop worker,
+  en-tn:1800, 4 rounds paired: the half frame 7.3 / 8.0-8.3 -> 6.8-6.9 / 7.6-7.9 ms, the work a frame -4.3% (lower
+  in every run). About 0.45 of the journal's 1.5 ms; the half frame's 90th percentile is still over 165's 6.06.
 - **U5's first rates (session bottom, 2026-10-11):** from the 60 fps switch the vsync runs at 30 N, in real time and
   under the virtual clock, so a frame a vsync is N frames a tick. The Frame rate setting offers 90, 120, 150 and "the
   display's": the most frames a tick its refresh shows, up to 5 (144 Hz 120, 165 Hz 150; for VRR displays), or half

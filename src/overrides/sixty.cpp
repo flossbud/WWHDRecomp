@@ -781,6 +781,7 @@ namespace
 	// whole) are harmless, as RollbackRestore puts them back last to first.
 	constexpr uint32 kPartPage = 0x80000000u;
 	std::vector<uint32> s_page;                     // per page of the 32-bit space: 0, or its bits' index + 1, | kPartPage
+	std::vector<uint8> s_pageByte;                  // the same, a byte per page: 1 where s_page isn't 0 (RT_STORE's test)
 	std::vector<uint32> s_pagesSet;                 // the pages set this frame
 	std::vector<std::array<uint64, 64>> s_savedBits;   // per journaled page: the bytes saved this frame
 	uint64 s_storesSeen = 0, s_storesSaved = 0;     // the frame log's counts (src/overrides/pacing.cpp)
@@ -788,7 +789,10 @@ namespace
 	void JournalPages()
 	{
 		if (s_page.empty())
+		{
 			s_page.assign(1u << 20, 0);
+			s_pageByte.assign(1u << 20, 0);
+		}
 		auto mark = [](uint32 low, uint32 high) {
 			for (uint32 p = low >> 12; p <= (high - 1) >> 12; p++)
 			{
@@ -799,6 +803,7 @@ namespace
 					s_savedBits.back().fill(0);
 					e = (uint32)s_savedBits.size() | kPartPage;
 					s_pagesSet.push_back(p);
+					s_pageByte[p] = 1;
 				}
 				if (low <= p << 12 && high - (p << 12) >= 0x1000)
 					e &= ~kPartPage;
@@ -831,7 +836,7 @@ namespace
 	void JournalPagesClear()
 	{
 		for (uint32 p : s_pagesSet)
-			s_page[p] = 0;
+			s_page[p] = 0, s_pageByte[p] = 0;
 		s_pagesSet.clear();
 		s_savedBits.clear();
 	}
@@ -1236,6 +1241,7 @@ namespace
 		s_halfValue.clear();
 		g_rtStoreCensus = TrialStore;
 		g_rtJournalOn = true;
+		rt_store_table_update();
 
 		// two half steps, as at 60 fps; with WWHD_STEPS=N (U1) N steps of 1/N, as at 30 N fps (U2's trial at N)
 		const uint32 steps = g_rtSteps;
@@ -1277,6 +1283,7 @@ namespace
 		s_trialPhase = 2;                               // the game's step: the run goes on from it
 		fn(ctx);
 		g_rtJournalOn = wwhd::rt::QuietWatching();   // a fast path's watch may still need it
+		rt_store_table_update();
 		g_rtStoreCensus = nullptr;
 		s_trialPhase = 0;
 		TrialCompare(tick);
@@ -1361,11 +1368,13 @@ namespace
 		s_attached = true;
 		const uint32* pages = g_rtStorePages;
 		g_rtStorePages = nullptr;                   // every store of its execute and draw is journaled
+		rt_store_table_update();
 		orig_f_025DE58C(ctx);
 		regs.Restore(ctx);
 		const size_t executed = s_saved.size();
 		fn(ctx);                                    // journaled whole too: its draw writes into Link
 		g_rtStorePages = pages;
+		rt_store_table_update();
 		s_attached = false;                         // (the bow's charge, from the arrow's state)
 		g_rtStep = step;
 		s_converting = converting;
@@ -3297,10 +3306,12 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		s_frameThread = PPCInterpreter_getCurrentInstance();   // for WWHD_STATE_CENSUS_HEAP=1 at 30 too
 		g_rtStoreCensus = CensusStore;
 		g_rtJournalOn = true;
+		rt_store_table_update();
 		orig_f_0274C264(ctx);
 		if (census == 3)
 			return;
 		g_rtJournalOn = wwhd::rt::QuietWatching();
+		rt_store_table_update();
 		g_rtStoreCensus = nullptr;
 		return;
 	}
@@ -3360,8 +3371,10 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		(void)once;
 		g_rtStoreCensus = CensusStore;
 		g_rtJournalOn = true;
+		rt_store_table_update();
 		orig_f_0274C264(ctx);
 		g_rtJournalOn = wwhd::rt::QuietWatching();   // a fast path's watch may still need it
+		rt_store_table_update();
 		g_rtStoreCensus = nullptr;
 		return;
 	}
@@ -3394,12 +3407,15 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		g_rtStoreCensus = HalfTickStore;
 		g_rtJournalThread = s_frameThread;          // only the frame thread's stores: HalfTickStore drops the rest
 		g_rtJournalOn = true;
+		rt_store_table_update();
 		if (RollbackLevel() == 2)
 		{
 			JournalPages();
 			if (!Census())
 			{
+				g_rtStorePageBytes = s_pageByte.data();
 				g_rtStorePages = s_page.data();         // HalfTickStore does nothing with stores into other pages
+				rt_store_table_update();
 				// and rt_journal_store passes over those into bytes saved already or not kept (WWHD_JOURNAL_SKIP=0: not),
 				// but while a converted process's execute runs (each store into a global is noted: s_convGlobals)
 				static const bool skip = [] { const char* e = getenv("WWHD_JOURNAL_SKIP"); return !(e && atoi(e) == 0); }();
@@ -3421,6 +3437,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		g_rtJournalOn = wwhd::rt::QuietWatching();   // a fast path's watch may still need it
 		g_rtJournalThread = nullptr;
 		g_rtStorePages = nullptr;
+		rt_store_table_update();
 		g_rtStoreBits = nullptr;
 		g_rtStoreCensus = nullptr;
 		RollbackRestore();

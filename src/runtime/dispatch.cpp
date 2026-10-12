@@ -173,6 +173,7 @@ namespace wwhd::rt
 			g_rtStoreAll = false;                     // within a watched task call, and every store of it went to
 		                                              // the hook, ~2% of the game thread at 60; WWHD_JOURNAL_SKIP=0:
 		                                              // as before)
+		rt_store_table_update();                      // RT_STORE's table from the switches (diff.cpp)
 	}
 
 	void QuietStore(uint32 ea, uint32 size)
@@ -516,6 +517,7 @@ namespace wwhd::rt
 		g_quiet = { ++s_quietTokens, ctx, low, high, coreinit::OSGetCurrentThread()->wakeUpCount, 0, false };
 		g_rtJournalOn = true;
 		g_rtStoreAll = true;                      // every store, past the half tick journal's page filter
+		rt_store_table_update();
 		return g_quiet.token;
 	}
 
@@ -525,6 +527,7 @@ namespace wwhd::rt
 			return -1;
 		g_rtJournalOn = g_rtStoreCensus != nullptr;   // the 60 fps hook's journaling goes on
 		g_rtStoreAll = false;
+		rt_store_table_update();
 		g_quiet.token = 0;
 		if (!g_quiet.visible && coreinit::OSGetCurrentThread()->wakeUpCount != g_quiet.wakeUps)
 			QuietVisible("left the core", 0);

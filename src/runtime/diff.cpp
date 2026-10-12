@@ -51,6 +51,17 @@ thread_local void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc) = nullpt
 thread_local constinit const uint32* g_rtStorePages = nullptr;
 thread_local const PPCInterpreter_t* g_rtJournalThread = nullptr;
 thread_local constinit bool g_rtStoreAll = false;
+thread_local constinit const uint8* g_rtStorePageBytes = nullptr;
+thread_local constinit const uint8* g_rtStoreTable = nullptr;
+
+// RT_STORE's table (ppc_ops.h) from the switches: off, null; a journal that takes every store (no page table, or
+// g_rtStoreAll), a byte set for every page; the half tick's journal, its pages' bytes (g_rtStorePageBytes: non-zero
+// exactly where g_rtStorePages is)
+void rt_store_table_update()
+{
+	static const std::vector<uint8> all(1u << 20, 1);
+	g_rtStoreTable = !g_rtJournalOn ? nullptr : (!g_rtStorePages || !g_rtStorePageBytes || g_rtStoreAll) ? all.data() : g_rtStorePageBytes;
+}
 thread_local uint64 g_rtStoresPassed = 0;
 const uint64* g_rtStoreBits = nullptr;
 const int* g_rtStoreHold = nullptr;
@@ -446,6 +457,7 @@ namespace wwhd::rt
 		s_nativeFunc = f.address;
 		s_nativeSince = Clock::now().time_since_epoch().count();
 		g_rtJournalOn = true;
+		rt_store_table_update();
 		hCPU->remainingCycles = INT32_MAX;             // never yields; the ticks it spends are counted
 		volatile bool ok = true;
 		if (setjmp(s_nativeJmp) == 0)
@@ -453,6 +465,7 @@ namespace wwhd::rt
 		else
 			ok = false;
 		g_rtJournalOn = false;
+		rt_store_table_update();
 		s_nativeSince = 0;
 		s.nativeCycles = (uint64)((sint64)INT32_MAX - hCPU->remainingCycles);
 		Capture(s.native, hCPU);

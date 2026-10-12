@@ -19,6 +19,9 @@ void rt_dcache_flush(uint32 ea);
 extern thread_local bool g_rtJournalOn;
 extern thread_local bool g_rtStoreAll;                          // every store to rt_journal_store, past RT_STORE's page filter (ppc_ops.h)
 void rt_journal_store(uint32 ea, uint32 size, uint32 pc);
+extern thread_local constinit const uint32* g_rtStorePages;
+extern thread_local constinit const uint8* g_rtStorePageBytes;
+void rt_store_table_update();                                    // RT_STORE's table from the switches above, after a change
 extern thread_local void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc);   // the 60 fps tools' store hook (diff.cpp)
 void rt_yield(PPCInterpreter_t* ctx, uint32 pc);
 

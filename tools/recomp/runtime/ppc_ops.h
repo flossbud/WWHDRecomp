@@ -16,19 +16,20 @@ extern uint8* memory_base;
 // about to overwrite and the guest instruction making it (0 from hand-written code), so that a
 // diff-mode native run can be rewound (D8.2), so that a real-time fast path can tell whether a call
 // wrote anything (the quiet watch, D19), or for the 60 fps tools (D21). Off otherwise.
-// While the half tick's journal is on (60 fps, src/overrides/sixty.cpp), g_rtStorePages is its table of
-// the 4 KB pages it keeps (an entry per page: 0 for none), and a store into neither of the pages it
-// touches is passed over here, without the call (most of a half tick's frame's stores are into the heap);
-// g_rtStoreAll sends every store on regardless (a fast path's quiet watch needs them all).
-// These and the step's values below are constinit (their first values are constants): generated code reads them
-// straight from the thread's TLS block. Without it each read first tested a weak TLS init function, a load and a
-// branch more on every store under the half tick's journal (U0: the half frame 6.4 -> 5.3 ms on continue).
+// While the half tick's journal is on (60 fps, src/overrides/sixty.cpp), it keeps only some 4 KB pages, and a store
+// into neither of the pages it touches is passed over here, without the call (most of a half tick's frame's stores
+// are into the heap); a fast path's quiet watch needs every store regardless (g_rtStoreAll).
+// The inline test is one TLS load: g_rtStoreTable (u8-journal), a byte per 4 KB page of the 32-bit space, non-zero
+// for a page whose stores go on; null while the journal is off; every byte set for a journal that takes every store
+// (a diff run's, a quiet watch's). The runtime derives it from the switches (diff.cpp rt_store_table_update) whenever
+// one changes. Before, the test read three TLS switches and a 4 KB-page table of words, out of line, on each of the
+// ~1M stores of a half frame: ~1.5 ms of en-tn's 7.4 on the desktop worker. The switches and the table are constinit
+// (their first values are constants): generated code reads them straight from the thread's TLS block (U0).
 extern thread_local constinit bool g_rtJournalOn;          // per host thread (docs/research/threads.md)
-extern thread_local constinit const uint32* g_rtStorePages;
-extern thread_local constinit bool g_rtStoreAll;
+extern thread_local constinit const uint8* g_rtStoreTable;
 void rt_journal_store(uint32 ea, uint32 size, uint32 pc);
-#define RT_STORE(ea, n, pc) do { if (g_rtJournalOn) [[unlikely]] { const uint32* rt_pages = g_rtStorePages; \
-	if (!rt_pages || g_rtStoreAll || rt_pages[(uint32)(ea) >> 12] || rt_pages[((uint32)(ea) + (n) - 1) >> 12]) \
+#define RT_STORE(ea, n, pc) do { if (const uint8* rt_t = g_rtStoreTable) [[unlikely]] { \
+	if (rt_t[(uint32)(ea) >> 12] | rt_t[((uint32)(ea) + (n) - 1) >> 12]) \
 		rt_journal_store((ea), (n), (pc)); } } while (0)
 
 // 60 fps (D21): instructions listed in config/US_v0/tick_rules.txt run only on the game's whole
