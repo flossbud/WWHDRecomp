@@ -314,9 +314,11 @@ class Emitter:
     def op_dcbtst(self, i, ea): return []
     def op_dcbi(self, i, ea): return []
     def op_dcbz_l(self, i, ea): return []
-    def op_isync(self, i, ea): return []
-    def op_sync(self, i, ea): return []
-    def op_eieio(self, i, ea): return []
+    # barriers: nothing on x86 (its order is the PPC's or stronger for what the guest relies on);
+    # arm64 reorders stores, so a guest lock's release needs them (ppc_ops.h RT_SYNC)
+    def op_isync(self, i, ea): return ["RT_ISYNC();"]
+    def op_sync(self, i, ea): return ["RT_SYNC();"]
+    def op_eieio(self, i, ea): return ["RT_EIEIO();"]
 
     # floating-point loads/stores ---------------------------------------------------------------
     def _lfs(self, i, ea_expr, update):

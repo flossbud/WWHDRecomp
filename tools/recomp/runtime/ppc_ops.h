@@ -272,11 +272,26 @@ static inline uint32 cr_pack(PPCInterpreter_t* ctx)
 	return v;
 }
 
+// ---- barriers (sync, isync, eieio) ---------------------------------------------------------------
+// x86 keeps stores in order and loads in order, as the guest's locks need: nothing, as before. arm64
+// doesn't: sync is a full fence, isync an acquire, eieio orders stores (docs/research/android-plan.md).
+#if defined(__aarch64__)
+#define RT_SYNC()  __atomic_thread_fence(__ATOMIC_SEQ_CST)
+#define RT_ISYNC() __atomic_thread_fence(__ATOMIC_ACQUIRE)
+#define RT_EIEIO() __atomic_thread_fence(__ATOMIC_RELEASE)
+#else
+#define RT_SYNC()  ((void)0)
+#define RT_ISYNC() ((void)0)
+#define RT_EIEIO() ((void)0)
+#endif
+
 // ---- floating point (mirrors PPCInterpreterFPU.cpp / PPCInterpreterPS.cpp) ----------------------
 static inline uint64 fctiw_result(double b, bool toZero)
 {
 	uint64 v;
-	if (b > (double)0x7FFFFFFF)
+	if (b != b)
+		v = 0x80000000;                             // a NaN: what x86's conversion gives and the PPC's does (arm64's gives 0)
+	else if (b > (double)0x7FFFFFFF)
 		v = 0x7FFFFFFF;
 	else if (b < -(double)0x80000000)
 		v = 0x80000000;

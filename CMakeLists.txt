@@ -35,6 +35,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# The same float results and char on every ISA, Cemu's targets included (docs/research/android-plan.md):
+# arm64 has fused multiply-add and clang would contract a*b+c with it (x86-64 has none at its baseline,
+# so this changes nothing there), and char is unsigned on Linux and Android arm64.
+add_compile_options(-ffp-contract=off -fsigned-char)
+
 # Cemu as its own build configures it, without its wxWidgets GUI: our frontend implements its
 # WindowSystem interface. Only what wwhd-null links is built.
 # Its find_package() targets are global, so src/ can link what Cemu's targets link.

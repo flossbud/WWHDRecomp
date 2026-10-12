@@ -30,7 +30,7 @@ namespace wwhd::rt { bool TakeExactSwitch(); }     // runtime/dispatch.cpp
 #include <string>
 #include <tuple>
 
-#ifdef __arm64__
+#if defined(__aarch64__) || defined(__arm64__)
 #if defined(__clang__)
 #include <arm_acle.h>
 #elif defined(_MSC_VER)
@@ -44,7 +44,7 @@ void enableFlushDenormalsToZero()
 {
 #if defined(ARCH_X86_64)
 	_mm_setcsr(_mm_getcsr() | 0x8000);
-#elif defined(__arm64__)
+#elif defined(__aarch64__) || defined(__arm64__)   // wwhd: __arm64__ is Apple's; Linux and Android define __aarch64__
 #if defined(__clang__)
 	__arm_wsr64("fpcr", __arm_rsr64("fpcr") | (1 << 24));
 #elif defined(__GNUC__)
@@ -69,7 +69,7 @@ uint32 LatteTiming_getVsyncSteps();               // gpu/null_gpu.cpp: frames a 
 
 namespace coreinit
 {
-#ifdef __arm64__
+#if defined(__arm64__) && defined(__APPLE__)        // wwhd: makecontext's int parameters; our arm64 switch passes a pointer
 	void __OSFiberThreadEntry(uint32, uint32);
 #else
 	void __OSFiberThreadEntry(void* thread);
@@ -1729,7 +1729,7 @@ namespace coreinit
 		__OSThreadStartTimeslice(hostThread->m_thread, &hostThread->ppcInstance);
 	}
 
-#ifdef __arm64__
+#if defined(__arm64__) && defined(__APPLE__)
 	void __OSFiberThreadEntry(uint32 _high, uint32 _low)
 	{
 		uint64 _thread = (uint64) _high << 32 | _low;
