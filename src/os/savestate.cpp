@@ -70,7 +70,9 @@ namespace wwhd::state
 	namespace
 	{
 		constexpr uint32 kSavePoint = 0x0274C264;      // fw_procFrame: where the parked main thread resumes
-		constexpr uint32 kVersion = 2;                  // 2: each record framed with its length
+		// what a record carries changes: kVersion goes up (savestate.h, Record). 2: each record framed with its length;
+		// 3: sixty.step's toe and position histories as U3 keeps them (N steps a tick): a 2 failed in that record, half loaded
+		constexpr uint32 kVersion = 3;
 		constexpr uint32 kBlock = 0x10000;
 
 		enum class Action { None, Census, Save, Load };
@@ -535,7 +537,7 @@ namespace wwhd::state
 				std::vector<uint8> packed;
 				Archive ar(true);
 				bool ok = fread(magic, 1, 8, f) == 8 && memcmp(magic, "WWHDSTAT", 8) == 0 && fread(&version, 1, 4, f) == 4 &&
-					fread(&recLen, 1, 8, f) == 8 && fread(&packedLen, 1, 8, f) == 8 && packedLen < (1u << 30) && recLen < (1u << 30);
+					version == kVersion && fread(&recLen, 1, 8, f) == 8 && fread(&packedLen, 1, 8, f) == 8 && packedLen < (1u << 30) && recLen < (1u << 30);
 				if (ok)
 				{
 					packed.resize(packedLen);
@@ -572,8 +574,14 @@ namespace wwhd::state
 			uint32 version = 0;
 			uint64 recLen = 0, packedLen = 0;
 			std::vector<uint8> packed;
-			bool ok = ReadAll(f, magic, 8) && memcmp(magic, "WWHDSTAT", 8) == 0 && ReadAll(f, &version, 4) && version == kVersion &&
-				ReadAll(f, &recLen, 8) && ReadAll(f, &packedLen, 8) && packedLen < (1u << 30) && recLen < (1u << 30);
+			bool ok = ReadAll(f, magic, 8) && memcmp(magic, "WWHDSTAT", 8) == 0 && ReadAll(f, &version, 4);
+			if (ok && version != kVersion)                  // another build's records: refused before anything is applied
+			{
+				fclose(f);
+				return error = fmt::format("a state of another build's format ({}; this build reads {})", version, kVersion),
+					Loaded::Refused;
+			}
+			ok = ok && ReadAll(f, &recLen, 8) && ReadAll(f, &packedLen, 8) && packedLen < (1u << 30) && recLen < (1u << 30);
 			if (ok)
 			{
 				packed.resize(packedLen);
@@ -816,15 +824,15 @@ namespace wwhd::state
 				// this process hasn't come as far as the state's yet: the next save point (a minute of frames at most)
 				if (++s_loadTries < 3600)
 					break;
-				cemuLog_log(LogType::Force, "wwhd state: couldn't load {} by swap {}: {}", TheLoadPath(), s_loadedAt, error);
+				cemuLog_log(LogType::Force, "wwhd state: couldn't load {} by swap {}: {}", path, s_loadedAt, error);
 				s_loadDone = true;
 				break;
 			case Loaded::Refused:
-				cemuLog_log(LogType::Force, "wwhd state: couldn't load {}: {}", TheLoadPath(), error);
+				cemuLog_log(LogType::Force, "wwhd state: couldn't load {}: {}", path, error);
 				s_loadDone = true;
 				break;
 			case Loaded::Broken:
-				cemuLog_log(LogType::Force, "wwhd state: couldn't load {}: {}; the process is half loaded: stopping", TheLoadPath(), error);
+				cemuLog_log(LogType::Force, "wwhd state: couldn't load {}: {}; the process is half loaded: stopping", path, error);
 				exit(3);
 			}
 			break;

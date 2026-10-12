@@ -138,7 +138,9 @@ namespace wwhd::state
 	};
 
 	// A module's record, registered at static initialization (WWHD_STATE_RECORD below); the records run in the order of
-	// their tags, the same on a save and a load
+	// their tags, the same on a save and a load. A change to what a record carries (a field more or less, a carried
+	// type's layout) bumps kVersion (savestate.cpp): a state of the old format is then refused before anything is
+	// applied. Without it the load fails in that record, guest memory already the state's, and the process stops
 	using RecordFn = void (*)(Archive& ar);
 	struct Record
 	{

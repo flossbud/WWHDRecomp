@@ -4432,6 +4432,10 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
     controller's sampling; the 60 fps layer's carried values; pacing), then guest memory: every mapped range in 64 KiB
     blocks, zero ones flagged, written on a load only where they differ (untouched pages stay unbacked; the write watch
     unprotects first so the texture cache hashes again).
+  - *The format's version* (savestate.cpp kVersion, 3): a change to what a record carries bumps it (savestate.h,
+    Record), and a state of another version is refused before anything is applied ("a state of another build's format":
+    the menu says so and the game goes on). U3 changed sixty.step's histories without it, and a state from before U3
+    (deploy 11's slots, the Deck's B16 captures) failed in that record, half loaded: the process stopped.
   - *Not carried, on purpose*: the vsync count (in the file, not set back): it's the host's, pacing alone reads it and
     holds counts of it from before a load (B82: set back, the next half frame waited for it to climb to them again, the
     time between the save and an in-place load: 68 s on the Deck). Host counts that pacing or the renderer compare
