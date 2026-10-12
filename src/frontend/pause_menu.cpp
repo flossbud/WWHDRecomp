@@ -7,6 +7,8 @@
 #include "ui_draw.h"
 #include "../gpu/vk/renderer.h"
 #include "../os/savestate.h"
+#include "../os/settings.h"
+#include <rapidjson/document.h>
 #include <SDL3/SDL.h>
 #include <array>
 #include <atomic>
@@ -14,6 +16,7 @@
 #include <cmath>
 #include <condition_variable>
 #include <filesystem>
+#include <map>
 #include <mutex>
 #include <sstream>
 #include <thread>
@@ -118,6 +121,148 @@ namespace wwhd::pause_menu
 			}
 		};
 
+		// ---- Settings (M2): the design's rows (assets/pause_menu/menu-and-settings.json: its copy and options) on the
+		// program's switches (os/settings.h): each row's option, its choices in the switch's order ----
+		struct Row
+		{
+			std::string id, label, type, description, env;  // type: choice, toggle, info
+			std::vector<std::string> options;               // the choices as shown (the planned ones left out)
+			std::string key;                                // the switch ("" none: an info row)
+		};
+		struct Category { std::string name; std::vector<Row> rows; };
+		std::vector<Category>& Categories()
+		{
+			static std::vector<Category> c;
+			return c;
+		}
+		// the design's row ids and the switches they set
+		const std::map<std::string, std::string> kRowKeys = { { "preset", "WWHD_PRESET" }, { "fps", "WWHD_FRAMERATE" },
+			{ "renderScale", "WWHD_RENDER_SCALE" }, { "upscaler", "WWHD_UPSCALER" }, { "frameGen", "WWHD_FRAMEGEN" },
+			{ "aniso", "WWHD_ANISO" }, { "fxaa", "WWHD_FXAA" }, { "ao", "WWHD_AO" }, { "display", "WWHD_FULLSCREEN" },
+			{ "resolution", "WWHD_WINDOW_SIZE" }, { "aspect", "WWHD_ASPECT" }, { "vsync", "WWHD_VSYNC" }, { "vrr", "WWHD_VRR" },
+			{ "fpsOverlay", "WWHD_FPS_OVERLAY" }, { "cpuThreads", "WWHD_CORES" }, { "lazyDD", "WWHD_LAZY_DRAWDONE" },
+			{ "writeWatch", "WWHD_WRITE_WATCH" }, { "vtxDedupe", "WWHD_VTX_DEDUPE" }, { "surfaceFit", "WWHD_SURFACE_FIT" },
+			{ "barriers", "WWHD_BARRIERS" }, { "clearLoadop", "WWHD_CLEAR_LOADOP" } };
+
+		bool LoadCategories(const std::string& path)
+		{
+			FILE* f = fopen(path.c_str(), "rb");
+			if (!f)
+				return false;
+			std::string text;
+			char buf[65536];
+			for (size_t n; (n = fread(buf, 1, sizeof(buf), f)) > 0;)
+				text.append(buf, n);
+			fclose(f);
+			rapidjson::Document d;
+			d.Parse(text.c_str());
+			if (d.HasParseError() || !d.HasMember("settingsCategories") || !d["settingsCategories"].IsArray())
+				return false;
+			auto str = [](const rapidjson::Value& v, const char* k) {
+				return v.HasMember(k) && v[k].IsString() ? std::string(v[k].GetString()) : std::string();
+			};
+			for (const auto& c : d["settingsCategories"].GetArray())
+			{
+				Category cat{ str(c, "name"), {} };
+				if (cat.name == "Enhancements" || !c.HasMember("rows"))
+					continue;                               // its rows are the design's placeholders (M4)
+				for (const auto& r : c["rows"].GetArray())
+				{
+					Row row{ str(r, "id"), str(r, "label"), str(r, "type"), str(r, "description"), str(r, "envVar"), {}, {} };
+					if (r.HasMember("options") && r["options"].IsArray())
+						for (const auto& o : r["options"].GetArray())
+							if (o.IsString())
+								row.options.push_back(o.GetString());
+					if (auto k = kRowKeys.find(row.id); k != kRowKeys.end())
+						row.key = k->second;
+					cat.rows.push_back(std::move(row));
+				}
+				Categories().push_back(std::move(cat));
+			}
+			return !Categories().empty();
+		}
+
+		// a row as it shows now: its value, note (warn: in the warning ink), markers, and whether it can change
+		struct Look
+		{
+			int option = -1;                                // settings.h's number (-1: none)
+			os::settings::OptionView v;
+			std::string value, note, lockWhy;
+			bool warn = false, changed = false, nextStart = false, locked = false, dimmed = false, on = false;
+			int index = 0;
+		};
+		std::string Setting(const std::string& key)          // a switch's value as set (the file's, else the default)
+		{
+			const int i = os::settings::Find(key);
+			if (i < 0)
+				return "";
+			const os::settings::OptionView v = os::settings::View(i);
+			return v.current < (int)v.values.size() ? v.values[v.current] : "";
+		}
+		Look LookAt(const Row& r)
+		{
+			Look k;
+			if (r.id == "keepSpeed")
+			{
+				k.on = true, k.value = "On", k.locked = true, k.lockWhy = "The game always keeps full speed.";
+				return k;
+			}
+			if (r.key.empty())
+			{
+				k.value = Setting("WWHD_UPSCALER") == "fsr3" ? "On \xC2\xB7 FSR 3" : "Off";   // motion vectors: FSR 3's
+				return k;
+			}
+			k.option = os::settings::Find(r.key);
+			if (k.option < 0)
+				return k;
+			k.v = os::settings::View(k.option);
+			const auto& v = k.v;
+			k.index = v.current;
+			k.value = k.index < (int)r.options.size() ? r.options[k.index] : k.index < (int)v.shown.size() ? v.shown[k.index] : "";
+			if (r.type == "toggle")
+			{
+				k.on = k.index < (int)v.shown.size() && v.shown[k.index] == "on";
+				k.value = k.on ? "On" : "Off";
+			}
+			k.locked = v.fromEnv || !v.active;
+			if (v.fromEnv)
+				k.lockWhy = "Set by the launcher (" + r.key + ").";
+			else if (!v.active)
+				k.lockWhy = "Settings are saved only when the game runs in a window.";
+			if (k.option == 0)                                // the preset: what Auto resolved to, or Custom
+			{
+				const std::string res = v.resolved == "performance" ? "Performance" : "Quality";
+				if (v.custom)
+					k.value = "Custom", k.note = "You changed an option the preset sets";
+				else if (k.index == 0)
+					k.value = "Auto \xC2\xB7 " + res, k.note = "Picked " + res + " for this PC";
+				k.changed = k.index != 0 || v.custom;
+				k.nextStart = !v.fromEnv && v.resolved != v.atStartValue;
+				return k;
+			}
+			k.changed = k.index != v.def;
+			k.nextStart = !v.live && !v.fromEnv && k.index != v.atStart;
+			const std::string val = k.index < (int)v.values.size() ? v.values[k.index] : "";
+			if (r.id == "fps" && (val == "40" || val == "50"))
+				k.note = "Smoother at 30 or 60";
+			else if (r.id == "renderScale" && (val == "1.5" || val == "2"))
+				k.note = "Supersampling \xE2\x80\x94 sharper, much heavier";
+			else if (r.id == "renderScale" && val == "auto")
+				k.note = "Dynamic resolution that holds 60 fps";
+			else if (r.id == "vrr" && k.on && Setting("WWHD_FULLSCREEN") != "1")
+				k.note = "Usually needs fullscreen", k.warn = true;
+			if (!v.note.empty())
+				k.note = v.note, k.warn = true;               // the part that reads it says why it's off
+			if (k.locked && k.lockWhy.size() > 1)
+				k.note = k.lockWhy.substr(0, k.lockWhy.size() - 1), k.warn = false;
+			if (r.id == "upscaler")
+			{
+				const std::string sc = Setting("WWHD_RENDER_SCALE");
+				k.dimmed = sc == "1" || sc == "1.5" || sc == "2";
+			}
+			return k;
+		}
+
 		// what doesn't move, drawn once for the window's size: the panel (opaque), the header sheet with its title, each
 		// button idle (with the group's shadow) and focused, and the open dialog's frame and message
 		struct Layers
@@ -128,6 +273,8 @@ namespace wwhd::pause_menu
 			Image dialog;
 			std::vector<std::array<Image, 2>> dialogButtons;   // each idle and focused
 			Image under;                                       // the menu under the open dialog, scrim included (once still)
+			Image settings;                                    // the panel with Settings drawn on it, once still (settingsKey)
+			std::string settingsKey;
 		};
 		Layers& L()
 		{
@@ -167,6 +314,14 @@ namespace wwhd::pause_menu
 			Clock::time_point compassSince;
 			std::vector<Clock::time_point> focusSince;  // per menu item: when its focus last changed (the cross-fade)
 			std::vector<bool> focused;
+			// the screen: the menu, or Settings over it (M2), and since when (the panel's widening, the layers' fades)
+			bool settings = false;
+			Clock::time_point screenSince;
+			int cat = 0, row = 0;
+			Clock::time_point rowSince;                 // the focused row's highlight cross-fades in over 140 ms
+			int prevRow = -1;
+			std::string toggled;                        // the toggle last flipped, and when (its knob slides over 220 ms)
+			Clock::time_point toggledSince;
 			Image backdrop, blurred;                    // the window's picture when it opened, and blurred
 			int bw = 0, bh = 0;
 			bool dirty = true;
@@ -184,6 +339,7 @@ namespace wwhd::pause_menu
 
 		const char* const kItems[5] = { "Resume", "Enhancements", "Settings", "Save", "Quit" };
 		constexpr float kButtonTops[5] = { 0, 90, 180, 292, 404 };
+		constexpr float kWidePanelW = 1380;
 		constexpr float kPanelW = 680, kButtonX = 110, kButtonY = 396, kButtonW = 460, kButtonH = 72;
 
 		std::string Caption(int item)
@@ -206,6 +362,11 @@ namespace wwhd::pause_menu
 		void CursorFor(int i, float out[4])
 		{
 			out[0] = kButtonX - 13, out[1] = kButtonY + kButtonTops[i] - 13, out[2] = kButtonW + 26, out[3] = kButtonH + 26;
+		}
+		// Settings' row i: the row (26, 26 + i 74 in the sheet at 84,212, 808 x 70) plus 13 on every side
+		void RowCursorFor(int i, float out[4])
+		{
+			out[0] = 84 + 26 - 13, out[1] = 212 + 26 + i * 74 - 13, out[2] = 808 + 26, out[3] = 70 + 26;
 		}
 		void DialogCursorFor(int n, int i, float fx, float fy, float out[4])
 		{
@@ -306,29 +467,58 @@ namespace wwhd::pause_menu
 			TextCentred(f, a.rocknroll, labelPx, x + w / 2, y + h / 2, label, kInk, op);
 		}
 
-		// the prompts at the top right (right 44, top 34): each a glyph with its label under it, overlapping it by 12, centred
-		// on each other, 26 apart
+		// a prompt's glyph (a pad button, a bumper's pill, or a key), its width
+		float GlyphWidth(const std::string& t, bool pad)
+		{
+			Assets& a = A();
+			const float s = a.s;
+			if (pad)
+				return (float)a.Get(t == "LB" || t == "RB" ? "prompt_pad-bumper_blank" : "prompt_pad-button_blank").w;
+			return std::max((float)a.Get("prompt_key_blank").w, a.rocknroll.Width(t, 17 * s) + 20 * s);
+		}
+		void DrawGlyph(Frame& f, const std::string& t, bool pad, float x, float top, float op)
+		{
+			Assets& a = A();
+			const float s = f.s;
+			const bool bumper = pad && (t == "LB" || t == "RB");
+			const Image& g = a.Get(pad ? (bumper ? "prompt_pad-bumper_blank" : "prompt_pad-button_blank") : "prompt_key_blank");
+			const float gw = GlyphWidth(t, pad);
+			if (pad)
+				f.c.Draw(g, x, top, op);
+			else
+				f.c.Draw3Slice(g, x, top, gw, (int)(12 * s), op);
+			TextCentred(f, a.rocknroll, pad ? 21.0f : 17.0f, (x + gw / 2) / s, (top + g.h / 2.0f) / s, t, kPromptText, op);
+		}
+
+		// the prompts at the top right (right 44, top 34): each its glyphs (4 apart when paired) with its label under them,
+		// overlapping them by 12, centred on each other, 26 apart
 		void DrawPrompts(Frame& f, const std::vector<std::pair<std::string, std::string>>& prompts, bool pad, float op)
 		{
 			Assets& a = A();
 			const float s = f.s, top = 34 * s;
+			const float gh = (float)a.Get(pad ? "prompt_pad-button_blank" : "prompt_key_blank").h;
 			float right = f.c.W() - 44 * s;
 			for (auto it = prompts.rbegin(); it != prompts.rend(); ++it)
 			{
-				const std::string& glyphText = it->first;
+				std::vector<std::string> glyphs;
+				std::istringstream words(it->first);
+				for (std::string g; words >> g;)
+					glyphs.push_back(g);
 				const std::string& label = it->second;
 				const float lw = a.rocknroll.Width(label, 24 * s);
-				const Image& g = a.Get(pad ? "prompt_pad-button_blank" : "prompt_key_blank");
-				const float gw = pad ? (float)g.w : std::max((float)g.w, a.rocknroll.Width(glyphText, 17 * s) + 20 * s);
+				float gw = 0;
+				for (size_t i = 0; i < glyphs.size(); i++)
+					gw += GlyphWidth(glyphs[i], pad) + (i ? 4 * s : 0);
 				const float colW = std::max(gw, lw), cx = right - colW / 2;
-				const float gx = cx - gw / 2;
-				if (pad)
-					f.c.Draw(g, gx, top, op);
-				else
-					f.c.Draw3Slice(g, gx, top, gw, (int)(12 * s), op);
-				TextCentred(f, a.rocknroll, pad ? 21.0f : 17.0f, cx / s, (top + g.h / 2.0f) / s, glyphText, kPromptText, op);
-				// the label under it, overlapping it by 12: white, a 2 px outline, its shadow (0 3px 4px rgba(0,30,90,.45))
-				const float base = top + g.h - 12 * s + a.rocknroll.Ascent(24 * s) * 0.92f;
+				float gx = cx - gw / 2;
+				for (const std::string& g : glyphs)
+				{
+					DrawGlyph(f, g, pad, gx, top + (gh - (float)a.Get(pad && (g == "LB" || g == "RB") ? "prompt_pad-bumper_blank" :
+						pad ? "prompt_pad-button_blank" : "prompt_key_blank").h) / 2, op);
+					gx += GlyphWidth(g, pad) + 4 * s;
+				}
+				// the label under them, overlapping by 12: white, a 2 px outline, its shadow (0 3px 4px rgba(0,30,90,.45))
+				const float base = top + gh - 12 * s + a.rocknroll.Ascent(24 * s) * 0.92f;
 				f.c.Text(a.rocknroll, 24 * s, cx - lw / 2, base + 3 * s, label, { 0, 30, 90, 115 }, op, { 0, 30, 90, 60 }, 3 * s);
 				f.c.Text(a.rocknroll, 24 * s, cx - lw / 2, base, label, kWhite, op, kPromptOutline, 2 * s);
 				right -= colW + 26 * s;
@@ -474,20 +664,251 @@ namespace wwhd::pause_menu
 			return true;
 		}
 
+		// words into lines no wider than w (pixels) at that size
+		std::vector<std::string> WrapText(ui::Font& font, float px, float w, const std::string& text)
+		{
+			std::vector<std::string> lines;
+			std::string line, word;
+			std::istringstream words(text);
+			while (words >> word)
+			{
+				const std::string next = line.empty() ? word : line + " " + word;
+				if (!line.empty() && font.Width(next, px) > w)
+					lines.push_back(line), line = word;
+				else
+					line = next;
+			}
+			if (!line.empty())
+				lines.push_back(line);
+			return lines;
+		}
+
+		constexpr Colour kTabIdle = Colour::Hex(0xe3f2b6), kTabRim = Colour::Hex(0xa3cd78), kRule = Colour::Hex(0xa9cf7f),
+			kWarnInk = Colour::Hex(0x8a4b14), kControl = Colour::Hex(0x5d8f3a), kToggleOn = Colour::Hex(0x7cc23a),
+			kToggleOff = Colour::Hex(0xc3dc9f), kCursorBrown = Colour::Hex(0x5b3b22), kOrange = Colour::Hex(0xf0a53a),
+			kOrangeText = Colour::Hex(0x3a240f), kBanner = Colour::Hex(0xf7d58a), kBannerRim = Colour::Hex(0xd79a3c);
+
+		// a rounded pill (a badge, a toggle), in design units
+		void Pill(Frame& f, float x, float y, float w, float h, Colour fill, Colour ring, float ringW, float op)
+		{
+			f.c.RoundRect(x * f.s, y * f.s, w * f.s, h * f.s, fill, ring, ringW * f.s, op);
+		}
+
+		// Settings (M2): the title, the tab bar, the rows sheet, the info pane and the next-start banner, dx to the right
+		void DrawSettings(Frame& f, State& st, Clock::time_point now, float dx, float op)
+		{
+			Assets& a = A();
+			const float s = f.s;
+			const auto& cats = Categories();
+			if (cats.empty())
+				return;
+			const int ci = std::clamp(st.cat, 0, (int)cats.size() - 1);
+			const Category& cat = cats[ci];
+			// the title: Reggae 46 at 90,50
+			f.c.Text(a.reggae, 46 * s, (90 + dx) * s, (50 * s) + a.reggae.Ascent(46 * s), "Settings", kInk, op);
+			// the tab bar, 84..1290 at 128, 60 tall: the arrows and the bumpers' glyphs at its ends, the tabs between
+			{
+				const float y = 128, h = 60, cy = y + h / 2;
+				const Image& arrow = a.Get("arrow_tab_left");
+				f.c.Draw(arrow, (84 + dx) * s, cy * s - arrow.h / 2.0f, op);
+				f.c.Draw(arrow, (1290 + dx) * s - arrow.w, cy * s - arrow.h / 2.0f, op, true);
+				const std::string lg = st.pad ? "LB" : "Q", rg = st.pad ? "RB" : "E";
+				const float gl = GlyphWidth(lg, st.pad), gr = GlyphWidth(rg, st.pad);
+				const float gh = (float)a.Get(st.pad ? "prompt_pad-bumper_blank" : "prompt_key_blank").h;
+				DrawGlyph(f, lg, st.pad, (84 + dx) * s + arrow.w + 6 * s, cy * s - gh / 2, op);
+				DrawGlyph(f, rg, st.pad, (1290 + dx) * s - arrow.w - 6 * s - gr, cy * s - gh / 2, op);
+				float x = 84 + dx + (arrow.w + gl) / s + 20;
+				for (int i = 0; i < (int)cats.size(); i++)
+				{
+					const float tw = a.rocknroll.Width(cats[i].name, 20 * s) / s + 36;
+					const bool active = i == ci;
+					const float ty = cy - 22;
+					if (active)
+					{
+						f.c.Fill(x * s, ty * s, tw * s, 44 * s, kButtonRim, op);
+						f.c.Fill((x + 3) * s, (ty + 3) * s, (tw - 6) * s, 38 * s, Colour::Hex(0xa3dc48), op);
+						f.c.Fill((x + 3) * s, (ty + 3) * s, (tw - 6) * s, 12 * s, Colour::Hex(0xc0ea5e), op * 0.8f);
+					}
+					else
+					{
+						f.c.Fill(x * s, ty * s, tw * s, 44 * s, kTabRim, op);
+						f.c.Fill((x + 3) * s, (ty + 3) * s, (tw - 6) * s, 38 * s, kTabIdle, op);
+					}
+					TextCentred(f, a.rocknroll, 20, x + tw / 2, cy, cats[i].name, kInk, op);
+					x += tw + 8;
+				}
+			}
+			// the rows sheet at 84,212, 860 wide, 26 padding, rows 70 tall 4 apart
+			const int n = (int)cat.rows.size();
+			const float sx = 84 + dx, sy = 212, sw = 860, sh = 52 + n * 74 - 4;
+			float offs[4] = { -60, -20, 40, -90 };
+			DrawSheet(f, sx, sy, sw, sh, offs, op);
+			int pending = 0;
+			for (const Category& c2 : cats)
+				for (const Row& r2 : c2.rows)
+					if (LookAt(r2).nextStart)
+						pending++;
+			const float rms = std::chrono::duration<float, std::milli>(now - st.rowSince).count();
+			std::vector<Look> looks;
+			for (const Row& r : cat.rows)
+				looks.push_back(LookAt(r));
+			for (int i = 0; i < n; i++)
+			{
+				const Row& r = cat.rows[i];
+				const Look& k = looks[i];
+				const float rx = sx + 26, ry = sy + 26 + i * 74, rw = 808, rh = 70;
+				const bool focus = i == st.row;
+				float hl = focus ? Linear(rms, 0, 140) : (i == st.prevRow ? 1 - Linear(rms, 0, 140) : 0);
+				if (hl > 0)
+					f.c.Draw(a.Get("row_settings_808x70_focused"), rx * s, ry * s, op * hl);
+				for (float x = rx + 4; x < rx + rw - 4; x += 10)          // the dotted rule under it
+					f.c.Fill(x * s, (ry + rh - 2) * s, 3 * s, 2 * s, kRule, op);
+				const float dim = k.dimmed || k.locked ? 0.5f : 1.0f;   // locked: as a dimmed row, its reason as its note
+				const Colour ink = kInk;
+				// the label, its markers, the note under it
+				const float lx = rx + 26;
+				const bool note = !k.note.empty();
+				const float lbase = note ? ry + 34 : ry + rh / 2 + (a.rocknroll.Ascent(26 * s) + a.rocknroll.Descent(26 * s)) / 2 / s;
+				const float lw = f.c.Text(a.rocknroll, 26 * s, lx * s, lbase * s, r.label, ink, op * dim) / s;
+				float mx = lx + lw + 12;
+				if (k.changed)
+				{
+					const Image& dot = a.Get("indicator_changed-dot");
+					f.c.Draw(dot, mx * s, (lbase - 13) * s - dot.h / 2.0f, op * dim);
+					mx += 14 + 12;
+				}
+				if (k.nextStart)
+				{
+					const float bw = a.rocknroll.Width("Next start", 14 * s) / s + 20;
+					Pill(f, mx, lbase - 22, bw, 22, kOrange, kOrange, 0, op);
+					TextCentred(f, a.rocknroll, 14, mx + bw / 2, lbase - 11, "Next start", kOrangeText, op);
+				}
+				if (note)
+				{
+					const float maxw = 808 - 26 - 20 - 330 - 20;
+					std::string t = k.note;
+					while (t.size() > 1 && a.rocknroll.Width(t, 17 * s) > maxw * s)
+						t = t.substr(0, t.size() - 4) + "\xE2\x80\xA6";
+					f.c.Text(a.rocknroll, 17 * s, lx * s, (ry + 58) * s, t, k.warn ? kWarnInk : focus ? kInk : kInkMuted, op * dim);
+				}
+				// the value column: 330 wide, right-aligned, 20 from the row's right
+				const float vr = rx + rw - 20, vcy = ry + rh / 2;
+				const float vop = op * (k.locked || k.dimmed ? 0.5f : 1.0f);
+				if (r.type == "toggle")
+				{
+					const float tx = vr - 78, ty = vcy - 19;
+					float pos = k.on ? 1.0f : 0.0f;
+					if (st.toggled == r.id)
+					{
+						const float t = Bezier(.3f, 1.4f, .5f, 1, Linear(std::chrono::duration<float, std::milli>(now - st.toggledSince).count(), 0, 220));
+						pos = k.on ? t : 1 - t;
+					}
+					Pill(f, tx, ty, 78, 38, k.on ? kToggleOn : kToggleOff, kControl, 3, vop);
+					const float kx = tx + 3 + 40 * pos;
+					Pill(f, kx + 3, ty + 6, 26, 26, kWhite, kControl, 3, vop);
+					const std::string t = k.on ? "On" : "Off";
+					f.c.Text(a.rocknroll, 23 * s, (tx - 12) * s - a.rocknroll.Width(t, 23 * s),
+						vcy * s + (a.rocknroll.Ascent(23 * s) + a.rocknroll.Descent(23 * s)) / 2, t, ink, vop);
+				}
+				else if (r.type == "info" || k.locked)
+					f.c.Text(a.rocknroll, 23 * s, vr * s - a.rocknroll.Width(k.value, 23 * s),
+						vcy * s + (a.rocknroll.Ascent(23 * s) + a.rocknroll.Descent(23 * s)) / 2, k.value, ink, vop);
+				else
+				{
+					// < value >: the arrows in 36 boxes either side of a 226 box
+					const Image& arr = a.Get("arrow_choice_right");
+					const float bx = vr - 36 - 226 - 36;
+					f.c.Draw(arr, (bx + 18) * s - arr.w / 2.0f, vcy * s - arr.h / 2.0f, vop, true);
+					f.c.Draw(arr, (vr - 18) * s - arr.w / 2.0f, vcy * s - arr.h / 2.0f, vop);
+					float vpx = 24;                              // a long value (the preset's "Auto · Performance") shrinks to fit
+					while (vpx > 14 && a.rocknroll.Width(k.value, vpx * s) > 214 * s)
+						vpx -= 1;
+					TextCentred(f, a.rocknroll, vpx, bx + 36 + 113, vcy, k.value, ink, vop);
+				}
+			}
+			// the next-start banner under the sheet (margin 16), when any next-start change waits
+			if (pending > 0)
+			{
+				const float by = sy + sh + 16, bh = 54;
+				f.c.Fill(sx * s, by * s, sw * s, bh * s, kBannerRim, op);
+				f.c.Fill((sx + 3) * s, (by + 3) * s, (sw - 6) * s, (bh - 6) * s, kBanner, op);
+				Pill(f, sx + 20, by + 12, 30, 30, kOrange, kCursorBrown, 3, op);
+				TextCentred(f, a.rocknroll, 18, sx + 35, by + 27, std::to_string(pending), kOrangeText, op);
+				f.c.Text(a.rocknroll, 21 * s, (sx + 62) * s, (by + 27) * s + (a.rocknroll.Ascent(21 * s) + a.rocknroll.Descent(21 * s)) / 2,
+					pending == 1 ? "This change takes effect next time you start WindSong." :
+						"These changes take effect next time you start WindSong.", kOrangeText, op);
+			}
+			// the info pane at 966,212, 310 wide: the focused row's title, description and facts
+			if (st.row < n)
+			{
+				const Row& r = cat.rows[st.row];
+				const Look& k = looks[st.row];
+				const float px = 966 + dx, py = 212, pw = 310, inner = pw - 64;
+				std::vector<std::string> desc = WrapText(a.rocknroll, 21 * s, inner * s, r.description);
+				std::vector<std::pair<std::string, std::string>> facts;
+				if (k.option >= 0 && !k.v.values.empty())
+				{
+					const int d = std::clamp(k.v.def, 0, (int)k.v.values.size() - 1);
+					facts.push_back({ "Default", r.type == "toggle" ? (k.v.shown[d] == "on" ? "On" : "Off") : d < (int)r.options.size() ? r.options[d] : k.v.shown[d] });
+					facts.push_back({ "Applies", k.locked ? "Not now" : k.option == 0 || !k.v.live ? "Next time you start the game" : "Right away" });
+					if (!k.v.performance.empty())
+					{
+						int pi = 0;
+						for (int j = 0; j < (int)k.v.values.size(); j++)
+							if (k.v.values[j] == k.v.performance)
+								pi = j;
+						facts.push_back({ "Performance preset", r.type == "toggle" ? (k.v.shown[pi] == "on" ? "On" : "Off") : pi < (int)r.options.size() ? r.options[pi] : k.v.shown[pi] });
+					}
+				}
+				if (!r.env.empty())
+					facts.push_back({ "Environment variable", r.env });
+				else if (!r.key.empty() && r.key != "WWHD_PRESET")
+					facts.push_back({ "Environment variable", r.key });
+				if (k.locked && !k.lockWhy.empty())
+					facts.push_back({ "Locked", k.lockWhy });
+				float h = 36 + 40 + 14 + 6 + desc.size() * 21 * 1.55f + 14 + 32;
+				for (const auto& fc : facts)
+					h += 16 + 4 + 20 * 1.3f * WrapText(a.rocknroll, 20 * s, inner * s, fc.second).size() + 12;
+				float offs2[4] = { 20, -70, -30, 50 };
+				DrawSheet(f, px, py, pw, h, offs2, op);
+				float y = py + 36;
+				f.c.Text(a.reggae, 28 * s, (px + 32) * s, y * s + a.reggae.Ascent(28 * s), r.label, kInk, op);
+				y += 40 + 14;
+				for (int i = 0; i < 10; i++)
+					f.c.Fill((px + 32 + i * 12) * s, y * s, 4 * s, 4 * s, kDot, op);
+				y += 6 + 14;
+				for (const std::string& line : desc)
+				{
+					f.c.Text(a.rocknroll, 21 * s, (px + 32) * s, (y + 21) * s, line, kInk, op);
+					y += 21 * 1.55f;
+				}
+				y += 14;
+				for (const auto& fc : facts)
+				{
+					f.c.Text(a.rocknroll, 16 * s, (px + 32) * s, (y + 16) * s, fc.first, kInkMuted, op);
+					y += 16 + 4;
+					for (const std::string& line : WrapText(a.rocknroll, 20 * s, inner * s, fc.second))
+					{
+						f.c.Text(a.rocknroll, 20 * s, (px + 32) * s, (y + 20) * s, line, kInk, op);
+						y += 20 * 1.3f;
+					}
+					y += 12;
+				}
+			}
+		}
+
 		void BuildLayers(Layers& l, int w, int h, float s)
 		{
 			Assets& a = A();
 			l.w = w, l.h = h, l.dialogKind = -1;
-			const int pw = (int)std::lround(kPanelW * s);
+			// the panel's felt at its widest (Settings' 1380) and its left corners; the right rim and corners follow its width
+			const int pw = (int)std::lround(kWidePanelW * s);
 			{
 				ui::Canvas c(pw, h);
 				c.Fill(0, 0, (float)pw, (float)h, kFrame);
 				c.Tile(a.Get("texture_frame-felt_tile"), 0, 0, (float)pw, (float)h);
-				c.Fill(pw - 9 * s, 0, 3 * s, (float)h, kRimDark);
-				c.Fill(pw - 6 * s, 0, 6 * s, (float)h, kRimLight);
 				const Image& fl = a.Get("frame_corner-flourish");
-				c.Draw(fl, 14 * s, 14 * s), c.Draw(fl, pw - 22 * s - fl.w, 14 * s, 1, true);
-				c.Draw(fl, 14 * s, h - 14 * s - fl.h, 1, false, true), c.Draw(fl, pw - 22 * s - fl.w, h - 14 * s - fl.h, 1, true, true);
+				c.Draw(fl, 14 * s, 14 * s), c.Draw(fl, 14 * s, h - 14 * s - fl.h, 1, false, true);
 				l.panel = c.Take();
 			}
 			{
@@ -534,7 +955,10 @@ namespace wwhd::pause_menu
 			}
 			// the panel wipes in from the left over 560 ms (out, reversed, without delays)
 			const float wipe = closing ? 1 - Bezier(.3f, .8f, .25f, 1, Linear(ms, 0, 560)) : Bezier(.3f, .8f, .25f, 1, Linear(ms, 0, 560));
-			const float pw = (float)l.panel.w;
+			// the panel's width: 680, widening to Settings' 1380 over 480 ms (and back)
+			const float sms = std::chrono::duration<float, std::milli>(now - st.screenSince).count();
+			const float widen = st.settings ? Bezier(.6f, 0, .2f, 1, Linear(sms, 0, 480)) : 1 - Bezier(.6f, 0, .2f, 1, Linear(sms, 0, 480));
+			const float pw = std::round((kPanelW + (kWidePanelW - kPanelW) * std::clamp(widen, 0.0f, 1.0f)) * s);
 			// its shadow (drop-shadow(10px 0 22px rgba(16,56,24,.4))) beyond its right edge
 			for (int i = 0; i < (int)(32 * s); i++)
 			{
@@ -543,13 +967,50 @@ namespace wwhd::pause_menu
 			}
 			const int shown = (int)std::ceil(pw * wipe);
 			c.Clip(0, 0, shown, c.H());
-			c.Rows(l.panel, 0, 0, 0, shown);
+			// Settings once still (its widening and fades over, no row's highlight or toggle's knob moving): the panel as
+			// last drawn while nothing it shows has changed (its key: the category, row, values, device)
+			std::string skey;
+			if (st.settings && !closing && sms > 700 && wipe >= 1 &&
+				std::chrono::duration<float, std::milli>(now - st.rowSince).count() > 160 &&
+				std::chrono::duration<float, std::milli>(now - st.toggledSince).count() > 240)
+			{
+				skey = fmt::format("{}x{} {} {} {}", c.W(), c.H(), st.cat, st.row, st.pad ? 1 : 0);
+				if (st.cat < (int)Categories().size())
+					for (const Row& r : Categories()[st.cat].rows)
+					{
+						const Look k = LookAt(r);
+						skey += "|" + k.value + (k.nextStart ? "*" : "") + (k.locked ? "L" : "") + k.note;
+					}
+				int pending = 0;
+				for (const Category& c2 : Categories())
+					for (const Row& r2 : c2.rows)
+						pending += LookAt(r2).nextStart ? 1 : 0;
+				skey += fmt::format("#{}", pending);
+			}
+			const bool cached = !skey.empty() && skey == l.settingsKey && l.settings.w == (int)pw && l.settings.h == c.H();
+			if (cached)
+				c.Rows(l.settings, 0, 0, 0, (int)pw);
+			else
+			{
+			c.Rows(l.panel, 0, 0, 0, std::min(shown, (int)pw));
+			c.Fill(pw - 9 * s, 0, 3 * s, (float)c.H(), kRimDark);
+			c.Fill(pw - 6 * s, 0, 6 * s, (float)c.H(), kRimLight);
+			{
+				const Image& fl = a.Get("frame_corner-flourish");
+				c.Draw(fl, pw - 22 * s - fl.w, 14 * s, 1, true), c.Draw(fl, pw - 22 * s - fl.w, c.H() - 14 * s - fl.h, 1, true, true);
+			}
+			// the menu's layer: out over 180 ms (30 to the left) as Settings opens, back 200 ms after it closes; Settings in
+			// after 260 ms (opacity 300, from 40 to the right over 380), out over 160
+			const float menuOp = st.settings ? 1 - Linear(sms, 0, 180) : Linear(sms, 200, 200);
+			const float menuDx = st.settings ? -30 * Linear(sms, 0, 180) : -30 * (1 - Linear(sms, 200, 200));
+			const float setOp = (st.settings ? Linear(sms, 260, 300) : 1 - Linear(sms, 0, 160)) * (closing ? 1 - Linear(ms, 0, 260) : 1);
+			const float setDx = st.settings ? 40 * (1 - Bezier(.2f, .8f, .2f, 1, Linear(sms, 260, 380))) : 0;
 			// the header: drops from -24, after 140 ms
-			const float hp = closing ? 1 - Linear(ms, 0, 260) : Linear(ms, 140, 260);
+			const float hp = (closing ? 1 - Linear(ms, 0, 260) : Linear(ms, 140, 260)) * menuOp;
 			const float hy = closing ? 0 : -24 * (1 - Bezier(.3f, 1.5f, .5f, 1, Linear(ms, 140, 460)));
 			if (hp > 0)
 			{
-				c.Draw(l.header, 60 * s, (92 + hy) * s, hp);
+				c.Draw(l.header, (60 + menuDx) * s, (92 + hy) * s, hp);
 				// the caption, 26 px, in a box 74 tall: wrapped to the sheet
 				const std::string cap = Caption(st.item);
 				std::vector<std::string> lines;
@@ -567,13 +1028,13 @@ namespace wwhd::pause_menu
 					lines.push_back(line);
 				const float top = 92 + hy + 148 + (74 - std::min<size_t>(lines.size(), 2) * 26 * 1.4f) / 2;
 				for (size_t i = 0; i < lines.size() && i < 2; i++)
-					TextCentred(f, a.rocknroll, 26, 340, top + (i + 0.5f) * 26 * 1.4f, lines[i], kInk, hp);
+					TextCentred(f, a.rocknroll, 26, 340 + menuDx, top + (i + 0.5f) * 26 * 1.4f, lines[i], kInk, hp);
 			}
 			// the buttons: pop up from +20, each 45 ms after the one before, from 220 ms; the focus cross-fades over 140
 			for (int i = 0; i < 5; i++)
 			{
 				const float d = 220 + 45.0f * i;
-				const float bp = closing ? 1 - Linear(ms, 0, 260) : Linear(ms, d, 260);
+				const float bp = (closing ? 1 - Linear(ms, 0, 260) : Linear(ms, d, 260)) * menuOp;
 				if (bp <= 0)
 					continue;
 				const float by = closing ? 0 : 20 * (1 - Bezier(.3f, 1.5f, .5f, 1, Linear(ms, d, 460)));
@@ -581,10 +1042,21 @@ namespace wwhd::pause_menu
 				float focus = Linear(fms, 0, 140);
 				if (!(st.focused.size() > (size_t)i && st.focused[i]))
 					focus = 1 - focus;
-				const float bx = kButtonX * s, byy = (kButtonY + kButtonTops[i] + by) * s;
+				const float bx = (kButtonX + menuDx) * s, byy = (kButtonY + kButtonTops[i] + by) * s;
 				c.Draw(l.button[i][0], bx, byy, bp);
 				if (focus > 0)
 					c.Draw(l.button[i][1], bx, byy, bp * focus);
+			}
+			if (setOp > 0)
+				DrawSettings(f, st, now, setDx, setOp);
+			if (!skey.empty())                            // drawn still: kept for the frames after
+			{
+				l.settings.w = (int)pw, l.settings.h = c.H();
+				l.settings.px.resize((size_t)l.settings.w * l.settings.h);
+				for (int y = 0; y < c.H(); y++)
+					memcpy(&l.settings.px[(size_t)y * l.settings.w], &c.Pixels()[(size_t)y * c.W()], (size_t)l.settings.w * 4);
+				l.settingsKey = skey;
+			}
 			}
 			// the compass emblem at the panel's bottom right (right 84, bottom 22), turned by the item
 			{
@@ -608,8 +1080,25 @@ namespace wwhd::pause_menu
 			}
 			// the prompts over the game frame
 			const float pp = closing ? 1 - Linear(ms, 0, 200) : Linear(ms, 300, 260);
-			if (pp > 0)
+			if (pp > 0 && !st.settings)
 				DrawPrompts(f, { { st.pad ? "A" : "Enter", "Select" }, { st.pad ? "B" : "Esc", "Back" } }, st.pad, pp);
+			else if (pp > 0)
+			{
+				// Settings: Change (Toggle on a toggle; none on a locked or an info row), the categories, the defaults, back
+				std::vector<std::pair<std::string, std::string>> pr;
+				const auto& cats = Categories();
+				if (st.cat < (int)cats.size() && st.row < (int)cats[st.cat].rows.size())
+				{
+					const Row& r = cats[st.cat].rows[st.row];
+					const Look k = LookAt(r);
+					if (!k.locked && r.type != "info")
+						pr.push_back({ st.pad ? "A" : "Enter", r.type == "toggle" ? "Toggle" : "Change" });
+				}
+				pr.push_back({ st.pad ? "LB RB" : "Q E", "Category" });
+				pr.push_back({ st.pad ? "Y" : "R", "Defaults" });
+				pr.push_back({ st.pad ? "B" : "Esc", "Back" });
+				DrawPrompts(f, pr, st.pad, pp);
+			}
 			DrawDialog(f, st, now, ms);
 			DrawToast(f, st, now);
 		}
@@ -646,6 +1135,105 @@ namespace wwhd::pause_menu
 			st.curSince = Clock::now();
 		}
 
+		enum class Input { Up, Down, Left, Right, Confirm, Back, Toggle, CatPrev, CatNext, Reset };
+
+		// the cursor glides to a new box from wherever it is now
+		void GlideTo(State& st, const float box[4])
+		{
+			const float g = Bezier(.25f, .8f, .25f, 1, Linear(std::chrono::duration<float, std::milli>(Clock::now() - st.curSince).count(), 0, 170));
+			for (int k = 0; k < 4; k++)
+				st.curFrom[k] = st.curFrom[k] + (st.curTo[k] - st.curFrom[k]) * g, st.curTo[k] = box[k];
+			st.curSince = Clock::now();
+		}
+		void TurnCompass(State& st, float deg)
+		{
+			st.compassFrom = st.compassFrom + (st.compassTo - st.compassFrom) *
+				Bezier(.3f, 1.35f, .5f, 1, Linear(std::chrono::duration<float, std::milli>(Clock::now() - st.compassSince).count(), 0, 800));
+			st.compassTo = deg, st.compassSince = Clock::now();
+		}
+		void FocusRow(State& st, int row)
+		{
+			if (row != st.row)
+				st.prevRow = st.row, st.rowSince = Clock::now();
+			st.row = row;
+			float box[4];
+			RowCursorFor(row, box);
+			GlideTo(st, box);
+		}
+
+		// Settings' input: rows, values, categories, the category's defaults, back to the menu
+		void ActSettings(State& st, Input in)
+		{
+			const auto& cats = Categories();
+			if (cats.empty())
+				return;
+			st.cat = std::clamp(st.cat, 0, (int)cats.size() - 1);
+			const Category& cat = cats[st.cat];
+			const int n = (int)cat.rows.size();
+			switch (in)
+			{
+			case Input::Up: FocusRow(st, (st.row + n - 1) % n); return;
+			case Input::Down: FocusRow(st, (st.row + 1) % n); return;
+			case Input::CatPrev: case Input::CatNext:
+				st.cat = (st.cat + (in == Input::CatNext ? 1 : (int)cats.size() - 1)) % (int)cats.size();
+				st.prevRow = -1, st.row = 0, st.rowSince = Clock::now();
+				FocusRow(st, 0);
+				TurnCompass(st, st.cat * 45.0f);
+				return;
+			case Input::Reset:
+			{
+				std::vector<std::string> keys;
+				for (const Row& r : cat.rows)
+					if (!r.key.empty())
+						keys.push_back(r.key);
+				os::settings::ResetToDefaults(keys);
+				ShowToast(st, cat.name + " reset to defaults.");
+				return;
+			}
+			case Input::Back:
+			{
+				st.settings = false, st.screenSince = Clock::now();
+				float box[4];
+				CursorFor(st.item, box);
+				GlideTo(st, box);
+				TurnCompass(st, st.item * -52.0f);
+				return;
+			}
+			case Input::Left: case Input::Right: case Input::Confirm:
+			{
+				if (st.row >= n)
+					return;
+				const Row& r = cat.rows[st.row];
+				const Look k = LookAt(r);
+				if (k.locked)
+				{
+					if (in == Input::Confirm && !k.lockWhy.empty())
+						ShowToast(st, k.lockWhy);
+					return;
+				}
+				if (r.type == "info" || k.option < 0)
+					return;
+				if (r.type == "toggle")
+				{
+					// to the other of on and off
+					for (int j = 0; j < (int)k.v.shown.size(); j++)
+						if ((k.v.shown[j] == "on") != k.on)
+						{
+							os::settings::Set(k.option, j);
+							st.toggled = r.id, st.toggledSince = Clock::now();
+							break;
+						}
+					return;
+				}
+				const int count = std::max(1, std::min((int)r.options.size(), (int)k.v.values.size()));
+				const int step = in == Input::Left ? -1 : 1;
+				os::settings::Set(k.option, ((k.index + step) % count + count) % count);
+				return;
+			}
+			default: return;
+			}
+		}
+
 		void QuitToDesktop()
 		{
 			cemuLog_log(LogType::Force, "wwhd: quit to the desktop from the pause menu");
@@ -653,7 +1241,6 @@ namespace wwhd::pause_menu
 			_exit(0);
 		}
 
-		enum class Input { Up, Down, Left, Right, Confirm, Back, Toggle };
 
 		void Act(State& st, Input in)
 		{
@@ -664,6 +1251,7 @@ namespace wwhd::pause_menu
 					if (Clock::now() - st.closedAt < std::chrono::milliseconds(400))
 						return;
 					st.phase = Phase::Waiting, st.since = Clock::now(), st.dialog = Dialog::None;
+					st.settings = false, st.screenSince = Clock::now() - std::chrono::seconds(10);
 					st.item = 0, st.focusSince.clear();
 					Focus(st, 0);
 					for (int k = 0; k < 4; k++)
@@ -678,6 +1266,12 @@ namespace wwhd::pause_menu
 			}
 			if (st.phase != Phase::Open && st.phase != Phase::Opening)
 				return;
+			if (st.settings && st.dialog == Dialog::None)
+			{
+				ActSettings(st, in);
+				st.dirty = true;
+				return;
+			}
 			if (st.dialog != Dialog::None)
 			{
 				const DialogSpec d = Spec(st.dialog);
@@ -717,6 +1311,13 @@ namespace wwhd::pause_menu
 				{
 					st.dialog = Dialog::Quit, st.dialogItem = 0, st.dialogSince = Clock::now();
 					// the Save & Quit choice needs File 1's save from the menu (M3): Desktop opens the unsaved dialog
+				}
+				else if (st.item == 2 && !Categories().empty())
+				{
+					st.settings = true, st.screenSince = Clock::now();
+					st.cat = 0, st.prevRow = -1, st.row = 0, st.rowSince = Clock::now();
+					FocusRow(st, 0);
+					TurnCompass(st, 0);
 				}
 				else
 					ShowToast(st, std::string(kItems[st.item]) + " comes in a later update.");
@@ -833,6 +1434,8 @@ namespace wwhd::pause_menu
 				cemuLog_log(LogType::Force, "wwhd: the pause menu's assets weren't found (assets/pause_menu; WWHD_UI_ASSETS): no pause menu");
 				return false;
 			}
+			if (!LoadCategories(a.dir + "/menu-and-settings.json"))
+				cemuLog_log(LogType::Force, "wwhd: the pause menu's settings (menu-and-settings.json) didn't load: no Settings screen");
 			return true;
 		}();
 		return ok;
@@ -883,6 +1486,9 @@ namespace wwhd::pause_menu
 		case SDLK_RIGHT: case SDLK_D: in = Input::Right; break;
 		case SDLK_RETURN: case SDLK_SPACE: case SDLK_KP_ENTER: in = Input::Confirm; break;
 		case SDLK_ESCAPE: case SDLK_BACKSPACE: in = Input::Back; break;
+		case SDLK_Q: in = Input::CatPrev; break;
+		case SDLK_E: in = Input::CatNext; break;
+		case SDLK_R: in = Input::Reset; break;
 		default: return true;                           // the game doesn't see keys while the menu is up
 		}
 		if (!repeat || in != Input::Confirm)
@@ -925,6 +1531,12 @@ namespace wwhd::pause_menu
 			Act(st, Input::Confirm);
 		else if (pressed & B::B)
 			Act(st, Input::Back);
+		else if (pressed & B::L)
+			Act(st, Input::CatPrev);
+		else if (pressed & B::R)
+			Act(st, Input::CatNext);
+		else if (pressed & B::Y)
+			Act(st, Input::Reset);
 		st.wake.notify_one();
 	}
 
@@ -958,6 +1570,35 @@ namespace wwhd::pause_menu
 					if (button == 1)
 						Act(st, Input::Confirm);
 				}
+			}
+			if (button == 2)
+				Act(st, Input::Back);
+		}
+		else if (st.settings && !Categories().empty())
+		{
+			// Settings: a row under the mouse takes the focus; a click on its arrows steps its value (elsewhere on it:
+			// as A); the tab bar's arrows change the category; a right click goes back
+			const Category& cat = Categories()[std::clamp(st.cat, 0, (int)Categories().size() - 1)];
+			for (int i = 0; i < (int)cat.rows.size(); i++)
+			{
+				const float rx = 110, ry = 238 + i * 74.0f;
+				if (dx < rx || dx >= rx + 808 || dy < ry || dy >= ry + 70)
+					continue;
+				if (st.row != i)
+					FocusRow(st, i);
+				if (button == 1)
+				{
+					const float vr = rx + 808 - 20, bx = vr - 36 - 226 - 36;
+					Act(st, dx >= bx && dx < bx + 36 ? Input::Left : dx >= vr - 36 && dx < vr ? Input::Right : Input::Confirm);
+				}
+			}
+			if (button == 1 && dy >= 128 && dy < 188)
+			{
+				const float aw = A().Get("arrow_tab_left").w / s;
+				if (dx >= 84 && dx < 84 + aw)
+					Act(st, Input::CatPrev);
+				else if (dx >= 1290 - aw && dx < 1290)
+					Act(st, Input::CatNext);
 			}
 			if (button == 2)
 				Act(st, Input::Back);

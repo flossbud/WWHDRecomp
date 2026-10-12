@@ -267,11 +267,42 @@ namespace wwhd::ui
 
 	void Canvas::Fill(float x, float y, float w, float h, Colour c, float opacity)
 	{
-		const int x0 = (int)std::lround(x), y0 = (int)std::lround(y), x1 = (int)std::lround(x + w), y1 = (int)std::lround(y + h);
-		const float a = c.a / 255.0f * opacity;
+		const int x0 = std::max({ (int)std::lround(x), 0, m_cx0 }), y0 = std::max({ (int)std::lround(y), 0, m_cy0 });
+		const int x1 = std::min({ (int)std::lround(x + w), m_w, m_cx1 }), y1 = std::min({ (int)std::lround(y + h), m_h, m_cy1 });
+		const float af = c.a / 255.0f * std::clamp(opacity, 0.0f, 1.0f);
+		const int a = (int)(af * 255 + 0.5f), ia = 255 - a;
+		if (!a)
+			return;
+		const int cr = c.r * a, cg = c.g * a, cb = c.b * a;
+		for (int yy = y0; yy < y1; yy++)
+		{
+			uint32* row = &m_px[(size_t)yy * m_w];
+			for (int xx = x0; xx < x1; xx++)
+			{
+				uint32& d = row[xx];
+				if (A(d) == 255)
+					d = Pack((cr + R(d) * ia) / 255, (cg + G(d) * ia) / 255, (cb + B(d) * ia) / 255, 255);
+				else
+					Blend(xx, yy, c, af);
+			}
+		}
+	}
+
+	void Canvas::RoundRect(float x, float y, float w, float h, Colour fill, Colour ring, float ringW, float opacity)
+	{
+		const float r = h / 2;
+		const int x0 = (int)std::floor(x), y0 = (int)std::floor(y), x1 = (int)std::ceil(x + w), y1 = (int)std::ceil(y + h);
 		for (int yy = std::max(y0, 0); yy < std::min(y1, m_h); yy++)
 			for (int xx = std::max(x0, 0); xx < std::min(x1, m_w); xx++)
-				Blend(xx, yy, c, a);
+			{
+				const float px = xx + 0.5f - x, py = yy + 0.5f - y;
+				const float cx = std::clamp(px, r, w - r), d = std::sqrt((px - cx) * (px - cx) + (py - r) * (py - r));
+				if (d > r + 0.5f)
+					continue;
+				const float edge = std::clamp(r + 0.5f - d, 0.0f, 1.0f);
+				const Colour col = d > r - ringW ? ring : fill;
+				Blend(xx, yy, col, col.a / 255.0f * opacity * edge);
+			}
 	}
 
 	void Canvas::Draw(const Image& img, float x, float y, float opacity, bool flipX, bool flipY)
@@ -398,19 +429,30 @@ namespace wwhd::ui
 			return;
 		const int x0 = (int)std::lround(x), y0 = (int)std::lround(y), x1 = (int)std::lround(x + w), y1 = (int)std::lround(y + h);
 		const int iox = (int)std::lround(ox), ioy = (int)std::lround(oy);
-		for (int yy = std::max(y0, 0); yy < std::min(y1, m_h); yy++)
+		const int k = (int)(std::clamp(opacity, 0.0f, 1.0f) * 256 + 0.5f);
+		const int xa = std::max({ x0, 0, m_cx0 }), xb = std::min({ x1, m_w, m_cx1 });
+		for (int yy = std::max({ y0, 0, m_cy0 }); yy < std::min({ y1, m_h, m_cy1 }); yy++)
 		{
 			int sj = ((yy - y0 - ioy) % img.h + img.h) % img.h;
 			if (flipY)
 				sj = img.h - 1 - sj;
-			for (int xx = std::max(x0, 0); xx < std::min(x1, m_w); xx++)
+			const uint32* src = &img.px[(size_t)sj * img.w];
+			uint32* dst = &m_px[(size_t)yy * m_w];
+			int si = ((xa - x0 - iox) % img.w + img.w) % img.w;
+			for (int xx = xa; xx < xb; xx++, si = si + 1 == img.w ? 0 : si + 1)
 			{
-				int si = ((xx - x0 - iox) % img.w + img.w) % img.w;
-				if (flipX)
-					si = img.w - 1 - si;
-				const uint32 p = img.px[(size_t)sj * img.w + si];
-				if (A(p))
-					Blend(xx, yy, { (uint8)R(p), (uint8)G(p), (uint8)B(p) }, A(p) / 255.0f * opacity);
+				const uint32 p = src[flipX ? img.w - 1 - si : si];
+				const int a = A(p) * k >> 8;
+				if (!a)
+					continue;
+				uint32& d = dst[xx];
+				if (A(d) != 255)
+				{
+					Blend(xx, yy, { (uint8)R(p), (uint8)G(p), (uint8)B(p) }, a / 255.0f);
+					continue;
+				}
+				const int ia = 255 - a;
+				d = Pack((R(p) * a + R(d) * ia) / 255, (G(p) * a + G(d) * ia) / 255, (B(p) * a + B(d) * ia) / 255, 255);
 			}
 		}
 	}

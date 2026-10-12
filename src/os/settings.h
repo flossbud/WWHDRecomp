@@ -25,6 +25,29 @@ namespace wwhd::os::settings
 	// a note on an option's line, from the part that reads it ("off: the display runs at 60 Hz"); "" removes it
 	void SetNote(const char* key, const std::string& note);
 
+	// The pause menu's Settings (t-pausemenu M2): an option as its rows show it. Option 0 is the preset (values auto,
+	// performance, quality); Find gives an option's number by its switch (-1: none)
+	struct OptionView
+	{
+		std::string key, label;
+		std::vector<std::string> values, shown;     // the switch's values, and as the debug menu shows them
+		int current = 0;                            // the value set (in use, or at the next start)
+		int atStart = 0;                            // the value the program started with
+		std::string atStartValue;                   // the same as the switch's text (the preset: as resolved)
+		int def = 0;                                // the program's default
+		bool live = false;                          // applied at once (else at the next start)
+		bool fromEnv = false;                       // the launcher's: the menu can't change it
+		bool active = false;                        // the file is in use (else nothing is saved)
+		std::string performance;                    // its value in the Performance preset ("": no preset's)
+		std::string note;                           // SetNote's
+		bool custom = false;                        // the preset: an option it covers has a line of its own
+		std::string resolved, autoWhy;              // the preset: what it resolves to, and why Auto picked it
+	};
+	int Find(const std::string& key);
+	OptionView View(int option);
+	void Set(int option, int value);               // to that value (an index into values), saved at once
+	void ResetToDefaults(const std::vector<std::string>& keys);   // their lines dropped (the preset's own values back)
+
 	// what applies live: the event loop takes the requests (window_system.cpp): the display (fullscreen, window size;
 	// width 0 when no size is set) and vsync (the swapchain rebuilt); true when either changed
 	bool TakeWindowRequest(bool& fullscreen, int& width, int& height, bool& vsync);

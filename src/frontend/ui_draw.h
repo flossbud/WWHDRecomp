@@ -60,6 +60,8 @@ namespace wwhd::ui
 		void Fill(float x, float y, float w, float h, Colour c, float opacity = 1.0f);
 		// an image at (x, y) w x h (scaled when the size differs; cached by the caller), with an opacity, mirrored
 		void Draw(const Image& img, float x, float y, float opacity = 1.0f, bool flipX = false, bool flipY = false);
+		// a pill (ends rounded to its half height), filled, its outer ringW pixels in the ring's colour, edges smoothed
+		void RoundRect(float x, float y, float w, float h, Colour fill, Colour ring, float ringW, float opacity = 1.0f);
 		// the whole canvas tinted towards a colour by its alpha times the opacity (a scrim)
 		void Tint(Colour c, float opacity);
 		// an opaque image's columns x0..x1 copied in at (x, y) (a layer drawn earlier; the clip's left and right apply)

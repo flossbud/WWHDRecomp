@@ -77,6 +77,13 @@ namespace
 		{ "WWHD_FPS_OVERLAY", "FPS overlay", { { "0", "off" }, { "1", "FPS" }, { "2", "FPS + frame time" } }, true, nullptr },
 		{ "WWHD_CORES", "CPU threads", { { "3", "3" }, { "1", "1" } }, false, "3" },
 		{ "WWHD_LAZY_DRAWDONE", "Lazy DrawDone", { { "1", "on" }, { "0", "off" } }, false, "1" },
+		// diagnostics (the pause menu's Diagnostics tab): the renderer's and the runtime's own speed-ups, each on by default,
+		// off only to rule one out when something looks wrong
+		{ "WWHD_WRITE_WATCH", "Texture write-watch", { { "1", "on" }, { "0", "off" } }, false, nullptr },
+		{ "WWHD_VTX_DEDUPE", "Vertex dedupe", { { "1", "on" }, { "0", "off" } }, false, nullptr },
+		{ "WWHD_SURFACE_FIT", "Surface fit", { { "1", "on" }, { "0", "off" } }, false, nullptr },
+		{ "WWHD_BARRIERS", "Precise barriers", { { "1", "on" }, { "all", "off" } }, false, nullptr },
+		{ "WWHD_CLEAR_LOADOP", "Clears as load ops", { { "1", "on" }, { "0", "off" } }, false, nullptr },
 	};
 	constexpr const char* kPresetKey = "WWHD_PRESET";
 	const char* const kPresets[] = { "auto", "performance", "quality" };
@@ -425,6 +432,113 @@ namespace wwhd::os::settings
 			else if (strcmp(o.key, "WWHD_FULLSCREEN") == 0 || strcmp(o.key, "WWHD_WINDOW_SIZE") == 0)
 				s_windowChanged = true;                      // the FPS overlay's reads the switch itself
 		}
+	}
+
+	int Find(const std::string& key)
+	{
+		if (key == kPresetKey)
+			return 0;
+		for (size_t i = 0; i < kOptions.size(); i++)
+			if (key == kOptions[i].key)
+				return (int)i + 1;
+		return -1;
+	}
+
+	OptionView View(int option)
+	{
+		std::lock_guard lock(s_lock);
+		OptionView v;
+		v.active = s_active;
+		if (option == 0)
+		{
+			v.key = kPresetKey, v.label = "Preset";
+			v.values = { "auto", "performance", "quality" }, v.shown = { "Auto", "Performance", "Quality" };
+			const std::string chosen = PresetChosen();
+			v.current = chosen == "performance" ? 1 : chosen == "quality" ? 2 : 0;
+			v.custom = !s_presetFromEnv && Custom();
+			v.resolved = Resolve(chosen);
+			v.atStartValue = s_presetAtStart;
+			v.fromEnv = s_presetFromEnv;
+			v.autoWhy = s_autoWhy;
+			return v;
+		}
+		if (option < 1 || option > (int)kOptions.size())
+			return v;
+		const Option& o = kOptions[option - 1];
+		v.key = o.key, v.label = o.label, v.live = o.live, v.def = o.def;
+		for (const Value& x : o.values)
+			v.values.push_back(x.value), v.shown.push_back(x.shown);
+		v.fromEnv = s_fromEnv.count(o.key) != 0;
+		const std::string cur = v.fromEnv ? s_atStart[o.key] : Current(o);
+		v.current = IndexOf(o, cur);
+		v.atStartValue = s_atStart[o.key];
+		v.atStart = IndexOf(o, v.atStartValue);
+		v.performance = o.performance ? o.performance : "";
+		if (auto n = s_notes.find(o.key); n != s_notes.end())
+			v.note = n->second;
+		return v;
+	}
+
+	void Set(int option, int value)
+	{
+		const OptionView v = View(option);
+		const int n = (int)v.values.size();
+		if (!n || value < 0 || value >= n || value == v.current)
+			return;
+		if (option == 0)
+		{
+			// the preset: straight to the chosen one (its options' own lines dropped), from Custom too
+			std::lock_guard lock(s_lock);
+			if (!s_active || s_presetFromEnv)
+				return;
+			s_file[kPresetKey] = kPresets[value];
+			for (const Option& o : kOptions)
+				if (o.performance)
+					s_file.erase(o.key);
+			Save();
+			return;
+		}
+		Cycle(option, ((value - v.current) % n + n) % n);
+	}
+
+	void ResetToDefaults(const std::vector<std::string>& keys)
+	{
+		for (const std::string& k : keys)
+		{
+			const int i = Find(k);
+			if (i > 0)
+			{
+				// a preset's option goes back to what the preset gives it (its line dropped), any other to its default
+				std::lock_guard lock(s_lock);
+				if (!s_active || s_fromEnv.count(k))
+					continue;
+				const Option& o = kOptions[i - 1];
+				const std::string target = o.performance && Resolve(PresetChosen()) == "performance" ? o.performance : Default(o);
+				const bool changed = Current(o) != target;
+				s_file.erase(k);
+				if (changed && o.live)
+				{
+					setenv(o.key, target.c_str(), 1);
+					if (k == "WWHD_VSYNC")
+						s_vsyncChanged = true;
+					else if (k == "WWHD_FULLSCREEN" || k == "WWHD_WINDOW_SIZE")
+						s_windowChanged = true;
+				}
+			}
+			else if (i == 0)
+			{
+				std::lock_guard lock(s_lock);
+				if (!s_active || s_presetFromEnv)
+					continue;
+				s_file.erase(kPresetKey);
+				for (const Option& o : kOptions)
+					if (o.performance)
+						s_file.erase(o.key);
+			}
+		}
+		std::lock_guard lock(s_lock);
+		if (s_active)
+			Save();
 	}
 
 	bool TakeWindowRequest(bool& fullscreen, int& width, int& height, bool& vsync)
