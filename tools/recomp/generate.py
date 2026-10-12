@@ -143,7 +143,10 @@ rules, for the code of processes that run every frame with a time step h
                signed constant: g_Counter.mTimer (counted in the whole tick's draw) seen by a half step a
                tick ahead (N = -IMM/2 on its count x IMM: half a tick back), by a half tick's draw the same as
                the whole tick's draw (+IMM/2: half a tick on), or a once-a-tick test kept off the half tick
-               (+0x200 on count & 0x1FF, which then never equals 0x1FF)
+               (+0x200 on count & 0x1FF, which then never equals 0x1FF). At N steps a tick (U2) N/on is N 2i/N on
+               step i (half a tick on at N 2: a draw's i/N of a tick on), N/back N 2(N - i)/N (an execute's (N - i)/N
+               of a tick back), N/key N + (i - 1)(N >> 3) (a key of each step's own); a plain N is N on every step
+               after the first (a test kept off them)
   OP@REG       the same, for this instruction only: REG has its value back afterwards (unless the
                instruction writes it), as in `x += (t - x) * k` with k@f2 on its fmadds
   note:REG     after the instruction, the float REG is noted (g_rtNote) for an arc@ later in the step
@@ -291,8 +294,7 @@ class Program:
 
     STEP_OPS = {"*h": "rt_step_mul", "/h": "rt_step_div", "k": "rt_step_approach", "d": "rt_step_damp",
                 "k75": "rt_step_approach75", "*hh": "rt_step_mul(rt_step_mul({}))", "surf": "rt_step_surface",
-                "lag": "({} - (RT_WHOLE_TICK() ? 0.5 : 0.0))", "lagdown": "({} + (RT_WHOLE_TICK() ? 0.5 : 0.0))",
-                "drawlag": "({} - 0.5)"}
+                "lag": "({} - rt_step_lag())", "lagdown": "({} + rt_step_lag())", "drawlag": "({} - rt_step_drawlag())"}
 
     def load_tick_rules(self, path):
         """address -> (rule, argument, expected instruction text, what): see the docstring. rule is
@@ -336,8 +338,9 @@ class Program:
                     assert not arg, f"tick_rules.txt:{n}: {kind} takes no argument"
                     value = None
                 elif kind == "halfadd":
-                    assert re.fullmatch(r"-?(0x[0-9a-fA-F]+|[0-9]+)", arg), f"tick_rules.txt:{n}: halfadd:N takes a signed constant"
-                    value = int(arg, 0)
+                    m = re.fullmatch(r"(-?(?:0x[0-9a-fA-F]+|[0-9]+))(?:/(on|back|key))?", arg)
+                    assert m, f"tick_rules.txt:{n}: halfadd:N[/on|/back|/key] takes a signed constant"
+                    value = (int(m.group(1), 0), m.group(2))
                 elif kind in ("whole", "late", "hold", "tick"):
                     value = None
                     if arg:
@@ -737,20 +740,21 @@ def apply_tick_rule(rule, i, lines):
         return lines + [f"if (RT_STEPPED()) GPR({i.rD}) = GPR({i.rD}) - {imm} + rt_step_split({imm});   // step rule: {what}"]
     if kind == "halfadd":
         dest = i.rA if i.op in HALFADD_RA_OPS else i.rT if i.op in HALFADD_LOADS else i.rD
-        return lines + [f"if (g_rtHalfTick) GPR({dest}) = GPR({dest}) + {emit.hx(arg & 0xFFFFFFFF)};   // step rule: {what}"]
+        n, mode = arg
+        add = emit.hx(n & 0xFFFFFFFF) if mode is None else f"rt_step_halfadd_{mode}({n})"
+        return lines + [f"if (g_rtHalfTick) GPR({dest}) = GPR({dest}) + {add};   // step rule: {what}"]
     if kind == "drawlagi":
-        half = emit.hx((int(i.simm / 2)) & 0xFFFFFFFF)
-        return lines + [f"if (RT_SIXTY() && RT_WHOLE_TICK()) GPR({i.rD}) = GPR({i.rD}) - {half};   // step rule: {what}"]
+        # at 60 fps, in step i's draw of N, rD lags by IMM (N - 1 - i)/N (IMM/2 in the whole tick's at N 2)
+        return lines + [f"if (RT_SIXTY()) GPR({i.rD}) = GPR({i.rD}) - rt_step_lagi({i.simm});   // step rule: {what}"]
     if kind == "lagi":
-        half = emit.hx((int(i.simm / 2)) & 0xFFFFFFFF)
-        return lines + [f"if (RT_STEPPED() && RT_WHOLE_TICK()) GPR({i.rD}) = GPR({i.rD}) - {half};   // step rule: {what}"]
+        return lines + [f"if (RT_STEPPED()) GPR({i.rD}) = GPR({i.rD}) - rt_step_lagi({i.simm});   // step rule: {what}"]
     if kind == "exact":
         src = (f"\tFPR({i.frD}).fp0 = (double)g_rtNote; FPR({i.frD}).fp1 = FPR({i.frD}).fp0;" if arg == "note"
                else f"\tFPR({i.frD}) = {reg_expr(arg)};")
         return [f"if (RT_STEPPED()) {{   // step rule: {what}", src, "} else {"] + ["\t" + l for l in lines] + ["}"]
     if kind == "lagw":
         return ([f"{{ const sint32 lagw_ = (sint32)GPR({arg[1:]});   // step rule: {what}"] + ["\t" + l for l in lines]
-                + [f"\tif (RT_STEPPED() && RT_WHOLE_TICK()) GPR({i.rD}) = GPR({i.rD}) - (uint32)(lagw_ / 2);", "}"])
+                + [f"\tif (RT_STEPPED()) GPR({i.rD}) = GPR({i.rD}) - rt_step_lagi(lagw_);", "}"])
     if kind == "keep":
         dest = f"GPR({i.rD})" if i.op in ("addi", "addic", "add") else f"FPR({i.frD})"
         return ([f"if (RT_WHOLE_TICK()) {{   // step rule: {what}"] + ["\t" + l for l in lines]

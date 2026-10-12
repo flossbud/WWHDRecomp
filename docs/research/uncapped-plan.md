@@ -159,6 +159,30 @@ So the half frame costs about what the whole does, not 0.78 of it (the draws are
 - **The Deck:** QA measured the Deck OLED at 36 fps on en-tn and ~50 at the start of continue at 60 (2026-10-11), so
   the OLED's 90 try is off; it's revisited when the Deck holds 60.
 
+## U2: the rules at N (session top, 2026-10-11)
+
+`split`/`ssplit`/`spliti` were N-way already (U1's `rt_step_split`), and `keep` and `eq/gt/ltwhole` already read "not
+step 0" (`g_rtHalfTick` is every step but the first). U2 adds the rest, each identical at N 2 (checks 15 captures PSNR
+inf, regress da06a4ee):
+- the lags (ppc_ops.h `rt_step_lag`, `rt_step_lagi`, `rt_step_drawlag`): a count kept to whole ticks, seen on step i,
+  is (N - 1 - i)/N of a count ahead of the steps: `lag`, `lagi`, `lagw` and `drawlagi` take that back (1/2 on step 0
+  at N 2, 0 on the last), `lagdown` gives it; `drawlag` (a count the whole tick's draw already moved on, in a later
+  step's draw) takes (N - i)/N back;
+- `halfadd`'s 15 rules by kind (`halfadd:N/on|/back|/key`, tick_rules/mtimer.txt): the draws' flash and chain angles
+  i/N of a tick on, the Hero's Charm's bob and turn (an execute) (N - i)/N back, Zunari's flags' cloth keys one per
+  step (with one key for steps 1..N-1 the cloths would move on one step of N); the ship's 0x1FF test a plain constant;
+- the step-doubling trial at N steps (`WWHD_STEPS=N` at 30: N steps of 1/N, the draw between them with
+  `WWHD_60FPS_TRIAL_DRAW`), and `tools/sixty/tests/trial_n.sh ROUTE FROM TO [N]`: the trial of every converted process
+  at 2 and at N, and the instructions that differ from the game's step at N only.
+
+The audit (after U3; tour3, sail, warp, hook, bombs and cuts, 200-400 ticks each): of 1,100-1,250 instructions that
+differ at 2 steps (today's, open-coded or rounding), 30-85 a route differ at 3 only, and none at a rule: the clouds'
+band wrapping on another step (positions a period apart), float rounding of large coordinates (half a unit on 300,000)
+and of 1/3 steps (an animation's frame at 40.0 of a 40-frame loop instead of 0), matrices and other heap scratch, and
+two override sites (session bottom's: the pots' `MoveC` settling, and the camera, whose steps before the last are for
+show and which the trial compares without the camera tick's restore). At N 4 (tour3) 6 more than at 3, each on 3 ticks: heap
+bookkeeping and an NPC's flag byte.
+
 ## What doesn't go to N steps (and stays on whole ticks)
 
 The whole-tick systems stay whole: process lifecycle and counters, input, the HD UI's update and the game manager (the

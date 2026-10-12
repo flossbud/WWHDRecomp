@@ -1235,26 +1235,35 @@ namespace
 		g_rtStoreCensus = TrialStore;
 		g_rtJournalOn = true;
 
-		s_trialPhase = 1;                               // two half steps, as at 60 fps
-		g_rtStep = 0.5f;
+		// two half steps, as at 60 fps; with WWHD_STEPS=N (U1) N steps of 1/N, as at 30 N fps (U2's trial at N)
+		const uint32 steps = g_rtSteps;
+		s_trialPhase = 1;
+		g_rtStep = 1.0f / steps;
 		s_converting++;
-		fn(ctx);
-		regs.Restore(ctx);
 		static const bool draw = [] { const char* e = getenv("WWHD_60FPS_TRIAL_DRAW"); return e && atoi(e) == 1; }();
-		if (draw && fn == orig_f_025DE58C)
+		for (uint32 i = 0; i < steps; i++)
 		{
-			s_converting--;                             // the draw as at 60 fps: a step of 1, not converting
-			g_rtStep = 1.0f;
-			orig_f_025DE2CC(ctx);                       // fpcM_Draw(the same process)
-			regs.Restore(ctx);
-			g_rtStep = 0.5f;
-			s_converting++;
+			if (i > 0)
+			{
+				regs.Restore(ctx);
+				if (draw && fn == orig_f_025DE58C)
+				{
+					s_converting--;                     // the draw as at 60 fps: a step of 1, not converting
+					g_rtStep = 1.0f;
+					orig_f_025DE2CC(ctx);               // fpcM_Draw(the same process)
+					regs.Restore(ctx);
+					g_rtStep = 1.0f / steps;
+					s_converting++;
+				}
+				g_rtHalfTick = true;
+				g_rtSubStep = i;
+				g_rtEarlyStep = i + 1 < steps;
+			}
+			fn(ctx);
 		}
-		g_rtHalfTick = true;
-		g_rtSubStep = 1;
-		fn(ctx);
 		g_rtHalfTick = false;
 		g_rtSubStep = 0;
+		g_rtEarlyStep = false;
 		s_converting--;
 		g_rtStep = 1.0f;
 		for (const auto& [b, u] : s_halfLast)

@@ -92,6 +92,40 @@ static inline uint32 rt_step_split(uint32 v)
 	const sint64 n = g_rtSteps, i = g_rtHalfTick ? g_rtSubStep : 0;
 	return (uint32)(sint32)((sint64)s * (n - i) / n - (sint64)s * (n - i - 1) / n);
 }
+// lag (U2): a count kept to whole ticks, seen on step i of N, is (N - 1 - i)/N of a count ahead of where the tick's
+// steps have taken it: lag/lagi/lagw/drawlagi take that much back (1/2 on the whole tick's step at N 2, 0 on the last
+// step), lagdown gives it back; drawlag (a count the whole tick's draw already moved on, in a later step's draw) takes
+// (N - i)/N back (1/2 at N 2). The integer forms truncate, as the game's division (at N 2: IMM/2, as before)
+static inline uint32 rt_step_index() { return g_rtHalfTick ? g_rtSubStep : 0; }
+static inline double rt_step_lag()
+{
+	if (g_rtSteps == 2) [[likely]]
+		return g_rtHalfTick ? 0.0 : 0.5;
+	return (double)(g_rtSteps - 1 - rt_step_index()) / g_rtSteps;
+}
+static inline double rt_step_drawlag()
+{
+	if (g_rtSteps == 2) [[likely]]
+		return 0.5;
+	return (double)(g_rtSteps - rt_step_index()) / g_rtSteps;
+}
+static inline uint32 rt_step_lagi(sint32 v)
+{
+	if (g_rtSteps == 2) [[likely]]
+		return g_rtHalfTick ? 0 : (uint32)(v / 2);
+	return (uint32)(sint32)((sint64)v * (g_rtSteps - 1 - rt_step_index()) / g_rtSteps);
+}
+// halfadd's modes (U2; each is h at N 2): on, a draw's i/N of a tick on (h is half a tick's); back, an execute's
+// (N - i)/N of a tick back; key, a value of each step's own (h + (i - 1)(h >> 3): distinct for i up to 8)
+static inline uint32 rt_step_halfadd_on(sint32 h)
+{
+	return g_rtSteps == 2 ? (uint32)h : (uint32)(sint32)((sint64)h * 2 * rt_step_index() / g_rtSteps);
+}
+static inline uint32 rt_step_halfadd_back(sint32 h)
+{
+	return g_rtSteps == 2 ? (uint32)h : (uint32)(sint32)((sint64)h * 2 * (g_rtSteps - rt_step_index()) / g_rtSteps);
+}
+static inline uint32 rt_step_halfadd_key(uint32 h) { return h + (rt_step_index() - 1) * (h >> 3); }
 extern thread_local constinit float g_rtNote;                 // a value noted by a step rule for a later one in the same step
 // vec@ / arc@: for one call, the vector (three floats) at ea is h of itself; for arc@ (a velocity)
 // y is h y + (1 - h)/2 (y - g_rtNote), g_rtNote its value before gravity was added this step. The
