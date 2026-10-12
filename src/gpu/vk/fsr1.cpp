@@ -194,9 +194,9 @@ void main()
 			return true;
 		}
 
-		VkPipeline Pipeline(VkShaderModule fragment, VkFormat format)
+		VkPipeline Pipeline(VkShaderModule fragment, VkFormat format, bool blend = false)
 		{
-			VkPipeline& p = s_common.pipelines[((uint64)(uintptr_t)fragment << 8) ^ (uint64)format];
+			VkPipeline& p = s_common.pipelines[((uint64)(uintptr_t)fragment << 9) ^ ((uint64)format << 1) ^ (blend ? 1 : 0)];
 			if (p)
 				return p;
 			VkPipelineShaderStageCreateInfo stages[2]{ { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO },
@@ -216,6 +216,13 @@ void main()
 			ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 			VkPipelineColorBlendAttachmentState att{};
 			att.colorWriteMask = 0xF;
+			if (blend)                                           // over what is there, its alpha kept
+			{
+				att.blendEnable = VK_TRUE;
+				att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA, att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+				att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO, att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+				att.colorBlendOp = att.alphaBlendOp = VK_BLEND_OP_ADD;
+			}
 			VkPipelineColorBlendStateCreateInfo cb{ VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
 			cb.attachmentCount = 1;
 			cb.pAttachments = &att;
@@ -242,11 +249,8 @@ void main()
 			return p;
 		}
 
-		// one full-screen pass of `fragment` from `src` (sampled) into `dst` (a colour attachment), with its constants
-		void Pass(VkShaderModule fragment, Image& src, Image& dst, const uint32 (&c)[16])
+		VkDescriptorSet SourceSet(Image& src)
 		{
-			Transition(src, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-			Transition(dst, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 			VkDescriptorSetAllocateInfo ai{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
 			ai.descriptorPool = s.descriptors;
 			ai.descriptorSetCount = 1;
@@ -260,6 +264,15 @@ void main()
 			w.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 			w.pImageInfo = &ii;
 			vkUpdateDescriptorSets(s.device, 1, &w, 0, nullptr);
+			return set;
+		}
+
+		// one full-screen pass of `fragment` from `src` (sampled) into `dst` (a colour attachment), with its constants
+		void Pass(VkShaderModule fragment, Image& src, Image& dst, const uint32 (&c)[16])
+		{
+			Transition(src, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			Transition(dst, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+			VkDescriptorSet set = SourceSet(src);
 			VkRenderingAttachmentInfo a{ VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
 			a.imageView = dst.view;
 			a.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -312,6 +325,34 @@ namespace wwhd::gpu::fullscreen
 	{
 		EndRendering();
 		fsr1::Pass(fragment, src, dst, c);
+		s.bound.valid = false;
+	}
+
+	void Blend(VkShaderModule fragment, Image& src, VkImageView dst, VkFormat format, VkRect2D rect, const uint32 (&c)[16])
+	{
+		using namespace fsr1;
+		EndRendering();
+		Transition(src, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		VkDescriptorSet set = SourceSet(src);
+		VkRenderingAttachmentInfo a{ VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+		a.imageView = dst;
+		a.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		a.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+		a.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		VkRenderingInfo ri{ VK_STRUCTURE_TYPE_RENDERING_INFO };
+		ri.renderArea = rect;
+		ri.layerCount = 1;
+		ri.colorAttachmentCount = 1;
+		ri.pColorAttachments = &a;
+		vkCmdBeginRendering(s.cmd, &ri);
+		vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, Pipeline(fragment, format, true));
+		vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s_common.layout, 0, 1, &set, 0, nullptr);
+		vkCmdPushConstants(s.cmd, s_common.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 64, c);
+		VkViewport v{ (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
+		vkCmdSetViewport(s.cmd, 0, 1, &v);
+		vkCmdSetScissor(s.cmd, 0, 1, &rect);
+		vkCmdDraw(s.cmd, 3, 1, 0, 0);
+		vkCmdEndRendering(s.cmd);
 		s.bound.valid = false;
 	}
 }

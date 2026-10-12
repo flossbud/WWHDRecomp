@@ -1992,9 +1992,20 @@ void f_025ABF00(PPCInterpreter_t* __restrict ctx)
 // fopScnM_ChangeReq(scene, proc, ?, fade, ?) (f_025DC86C): the scene asked for, for the frame skip (play only);
 // WWHD_DEBUG_BOOT_LOG=1 logs each (a probe: logo -> 8 the
 // title at frame 54, the title -> 9 the file select at A, the file select -> 7 play at Start)
+namespace
+{
+	std::atomic<uint32> s_lastScene{ 0 };             // the last scene asked for (0: none yet, the logo)
+	std::atomic<uint32> s_titleRequests{ 0 };         // the title's (proc 8) asked for so far
+	std::atomic<uint32> s_playStarts{ 0 };            // play (proc 7) asked for from another scene: the pause menu's hint
+}
 void f_025DC86C(PPCInterpreter_t* __restrict ctx)
 {
-	wwhd::pacing::SceneRequested(GPR(4));             // the frame skip runs only in play (pacing.cpp)
+	wwhd::pacing::SceneRequested(GPR(4));
+	if (GPR(4) == 7 && s_lastScene.load(std::memory_order_relaxed) != 7)
+		s_playStarts.fetch_add(1, std::memory_order_relaxed);
+	s_lastScene.store(GPR(4), std::memory_order_relaxed);
+	if (GPR(4) == 8)
+		s_titleRequests.fetch_add(1, std::memory_order_relaxed);             // the frame skip runs only in play (pacing.cpp)
 	if (static const bool log = getenv("WWHD_DEBUG_BOOT_LOG") != nullptr; log)
 		cemuLog_log(LogType::Force, "wwhd boot: ChangeReq({:08x}, {:x}, {:x}, {:x}, {:x}) at frame {}, lr {:08x}", GPR(3), GPR(4), GPR(5), GPR(6), GPR(7),
 			wwhd::rt::GameFrame(wwhd::os::SwapCount()), ctx->spr.LR);
@@ -5080,4 +5091,33 @@ namespace
 		regs.Restore(ctx);
 	}
 	const bool s_gameSaveSet = [] { wwhd::state::SetGameSave(GameSave, 0x101F852Cu); return true; }();
+}
+
+// The pause menu's Quit to the title screen (t-pausemenu M4): the game's own soft reset. Its reset data's pointer is at
+// 0x101F4974 (mDoRst), and a scene's execute (the play scene's f_025AF8A0, the menus' f_025ADF50) calls
+// dComIfG_resetToOpening (f_025202F8) when no overlap is up: with the data's first word set (mDoRst::isReset) it asks
+// for the opening scene (dComIfG_changeOpeningScene f_02520230: proc 8, the title on sea_T) and mutes the music over 30
+// frames, as the GameCube's three-button reset. Set from the menu's thread while the game is held; it goes there once
+// the menu lets it go.
+namespace wwhd::sixty
+{
+	bool TitleAvailable()
+	{
+		const uint32 scene = s_lastScene.load(std::memory_order_relaxed);
+		return scene != 0 && scene != 8 && rd32(0x101F4974u) != 0;   // not before the title, nor on it
+	}
+
+	uint32 TitleRequests() { return s_titleRequests.load(std::memory_order_relaxed); }
+
+	uint32 PlayStarts() { return s_playStarts.load(std::memory_order_relaxed); }
+
+	bool ReturnToTitle()
+	{
+		const uint32 rst = rd32(0x101F4974u);
+		if (!rst || !TitleAvailable())
+			return false;
+		wr32(rst, 1u);
+		cemuLog_log(LogType::Force, "wwhd: back to the title screen from the pause menu (frame {})", wwhd::rt::GameFrame(wwhd::os::SwapCount()));
+		return true;
+	}
 }

@@ -452,6 +452,7 @@ static void PrepareShaders(SDL_Window* window)
 				SDL_SetWindowSize(window, rw, rh);
 			}
 		}
+		wwhd::pause_menu::Begin();                                 // its thread (the Pause prompt at play's start), once
 		bool typing = wwhd::os::swkbd::Current().open;
 		if (typing != SDL_TextInputActive(window))
 			typing ? SDL_StartTextInput(window) : SDL_StopTextInput(window);

@@ -30,6 +30,7 @@ namespace wwhd::gpu
 			VkSurfaceKHR surface = VK_NULL_HANDLE;
 			VkSwapchainKHR chain = VK_NULL_HANDLE;
 			std::vector<VkImage> images;
+			std::vector<VkImageView> views;                      // per image, for the blended panels (none: the usage unsupported)
 			VkFormat format = VK_FORMAT_UNDEFINED;
 			bool srgb = false;
 			uint32 width = 0, height = 0;
@@ -55,6 +56,8 @@ namespace wwhd::gpu
 		Panel s_overlay;                        // the system's screens, in the TV image's 1920x1080 frame (SetOverlay)
 		Panel s_fps;                            // the FPS overlay, in the window's pixels (SetFpsPanel)
 		Panel s_menu;                           // the pause menu, the whole window (SetMenuPanel)
+		Panel s_hint;                           // the pause menu's "Pause" prompt, in the window's pixels, blended (SetHintPanel)
+		std::atomic<float> s_hintOpacity{ 0 };
 		uint32 s_menuShown = 0;                 // the menu panel's version last presented while held
 		std::atomic<double> s_frameX{ 0 }, s_frameY{ 0 }, s_frameScale{ 0 };   // where the 1920x1080 frame was last drawn
 
@@ -303,7 +306,8 @@ namespace wwhd::gpu
 			ci.imageExtent = extent;
 			ci.imageArrayLayers = 1;
 			probe::s_swapSrc = probe::Mode() >= 2 && (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
-			ci.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | (probe::s_swapSrc ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0);
+			ci.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | (probe::s_swapSrc ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0) |
+				(caps.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);   // the blended panels (DrawHint)
 			ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 			ci.preTransform = caps.currentTransform;
 			ci.compositeAlpha = (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) ? VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR
@@ -320,6 +324,9 @@ namespace wwhd::gpu
 			for (VkSemaphore sem : w.rendered)
 				vkDestroySemaphore(s.device, sem, nullptr);
 			w.rendered.clear();
+			for (VkImageView v : w.views)
+				vkDestroyImageView(s.device, v, nullptr);
+			w.views.clear();
 			if (w.chain)
 				vkDestroySwapchainKHR(s.device, w.chain, nullptr);  // nothing uses it now
 			w.chain = chain;
@@ -328,6 +335,18 @@ namespace wwhd::gpu
 			vkGetSwapchainImagesKHR(s.device, w.chain, &n, w.images.data());
 			w.format = chosen.format;
 			w.srgb = srgb;
+			if (ci.imageUsage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
+				for (VkImage img : w.images)
+				{
+					VkImageViewCreateInfo vi{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+					vi.image = img;
+					vi.viewType = VK_IMAGE_VIEW_TYPE_2D;
+					vi.format = w.format;
+					vi.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+					VkImageView v;
+					Check(vkCreateImageView(s.device, &vi, nullptr, &v), "vkCreateImageView");
+					w.views.push_back(v);
+				}
 			w.width = extent.width;
 			w.height = extent.height;
 			Log(fmt::format("window: {}x{}, {} images, format {}, {}", w.width, w.height, n, (int)w.format,
@@ -363,17 +382,22 @@ namespace wwhd::gpu
 		SetPanel(s_menu, 0, 0, w, h, std::move(rgba));
 	}
 
+	void SetHintPanel(sint32 x, sint32 y, uint32 w, uint32 h, std::vector<uint32> rgba)
+	{
+		SetPanel(s_hint, x, y, w, h, std::move(rgba));
+	}
+
+	void SetHintOpacity(float opacity) { s_hintOpacity.store(opacity, std::memory_order_relaxed); }
+
 	uint64 ShownFrames() { return s_shown.load(std::memory_order_relaxed); }
 
 	double TakeLongestShownInterval() { return s_longestNs.exchange(0, std::memory_order_relaxed) / 1e6; }
 
-	// a panel into the swapchain image (in TRANSFER_DST layout): place(w, h, x0, y0, x1, y1) gives its rectangle there
-	template<typename Place>
-	static void DrawPanel(Panel& p, VkImage target, VkFilter filter, Place place)
+	// a panel's pixels into its image when they changed (p.lock held; false: no pixels)
+	static bool UploadPanel(Panel& p, VkImageUsageFlags usage = 0)
 	{
-		std::unique_lock lock(p.lock);
 		if (!p.w)
-			return;
+			return false;
 		VkFormat format = w.srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;   // keep its bytes, like the TV image
 		Image& img = p.image;
 		if (!img.image || img.width != p.w || img.height != p.h || img.format != format)
@@ -383,7 +407,7 @@ namespace wwhd::gpu
 				WaitPending();                                   // the lazy path: the last frame's submit may still blit it
 				DestroyImage(img);
 			}
-			img = CreateImage(format, VK_IMAGE_ASPECT_COLOR_BIT, p.w, p.h, 0);
+			img = CreateImage(format, VK_IMAGE_ASPECT_COLOR_BIT, p.w, p.h, usage);
 			p.uploaded = 0;
 		}
 		if (p.uploaded != p.version)
@@ -399,6 +423,17 @@ namespace wwhd::gpu
 			vkCmdCopyBufferToImage(s.cmd, s.ring.buffer, img.image, img.layout, 1, &c);
 			p.uploaded = p.version;
 		}
+		return true;
+	}
+
+	// a panel into the swapchain image (in TRANSFER_DST layout): place(w, h, x0, y0, x1, y1) gives its rectangle there
+	template<typename Place>
+	static void DrawPanel(Panel& p, VkImage target, VkFilter filter, Place place)
+	{
+		std::unique_lock lock(p.lock);
+		if (!UploadPanel(p))
+			return;
+		Image& img = p.image;
 		sint32 x0, y0, x1, y1;
 		place(p, x0, y0, x1, y1);
 		lock.unlock();
@@ -448,6 +483,41 @@ namespace wwhd::gpu
 		DrawPanel(s_menu, target, VK_FILTER_LINEAR, [&](const Panel& p, sint32& x0, sint32& y0, sint32& x1, sint32& y1) {
 			x0 = 0, y0 = 0, x1 = (sint32)w.width, y1 = (sint32)w.height;
 		});
+	}
+
+	// the "Pause" prompt blended over the window image at its opacity (a pass of its own: the panels above are copies);
+	// nothing where the swapchain can't be drawn into
+	static void DrawHint(VkImage target)
+	{
+		const float op = s_hintOpacity.load(std::memory_order_relaxed);
+		if (op <= 0.004f || w.index >= w.views.size())
+			return;
+		static VkShaderModule fragment = fullscreen::Fragment(R"(#version 450
+layout(set = 0, binding = 0) uniform sampler2D src;
+layout(push_constant) uniform Constants { vec4 rect; vec4 k; } p;
+layout(location = 0) out vec4 outColor;
+void main()
+{
+	vec4 c = texture(src, (gl_FragCoord.xy - p.rect.xy) / p.rect.zw);
+	outColor = vec4(c.rgb, c.a * p.k.x);
+}
+)", "pause prompt");
+		if (!fragment)
+			return;
+		std::unique_lock lock(s_hint.lock);
+		if (!UploadPanel(s_hint, VK_IMAGE_USAGE_SAMPLED_BIT))
+			return;
+		const sint32 x0 = std::max(0, s_hint.x), y0 = std::max(0, s_hint.y);
+		const sint32 x1 = std::min((sint32)w.width, s_hint.x + (sint32)s_hint.w), y1 = std::min((sint32)w.height, s_hint.y + (sint32)s_hint.h);
+		if (x1 <= x0 || y1 <= y0)
+			return;
+		const float r[8] = { (float)s_hint.x, (float)s_hint.y, (float)s_hint.w, (float)s_hint.h, op, 0, 0, 0 };
+		uint32 c[16]{};
+		memcpy(c, r, sizeof(r));
+		Barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		fullscreen::Blend(fragment, s_hint.image, w.views[w.index], w.format, { { x0, y0 }, { (uint32)(x1 - x0), (uint32)(y1 - y0) } }, c);
+		lock.unlock();
+		Barrier(target, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 	}
 
 	void SetWindow(Window window)
@@ -558,6 +628,7 @@ namespace wwhd::gpu
 		const double fs = std::min(dw / 1920.0, dh / 1080.0);
 		DrawOverlay(target, x + (dw - (sint32)(1920 * fs)) / 2, y + (dh - (sint32)(1080 * fs)) / 2, fs);
 		DrawFps(target, x, y, dw, dh);
+		DrawHint(target);
 		DrawMenu(target);
 		if (probing)
 			probe::End(target, x, y, dw, dh);

@@ -156,9 +156,18 @@
           "label": "Preset",
           "type": "choice",
           "options": [
-            "Auto",
-            "Performance",
-            "Quality"
+            {
+              "label": "Auto",
+              "value": "auto"
+            },
+            {
+              "label": "Performance",
+              "value": "performance"
+            },
+            {
+              "label": "Quality",
+              "value": "quality"
+            }
           ],
           "default": "Auto",
           "applies": "next game start",
@@ -169,14 +178,38 @@
           "label": "Frame Rate",
           "type": "choice",
           "options": [
-            "30",
-            "40",
-            "50",
-            "60",
-            "90",
-            "120",
-            "150",
-            "Display's"
+            {
+              "label": "30",
+              "value": "30"
+            },
+            {
+              "label": "40",
+              "value": "40"
+            },
+            {
+              "label": "50",
+              "value": "50"
+            },
+            {
+              "label": "60",
+              "value": "60"
+            },
+            {
+              "label": "90",
+              "value": "90"
+            },
+            {
+              "label": "120",
+              "value": "120"
+            },
+            {
+              "label": "150",
+              "value": "150"
+            },
+            {
+              "label": "Display's",
+              "value": "display"
+            }
           ],
           "default": "30 (or 60 — see frameDefault)",
           "applies": "next game start",
@@ -187,13 +220,34 @@
           "label": "Render Scale",
           "type": "choice",
           "options": [
-            "100%",
-            "75%",
-            "67%",
-            "50%",
-            "150%",
-            "200%",
-            "Auto"
+            {
+              "label": "100%",
+              "value": "1"
+            },
+            {
+              "label": "75%",
+              "value": "0.75"
+            },
+            {
+              "label": "67%",
+              "value": "0.67"
+            },
+            {
+              "label": "50%",
+              "value": "0.5"
+            },
+            {
+              "label": "150%",
+              "value": "1.5"
+            },
+            {
+              "label": "200%",
+              "value": "2"
+            },
+            {
+              "label": "Auto",
+              "value": "auto"
+            }
           ],
           "default": "100%",
           "applies": "next game start",
@@ -208,9 +262,18 @@
           "label": "Upscaler",
           "type": "choice",
           "options": [
-            "Bilinear",
-            "FSR 1",
-            "FSR 3"
+            {
+              "label": "Bilinear",
+              "value": "none"
+            },
+            {
+              "label": "FSR 1",
+              "value": "fsr1"
+            },
+            {
+              "label": "FSR 3",
+              "value": "fsr3"
+            }
           ],
           "default": "Bilinear",
           "applies": "next game start",
@@ -221,11 +284,26 @@
           "label": "Frame Generation",
           "type": "choice",
           "options": [
-            "Off",
-            "FSR 3",
-            "Lossless ×2",
-            "Lossless ×3",
-            "Lossless ×4"
+            {
+              "label": "Off",
+              "value": "0"
+            },
+            {
+              "label": "FSR 3",
+              "value": "1"
+            },
+            {
+              "label": "Lossless ×2",
+              "value": "lsfg2"
+            },
+            {
+              "label": "Lossless ×3",
+              "value": "lsfg3"
+            },
+            {
+              "label": "Lossless ×4",
+              "value": "lsfg4"
+            }
           ],
           "default": "Off",
           "applies": "next game start",
@@ -236,10 +314,22 @@
           "label": "Anisotropic Filtering",
           "type": "choice",
           "options": [
-            "Default",
-            "4×",
-            "8×",
-            "16×"
+            {
+              "label": "Default",
+              "value": "0"
+            },
+            {
+              "label": "4×",
+              "value": "4"
+            },
+            {
+              "label": "8×",
+              "value": "8"
+            },
+            {
+              "label": "16×",
+              "value": "16"
+            }
           ],
           "default": "Default",
           "applies": "not confirmed",
@@ -272,8 +362,14 @@
           "label": "Display",
           "type": "choice",
           "options": [
-            "Window",
-            "Fullscreen"
+            {
+              "label": "Window",
+              "value": "0"
+            },
+            {
+              "label": "Fullscreen",
+              "value": "1"
+            }
           ],
           "default": "Window",
           "applies": "immediately",
@@ -284,12 +380,30 @@
           "label": "Resolution",
           "type": "choice",
           "options": [
-            "1920 × 1080",
-            "1280 × 720",
-            "1280 × 800",
-            "1600 × 900",
-            "2560 × 1440",
-            "3840 × 2160"
+            {
+              "label": "1920 × 1080",
+              "value": "1920x1080"
+            },
+            {
+              "label": "1280 × 720",
+              "value": "1280x720"
+            },
+            {
+              "label": "1280 × 800",
+              "value": "1280x800"
+            },
+            {
+              "label": "1600 × 900",
+              "value": "1600x900"
+            },
+            {
+              "label": "2560 × 1440",
+              "value": "2560x1440"
+            },
+            {
+              "label": "3840 × 2160",
+              "value": "3840x2160"
+            }
           ],
           "default": "1920 × 1080",
           "applies": "immediately",
@@ -300,9 +414,18 @@
           "label": "Aspect Ratio",
           "type": "choice",
           "options": [
-            "16:9",
-            "Auto",
-            "4:3"
+            {
+              "label": "16:9",
+              "value": "16:9"
+            },
+            {
+              "label": "Auto",
+              "value": "auto"
+            },
+            {
+              "label": "4:3",
+              "value": "4:3"
+            }
           ],
           "default": "16:9",
           "applies": "not confirmed",
@@ -335,9 +458,18 @@
           "label": "FPS Overlay",
           "type": "choice",
           "options": [
-            "Off",
-            "FPS",
-            "FPS + frame time"
+            {
+              "label": "Off",
+              "value": "0"
+            },
+            {
+              "label": "FPS",
+              "value": "1"
+            },
+            {
+              "label": "FPS + frame time",
+              "value": "2"
+            }
           ],
           "default": "Off",
           "applies": "immediately",
@@ -348,8 +480,14 @@
           "label": "CPU Threads",
           "type": "choice",
           "options": [
-            "3",
-            "1"
+            {
+              "label": "3",
+              "value": "3"
+            },
+            {
+              "label": "1",
+              "value": "1"
+            }
           ],
           "default": "3",
           "applies": "next game start",

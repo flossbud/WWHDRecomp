@@ -42,6 +42,10 @@ namespace wwhd::gpu
 	// RGBA8, TakeTvPicture hands it over once. While the game is held (os/savestate.h Held: no swaps) the GPU thread's
 	// idle loop presents the panel alone (ServeHeldPresent, null_gpu.cpp), when it changed
 	void SetMenuPanel(uint32 w, uint32 h, std::vector<uint32> rgba);
+	// its "Pause" prompt while it is closed (at play's start and after it closes): a panel at (x, y) in the window's
+	// pixels, blended over the picture at SetHintOpacity's opacity (0: not drawn)
+	void SetHintPanel(sint32 x, sint32 y, uint32 w, uint32 h, std::vector<uint32> rgba);
+	void SetHintOpacity(float opacity);
 	void RequestTvPicture();
 	bool TakeTvPicture(std::vector<uint32>& rgba, uint32& w, uint32& h);
 	void ServeHeldPresent();

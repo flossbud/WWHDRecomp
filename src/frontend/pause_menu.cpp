@@ -1,8 +1,8 @@
 // The pause menu (pause_menu.h). Laid out in the design's 1920x1080 space, drawn at s = min(W/1920, H/1080) of the
 // window (the README): the side panel at the left edge, the prompts and toasts at the right, dialogs centred; the
-// design's PNGs at 1x (s <= 1) or 2x, scaled to s; text from the TTFs at its size times s. M1 (this): the menu, its
-// cursor, prompts, captions and motion, Resume, and Quit to the desktop; Enhancements, Settings and Save come with
-// M2-M4 (a toast says so meanwhile).
+// design's PNGs at 1x (s <= 1) or 2x, scaled to s; text from the TTFs at its size times s. M1: the menu, its cursor,
+// prompts, captions and motion, Resume, and Quit to the desktop; M2 Settings; M3 Save; M4 Enhancements (none yet), Quit
+// to the title screen (the game's own soft reset) and the "Pause" prompt while closed.
 #include "pause_menu.h"
 #include "ui_draw.h"
 #include "../gpu/vk/renderer.h"
@@ -10,6 +10,7 @@
 #include "../os/settings.h"
 #include <rapidjson/document.h>
 #include <SDL3/SDL.h>
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -20,6 +21,14 @@
 #include <mutex>
 #include <sstream>
 #include <thread>
+
+namespace wwhd::sixty                                // overrides/sixty.cpp: the game's soft reset
+{
+	bool TitleAvailable();
+	uint32 TitleRequests();
+	uint32 PlayStarts();
+	bool ReturnToTitle();
+}
 
 namespace wwhd::pause_menu
 {
@@ -122,11 +131,12 @@ namespace wwhd::pause_menu
 		};
 
 		// ---- Settings (M2): the design's rows (assets/pause_menu/menu-and-settings.json: its copy and options) on the
-		// program's switches (os/settings.h): each row's option, its choices in the switch's order ----
+		// program's switches (os/settings.h): each row's option; a choice row's choices name the switch's value each
+		// ({"label", "value"}), in the menu's order, paired by value (CheckRows logs what doesn't pair) ----
 		struct Row
 		{
 			std::string id, label, type, description, env;  // type: choice, toggle, info
-			std::vector<std::string> options;               // the choices as shown (the planned ones left out)
+			std::vector<std::string> options, values;       // a choice row's choices: their labels and the switch's values
 			std::string key;                                // the switch ("" none: an info row)
 		};
 		struct Category { std::string name; std::vector<Row> rows; };
@@ -144,6 +154,7 @@ namespace wwhd::pause_menu
 			{ "writeWatch", "WWHD_WRITE_WATCH" }, { "vtxDedupe", "WWHD_VTX_DEDUPE" }, { "surfaceFit", "WWHD_SURFACE_FIT" },
 			{ "barriers", "WWHD_BARRIERS" }, { "clearLoadop", "WWHD_CLEAR_LOADOP" } };
 
+		void CheckRows();
 		bool LoadCategories(const std::string& path)
 		{
 			FILE* f = fopen(path.c_str(), "rb");
@@ -171,14 +182,15 @@ namespace wwhd::pause_menu
 					Row row{ str(r, "id"), str(r, "label"), str(r, "type"), str(r, "description"), str(r, "envVar"), {}, {} };
 					if (r.HasMember("options") && r["options"].IsArray())
 						for (const auto& o : r["options"].GetArray())
-							if (o.IsString())
-								row.options.push_back(o.GetString());
+							if (o.IsObject() && !o.HasMember("planned"))
+								row.options.push_back(str(o, "label")), row.values.push_back(str(o, "value"));
 					if (auto k = kRowKeys.find(row.id); k != kRowKeys.end())
 						row.key = k->second;
 					cat.rows.push_back(std::move(row));
 				}
 				Categories().push_back(std::move(cat));
 			}
+			CheckRows();
 			return !Categories().empty();
 		}
 
@@ -199,6 +211,59 @@ namespace wwhd::pause_menu
 			const os::settings::OptionView v = os::settings::View(i);
 			return v.current < (int)v.values.size() ? v.values[v.current] : "";
 		}
+		// a switch value's place among a row's choices (-1: not one of them)
+		int ChoiceOf(const Row& r, const os::settings::OptionView& v, int j)
+		{
+			if (j < 0 || j >= (int)v.values.size())
+				return -1;
+			const auto it = std::find(r.values.begin(), r.values.end(), v.values[j]);
+			return it == r.values.end() ? -1 : (int)(it - r.values.begin());
+		}
+
+		// a switch value's label: its choice's, else the switch's own less its note in brackets (logged by CheckRows)
+		std::string ChoiceLabel(const Row& r, const os::settings::OptionView& v, int j)
+		{
+			if (const int c = ChoiceOf(r, v, j); c >= 0)
+				return r.options[c];
+			if (j < 0 || j >= (int)v.shown.size())
+				return "";
+			std::string t = v.shown[j].substr(0, v.shown[j].find(" ("));
+			if (!t.empty())
+				t[0] = (char)toupper((unsigned char)t[0]);
+			return t;
+		}
+
+		// each choice row against its switch (os/settings.cpp's options): a choice whose value the switch hasn't got is
+		// dropped, a value of the switch's no choice names is logged (it shows by the switch's own label when set)
+		void CheckRows()
+		{
+			for (Category& cat : Categories())
+				for (Row& r : cat.rows)
+				{
+					if (r.type != "choice" || r.key.empty())
+						continue;
+					const int i = os::settings::Find(r.key);
+					if (i < 0)
+					{
+						cemuLog_log(LogType::Force, "wwhd: pause menu: the row {} names {}, no switch of the program's", r.id, r.key);
+						continue;
+					}
+					const os::settings::OptionView v = os::settings::View(i);
+					for (size_t c = 0; c < r.values.size();)
+						if (std::find(v.values.begin(), v.values.end(), r.values[c]) == v.values.end())
+						{
+							cemuLog_log(LogType::Force, "wwhd: pause menu: the row {}'s choice \"{}\" ({}={}) isn't one of the switch's: left out",
+								r.id, r.options[c], r.key, r.values[c]);
+							r.options.erase(r.options.begin() + c), r.values.erase(r.values.begin() + c);
+						}
+						else
+							c++;
+					for (const std::string& val : v.values)
+						if (std::find(r.values.begin(), r.values.end(), val) == r.values.end())
+							cemuLog_log(LogType::Force, "wwhd: pause menu: the row {} offers no choice for {}={}", r.id, r.key, val);
+				}
+		}
+
 		Look LookAt(const Row& r)
 		{
 			Look k;
@@ -218,7 +283,7 @@ namespace wwhd::pause_menu
 			k.v = os::settings::View(k.option);
 			const auto& v = k.v;
 			k.index = v.current;
-			k.value = k.index < (int)r.options.size() ? r.options[k.index] : k.index < (int)v.shown.size() ? v.shown[k.index] : "";
+			k.value = ChoiceLabel(r, v, k.index);
 			if (r.type == "toggle")
 			{
 				k.on = k.index < (int)v.shown.size() && v.shown[k.index] == "on";
@@ -283,7 +348,7 @@ namespace wwhd::pause_menu
 		}
 
 		enum class Phase { Closed, Waiting, Opening, Open, Closing };
-		enum class Dialog { None, Quit, QuitDesktop, Overwrite, Load, SaveFile, Saving, Saved };
+		enum class Dialog { None, Quit, QuitDesktop, QuitTitle, Overwrite, Load, SaveFile, Saving, Saved };
 
 		struct Toast { std::string text; Clock::time_point at; };
 
@@ -320,13 +385,19 @@ namespace wwhd::pause_menu
 			int cat = 0, row = 0;
 			Clock::time_point rowSince;                 // the focused row's highlight cross-fades in over 140 ms
 			int prevRow = -1;
-			int sub = 0;                                // the sub-screen up (with settings set): 0 Settings, 1 Save (M3)
+			int sub = 0;                                // the sub-screen up (with settings set): 0 Settings, 1 Save (M3), 2 Enhancements (M4)
 			int saveRow = 0, saveAct = 0;               // Save: the row (File 1, slots 1-4), Save (0) or Load (1)
 			int dialogSlot = 0;                         // the slot an Overwrite or Load dialog is about
-			bool quitAfterSave = false;                 // Save & Quit: to the desktop once File 1 is saved
+			Dialog quitAfterSave = Dialog::None;        // Save & Quit: to the desktop or the title once File 1 is saved
 			Image thumbs[5];                            // the slots' thumbnails (1-4), as loaded when Save opens
 			int busySlot = 0;                           // a slot's save (> 0) or load (< 0) asked for, waiting for its outcome
 			std::string blackout;                       // the blackout's line while a slot loads ("" none)
+			bool toTitle = false;                       // Quit to the title screen: the game let go under the blackout
+			uint32 titleSeen = 0;                       // the title's requests when it was asked (sixty TitleRequests)
+			Clock::time_point titleAt{}, titleAsked{};  // when it was asked; when the game asked for the title (0: not yet)
+			Clock::time_point hintAt{};                 // the "Pause" prompt's show from (0: none)
+			uint32 playSeen = 0;                        // sixty PlayStarts when last looked
+			std::string hintKey;                        // the prompt's picture as drawn (size and device)
 			std::string toggled;                        // the toggle last flipped, and when (its knob slides over 220 ms)
 			Clock::time_point toggledSince;
 			Image backdrop, blurred;                    // the window's picture when it opened, and blurred
@@ -583,7 +654,10 @@ namespace wwhd::pause_menu
 			{
 			case Dialog::Quit:
 				return { "Quit to\xE2\x80\xA6", JustSaved() ? "All progress is saved." : "Your progress since the last save " + since,
-					{ "Title Screen", "Desktop", "Cancel" }, { true, true, true } };
+					{ "Title Screen", "Desktop", "Cancel" }, { wwhd::sixty::TitleAvailable(), true, true } };
+			case Dialog::QuitTitle:
+				return { "Return to the title screen?", "Progress since your last save" + (ago.empty() ? std::string() : " (" + ago + ")") + " will be lost.",
+					{ "Save & Quit", "Don\xE2\x80\x99t Save", "Cancel" }, { true, true, true } };
 			case Dialog::QuitDesktop:
 				return { "Quit to desktop?", "Progress since your last save" + (ago.empty() ? std::string() : " (" + ago + ")") + " will be lost.",
 					{ "Save & Quit", "Don\xE2\x80\x99t Save", "Cancel" }, { true, true, true } };
@@ -900,7 +974,7 @@ namespace wwhd::pause_menu
 				if (k.option >= 0 && !k.v.values.empty())
 				{
 					const int d = std::clamp(k.v.def, 0, (int)k.v.values.size() - 1);
-					facts.push_back({ "Default", r.type == "toggle" ? (k.v.shown[d] == "on" ? "On" : "Off") : d < (int)r.options.size() ? r.options[d] : k.v.shown[d] });
+					facts.push_back({ "Default", r.type == "toggle" ? (k.v.shown[d] == "on" ? "On" : "Off") : ChoiceLabel(r, k.v, d) });
 					facts.push_back({ "Applies", k.locked ? "Not now" : k.option == 0 || !k.v.live ? "Next time you start the game" : "Right away" });
 					if (!k.v.performance.empty())
 					{
@@ -908,7 +982,7 @@ namespace wwhd::pause_menu
 						for (int j = 0; j < (int)k.v.values.size(); j++)
 							if (k.v.values[j] == k.v.performance)
 								pi = j;
-						facts.push_back({ "Performance preset", r.type == "toggle" ? (k.v.shown[pi] == "on" ? "On" : "Off") : pi < (int)r.options.size() ? r.options[pi] : k.v.shown[pi] });
+						facts.push_back({ "Performance preset", r.type == "toggle" ? (k.v.shown[pi] == "on" ? "On" : "Off") : ChoiceLabel(r, k.v, pi) });
 					}
 				}
 				if (!r.env.empty())
@@ -1110,6 +1184,20 @@ namespace wwhd::pause_menu
 			}
 		}
 
+		// Enhancements (M4): the screen with its sheet and a note while there are none yet (the owner's choice: no
+		// placeholder rows)
+		void DrawEnhancements(Frame& f, float dx, float op)
+		{
+			Assets& a = A();
+			const float s = f.s;
+			f.c.Text(a.reggae, 46 * s, (90 + dx) * s, (50 * s) + a.reggae.Ascent(46 * s), "Enhancements", kInk, op);
+			const float sx = 84 + dx, sy = 150, sw = 860, sh = 816;
+			float offs[4] = { -30, -80, 10, -40 };
+			DrawSheet(f, sx, sy, sw, sh, offs, op);
+			TextCentred(f, a.reggae, 34, sx + sw / 2, sy + sh / 2 - 26, "No enhancements yet", kInk, op);
+			TextCentred(f, a.rocknroll, 21, sx + sw / 2, sy + sh / 2 + 24, "Quality-of-life and gameplay tweaks will appear here.", kInkMuted, op);
+		}
+
 		void BuildLayers(Layers& l, int w, int h, float s)
 		{
 			Assets& a = A();
@@ -1264,7 +1352,7 @@ namespace wwhd::pause_menu
 					c.Draw(l.button[i][1], bx, byy, bp * focus);
 			}
 			if (setOp > 0)
-				st.sub == 1 ? DrawSaves(f, st, now, setDx, setOp) : DrawSettings(f, st, now, setDx, setOp);
+				st.sub == 1 ? DrawSaves(f, st, now, setDx, setOp) : st.sub == 2 ? DrawEnhancements(f, setDx, setOp) : DrawSettings(f, st, now, setDx, setOp);
 			if (!skey.empty())                            // drawn still: kept for the frames after
 			{
 				l.settings.w = (int)pw, l.settings.h = c.H();
@@ -1284,7 +1372,7 @@ namespace wwhd::pause_menu
 			c.NoClip();
 			// the cursor: glides over 170 ms, fades in from 520 ms
 			const float cp = closing ? 1 - Linear(ms, 0, 200) : Linear(ms, 520, 200);
-			if (cp > 0 && st.dialog == Dialog::None)
+			if (cp > 0 && st.dialog == Dialog::None && !(st.settings && st.sub == 2))
 			{
 				const float g = Bezier(.25f, .8f, .25f, 1, Linear(std::chrono::duration<float, std::milli>(now - st.curSince).count(), 0, 170));
 				float box[4];
@@ -1308,6 +1396,8 @@ namespace wwhd::pause_menu
 					pr.push_back({ st.pad ? "A" : "Enter", st.saveRow > 0 && st.saveAct == 1 ? "Load" : "Save" });
 					pr.push_back({ st.pad ? "B" : "Esc", "Back" });
 				}
+				else if (st.sub == 2)
+					pr.push_back({ st.pad ? "B" : "Esc", "Back" });
 				else if (st.cat < (int)cats.size() && st.row < (int)cats[st.cat].rows.size())
 				{
 					const Row& r = cats[st.cat].rows[st.row];
@@ -1519,13 +1609,35 @@ namespace wwhd::pause_menu
 						}
 					return;
 				}
-				const int count = std::max(1, std::min((int)r.options.size(), (int)k.v.values.size()));
-				const int step = in == Input::Left ? -1 : 1;
-				os::settings::Set(k.option, ((k.index + step) % count + count) % count);
+				// the next choice in the menu's order (from a value no choice names: the first), set by its value
+				const int count = (int)r.values.size();
+				if (count == 0)
+					return;
+				const int at = ChoiceOf(r, k.v, k.index);
+				const int next = at < 0 ? 0 : ((at + (in == Input::Left ? -1 : 1)) % count + count) % count;
+				const auto it = std::find(k.v.values.begin(), k.v.values.end(), r.values[next]);
+				if (it != k.v.values.end())
+					os::settings::Set(k.option, (int)(it - k.v.values.begin()));
 				return;
 			}
 			default: return;
 			}
+		}
+
+		// the game's own soft reset (overrides/sixty.cpp): the menu goes and the game fades to the title once let go
+		// (the design's blackout, "Returning to title...", until the game has faded to black under it and asked for the title)
+		void QuitToTitle(State& st)
+		{
+			st.dialog = Dialog::None, L().dialogKind = -1;
+			const uint32 seen = wwhd::sixty::TitleRequests();
+			if (!wwhd::sixty::ReturnToTitle())
+			{
+				ShowToast(st, "Can\xE2\x80\x99t return to the title screen here.");
+				return;
+			}
+			st.blackout = "Returning to title\xE2\x80\xA6";
+			st.toTitle = true, st.titleSeen = seen, st.titleAt = Clock::now(), st.titleAsked = {};
+			wwhd::state::RequestHold(false);
 		}
 
 		void QuitToDesktop()
@@ -1564,7 +1676,19 @@ namespace wwhd::pause_menu
 				return;                                     // a slot loading: nothing until it's done
 			if (st.settings && st.dialog == Dialog::None)
 			{
-				st.sub == 1 ? ActSaves(st, in) : ActSettings(st, in);
+				if (st.sub == 2)
+				{
+					if (in == Input::Back)                  // Enhancements: back to the menu
+					{
+						st.settings = false, st.screenSince = Clock::now();
+						float box[4];
+						CursorFor(st.item, box);
+						GlideTo(st, box);
+						TurnCompass(st, st.item * -52.0f);
+					}
+				}
+				else
+					st.sub == 1 ? ActSaves(st, in) : ActSettings(st, in);
 				st.dirty = true;
 				return;
 			}
@@ -1591,16 +1715,23 @@ namespace wwhd::pause_menu
 							QuitToDesktop();                    // nothing unsaved: straight away
 						st.dialog = Dialog::QuitDesktop, st.dialogItem = 0, st.dialogSince = Clock::now();
 					}
+					else if (b == "Don\xE2\x80\x99t Save" && st.dialog == Dialog::QuitTitle)
+						QuitToTitle(st);
 					else if (b == "Don\xE2\x80\x99t Save")
 						QuitToDesktop();
 					else if (b == "Save & Quit" || b == "Save")
 					{
-						st.quitAfterSave = b == "Save & Quit";
+						st.quitAfterSave = b == "Save & Quit" ? st.dialog : Dialog::None;
 						st.dialog = Dialog::Saving, st.dialogItem = 0, st.dialogSince = Clock::now();
 						wwhd::state::RequestGameSave();
 					}
 					else if (b == "Title Screen")
-						ShowToast(st, "Returning to the title screen comes in a later update.");
+					{
+						if (JustSaved())
+							QuitToTitle(st);                    // nothing unsaved: straight away
+						else
+							st.dialog = Dialog::QuitTitle, st.dialogItem = 0, st.dialogSince = Clock::now();
+					}
 					else if (b == "Overwrite")
 					{
 						st.dialog = Dialog::None;
@@ -1647,6 +1778,8 @@ namespace wwhd::pause_menu
 					FocusRow(st, 0);
 					TurnCompass(st, 0);
 				}
+				else if (st.item == 1)
+					st.settings = true, st.sub = 2, st.screenSince = Clock::now();
 				else
 					ShowToast(st, std::string(kItems[st.item]) + " comes in a later update.");
 				break;
@@ -1656,16 +1789,57 @@ namespace wwhd::pause_menu
 		}
 
 		// the menu's thread: the backdrop once the TV picture comes, then a frame each 16 ms while it moves
+		// the "Pause" prompt over the game while the menu is closed (the design's closed state; the owner's choice: a few
+		// seconds at the start of play and after the menu closes): in over 260 ms, 4 s in all, out over 600; the glyph
+		// follows the last device. A panel of the renderer's, blended at its opacity (gpu SetHintPanel)
+		void Hint(State& st, Clock::time_point now, uint32 ww, uint32 wh)
+		{
+			const uint32 plays = wwhd::sixty::PlayStarts();
+			if (plays != st.playSeen)
+			{
+				st.playSeen = plays, st.hintAt = now + std::chrono::milliseconds(3000);   // play's first frames: after its load and fade
+				cemuLog_log(LogType::Force, "wwhd: pause menu: play starts: the Pause prompt in 3 s");
+			}
+			const float ms = std::chrono::duration<float, std::milli>(now - st.hintAt).count();
+			if (st.hintAt == Clock::time_point{} || st.phase != Phase::Closed || !ww || !wh || ms > 4600)
+			{
+				if (st.hintAt != Clock::time_point{} && (st.phase != Phase::Closed || ms > 4600))
+					st.hintAt = {};
+				gpu::SetHintOpacity(0);
+				return;
+			}
+			if (ms < 0)
+				return;
+			const float s = std::min(ww / 1920.0f, wh / 1080.0f);
+			const std::string key = fmt::format("{}x{} {}", ww, wh, st.pad ? 1 : 0);
+			if (key != st.hintKey)
+			{
+				A().Rescale(s);
+				// at the top centre: the design's top right is where the game's own button prompts are (ZR, R, X, Y)
+				ui::Canvas c((int)std::ceil(300 * s), (int)std::ceil(130 * s));
+				Frame f{ c, s };
+				DrawPrompts(f, { { st.pad ? "\xE2\x88\x92" : "Esc", "Pause" } }, st.pad, 1);
+				const float pw = std::max(GlyphWidth(st.pad ? "\xE2\x88\x92" : "Esc", st.pad), A().rocknroll.Width("Pause", 24 * s));
+				const sint32 right = (sint32)std::lround(44 * s);    // DrawPrompts' right edge in the canvas
+				gpu::SetHintPanel((sint32)ww / 2 - (c.W() - right - (sint32)(pw / 2)), 0, (uint32)c.W(), (uint32)c.H(), std::move(c.Pixels()));
+				st.hintKey = key;
+			}
+			gpu::SetHintOpacity(ms < 260 ? ms / 260 : ms < 4000 ? 1.0f : 1 - (ms - 4000) / 600);
+		}
+
 		void Run()
 		{
 			State& st = S();
 			std::unique_lock lock(st.lock);
+			st.playSeen = wwhd::sixty::PlayStarts();
 			for (;;)
 			{
-				st.wake.wait_for(lock, std::chrono::milliseconds(st.phase == Phase::Closed ? 1000 : 16));
+				st.wake.wait_for(lock, std::chrono::milliseconds(st.phase != Phase::Closed || st.hintAt != Clock::time_point{} ? 16 : 250));
 				const Clock::time_point now = Clock::now();
 				uint32 ww = 0, wh = 0;
-				if (st.phase == Phase::Closed || !gpu::WindowExtent(ww, wh) || !ww || !wh)
+				const bool window = gpu::WindowExtent(ww, wh) && ww && wh;
+				Hint(st, now, window ? ww : 0, window ? wh : 0);
+				if (st.phase == Phase::Closed || !window)
 					continue;
 				// the pad's held direction repeats: first after 380 ms, then each 110
 				if (st.held && now >= st.repeatAt)
@@ -1720,14 +1894,17 @@ namespace wwhd::pause_menu
 					if (g == 2)
 						st.dialog = Dialog::Saved, st.dialogSince = Clock::now(), L().dialogKind = -1;
 					else if (g == -1)
-						st.dialog = Dialog::None, L().dialogKind = -1, st.quitAfterSave = false, ShowToast(st, "Couldn\xE2\x80\x99t save File 1.");
+						st.dialog = Dialog::None, L().dialogKind = -1, st.quitAfterSave = Dialog::None, ShowToast(st, "Couldn\xE2\x80\x99t save File 1.");
 				}
 				else if (st.dialog == Dialog::Saved && now - st.dialogSince > std::chrono::milliseconds(850))
 				{
 					st.dialog = Dialog::None, L().dialogKind = -1;
-					if (st.quitAfterSave)
+					if (st.quitAfterSave == Dialog::QuitDesktop)
 						QuitToDesktop();
-					ShowToast(st, "Progress saved to File 1.");
+					if (st.quitAfterSave == Dialog::QuitTitle)
+						st.quitAfterSave = Dialog::None, QuitToTitle(st);
+					else
+						ShowToast(st, "Progress saved to File 1.");
 				}
 				// a slot's save or load from the hold: its outcome (savestate's status) when it's done
 				if (st.busySlot)
@@ -1744,7 +1921,7 @@ namespace wwhd::pause_menu
 					{
 						// the game is the state's now: the menu goes at once (its picture is from before), the game goes on
 						st.busySlot = 0, st.blackout.clear();
-						st.phase = Phase::Closed, st.closedAt = Clock::now(), st.settings = false;
+						st.phase = Phase::Closed, st.closedAt = Clock::now(), st.settings = false, st.hintAt = st.closedAt + std::chrono::milliseconds(300);
 						gpu::SetMenuPanel(0, 0, {});
 						wwhd::state::RequestHold(false);
 						continue;
@@ -1757,12 +1934,28 @@ namespace wwhd::pause_menu
 						st.busySlot = 0, st.blackout.clear(), st.dirty = true;
 					}
 				}
+				// Quit to the title: the menu goes 1.2 s after the game asked for the title (its 30-frame fade under the
+				// blackout), or after 8 s if it never does
+				if (st.toTitle)
+				{
+					const Clock::time_point t = Clock::now();
+					if (st.titleAsked == Clock::time_point{} && wwhd::sixty::TitleRequests() != st.titleSeen)
+						st.titleAsked = t;
+					if ((st.titleAsked != Clock::time_point{} && t - st.titleAsked > std::chrono::milliseconds(1200)) ||
+						t - st.titleAt > std::chrono::seconds(8))
+					{
+						st.toTitle = false, st.blackout.clear();
+						st.phase = Phase::Closed, st.closedAt = t, st.settings = false;
+						gpu::SetMenuPanel(0, 0, {});
+						continue;
+					}
+				}
 				const float ms = std::chrono::duration<float, std::milli>(Clock::now() - st.since).count();
 				if (st.phase == Phase::Opening && ms > 1000)
 					st.phase = Phase::Open;
 				if (st.phase == Phase::Closing && ms > 560)
 				{
-					st.phase = Phase::Closed, st.closedAt = Clock::now();
+					st.phase = Phase::Closed, st.closedAt = Clock::now(), st.hintAt = st.closedAt + std::chrono::milliseconds(300);
 					gpu::SetMenuPanel(0, 0, {});
 					wwhd::state::RequestHold(false);
 					continue;
@@ -1789,6 +1982,7 @@ namespace wwhd::pause_menu
 			if (st.started)
 				return;
 			st.started = true;
+			cemuLog_log(LogType::Force, "wwhd: pause menu: its thread starts");
 			st.thread = std::thread(Run);
 			st.thread.detach();
 		}
@@ -1811,6 +2005,17 @@ namespace wwhd::pause_menu
 			return true;
 		}();
 		return ok;
+	}
+
+	void Begin()
+	{
+		static std::atomic<bool> begun{ false };
+		if (begun.load(std::memory_order_relaxed) || gpu::ShownFrames() == 0 || !Available())
+			return;                                     // (once the renderer has shown a frame: it is up, Available won't start it)
+		begun = true;
+		State& st = S();
+		std::lock_guard lock(st.lock);
+		Start(st);
 	}
 
 	bool Up()
@@ -1847,7 +2052,11 @@ namespace wwhd::pause_menu
 			return true;
 		}
 		if (!up)
+		{
+			if (!repeat)
+				st.pad = false;                         // the closed prompt's glyph: the keyboard's
 			return false;
+		}
 		st.pad = false;
 		Input in;
 		switch (key)
@@ -1880,6 +2089,8 @@ namespace wwhd::pause_menu
 		if (pad.lx > 0.5f) now |= B::RIGHT;
 		const uint32 pressed = now & ~st.lastPad.buttons;
 		st.lastPad.buttons = now;
+		if (pressed && st.phase == Phase::Closed)
+			st.pad = true;                              // the closed prompt's glyph follows the device too
 		st.swallow &= now;                              // a button held at closing stays the menu's until released
 		if (pressed & B::MINUS)                         // SELECT (the owner's choice: − does nothing useful in-game without the GamePad)
 		{
@@ -1942,6 +2153,38 @@ namespace wwhd::pause_menu
 					if (button == 1)
 						Act(st, Input::Confirm);
 				}
+			}
+			if (button == 2)
+				Act(st, Input::Back);
+		}
+		else if (st.settings && st.sub == 2)
+		{
+			if (button == 2)                            // Enhancements: nothing to choose yet
+				Act(st, Input::Back);
+		}
+		else if (st.settings && st.sub == 1)
+		{
+			// Save: a row under the mouse takes the focus, a button the focus and a click chooses it; a right click
+			// goes back
+			for (int row = 0; row < 5; row++)
+			{
+				const float rx = 110, ry = 150 + (row == 0 ? 70 : 264 + 134 * (row - 1));
+				if (dx < rx || dx >= rx + 808 || dy < ry || dy >= ry + 124)
+					continue;
+				int act = st.saveRow == row ? st.saveAct : 0;
+				for (int k = 0; k < (row == 0 ? 1 : 2); k++)
+				{
+					float b[2];
+					SaveButtonAt(row, k, b);
+					if (dx >= b[0] && dx < b[0] + 130 && dy >= b[1] && dy < b[1] + 60)
+						act = k;
+				}
+				if (st.saveRow != row || st.saveAct != act)
+					FocusSave(st, row, act), st.dirty = true;
+				float b[2];
+				SaveButtonAt(row, act, b);
+				if (button == 1 && dx >= b[0] && dx < b[0] + 130 && dy >= b[1] && dy < b[1] + 60)
+					Act(st, Input::Confirm);
 			}
 			if (button == 2)
 				Act(st, Input::Back);

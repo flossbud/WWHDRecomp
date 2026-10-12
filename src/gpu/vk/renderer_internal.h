@@ -262,6 +262,8 @@ namespace wwhd::gpu
 	{
 		VkShaderModule Fragment(const std::string& glsl, const char* name);   // null if it doesn't compile (logged)
 		void Draw(VkShaderModule fragment, Image& src, Image& dst, const uint32 (&c)[16]);
+		// `fragment` over `rect` of dst (a view of format `format`, in COLOR_ATTACHMENT_OPTIMAL), blended by its alpha
+		void Blend(VkShaderModule fragment, Image& src, VkImageView dst, VkFormat format, VkRect2D rect, const uint32 (&c)[16]);
 	}
 	// motion.cpp: motion vectors (WWHD_MOTION=1|debug; b-motion)
 	namespace motion

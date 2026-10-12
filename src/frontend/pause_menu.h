@@ -9,6 +9,7 @@
 namespace wwhd::pause_menu
 {
 	bool Available();                       // a window and the renderer, and its assets found
+	void Begin();                           // its thread started when Available (the window's loop calls it)
 	bool Up();                              // shown, opening or closing: the game gets no input
 	void Toggle();
 	// a key press from the window (SDL keycode, true when repeated by the system): true when the menu took it
