@@ -597,7 +597,6 @@
       "lane": "bottom",
       "complexity": 7,
       "name": "Round 14: [7] A steady 165, the draw side (after u8-journal): the whole frame's p90 is 6.7-7.1 ms on en-tn even with the journal off (a frame's draws cost a frame, whatever its step): the processes' draws (fpcM_Draw, 31% of a half frame) and RenderDisplay::draw's render lists (25%); profile them on the desktop, cut the exact wins, and measure each against 6.06 ms; N 2 byte-identical"
-
     },
     {
       "id": "q-savestate",
@@ -628,6 +627,12 @@
       "lane": "main",
       "complexity": 3,
       "name": "Round 14: [3] With the owner: the Deck's quick tests (deck-plan tests 1-4: clocks, 30 fps, a profile, thread placement) on the newest deploy"
+    },
+    {
+      "id": "m-android",
+      "lane": "main",
+      "complexity": 9,
+      "name": "Round 14: [9] An Android port (the owner's ask, 2026-10-12; tested in game on the owner's AYN Odin 2 Portal: Snapdragon 8 Gen 2, Adreno 740, on the tailnet): A1 arm64: the runtime, our forks and Cemu's parts and the recompiled program built with the NDK for arm64 (Cemu's own arm64 paths; the x86-only spots: write_watch, PPCTimer, fibers, spinlocks, threads, profile), floats byte-exact (-ffp-contract=off), an arm64 Linux build's checks MATCH under qemu-user on the worker; A2 the app: SDL3's Android activity, Vulkan on Adreno (Qualcomm's driver, Turnip the fallback), the built-in pad as a gamepad, touch for the menu, the player's own dump chosen with the system's file picker (never shipped), portable/ in the app's storage, pause and resume; built on the worker (NDK, Gradle), the APK never in git; A3 on the Odin over adb on the tailnet: the routes, captures reviewed, 60 at its 1080p, thermals, the handheld preset; A4 the pause menu by touch, battery, 16K pages. Main starts A1 between deploys; A2 on goes to the first lane free. The worker's disk is at 93%: clean before the NDK and arm64 deps"
     }
   ],
   "later": [
