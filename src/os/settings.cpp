@@ -60,9 +60,11 @@ namespace
 			{ "fsr3", "FSR 3 (desktop GPUs)" } }, false, nullptr },
 		// FSR 3.1 frame generation (gpu/vk/fsr3.cpp Interpolate): a frame between each two, shown when the display runs at
 		// twice the game's rate (present.cpp FrameGenPresents, which notes on this line why it's off); with the FSR 3
-		// upscaler only. Its input lag: each real frame shows one refresh later, after the generated one (8 ms at 120 Hz)
-		{ "WWHD_FRAMEGEN", "Frame generation (FSR 3: generated in-between frames, adds input lag; 120 Hz+ displays)",
-			{ { "0", "off" }, { "1", "on" } }, false, nullptr },
+		// upscaler only. Its input lag: each real frame shows one refresh later, after the generated one (8 ms at 120 Hz).
+		// Lossless Scaling x2-x4 (gpu/vk/lsfg.cpp, b-lsfg): an installed lsfg-vk layer with the player's own Lossless Scaling
+		{ "WWHD_FRAMEGEN", "Frame generation (generated in-between frames, adds input lag; 120 Hz+ displays)",
+			{ { "0", "off" }, { "1", "FSR 3" }, { "lsfg2", "Lossless Scaling x2 (lsfg-vk)" },
+			{ "lsfg3", "Lossless Scaling x3 (lsfg-vk)" }, { "lsfg4", "Lossless Scaling x4 (lsfg-vk)" } }, false, nullptr },
 		// at least this much anisotropy on the game's mipmapped textures (gpu/vk/texture.cpp Sampler; render targets keep
 		// the game's own): the ground and the sea sharper at a slant
 		{ "WWHD_ANISO", "Anisotropic filtering", { { "0", "the game's" }, { "4", "4x" }, { "8", "8x" }, { "16", "16x" } },
@@ -310,9 +312,9 @@ namespace wwhd::os::settings
 	void SetDisplayHz(float hz) { s_displayHz = hz; }
 	float DisplayHz() { return s_displayHz.load(); }
 	// frame generation's decision (gpu/vk/present.cpp, at the first present with a window, before the 60 fps switch)
-	static std::atomic<bool> s_frameGen{ false };
-	void SetFrameGen(bool on) { s_frameGen = on; }
-	bool FrameGen() { return s_frameGen.load(); }
+	static std::atomic<int> s_frameGen{ 1 };
+	void SetFrameGen(int multiplier) { s_frameGen = multiplier < 1 ? 1 : multiplier; }
+	int FrameGen() { return s_frameGen.load(); }
 
 	std::string StartLog()
 	{

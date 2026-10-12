@@ -153,7 +153,7 @@ configure_file("${CMAKE_CURRENT_BINARY_DIR}/gen/fsr3_sources.inc.new" "${CMAKE_C
 
 add_library(wwhd_gpu OBJECT gpu/null_gpu.cpp gpu/vk/vk.cpp gpu/vk/renderer.cpp gpu/vk/present.cpp
 	gpu/vk/shader_cache.cpp gpu/vk/shader_list.cpp gpu/vk/draw.cpp gpu/vk/texture.cpp gpu/vk/latte_glue.cpp gpu/vk/gpu_timing.cpp
-	gpu/vk/fsr1.cpp gpu/vk/fxaa.cpp gpu/vk/motion.cpp gpu/vk/fsr3.cpp)
+	gpu/vk/fsr1.cpp gpu/vk/fxaa.cpp gpu/vk/lsfg.cpp gpu/vk/motion.cpp gpu/vk/fsr3.cpp)
 wwhd_like_cemu(wwhd_gpu)
 target_include_directories(wwhd_gpu PRIVATE gpu "${CMAKE_CURRENT_BINARY_DIR}/gen" "${fsr3_dir}/include")
 

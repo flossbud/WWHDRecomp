@@ -3320,14 +3320,14 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		if (const char* e = getenv("WWHD_STEPS"); e && strcmp(e, "display") == 0)
 		{
 			// Frame rate: the display's (settings.cpp): the most frames a tick its refresh rate shows (a 1% margin:
-			// 59.94 Hz is 60's), or with frame generation on half that (it shows two a frame: gpu/vk/present.cpp
-			// picked the same), 2 to 5; unknown (no window), 60's 2
+			// 59.94 Hz is 60's), or with frame generation on that over its frames shown a frame drawn (FSR 3 two:
+			// gpu/vk/present.cpp picked the same; lsfg-vk 2 to 4: gpu/vk/lsfg.cpp), 2 to 5; unknown (no window), 60's 2
 			const float hz = wwhd::os::settings::DisplayHz();
-			const bool gen = wwhd::os::settings::FrameGen();
-			const int n = (int)(hz * 1.01f / (gen ? 60.0f : 30.0f));
+			const int gen = wwhd::os::settings::FrameGen();   // frames shown a frame drawn: 1, or frame generation's 2-4
+			const int n = (int)(hz * 1.01f / (30.0f * gen));
 			g_rtSteps = (uint32)(n < 2 ? 2 : n > 5 ? 5 : n);
 			cemuLog_log(LogType::Force, "wwhd sixty: the display's frame rate: {:.0f} Hz, {} frames a tick{}", hz, g_rtSteps,
-				gen ? " (frame generation doubles them)" : "");
+				gen > 1 ? fmt::format(" (frame generation x{})", gen) : std::string());
 		}
 		if (g_rtSteps != 2)
 			LatteTiming_setVsyncSteps(g_rtSteps);      // at N steps a vsync each 1/(30 N) s (U5): N frames a tick

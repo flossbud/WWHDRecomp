@@ -16,8 +16,8 @@ namespace wwhd::os::settings
 	std::string StartLog();                        // the preset and its options as they started (one line), or ""
 	void SetDisplayHz(float hz);                   // the window's display's refresh rate (window_system.cpp)
 	float DisplayHz();                             // it, or 0 (unknown, or no window)
-	void SetFrameGen(bool on);                     // frame generation presents (gpu/vk/present.cpp)
-	bool FrameGen();                               // it does (decided before the 60 fps switch)
+	void SetFrameGen(int multiplier);              // frames shown a frame drawn: FSR 3 (gpu/vk/present.cpp) 2, lsfg-vk (lsfg.cpp) 2-4
+	int FrameGen();                                // it, or 1 (decided before the 60 fps switch)
 
 	int Count();                                   // the settings page's options
 	std::string Line(int option);                  // "Frame rate: 60 (at the next start)"

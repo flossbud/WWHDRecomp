@@ -10,7 +10,7 @@
 namespace wwhd::vk
 {
 #define WWHD_VK_GLOBAL(X) \
-	X(vkCreateInstance) X(vkEnumerateInstanceVersion)
+	X(vkCreateInstance) X(vkEnumerateInstanceVersion) X(vkEnumerateInstanceLayerProperties)
 #define WWHD_VK_INSTANCE(X) \
 	X(vkEnumeratePhysicalDevices) X(vkGetPhysicalDeviceProperties) X(vkGetPhysicalDeviceQueueFamilyProperties) \
 	X(vkGetPhysicalDeviceMemoryProperties) X(vkGetPhysicalDeviceFormatProperties) X(vkGetPhysicalDeviceImageFormatProperties) X(vkGetPhysicalDeviceFeatures2) \

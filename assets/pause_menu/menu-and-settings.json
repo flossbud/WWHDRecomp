@@ -173,26 +173,10 @@
             "40",
             "50",
             "60",
-            {
-              "value": "90",
-              "planned": "In progress (U5)"
-            },
-            {
-              "value": "120",
-              "planned": "In progress (U5)"
-            },
-            {
-              "value": "144",
-              "planned": "After U5 · variable refresh or a fixed frame pattern"
-            },
-            {
-              "value": "165",
-              "planned": "After U5 · variable refresh or a fixed frame pattern"
-            },
-            {
-              "value": "240",
-              "planned": "Frame generation on top of 120"
-            }
+            "90",
+            "120",
+            "150",
+            "Display's"
           ],
           "default": "30 (or 60 — see frameDefault)",
           "applies": "next game start",
@@ -239,22 +223,13 @@
           "options": [
             "Off",
             "FSR 3",
-            {
-              "value": "Lossless ×2",
-              "planned": "Uses your own Lossless Scaling copy"
-            },
-            {
-              "value": "Lossless ×3",
-              "planned": "Uses your own Lossless Scaling copy"
-            },
-            {
-              "value": "Lossless ×4",
-              "planned": "Uses your own Lossless Scaling copy"
-            }
+            "Lossless ×2",
+            "Lossless ×3",
+            "Lossless ×4"
           ],
           "default": "Off",
           "applies": "next game start",
-          "description": "Smoother motion from generated in-between frames. FSR 3 needs the FSR 3 upscaler and a display at twice the frame rate. Adds about one refresh of input lag."
+          "description": "Smoother motion from generated in-between frames. FSR 3 needs the FSR 3 upscaler and a display at twice the frame rate. Lossless ×2 to ×4 need lsfg-vk installed and your own copy of Lossless Scaling. Adds about one refresh of input lag."
         },
         {
           "id": "aniso",

@@ -357,7 +357,7 @@ and the aspect latched at each swap.
 
 ## FSR 3.1 frame generation (b-framegen, session bottom, 2026-10-10), opt-in
 
-`WWHD_FRAMEGEN=1` (settings: "Frame generation (FSR 3: generated in-between frames, adds input lag; 120 Hz+ displays)",
+`WWHD_FRAMEGEN=1` (settings: "Frame generation", choice "FSR 3"; b-lsfg below adds Lossless Scaling's,
 off by default, set by no preset; when it can't run, the page's line says why: "off: the display runs at 60 Hz, ..."), with the FSR 3 upscaler only. A generated frame between each two of the
 game's, presented before the game's own: 120 shown a second from the game's 60 (or 60 from 30). Latency: each real
 frame shows one refresh later than without it (8 ms at 120 Hz), plus the interpolation's GPU time.
@@ -385,6 +385,40 @@ frame shows one refresh later than without it (8 ms at 120 Hz), plus the interpo
   them, which are 26.9 dB apart); Link, the wake and the HUD clean, no ghosting seen.
 - **Not done:** VRR (t-vrr, top's lane) would let it pace on any refresh above twice the rate; a present thread
   (AMD's way) would let it run with mailbox. Not on the worker's iGPU: FSR 3 alone costs 18.5 ms there.
+
+## Lossless Scaling frame generation through lsfg-vk (b-lsfg, session bottom, 2026-10-12), opt-in
+
+The owner's ask: Lossless Scaling's frame generation as an alternative to FSR 3's. Frame generation's setting is now
+off / FSR 3 / Lossless Scaling x2, x3, x4 (`WWHD_FRAMEGEN=0|1|lsfg2|lsfg3|lsfg4`). Lossless Scaling's runs through
+lsfg-vk, a Vulkan layer that runs its shaders on Linux from the player's own copy of the program (its DLL). We never ship
+or commit the DLL (`*.dll` gitignored).
+
+- **The licence:** lsfg-vk 2 (lsfg-vk.dev, 2026) is CC BY-NC-ND 4.0, so we don't bundle it. Codeberg removed its mirror
+  over that licence. lsfg-vk 1.0.0 (2025, GitHub) was MIT (its dependencies MIT and zlib), and a release could ship
+  it with its notice, but the owner chose detect-only (2026-10-12): no layer ships, an installed one is used.
+- **How (`gpu/vk/lsfg.cpp`, before the instance):** an installed layer is found among the loader's
+  (`vkEnumerateInstanceLayerProperties`; both are implicit): v1 `VK_LAYER_LS_frame_generation` reads `Lossless.dll`;
+  v2 `VK_LAYER_LSFGVK_frame_generation` reads `lsfg-vk.dll`, which comes from Lossless Scaling's "lsfg-vk" Steam
+  branch. Each is driven by its environment: v1 `LSFG_LEGACY=1`, `LSFG_DLL_PATH`, `LSFG_MULTIPLIER`; v2
+  `LSFGVK_ENV=1`, `LSFGVK_DLL_PATH`, `LSFGVK_MULTIPLIER`. A launcher's own values win. The DLL comes from
+  `WWHD_LSFG_DLL` (the file or its folder), else portable/, else Steam's Lossless Scaling folder (the layers' own
+  search). With both layers installed, v2 is used when its DLL is there. With no layer or no DLL it stays off, and the
+  settings line says why. FSR 3's frame generation disables an installed layer (`DISABLE_LSFG`, `DISABLE_LSFGVK`) so
+  the two don't stack; off leaves the player's own lsfg-vk profiles alone. A device that fails with the layer on (the
+  worker's lavapipe has no external semaphores: "Failed to get device function pointers") makes the renderer start
+  again without it, noted "off: lsfg-vk failed on this GPU".
+- **Frame rate "the display's":** frames a tick are the display's rate over 30 times frame generation's multiplier
+  (`settings::FrameGen`, now a multiplier: FSR 3 2, lsfg-vk 2-4). At 144 Hz, Lossless x2 gives 60 drawn and 120 shown.
+- **Checked (the speed worker):** lsfg-vk v1.0.0 built from source (the build stays on the worker), with the owner's
+  DLL. The layer loads, reads the DLL and extracts its shaders ("Shaders extracted successfully"), then fails at the
+  device on lavapipe; the fallback starts the renderer without it and the route runs.
+- **Checked (the desktop worker, RADV GFX1201):** the same build, Lossless x2, the continue route in real time with a
+  window on its virtual display: the layer comes up with the device and the swapchain, the route reaches 60 fps, and
+  shots of the screen during a camera swing are clean (the HUD unwarped, no smearing on the boat or the clouds). The
+  layer interpolates the whole picture (the HUD too, unlike FSR 3's) and presents FIFO unless told otherwise.
+  **Open (an owner or Deck check):** pacing, latency and VRR on a real display with lsfg-vk installed. The virtual
+  display has no DRI3, so Mesa copies each present in software (drawdone ~14 ms a frame without the layer, ~34 with it:
+  twice the presents), and timing there says nothing about the layer.
 
 ## Graphics options: ambient occlusion off, anisotropic filtering, FXAA (b-gfxopts, session bottom, 2026-10-11)
 

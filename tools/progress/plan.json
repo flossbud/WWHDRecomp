@@ -584,7 +584,7 @@
       "id": "b-lsfg",
       "lane": "bottom",
       "complexity": 6,
-      "name": "Round 14: [6] Lossless Scaling frame generation as an alternative to FSR 3's (the owner's ask): the setting Frame generation: off / FSR 3 / Lossless Scaling (x2, x3, x4), the latter through lsfg-vk (the Vulkan layer that runs Lossless Scaling's shaders on Linux; check its licence before bundling it, else detect an installed one) with the user's own Lossless.dll (a path setting or portable/; never shipped or committed: *.dll gitignored; the owner's copy for tests in /wwhd/data/lsfg on both workers); on the desktop and the Deck, with the HUD, pacing and VRR checked as for b-framegen"
+      "name": "Round 14: [6] Lossless Scaling frame generation as an alternative to FSR 3's (the owner's ask): the setting Frame generation: off / FSR 3 / Lossless Scaling (x2, x3, x4), the latter through lsfg-vk (the Vulkan layer that runs Lossless Scaling's shaders on Linux; check its licence before bundling it, else detect an installed one) with the user's own Lossless.dll (a path setting or portable/; never shipped or committed: *.dll gitignored; the owner's copy for tests in /wwhd/data/lsfg on both workers); on the desktop and the Deck, with the HUD, pacing and VRR checked as for b-framegen. Detect-only (the owner, 2026-10-12): no layer ships. The picture checked on the desktop worker (clean, the HUD too); open, an owner or Deck check: pacing, latency and VRR on a real display with lsfg-vk installed"
     },
     {
       "id": "u8-journal",

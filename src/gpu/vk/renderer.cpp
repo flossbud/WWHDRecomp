@@ -59,6 +59,7 @@ namespace wwhd::gpu
 			Log("libvulkan not found");
 			return false;
 		}
+		lsfg::Prepare();                                            // Lossless Scaling frame generation: its layer's environment
 		VkApplicationInfo app{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
 		app.pApplicationName = "wwhd";
 		app.apiVersion = VK_API_VERSION_1_3;
@@ -154,7 +155,17 @@ namespace wwhd::gpu
 		dci.pQueueCreateInfos = &qci;
 		dci.enabledExtensionCount = (uint32)enable.size();
 		dci.ppEnabledExtensionNames = enable.data();
-		Check(vkCreateDevice(s.physical, &dci, nullptr, &s.device), "vkCreateDevice");
+		const VkResult created = vkCreateDevice(s.physical, &dci, nullptr, &s.device);
+		if (created != VK_SUCCESS && lsfg::Active())
+		{
+			// lsfg-vk couldn't start on this GPU (lavapipe has no external semaphores): the renderer again without it
+			DestroyWindowSurface();
+			vkDestroyInstance(s.instance, nullptr);
+			s.instance = VK_NULL_HANDLE;
+			lsfg::Disable(fmt::format("lsfg-vk failed on this GPU (vkCreateDevice {})", (int)created));
+			return Init();
+		}
+		Check(created, "vkCreateDevice");
 		LoadDevice(s.device);
 		vkGetDeviceQueue(s.device, s.queueFamily, 0, &s.queue);
 		VkCommandPoolCreateInfo pci{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };

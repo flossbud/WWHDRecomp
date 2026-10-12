@@ -152,6 +152,7 @@ namespace wwhd::gpu
 	bool HasWindow();
 	std::vector<const char*> WindowInstanceExtensions();
 	void CreateWindowSurface();                                   // after the instance
+	void DestroyWindowSurface();                                  // before it goes (the renderer's start again without lsfg-vk)
 	bool CanPresent(uint32 queueFamily);                          // true without a window
 	void PresentRecord(Image& scan, Image* between = nullptr);    // before the swap's submit: into the next window image
 	                                                              // (frame generation: between first, into one before it)
@@ -243,6 +244,13 @@ namespace wwhd::gpu
 		bool Upscale(Image& src, Image& dst);
 	}
 	// fxaa.cpp: FXAA on the TV's scene (WWHD_FXAA=1; b-gfxopts), at the HUD split like the upscalers
+	namespace lsfg
+	{
+		void Prepare();                                            // before the instance: lsfg-vk's environment (lsfg.cpp)
+		bool Active();                                             // Prepare turned it on
+		void Disable(const std::string& why);                      // off, for the instance made again (the settings note says why)
+	}
+
 	namespace fxaa
 	{
 		bool On();

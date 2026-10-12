@@ -474,6 +474,13 @@ namespace wwhd::gpu
 			Fail("cannot create a Vulkan surface for the window");
 	}
 
+	void DestroyWindowSurface()
+	{
+		if (w.surface)
+			vkDestroySurfaceKHR(s.instance, w.surface, nullptr);
+		w.surface = VK_NULL_HANDLE;
+	}
+
 	bool CanPresent(uint32 queueFamily)
 	{
 		if (!s_hasWindow)
@@ -623,7 +630,7 @@ namespace wwhd::gpu
 		const float rate = cap && atoi(cap) > 0 ? (float)atoi(cap) : sixty && *sixty == '1' ? 30.0f * steps : 30.0f;
 		const bool force = e && strcmp(e, "force") == 0;
 		s_decided = force || hz >= 2 * rate * 0.95f;
-		os::settings::SetFrameGen(s_decided != 0);
+		os::settings::SetFrameGen(s_decided ? 2 : 1);
 		if (!s_decided)                                           // the settings page says why, not only the log
 			os::settings::SetNote("WWHD_FRAMEGEN", hz > 0 ? fmt::format("off: the display runs at {:.0f} Hz, under twice the game's {:.0f}",
 				hz, rate) : "off: the display's refresh rate is unknown");
