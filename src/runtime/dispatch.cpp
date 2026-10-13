@@ -58,6 +58,9 @@ thread_local constinit float g_rtNote = 0.0f;
 thread_local constinit bool g_rtLateNotes = false;
 thread_local constinit bool g_rtHold = false;
 
+// behind ppc_ops.h's rt_memBase, the recompiled program's constant view of memory_base
+uint8* rt_memBaseVar __asm__("wwhd_rt_membase") = nullptr;
+
 namespace wwhd::rt
 {
 	uint32 g_codeBase, g_codeWords;
@@ -263,6 +266,7 @@ namespace wwhd::rt
 		rt_directBase = g_codeBase;
 		rt_directWords = g_codeWords;
 		rt_direct = table.data();
+		rt_memBaseVar = memory_base;
 	}
 
 	static void Init()

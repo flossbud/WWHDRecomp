@@ -279,3 +279,16 @@ at once. The first: `psq_l`/`psq_st` with a float GQR type (0-3, where Cemu's `d
 ignore the scale) are two word accesses inline (`ppc_ops.h`); the quantized types (4-7) stay out of line. The two
 helpers were 3.7% of the main core. A/B, 4 rounds paired: the work a frame 6.22 -> 6.03 ms (-3.5%, lower in every run),
 the whole frame's median / p90 6.25 / 7.0 -> 6.05 / 6.9 ms, the half frame's 6.5 / 7.3 -> 6.35 / 7.0 ms.
+
+The second: the recompiled program reads guest memory through a constant view of `memory_base`. The generated code is
+built with `-fno-strict-aliasing`, so every guest store may alias any global and the next access reloads the base:
+in `f_02759564` 50 of its ~56 accesses dereferenced it first. `ppc_ops.h` declares `extern uint8* const rt_memBase`
+for the shards only (`-DWWHD_RT_GENERATED`, src/CMakeLists.txt), bound by an asm label to a plain variable that
+`dispatch.cpp`'s `BuildDirectTable` sets from `memory_base` in `Init`, which `Execute` runs once (`std::call_once`)
+before any guest code. Cemu assigns `memory_base` once (`memory_init`'s 4 GB reservation, `if (!memory_base)`); state
+loads restore memory, not the base. The overrides and the runtime keep `memory_base`. After it, `f_02759564`
+dereferences the base 18 times, `f_02010FFC` names it once instead of 49 times, and wwhd-play is 2.3 MB smaller. The
+label is a plain symbol (no mangling, the same on aarch64 and Mach-O; -fPIC reads it through the GOT, still invariant),
+and the shards are built without LTO, so the constant declaration never meets the variable's definition.
+A/B on the desktop worker (en-tn:1800, 4 rounds paired, `WWHD_CORES=3`): the work a frame 6.03 -> 5.94 ms (-1.5%,
+lower in every round, every run below every run). The speed worker's A/B was within its noise (cpu -1.2%, overlapping).

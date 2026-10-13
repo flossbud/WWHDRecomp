@@ -11,6 +11,16 @@
 #include "Cafe/HW/Espresso/Interpreter/PPCInterpreterHelper.h"
 
 extern uint8* memory_base;
+// The recompiled program (WWHD_RT_GENERATED, src/CMakeLists.txt) reads the base through a constant: under
+// -fno-strict-aliasing a guest store may alias any global, so through memory_base every access after a store reloads
+// it; a constant global no store can change. The runtime sets the variable behind it once, before any recompiled code
+// runs (dispatch.cpp BuildDirectTable), and the base never moves after.
+#if defined(WWHD_RT_GENERATED)
+extern uint8* const rt_memBase __asm__("wwhd_rt_membase");
+#define RT_MEM rt_memBase
+#else
+#define RT_MEM memory_base
+#endif
 
 // Store journal: while g_rtJournalOn is set, every store first hands the runtime the range it is
 // about to overwrite and the guest instruction making it (0 from hand-written code), so that a
@@ -131,8 +141,8 @@ extern thread_local constinit float g_rtNote;                 // a value noted b
 // vec@ / arc@: for one call, the vector (three floats) at ea is h of itself; for arc@ (a velocity)
 // y is h y + (1 - h)/2 (y - g_rtNote), g_rtNote its value before gravity was added this step. The
 // vector is put back after the call (outside the store journal: nothing of it is left).
-static inline float rt_vec_rd(uint32 ea) { uint32 v; memcpy(&v, memory_base + ea, 4); v = __builtin_bswap32(v); float f; memcpy(&f, &v, 4); return f; }
-static inline void rt_vec_wr(uint32 ea, float f) { uint32 v; memcpy(&v, &f, 4); v = __builtin_bswap32(v); memcpy(memory_base + ea, &v, 4); }
+static inline float rt_vec_rd(uint32 ea) { uint32 v; memcpy(&v, RT_MEM + ea, 4); v = __builtin_bswap32(v); float f; memcpy(&f, &v, 4); return f; }
+static inline void rt_vec_wr(uint32 ea, float f) { uint32 v; memcpy(&v, &f, 4); v = __builtin_bswap32(v); memcpy(RT_MEM + ea, &v, 4); }
 static inline void rt_step_vec_begin(uint32 ea, float saved[3], bool arc)
 {
 	const float h = g_rtStep;
@@ -152,14 +162,14 @@ static inline void rt_step_vec_end(uint32 ea, const float saved[3])
 // (outside the store journal, as vec@'s vector)
 static inline uint16 rt_step_s16_begin(uint32 ea)
 {
-	uint16 v; memcpy(&v, memory_base + ea, 2); v = __builtin_bswap16(v);
+	uint16 v; memcpy(&v, RT_MEM + ea, 2); v = __builtin_bswap16(v);
 	const uint16 s = (uint16)rt_step_split((uint32)(sint32)(sint16)v);
-	const uint16 b = __builtin_bswap16(s); memcpy(memory_base + ea, &b, 2);
+	const uint16 b = __builtin_bswap16(s); memcpy(RT_MEM + ea, &b, 2);
 	return v;
 }
 static inline void rt_step_s16_end(uint32 ea, uint16 saved)
 {
-	const uint16 b = __builtin_bswap16(saved); memcpy(memory_base + ea, &b, 2);
+	const uint16 b = __builtin_bswap16(saved); memcpy(RT_MEM + ea, &b, 2);
 }
 
 // Guest time (design D6, revised for M4): every instruction costs one cycle of the thread's
@@ -230,15 +240,15 @@ static inline void rt_fcmpu(PPCInterpreter_t* ctx, int crfD, double a, double b)
 }
 
 // ---- memory (big-endian guest, identity-mapped at memory_base) ----------------------------------
-static inline uint8 rd8(uint32 ea) { return memory_base[ea]; }
-static inline uint16 rd16(uint32 ea) { uint16 v; memcpy(&v, memory_base + ea, 2); return __builtin_bswap16(v); }
-static inline uint32 rd32(uint32 ea) { uint32 v; memcpy(&v, memory_base + ea, 4); return __builtin_bswap32(v); }
-static inline uint64 rd64(uint32 ea) { uint64 v; memcpy(&v, memory_base + ea, 8); return __builtin_bswap64(v); }
-static inline void wr8(uint32 ea, uint8 v, uint32 pc = 0) { RT_STORE(ea, 1, pc); memory_base[ea] = v; }
-static inline void wr16(uint32 ea, uint16 v, uint32 pc = 0) { RT_STORE(ea, 2, pc); v = __builtin_bswap16(v); memcpy(memory_base + ea, &v, 2); }
-static inline void wr32(uint32 ea, uint32 v, uint32 pc = 0) { RT_STORE(ea, 4, pc); v = __builtin_bswap32(v); memcpy(memory_base + ea, &v, 4); }
-static inline void wr64(uint32 ea, uint64 v, uint32 pc = 0) { RT_STORE(ea, 8, pc); v = __builtin_bswap64(v); memcpy(memory_base + ea, &v, 8); }
-static inline void zero_line(uint32 ea, uint32 pc = 0) { ea &= ~31u; RT_STORE(ea, 32, pc); memset(memory_base + ea, 0, 32); }   // dcbz
+static inline uint8 rd8(uint32 ea) { return RT_MEM[ea]; }
+static inline uint16 rd16(uint32 ea) { uint16 v; memcpy(&v, RT_MEM + ea, 2); return __builtin_bswap16(v); }
+static inline uint32 rd32(uint32 ea) { uint32 v; memcpy(&v, RT_MEM + ea, 4); return __builtin_bswap32(v); }
+static inline uint64 rd64(uint32 ea) { uint64 v; memcpy(&v, RT_MEM + ea, 8); return __builtin_bswap64(v); }
+static inline void wr8(uint32 ea, uint8 v, uint32 pc = 0) { RT_STORE(ea, 1, pc); RT_MEM[ea] = v; }
+static inline void wr16(uint32 ea, uint16 v, uint32 pc = 0) { RT_STORE(ea, 2, pc); v = __builtin_bswap16(v); memcpy(RT_MEM + ea, &v, 2); }
+static inline void wr32(uint32 ea, uint32 v, uint32 pc = 0) { RT_STORE(ea, 4, pc); v = __builtin_bswap32(v); memcpy(RT_MEM + ea, &v, 4); }
+static inline void wr64(uint32 ea, uint64 v, uint32 pc = 0) { RT_STORE(ea, 8, pc); v = __builtin_bswap64(v); memcpy(RT_MEM + ea, &v, 8); }
+static inline void zero_line(uint32 ea, uint32 pc = 0) { ea &= ~31u; RT_STORE(ea, 32, pc); memset(RT_MEM + ea, 0, 32); }   // dcbz
 // a `late` store passed over on a stepping whole tick: noted, not made (RT_LATE_TICK, above)
 static inline void late_wr8(uint32 ea, uint8 v, uint32 = 0) { if (g_rtLateNotes) rt_late_note(ea, 1, v); }
 static inline void late_wr16(uint32 ea, uint16 v, uint32 = 0) { if (g_rtLateNotes) rt_late_note(ea, 2, v); }
