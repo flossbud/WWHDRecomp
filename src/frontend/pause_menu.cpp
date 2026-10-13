@@ -416,6 +416,10 @@ namespace wwhd::pause_menu
 			// the start screen (t-startscreen S1, Launch): up over the title's first frame, held, until Start Game
 			bool start = false;                         // the Launch screen is up (the menu's own items are not)
 			bool startDone = false;                     // shown once a run: after Start Game the menu is the pause menu
+			bool begun = false;                         // the menu's thread is running (Begin): the start screen will come
+			bool startGrace = false;                    // Start Game chosen: the game gets no button until none is held
+			bool graceIdle = false;                     // and none was held since
+			bool bgHold = false;                        // the app went to the background before play: held here (Background)
 			// the title's first frame: the game's requests for the title scene (its logo's fade, ~30 frames) end, its stage
 			// loads under black, then its sky: the TV picture sampled every 150 ms until it's bright and settled
 			uint32 titleReqs = 0;                       // sixty TitleRequests when last looked
@@ -2611,7 +2615,14 @@ namespace wwhd::pause_menu
 				if (st.checked && !st.copy.ok)
 					ShowToast(st, "These game files didn\xE2\x80\x99t verify: see Game Files.");
 				else
-					Close(st);                              // Start Game: the hold let go, into the live title
+				{
+					// Start Game: the game let go now, its sound with it, and the whole screen (its logo and the frozen
+					// frame too) faded out over the title as it goes on from that frame (gpu SetMenuOpacity)
+					Close(st);
+					st.startGrace = true, st.graceIdle = false;
+					wwhd::state::RequestHold(false);
+					wwhd::state::PauseSound(false);
+				}
 				return;
 			case 1:
 				if (Categories().empty())
@@ -2844,7 +2855,8 @@ namespace wwhd::pause_menu
 		}
 
 		// Launch over the title: once the game has asked for the title scene and its first frames are shown, the game held
-		// there (its picture the backdrop, frozen), the menu on Start Game; the game files' check from game.txt, or run now
+		// there (its picture the backdrop, frozen; its sound stopped since the logo went, so the song waits too), the menu on
+		// Start Game, which fades the whole screen into the title as it goes on; the files' check from game.txt, or run now
 		void StartLaunch(State& st, bool window)
 		{
 			if (st.startDone || st.start || st.phase != Phase::Closed || !window || !StartWanted())
@@ -2865,6 +2877,10 @@ namespace wwhd::pause_menu
 			}
 			if (now - st.titleQuietSince < std::chrono::milliseconds(300))
 				return;
+			// the logo gone, the title's stage loading: its sound stopped until Start Game (the song begins ~0.6 s before
+			// the picture, ~1.5 s before the start screen: held there, Start Game went on from partway through it)
+			if (!wwhd::state::SoundPaused())
+				wwhd::state::PauseSound(true);
 			// the title's stage loading, then its sky: the first bright, settled picture (20 s at most)
 			bool ready = now - st.titleQuietSince > std::chrono::seconds(20);
 			if (!ready)
@@ -3085,6 +3101,8 @@ namespace wwhd::pause_menu
 				const float ms = std::chrono::duration<float, std::milli>(Clock::now() - st.since).count();
 				if (st.phase == Phase::Opening && ms > 1000)
 					st.phase = Phase::Open;
+				if (st.phase == Phase::Closing && st.start)
+					gpu::SetMenuOpacity(1 - Linear(ms, 0, 560));
 				if (st.phase == Phase::Closing && ms > 560)
 				{
 					st.phase = Phase::Closed, st.closedAt = Clock::now(), st.hintAt = st.closedAt + std::chrono::milliseconds(300);
@@ -3095,6 +3113,7 @@ namespace wwhd::pause_menu
 						cemuLog_log(LogType::Force, "wwhd: start screen: Start Game, the title goes on");
 					}
 					gpu::SetMenuPanel(0, 0, {});
+					gpu::SetMenuOpacity(1);
 					wwhd::state::RequestHold(false);
 					continue;
 				}
@@ -3153,7 +3172,36 @@ namespace wwhd::pause_menu
 		begun = true;
 		State& st = S();
 		std::lock_guard lock(st.lock);
+		st.begun = true;
 		Start(st);
+	}
+
+	void Background(bool on)
+	{
+		State& st = S();
+		std::unique_lock lock(st.lock);
+		if (on)
+		{
+			if (!st.begun || st.bgHold || st.phase != Phase::Closed)
+				return;                                     // no menu yet (its thread starts with the first frame shown), or
+				                                            // the menu or the start screen up: held already
+			if (st.begun && st.startDone)
+			{
+				lock.unlock();
+				cemuLog_log(LogType::Force, "wwhd: the app went to the background: the pause menu");
+				Toggle();                                   // in play: paused as Esc pauses, and back to the menu
+				return;
+			}
+			cemuLog_log(LogType::Force, "wwhd: the app went to the background: the game held");
+			wwhd::state::RequestHold(true);
+			st.bgHold = true;
+		}
+		else if (st.bgHold)
+		{
+			st.bgHold = false;
+			if (!st.start)                                  // the start screen came up meanwhile: its hold now
+				wwhd::state::RequestHold(false);
+		}
 	}
 
 	bool Up()
@@ -3515,10 +3563,31 @@ namespace wwhd::pause_menu
 	}
 
 	// what the game may see of the pad: nothing while the menu is up, nor a button held since it closed
-	uint32 Swallowed()
+	uint32 Swallowed(uint32 held)
 	{
 		State& st = S();
 		std::lock_guard lock(st.lock);
+		// after Start Game, every button (the keyboard's and the pad's, however the system sent them) until the fade is
+		// over and none is held: the title skips its intro to its finished logo on any A, B or START it sees
+		// (daTitle_proc_c::proc_execute), and on the Odin the press that chose Start Game reached it
+		// (a new press once all were let go and the fade is over is the game's; 2 s after it, whatever is held)
+		if (st.startGrace)
+		{
+			const bool closed = st.phase == Phase::Closed;
+			if (closed && (held == 0 || st.graceIdle || Clock::now() - st.closedAt > std::chrono::seconds(2)))
+				st.startGrace = false;
+			else
+			{
+				st.graceIdle |= held == 0;
+				if (held != 0 && !closed)
+					cemuLog_log(LogType::Force, "wwhd: start screen: buttons {:08x} held over the fade, kept from the game", held);
+				return ~0u;
+			}
+		}
+		// all of them too before the start screen comes up: the game goes on under it while the title loads, and buttons
+		// pressed then took it past its title (A pressed through the logos: the file select, the start screen over it)
+		if (st.begun && !st.startDone && StartWanted() && wwhd::sixty::PlayStarts() == 0)
+			return ~0u;
 		return st.phase != Phase::Closed ? ~0u : st.swallow;
 	}
 }

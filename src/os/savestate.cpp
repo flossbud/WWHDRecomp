@@ -722,6 +722,13 @@ namespace wwhd::state
 		return s_held.load(std::memory_order_acquire);
 	}
 
+	namespace
+	{
+		std::atomic<bool> s_soundPaused{ false };
+	}
+	void PauseSound(bool on) { s_soundPaused.store(on, std::memory_order_release); }
+	bool SoundPaused() { return s_soundPaused.load(std::memory_order_acquire); }
+
 	std::string SlotFile(int slot)
 	{
 		std::lock_guard lock(s_slotLock);

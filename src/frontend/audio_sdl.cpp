@@ -92,6 +92,11 @@ namespace wwhd
 
 	bool OpenAudio()
 	{
+#ifdef __ANDROID__
+		const char* api = getenv("WWHD_AUDIO_API");    // sdl: SDL's AAudio output, as before audio_aaudio.cpp
+		if (!(api && strcmp(api, "sdl") == 0) && OpenAAudio())
+			return true;
+#endif
 		if (!SDL_InitSubSystem(SDL_INIT_AUDIO))
 		{
 			cemuLog_log(LogType::Force, "wwhd: SDL audio: {}", SDL_GetError());

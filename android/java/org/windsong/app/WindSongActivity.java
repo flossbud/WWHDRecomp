@@ -7,6 +7,8 @@ package org.windsong.app;
 import android.os.Bundle;
 import android.system.ErrnoException;
 import android.system.Os;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import java.io.File;
 import org.libsdl.app.SDLActivity;
 
@@ -38,6 +40,31 @@ public class WindSongActivity extends SDLActivity {
             throw new RuntimeException(e);
         }
         super.onCreate(savedInstanceState);
+        hideSystemBars();
+    }
+
+    // The system bars hidden whenever the window is ours again. SDL hides them once, when the window goes fullscreen,
+    // with the old system UI flags, which a moment without focus then (another activity over ours, a dialog) can
+    // undo: the game was drawn between the bars, black bands at the top and bottom, on some launches and not others.
+    private void hideSystemBars() {
+        WindowInsetsController bars = getWindow().getInsetsController();
+        if (bars == null)
+            return;
+        bars.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        bars.hide(WindowInsets.Type.systemBars());
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        hideSystemBars();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus)
+            hideSystemBars();
     }
 
     @Override

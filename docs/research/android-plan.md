@@ -74,6 +74,18 @@ Not run on the device yet (A3): it needs the handheld on the tailnet with Wirele
 `tools/android/device.sh` (in the worker's container): `pair`/`connect`, `install`, `files` (deploy.sh's layout, the game
 once), `run` (start, then the app's logcat), `stop`, `uninstall` (restores the device).
 
+## A3 on the device (2026-10-13, the owner's handheld: Adreno 740, Android 13)
+- Runs: three host threads at 59-60 fps in the title (the scheduler thread 72-80% busy); fullscreen and landscape;
+  Home and back keep the process; asleep or in another app the pause menu opens and the sound's stream pauses.
+- Sound on AAudio directly (audio_aaudio.cpp): no fast track there (no MMAP; a normal mixer track), latency 122 -> 75 ms.
+- Found by testing: libc++'s atomic wait/notify lose wake-ups (the scheduler lock on a futex), arm64's thread pointer
+  read once a function (the lock count through a call), SDL's orientation and system bars, the start screen's input.
+- Open: the title's boat snaps in at 60 (its 60 rules; session bottom); SDL's event wait spins on Android (a core);
+  Change Files' restart (execv of /proc/self/exe) is wrong there (S3).
+- Tools: `tools/android/device.sh` (ENV="A=1;B=2" for run's variables), the APK debuggable (run-as: simpleperf,
+  lldb-server on an abstract socket, the app has no INTERNET permission), Cemu's log in the app's external files
+  (portable/log.txt), `adb shell screenrecord` for frame-by-frame looks.
+
 ## P0: doesn't build, link or start on Android
 
 1. **Fibers** (`src/runtime/fiber/FiberUnix.cpp`): the switch is x86-64 asm; the fallback is `ucontext`, which bionic

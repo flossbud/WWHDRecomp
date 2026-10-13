@@ -47,6 +47,9 @@ namespace wwhd::gpu
 	// pixels, blended over the picture at SetHintOpacity's opacity (0: not drawn)
 	void SetHintPanel(sint32 x, sint32 y, uint32 w, uint32 h, std::vector<uint32> rgba);
 	void SetHintOpacity(float opacity);
+	// the menu's panel blended over the picture at this opacity instead of copied over it (1, the default: copied): the
+	// start screen's fade into the title as it goes on
+	void SetMenuOpacity(float opacity);
 	void RequestTvPicture();
 	bool TakeTvPicture(std::vector<uint32>& rgba, uint32& w, uint32& h);
 	void ServeHeldPresent();

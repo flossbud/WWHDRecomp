@@ -61,6 +61,7 @@ namespace wwhd::gpu
 		Panel s_menu;                           // the pause menu, the whole window (SetMenuPanel)
 		Panel s_hint;                           // the pause menu's "Pause" prompt, in the window's pixels, blended (SetHintPanel)
 		std::atomic<float> s_hintOpacity{ 0 };
+		std::atomic<float> s_menuOpacity{ 1 };
 		uint32 s_menuShown = 0;                 // the menu panel's version last presented while held
 		std::atomic<double> s_frameX{ 0 }, s_frameY{ 0 }, s_frameScale{ 0 };   // where the 1920x1080 frame was last drawn
 
@@ -418,6 +419,8 @@ namespace wwhd::gpu
 
 	void SetHintOpacity(float opacity) { s_hintOpacity.store(opacity, std::memory_order_relaxed); }
 
+	void SetMenuOpacity(float opacity) { s_menuOpacity.store(opacity, std::memory_order_relaxed); }
+
 	uint64 ShownFrames() { return s_shown.load(std::memory_order_relaxed); }
 
 	double TakeLongestShownInterval() { return s_longestNs.exchange(0, std::memory_order_relaxed) / 1e6; }
@@ -457,10 +460,10 @@ namespace wwhd::gpu
 
 	// a panel into the swapchain image (in TRANSFER_DST layout): place(w, h, x0, y0, x1, y1) gives its rectangle there
 	template<typename Place>
-	static void DrawPanel(Panel& p, VkImage target, VkFilter filter, Place place)
+	static void DrawPanel(Panel& p, VkImage target, VkFilter filter, Place place, VkImageUsageFlags usage = 0)
 	{
 		std::unique_lock lock(p.lock);
-		if (!UploadPanel(p))
+		if (!UploadPanel(p, usage))
 			return;
 		Image& img = p.image;
 		sint32 x0, y0, x1, y1;
@@ -506,21 +509,12 @@ namespace wwhd::gpu
 		});
 	}
 
-	// the pause menu over the whole window image (drawn at the window's size: a resize redraws it)
-	static void DrawMenu(VkImage target)
+	// a panel blended over the window image at an opacity (a pass of its own: the other panels are copies), over the
+	// whole window or at its own place; false where the swapchain can't be drawn into
+	static bool BlendPanel(Panel& p, VkImage target, float op, bool whole)
 	{
-		DrawPanel(s_menu, target, VK_FILTER_LINEAR, [&](const Panel& p, sint32& x0, sint32& y0, sint32& x1, sint32& y1) {
-			x0 = 0, y0 = 0, x1 = (sint32)w.width, y1 = (sint32)w.height;
-		});
-	}
-
-	// the "Pause" prompt blended over the window image at its opacity (a pass of its own: the panels above are copies);
-	// nothing where the swapchain can't be drawn into
-	static void DrawHint(VkImage target)
-	{
-		const float op = s_hintOpacity.load(std::memory_order_relaxed);
-		if (op <= 0.004f || w.index >= w.views.size())
-			return;
+		if (w.index >= w.views.size())
+			return false;
 		static VkShaderModule fragment = fullscreen::Fragment(R"(#version 450
 layout(set = 0, binding = 0) uniform sampler2D src;
 layout(push_constant) uniform Constants { vec4 rect; vec4 k; } p;
@@ -530,23 +524,48 @@ void main()
 	vec4 c = texture(src, (gl_FragCoord.xy - p.rect.xy) / p.rect.zw);
 	outColor = vec4(c.rgb, c.a * p.k.x);
 }
-)", "pause prompt");
+)", "blended panel");
 		if (!fragment)
-			return;
-		std::unique_lock lock(s_hint.lock);
-		if (!UploadPanel(s_hint, VK_IMAGE_USAGE_SAMPLED_BIT))
-			return;
-		const sint32 x0 = std::max(0, s_hint.x), y0 = std::max(0, s_hint.y);
-		const sint32 x1 = std::min((sint32)w.width, s_hint.x + (sint32)s_hint.w), y1 = std::min((sint32)w.height, s_hint.y + (sint32)s_hint.h);
+			return false;
+		std::unique_lock lock(p.lock);
+		if (!UploadPanel(p, VK_IMAGE_USAGE_SAMPLED_BIT))
+			return true;
+		const sint32 px = whole ? 0 : p.x, py = whole ? 0 : p.y;
+		const uint32 pw = whole ? w.width : p.w, ph = whole ? w.height : p.h;
+		const sint32 x0 = std::max(0, px), y0 = std::max(0, py);
+		const sint32 x1 = std::min((sint32)w.width, px + (sint32)pw), y1 = std::min((sint32)w.height, py + (sint32)ph);
 		if (x1 <= x0 || y1 <= y0)
-			return;
-		const float r[8] = { (float)s_hint.x, (float)s_hint.y, (float)s_hint.w, (float)s_hint.h, op, 0, 0, 0 };
+			return true;
+		const float r[8] = { (float)px, (float)py, (float)pw, (float)ph, op, 0, 0, 0 };
 		uint32 c[16]{};
 		memcpy(c, r, sizeof(r));
 		Barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-		fullscreen::Blend(fragment, s_hint.image, w.views[w.index], w.format, { { x0, y0 }, { (uint32)(x1 - x0), (uint32)(y1 - y0) } }, c);
+		fullscreen::Blend(fragment, p.image, w.views[w.index], w.format, { { x0, y0 }, { (uint32)(x1 - x0), (uint32)(y1 - y0) } }, c);
 		lock.unlock();
 		Barrier(target, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		return true;
+	}
+
+	// the pause menu over the whole window image (drawn at the window's size: a resize redraws it); below SetMenuOpacity's
+	// 1 blended over the picture (the start screen's fade into the title), copied where it can't be
+	static void DrawMenu(VkImage target)
+	{
+		const float op = s_menuOpacity.load(std::memory_order_relaxed);
+		if (op <= 0.004f)
+			return;
+		if (op < 0.996f && BlendPanel(s_menu, target, op, true))
+			return;
+		DrawPanel(s_menu, target, VK_FILTER_LINEAR, [&](const Panel& p, sint32& x0, sint32& y0, sint32& x1, sint32& y1) {
+			x0 = 0, y0 = 0, x1 = (sint32)w.width, y1 = (sint32)w.height;
+		}, w.views.empty() ? 0 : VK_IMAGE_USAGE_SAMPLED_BIT);      // sampled too: blended while the start screen fades
+	}
+
+	// the "Pause" prompt blended over the window image at its opacity; nothing where the swapchain can't be drawn into
+	static void DrawHint(VkImage target)
+	{
+		const float op = s_hintOpacity.load(std::memory_order_relaxed);
+		if (op > 0.004f)
+			BlendPanel(s_hint, target, op, false);
 	}
 
 	void SetWindow(Window window)

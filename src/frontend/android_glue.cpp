@@ -81,6 +81,9 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char* a
 	// landscape only, as the manifest says: SDL sets the activity's orientation again when the window opens, from this
 	// hint, and without it from the window (resizable: any orientation, which put the game in portrait)
 	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+	// no Steam Controller over Bluetooth (Cemu's controller setup turns it on): SDL asks for the Bluetooth permission for
+	// it, which the app doesn't declare, and the request's activity took the window's focus while it went fullscreen
+	SDL_SetHintWithPriority(SDL_HINT_JOYSTICK_HIDAPI_STEAM, "0", SDL_HINT_OVERRIDE);
 	Dl_info self{};   // where the library is loaded: crash backtraces print addresses only (symbols are local)
 	if (dladdr(reinterpret_cast<void*>(&SDL_main), &self))
 		__android_log_print(ANDROID_LOG_INFO, "wwhd", "libmain.so at %p", self.dli_fbase);

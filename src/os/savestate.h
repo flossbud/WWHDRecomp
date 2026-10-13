@@ -52,6 +52,10 @@ namespace wwhd::state
 	// game stays held after it. While held the sound is silent (ax_out.cpp) and the game reads no input
 	void RequestHold(bool on);
 	bool Held();
+	// The start screen (pause_menu.cpp): the game's sound stopped where it is, held or not: no AX frames, so its sound
+	// threads (driven by AX's frame callbacks) and the song they play wait, and the device plays nothing (ax_out.cpp)
+	void PauseSound(bool on);
+	bool SoundPaused();
 	// the pause menu's File 1 save: while held, the main thread is woken to run fn (the game's own save: SetGameSave,
 	// overrides/sixty.cpp) at the tick's top, then parked again; the save's own thread writes the file meanwhile
 	void SetGameSave(void (*fn)(PPCInterpreter_t*), uint32 managerAt);

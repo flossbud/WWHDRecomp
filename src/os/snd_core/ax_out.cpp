@@ -529,6 +529,9 @@ namespace snd_core
 			AXOut_updateVirtual();
 			return;
 		}
+		// wwhd: the start screen stops the game's sound where it is (savestate.h PauseSound): no frames queued
+		if (wwhd::state::SoundPaused())
+			return;
 		constexpr static auto kTimeout = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::milliseconds(((IAudioAPI::kBlockCount * 3) / 4) * (AX_FRAMES_PER_GROUP * 3)));
 		constexpr static auto kWaitDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::milliseconds(3));
 		constexpr static auto kWaitDurationFast = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::microseconds(2900));

@@ -246,7 +246,7 @@ static void PublishInput()
 	// opens and closes it, and the game never sees − (the owner's choice: without the GamePad it does nothing useful)
 	wwhd::pause_menu::Pad(gamepad);
 	pad.buttons &= ~MINUS;
-	if (const uint32 swallowed = wwhd::pause_menu::Swallowed())
+	if (const uint32 swallowed = wwhd::pause_menu::Swallowed(pad.buttons))
 	{
 		pad.buttons &= ~swallowed;
 		if (swallowed == ~0u)
@@ -394,11 +394,25 @@ static SDL_Window* OpenWindow()
 	wwhd::gpu::SetWindow(std::move(w));
 	// Android's pause and resume (b-android-vk): the window's surface goes with the app to the background and a new one
 	// is made when it comes back. An event watch, so the renderer hears of it as it happens, whatever the loop is doing
+	// The game stops there too: the pause menu opens (or the game is held before play) and the sound's stream pauses;
+	// before, it went on behind the sleeping screen, its music playing (the owner's Odin)
 	SDL_AddEventWatch([](void*, SDL_Event* ev) {
 		if (ev->type == SDL_EVENT_WILL_ENTER_BACKGROUND || ev->type == SDL_EVENT_DID_ENTER_BACKGROUND)
+		{
 			wwhd::gpu::SurfaceLost();
+#if defined(__ANDROID__)
+			wwhd::AudioBackground(true);
+			wwhd::pause_menu::Background(true);
+#endif
+		}
 		else if (ev->type == SDL_EVENT_DID_ENTER_FOREGROUND)
+		{
 			wwhd::gpu::SurfaceBack();
+#if defined(__ANDROID__)
+			wwhd::pause_menu::Background(false);
+			wwhd::AudioBackground(false);
+#endif
+		}
 		return true;
 	}, nullptr);
 	cemuLog_log(LogType::Force, "wwhd: window on SDL's {} video driver", SDL_GetCurrentVideoDriver());

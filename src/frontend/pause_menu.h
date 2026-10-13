@@ -13,13 +13,18 @@ namespace wwhd::pause_menu
 	bool Available();                       // a window and the renderer, and its assets found
 	void Begin();                           // its thread started when Available (the window's loop calls it)
 	bool Up();                              // shown, opening or closing: the game gets no input
+	// the app to the background (Android: the screen off, another app) and back: in play the pause menu opens, as Esc
+	// opens it; before play the game is held until it's back
+	void Background(bool on);
 	void Toggle();
 	// a key press from the window (SDL keycode, true when repeated by the system): true when the menu took it
 	bool Key(uint32 key, bool repeat);
 	// the pad as the frontend reads it, every time it publishes input: the menu's own while it is up
 	void Pad(const os::input::Pad& pad);
-	// the pad's buttons the game mustn't see: all while the menu is up, then those held since it closed until released
-	uint32 Swallowed();
+	// the pad's buttons the game mustn't see: all while the menu is up or the start screen is still to come, then those
+	// held since it closed until released
+	// (held: the buttons the game would see, keyboard and pad together; after Start Game all stay the menu's until none is)
+	uint32 Swallowed(uint32 held);
 	// the mouse in the window's pixels: button 0 a move, 1 the left button pressed, 2 the right
 	void Mouse(float x, float y, int button);
 

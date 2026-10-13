@@ -117,7 +117,7 @@ set_property(TARGET wwhd_main PROPERTY COMPILE_OPTIONS "${options}")
 add_library(wwhd_frontend OBJECT frontend/cemu_boot.cpp frontend/window_system.cpp frontend/audio_sdl.cpp frontend/overlay.cpp
 	frontend/pause_menu.cpp frontend/ui_draw.cpp frontend/game_files.cpp)
 if(ANDROID)
-	target_sources(wwhd_frontend PRIVATE frontend/android_glue.cpp)
+	target_sources(wwhd_frontend PRIVATE frontend/android_glue.cpp frontend/audio_aaudio.cpp)
 	# Cemu's exception handler names functions with its ELF reader on every Linux (BOOST_OS_LINUX), but Cemu builds the
 	# reader only where CMake's LINUX is, which Android isn't
 	target_sources(CemuCommon PRIVATE "${CEMU_SRC}/src/Common/ExceptionHandler/ELFSymbolTable.cpp")
@@ -257,6 +257,7 @@ function(wwhd_executable name)
 	if(ANDROID)   # after Cemu's options, which replace the target's
 		target_link_options(${name} PRIVATE "-Wl,-z,max-page-size=16384"   # 16K-page devices
 			"-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/frontend/android.map")
+		target_link_libraries(${name} PRIVATE aaudio)    # audio_aaudio.cpp
 	endif()
 	if(ANDROID OR CMAKE_EXE_LINKER_FLAGS MATCHES "fuse-ld=lld")         # lld's spelling (the NDK's, tools/arm64/toolchain.cmake)
 		target_link_options(${name} PRIVATE "-Wl,--thinlto-cache-dir=${CMAKE_BINARY_DIR}/thinlto-cache")
