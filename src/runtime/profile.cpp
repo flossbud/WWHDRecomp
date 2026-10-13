@@ -29,7 +29,7 @@
 #include <ucontext.h>
 #include <unistd.h>
 
-#if defined(__x86_64__) && !defined(_WIN32)
+#if (defined(__x86_64__) || defined(__aarch64__)) && !defined(_WIN32) && !defined(__APPLE__)
 // src/runtime/fiber/FiberUnix.cpp; weak: without our forks (WWHD_FORKS=OFF) both are 0, and no pc is in between
 extern "C" __attribute__((weak)) char wwhd_fiber_switch[], wwhd_fiber_switch_end[];
 #endif
@@ -70,13 +70,18 @@ namespace wwhd::rt
 			if (i >= s_capacity)
 				return;
 			Sample& s = At(i);
-			const greg_t* regs = ((ucontext_t*)context)->uc_mcontext.gregs;
+			const mcontext_t& mc = ((ucontext_t*)context)->uc_mcontext;
+#if defined(__aarch64__)
+			const uintptr_t pc = mc.pc, sp = mc.sp;
+#else
+			const uintptr_t pc = mc.gregs[REG_RIP], sp = mc.gregs[REG_RSP];
+#endif
 			s.tid = (uintptr_t)syscall(SYS_gettid) | (uintptr_t)g_rtHalfTick << 32;
-			s.pc[0] = (uintptr_t)regs[REG_RIP];
+			s.pc[0] = pc;
 			s.depth = 1;
 			if (!s_stacks)
 				return;
-#if defined(__x86_64__) && !defined(_WIN32)
+#if (defined(__x86_64__) || defined(__aarch64__)) && !defined(_WIN32) && !defined(__APPLE__)
 			// in the middle of a fiber switch the stack pointer belongs to either fiber: no unwinding
 			const bool switching = s.pc[0] >= (uintptr_t)wwhd_fiber_switch && s.pc[0] < (uintptr_t)wwhd_fiber_switch_end;
 #else
@@ -92,7 +97,7 @@ namespace wwhd::rt
 				return;
 			}
 			uintptr_t words[16];
-			iovec local{ words, sizeof(words) }, remote{ (void*)regs[REG_RSP], sizeof(words) };
+			iovec local{ words, sizeof(words) }, remote{ (void*)sp, sizeof(words) };
 			if (s_depth > 1 && process_vm_readv(getpid(), &local, 1, &remote, 1, 0) == (ssize_t)sizeof(words))
 				for (uintptr_t w : words)
 					if (InText(w))

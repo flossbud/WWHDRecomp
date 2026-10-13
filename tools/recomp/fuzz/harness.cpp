@@ -7,16 +7,22 @@
 #include "fuzz.h"
 #include "Cafe/HW/MMU/MMU.h"
 #include <random>
+#if defined(__x86_64__)
+#include <xmmintrin.h>
+#elif defined(__aarch64__)
+#include <arm_acle.h>
+#endif
 #include <map>
 #include <string>
 
 static constexpr uint32 WIN = 0x10100000, WIN_SIZE = 0x10000;
 
-void rt_trap(PPCInterpreter_t*, uint32 ea) { fprintf(stderr, "trap at %08x\n", ea); abort(); }
-void rt_dcache_flush(uint32) {}
-thread_local constinit bool g_rtJournalOn = false;
-thread_local constinit const uint8* g_rtStoreTable = nullptr;   // the journal off: RT_STORE passes every store
-void rt_journal_store(uint32, uint32, uint32) {}
+// Weak: linked against wwhd-null (build.sh's FUZZ_WWHD) the runtime's own definitions win.
+__attribute__((weak)) void rt_trap(PPCInterpreter_t*, uint32 ea) { fprintf(stderr, "trap at %08x\n", ea); abort(); }
+__attribute__((weak)) void rt_dcache_flush(uint32) {}
+__attribute__((weak)) thread_local constinit bool g_rtJournalOn = false;
+__attribute__((weak)) thread_local constinit const uint8* g_rtStoreTable = nullptr;   // the journal off: RT_STORE passes every store
+__attribute__((weak)) void rt_journal_store(uint32, uint32, uint32) {}
 
 static std::mt19937_64 rng(1);
 
@@ -51,7 +57,7 @@ static double randDouble()
 	}
 	case 6: return (double)bitsToFloat((uint32)(rng() & 0x807FFFFF));     // float denormals
 	case 7: return ((double)(rng() % 2000000) - 1000000.0) / 1024.0;
-	default: return ldexp((double)(rng() % 0x1000000) / 0x1000000, (int)(rng() % 300) - 150);
+	default: { double m = (double)(rng() % 0x1000000) / 0x1000000; return ldexp(m, (int)(rng() % 300) - 150); }   // arguments are unsequenced
 	}
 }
 
@@ -63,8 +69,12 @@ static void randomState(PPCInterpreter_t& c)
 	c.xer_ca = rng() & 1; c.xer_so = rng() & 1; c.xer_ov = rng() & 1;
 	c.fpscr = (uint32)rng() & 0x000FF000;
 	c.spr.LR = (uint32)rng(); c.spr.CTR = randGpr();
-	for (auto& q : c.spr.UGQR)
-		q = (uint32)((rng() % 64) << 24 | (rng() % 8) << 16 | (rng() % 64) << 8 | (rng() % 8));
+	for (auto& q : c.spr.UGQR)   // one draw a statement: the operands of | are unsequenced (x86-64 and arm64 builds differ)
+	{
+		uint32 ls = (uint32)(rng() % 64) << 24; uint32 lt = (uint32)(rng() % 8) << 16;
+		uint32 ss = (uint32)(rng() % 64) << 8; uint32 st = (uint32)(rng() % 8);
+		q = ls | lt | ss | st;
+	}
 	c.reservedMemAddr = 0; c.reservedMemValue = 0;
 }
 
@@ -98,6 +108,46 @@ static uint32 aim(PPCInterpreter_t& c, const FuzzCase& fc)
 }
 
 static long g_nanOnly = 0;
+
+// FUZZ_DUMP=FILE (m-android A1): a line per case, "op word raw sign value in", three FNV-1a hashes of what our code left
+// over every iteration (the compared registers and the window): raw; NaNs as their sign only; NaNs as one value. The
+// same build on x86-64 and arm64 makes the same cases and states (mt19937_64, seed 1), so diffing two dumps finds the
+// cases the hosts disagree on and sorts them: raw only = a NaN's payload, sign = a NaN's sign, value = a real
+// difference (a denormal flushed, a conversion); in hashes the inputs, which must match or the dumps don't compare.
+// FUZZ_FTZ=1 sets flush to zero as the runtime's threads do (coreinit_Thread.cpp: MXCSR.FZ on x86-64, FPCR.FZ on
+// arm64, which also flushes denormal inputs), only around the instruction: arm64's FZ would flush the generator's
+// own denormals too, and the hosts would start from different states.
+// FUZZ_FTZ=2 on x86-64 adds DAZ (inputs flushed too), as arm64's FZ: a dump that then matches arm64's shows every
+// difference is a flushed denormal input.
+static uint32 g_ftzBits = 0x8000;
+static void setFtz(bool on)
+{
+#if defined(__x86_64__)
+	_mm_setcsr(on ? _mm_getcsr() | g_ftzBits : _mm_getcsr() & ~g_ftzBits);
+#elif defined(__aarch64__)
+	__arm_wsr64("fpcr", on ? __arm_rsr64("fpcr") | (1 << 24) : __arm_rsr64("fpcr") & ~(uint64)(1 << 24));   // clang (build.sh)
+#endif
+}
+
+struct Fnv { uint64 h = 0xcbf29ce484222325ULL; void add(uint64 v) { for (int i = 0; i < 8; i++) { h ^= (uint8)(v >> (8 * i)); h *= 0x100000001b3ULL; } } };
+
+static void hashState(const PPCInterpreter_t& c, const uint8* mem, Fnv (&h)[3])
+{
+	auto all = [&](uint64 v) { for (auto& x : h) x.add(v); };
+	auto fp = [&](uint64 v) {
+		h[0].add(v);
+		h[1].add(IS_NAN(v) ? (v & 0x8000000000000000ULL) | 0x7FF8000000000000ULL : v);
+		h[2].add(IS_NAN(v) ? 0x7FF8000000000000ULL : v);
+	};
+	all(c.instructionPointer);
+	for (auto g : c.gpr) all(g);
+	for (auto& f : c.fpr) { fp(f.fp0int); fp(f.fp1int); }
+	for (auto b : c.cr) all(b);
+	all(c.fpscr); all(c.xer_ca); all(c.xer_so); all(c.xer_ov); all(c.spr.LR); all(c.spr.CTR);
+	for (auto q : c.spr.UGQR) all(q);
+	all(c.reservedMemAddr); all(c.reservedMemValue);
+	for (uint32 i = 0; i < WIN_SIZE; i += 8) { uint64 v; memcpy(&v, mem + i, 8); all(v); }
+}
 
 struct Diff { std::string what; uint64 interp, native; };
 
@@ -136,6 +186,9 @@ extern "C" int __wrap_main(int argc, char** argv)
 	setvbuf(stdout, nullptr, _IOLBF, 0);
 	int iters = argc > 1 ? atoi(argv[1]) : 200;
 	const char* only = argc > 2 ? argv[2] : nullptr;
+	FILE* dump = getenv("FUZZ_DUMP") ? fopen(getenv("FUZZ_DUMP"), "w") : nullptr;
+	bool ftzOn = getenv("FUZZ_FTZ") && atoi(getenv("FUZZ_FTZ"));
+	if (ftzOn && atoi(getenv("FUZZ_FTZ")) == 2) g_ftzBits = 0x8040;
 	memory_init();
 	mmuRange_TEXT_AREA.mapMem();
 	mmuRange_MEM2.mapMem();
@@ -154,6 +207,7 @@ extern "C" int __wrap_main(int argc, char** argv)
 		if (stats.find(fc.op) == stats.end())
 			printf("... %s\n", fc.op);             // progress (tools/worker/job watches the log)
 		Stat& st = stats[fc.op];
+		Fnv h[3], in[3];
 		for (int it = 0; it < iters; it++)
 		{
 			static PPCInterpreter_t base, a, b;
@@ -168,13 +222,19 @@ extern "C" int __wrap_main(int argc, char** argv)
 				base.reservedMemAddr = ea;
 				base.reservedMemValue = (rng() & 1) ? __builtin_bswap32(*(uint32*)&init[ea - WIN]) : (uint32)rng();
 			}
+			if (dump) hashState(base, init.data(), in);
 			memcpy(win, init.data(), WIN_SIZE);
 			a = base;
+			if (ftzOn) setFtz(true);
 			PPCInterpreterSlim_executeInstruction(&a);
+			if (ftzOn) setFtz(false);
 			memcpy(after.data(), win, WIN_SIZE);
 			memcpy(win, init.data(), WIN_SIZE);
 			b = base;
+			if (ftzOn) setFtz(true);
 			fc.native(&b);
+			if (ftzOn) setFtz(false);
+			if (dump) hashState(b, win, h);
 			Diff d;
 			st.runs++;
 			if (!compare(a, b, after.data(), win, d))
@@ -188,7 +248,10 @@ extern "C" int __wrap_main(int argc, char** argv)
 				}
 			}
 		}
+		if (dump) fprintf(dump, "%s %08x %016llx %016llx %016llx %016llx\n", fc.op, fc.word,
+			(unsigned long long)h[0].h, (unsigned long long)h[1].h, (unsigned long long)h[2].h, (unsigned long long)in[0].h);
 	}
+	if (dump) fclose(dump);
 	int bad = 0;
 	for (auto& [op, st] : stats)
 	{

@@ -12,8 +12,14 @@ set(WWHD_SDL3 "/wwhd/opt/sdl3" CACHE PATH "SDL3 with video, for the window (tool
 # Cemu's dependencies come from vcpkg with Cemu's manifest. Cemu's own CMakeLists.txt sets that up
 # before its project(); as Cemu is our subproject, it happens here, before ours, the same way.
 set(THREADS_PREFER_PTHREAD_FLAG true)
-set(VCPKG_MANIFEST_DIR "${CEMU_SRC}")
-if(UNIX AND NOT APPLE)
+set(WWHD_VCPKG_MANIFEST "${CEMU_SRC}" CACHE PATH "vcpkg's manifest directory: Cemu's, or tools/arm64/build.sh's trimmed copy")
+set(VCPKG_MANIFEST_DIR "${WWHD_VCPKG_MANIFEST}")
+# WWHD_VCPKG_SYSTEM_PORTS=OFF (tools/arm64/build.sh): no Linux overlay, whose ports (libpng, glm, gtk3, cairo) are
+# empty stand-ins for the system's packages, which a cross build's sysroot doesn't have
+option(WWHD_VCPKG_SYSTEM_PORTS "Cemu's Linux overlay: libpng, glm, gtk3 and cairo from the system" ON)
+if(NOT WWHD_VCPKG_SYSTEM_PORTS)
+	set(VCPKG_OVERLAY_PORTS "${CEMU_SRC}/dependencies/vcpkg_overlay_ports")
+elseif(UNIX AND NOT APPLE)
 	set(VCPKG_OVERLAY_PORTS "${CEMU_SRC}/dependencies/vcpkg_overlay_ports_linux;${CEMU_SRC}/dependencies/vcpkg_overlay_ports")
 elseif(APPLE)
 	set(VCPKG_OVERLAY_PORTS "${CEMU_SRC}/dependencies/vcpkg_overlay_ports_mac;${CEMU_SRC}/dependencies/vcpkg_overlay_ports")

@@ -4,6 +4,8 @@
 #              being ~/wwhd-desk there: everything runs there while the owner lends it (builds,
 #              tests, captures, checks: its references give the same verdicts as the worker's, Ghidra).
 #   worker     docker on the worker (10 of 12 threads), /wwhd on the host too: the fallback.
+#   mac        rootless podman in an arm64 Linux VM on the owner's laptop (tools/worker/mac.sh), /wwhd there too:
+#              arm64 jobs only (m-android: the arm64 build and its checks, native), and only when asked for.
 # Without WWHD_ON the desktop is used when its worker is running (tools/worker/desktop.sh status),
 # else the worker. WWHD_ON=worker or WWHD_ON=desktop forces one. When the owner takes the desktop
 # back, commands go to the worker by themselves: sync and build there first (its build may be old).
@@ -20,7 +22,8 @@ fi
 case "$WWHD_ON" in
     worker)  W_SSH=$WWHD_WORKER_SSH; W_ENGINE=docker; W_ROOT=/wwhd ;;
     desktop) W_SSH=$WWHD_DESKTOP_SSH; W_ENGINE=podman; W_ROOT=$WWHD_DESKTOP_HOME/wwhd-desk ;;
-    *) echo "WWHD_ON=$WWHD_ON: worker or desktop" >&2; exit 2 ;;
+    mac)     W_SSH=${WWHD_MAC_SSH:?WWHD_MAC_SSH in tools/worker/hosts.env}; W_ENGINE=podman; W_ROOT=/wwhd ;;
+    *) echo "WWHD_ON=$WWHD_ON: worker, desktop or mac" >&2; exit 2 ;;
 esac
 # a path inside the container (/wwhd/...) as the host sees it
 hostpath() { echo "$W_ROOT${1#/wwhd}"; }

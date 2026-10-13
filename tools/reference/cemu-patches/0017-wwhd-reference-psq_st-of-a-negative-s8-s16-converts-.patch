@@ -1,0 +1,36 @@
+From 4f89d1f5751a750d851ea942ca85f5271f808a55 Mon Sep 17 00:00:00 2001
+From: wwhd <wwhd@localhost>
+Date: Tue, 13 Oct 2026 04:13:07 +0000
+Subject: [PATCH] wwhd-reference: psq_st of a negative s8/s16 converts through
+ sint32
+
+(uint32) of a negative float is undefined behaviour: x86-64 wraps it (the bits Cemu wants), arm64 saturates it to 0,
+so every signed quantized store of a negative value would store 0. The value is already clamped to the type's range,
+so (sint32) is exact and gives the same bits on both (a NaN: 0 on both, as before on x86).
+---
+ src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHelper.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHelper.h b/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHelper.h
+index 6d60b73..34ac51b 100644
+--- a/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHelper.h
++++ b/src/Cafe/HW/Espresso/Interpreter/PPCInterpreterHelper.h
+@@ -116,13 +116,13 @@ static uint32 quantize(float data, sint32 type, uint8 scale)
+ 		data *= ST_SCALE[scale];
+ 		if (data < -128) data = -128;
+ 		if (data > 127) data = 127;
+-		val = (sint8)(uint8)(sint32)(uint32)data;
++		val = (sint8)(uint8)(sint32)data; // through sint32: (uint32) of a negative float is undefined (x86 wraps, arm64 gives 0)
+ 		break;
+ 	case 7: // s16
+ 		data *= ST_SCALE[scale];
+ 		if (data < -32768) data = -32768;
+ 		if (data > 32767) data = 32767;
+-		val = (sint16)(uint16)(sint32)(uint32)data;
++		val = (sint16)(uint16)(sint32)data;
+ 		break;
+ 	case 0: // float
+ 	default: 
+-- 
+2.47.3
+

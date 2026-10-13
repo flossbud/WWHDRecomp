@@ -7,10 +7,42 @@ order of work; `docs/cloud-handoff.md` item 2 is the older note on arm64 Linux.
 
 ## How it's checked
 
-An arm64 **Linux** build (glibc, the NDK's clang or the distro's, `--target=aarch64-linux-gnu`) runs the checks and
-the fuzzer under qemu-user on the worker: the same fixtures, MATCH byte for byte, as on x86. Only then the Android
-build (bionic, a shared library in an APK) and the device. Caution: the glibc build hides the fiber gap below
-(bionic has no `ucontext`), so the arm64 fiber switch is written first and used on both.
+An arm64 **Linux** build runs the checks and the fuzzer: the same fixtures, MATCH byte for byte, as on x86. Only then
+the Android build (bionic, a shared library in an APK) and the device. Caution: the glibc build hides the fiber gap
+below (bionic has no `ucontext`), so the arm64 fiber switch is written first and used on both.
+
+- **Native, the arm64 worker** (`WWHD_ON=mac`, `tools/worker/mac.sh`): an arm64 Debian VM under rootless podman, the
+  same tools image built for arm64; the repo's normal `tools/recomp/build.sh` and `src/build.sh` build there
+  (`VCPKG_FORCE_SYSTEM_BINARIES=1`, `SDL3_DIR=` for vcpkg's SDL3, `JOBS=6`) and `checks.sh` runs as on x86, with
+  Cemu's `bin/` (resources, sharedFonts, gameProfiles) copied to its `/wwhd/opt/cemu-src/bin`. It's the owner's
+  machine: arm64 jobs only.
+- **Cross, from the x86 worker** (`tools/arm64/`): `setup.sh` makes a sysroot of Debian's arm64 packages,
+  `build.sh` a cross build (`toolchain.cmake`, the `arm64-linux-cross` triplet, a manifest without
+  wxwidgets/tiff/libusb/dbus). It builds and links; running it under qemu-user is too slow for the routes (the
+  title isn't reached within the checks' 60 s), so the native worker runs the checks.
+
+## A1 result (2026-10-13, native arm64)
+
+- `checks.sh`: both routes' OS-call traces, command streams and sound MATCH x86's references (1,124,796,468 calls on
+  the route), diff mode 0 mismatches of 1,118,003, captures 14 of 15 PSNR inf and one 51.37 dB (106 pixels, 0.05%,
+  f000900): the command stream is identical, so that is llvmpipe rasterizing differently on arm64 (the device draws
+  with its own GPU). Statetests not run there yet.
+- Items 2, 11, 12 (`fctiw`, Cemu's quantize: cemu-patch 0017), 15 and 16 done, each byte-identical on x86 (checks,
+  regress, statetest).
+- The fuzzer (`tools/recomp/fuzz`, `FUZZ_WWHD` to link against our build, `FUZZ_DUMP` for a per-case hash,
+  `FUZZ_FTZ` for the runtime's flush to zero) on both hosts: on arm64 our code matches Cemu's interpreter as on x86
+  (psq_lux/psq_stux fail on both: Cemu has none). Across hosts (11,589 cases, 200 random states each, the same
+  inputs on both), every integer, branch, system and integer load/store case matches; 1,681 floating-point ones
+  differ, only as items 13 and 14 said:
+  - against x86 with FZ (the runtime's): 1,044 differ in value (denormal inputs: arithmetic, compares, frsqrte,
+    psq_l's float loads), 619 in a NaN's sign only, 18 in a NaN's payload only;
+  - against x86 with FZ and DAZ (`FUZZ_FTZ=2`, inputs flushed as arm64's FZ does): 21 differ in value, all
+    single-precision multiply-adds rounding to the edge of the single denormals (tininess before vs after
+    rounding), and the rest in a NaN's sign (1,146) or payload (23).
+  So arm64 runs as x86 would with DAZ, but for the default NaN's sign (arm64 makes 0x7FF8..., as the Espresso does;
+  x86 0xFFF8...). Neither shows on the checks' routes (the game rarely makes denormals or invalid operations).
+  Making them byte-exact would cost a test on every float operation; left as known differences, to look at only if a
+  route differs on the device.
 
 ## P0: doesn't build, link or start on Android
 
@@ -70,8 +102,8 @@ Cemu selects its aarch64 paths itself; byte swaps compile to `rev`; the window s
 
 ## Order
 
-1. Items 2, 11, 12, 15, 16 (small, decide byte-exactness), each gated on x86 (regress unchanged).
-2. The fiber switch (1), then 3, 4, 10; an arm64 Linux build and its checks under qemu-user.
-3. 13 and 14 with the fuzzer under qemu-user.
+1. Items 2, 11, 12, 15, 16 (small, decide byte-exactness), each gated on x86 (regress unchanged). Done.
+2. The fiber switch (1), then 3, 4, 10; an arm64 Linux build and its checks (native, the arm64 worker). Done but 4, 10.
+3. 13 and 14 with the fuzzer. Measured (A1 result above).
 4. Cemu's CMake and vcpkg (5, 6), then the app (7-9): A2.
 5. The device: GPU, input, speed (A3, A4).

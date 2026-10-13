@@ -62,13 +62,14 @@ sed "s|<logflag>0</logflag>|<logflag>${REF_LOGFLAG:-0}</logflag>|" "$here/settin
 
 # 2200x1100 fits the TV window (1280x745) and the GamePad window (854x480) side by side.
 # openbox gives keyboard focus/activation; without a WM, Cemu ignores key presses.
-xdpyinfo >/dev/null 2>&1 || { Xvfb "$DISPLAY" -screen 0 2200x1100x24 -nolisten tcp >/dev/null 2>&1 & sleep 1; }
-pgrep -x openbox >/dev/null || { openbox >/dev/null 2>&1 & sleep 1; }
+# They (and pulseaudio) outlive this run: 9>&- so they don't keep checks.sh's slot lock (fd 9) held for good.
+xdpyinfo >/dev/null 2>&1 || { Xvfb "$DISPLAY" -screen 0 2200x1100x24 -nolisten tcp >/dev/null 2>&1 9>&- & sleep 1; }
+pgrep -x openbox >/dev/null || { openbox >/dev/null 2>&1 9>&- & sleep 1; }
 export WWHD_CEMU_DATA=${WWHD_CEMU_DATA:-/wwhd/opt/cemu-src/bin}   # Cemu's resources/ for build/wwhd/wwhd
 export MESA_VK_WSI_DEBUG=${MESA_VK_WSI_DEBUG-sw}
 [ "${REF_GPU:-}" = llvmpipe ] && export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/tmp/xdg-$(id -u)}; mkdir -p -m 700 "$XDG_RUNTIME_DIR"
-pulseaudio --check 2>/dev/null || pulseaudio --start --exit-idle-time=-1
+pulseaudio --check 2>/dev/null || pulseaudio --start --exit-idle-time=-1 9>&-
 pactl list short sinks | grep -q null || pactl load-module module-null-sink sink_name=null >/dev/null
 
 # One instance per portable dir (they hold the NAND and log); different binaries may run side by side.
