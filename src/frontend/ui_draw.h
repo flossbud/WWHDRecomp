@@ -53,6 +53,11 @@ namespace wwhd::ui
 	{
 	public:
 		Canvas(int w, int h) : m_w(w), m_h(h), m_px((size_t)w * h, 0), m_cx1(w), m_cy1(h) {}
+		// drawn in pixels already allocated (the last frame's but one: the panel hands them back), cleared
+		Canvas(int w, int h, std::vector<uint32>&& reuse) : m_w(w), m_h(h), m_px(std::move(reuse)), m_cx1(w), m_cy1(h)
+		{
+			m_px.assign((size_t)w * h, 0);
+		}
 		int W() const { return m_w; }
 		int H() const { return m_h; }
 		std::vector<uint32>& Pixels() { return m_px; }

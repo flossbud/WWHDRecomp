@@ -408,6 +408,7 @@ namespace wwhd::pause_menu
 			std::string toggled;                        // the toggle last flipped, and when (its knob slides over 220 ms)
 			Clock::time_point toggledSince;
 			Image backdrop, blurred;                    // the window's picture when it opened, and blurred
+			std::vector<uint32> spare;                  // the pixels of the frame before last (the panel's, handed back): drawn in again
 			int bw = 0, bh = 0;
 			bool dirty = true;
 			// the start screen (t-startscreen S1, Launch): up over the title's first frame, held, until Start Game
@@ -2960,7 +2961,11 @@ namespace wwhd::pause_menu
 					st.job.reset(), st.dirty = true;
 				}
 				if (st.phase == Phase::Closed || !window)
+				{
+					if (st.phase == Phase::Closed && st.spare.capacity())
+						st.spare = std::vector<uint32>();       // closed: its pixels not kept for play
 					continue;
+				}
 				// the pad's held direction repeats: first after 380 ms, then each 110
 				if (st.held && now >= st.repeatAt)
 				{
@@ -3092,9 +3097,9 @@ namespace wwhd::pause_menu
 					continue;
 				}
 				const Clock::time_point t0 = Clock::now();
-				ui::Canvas c((int)ww, (int)wh);
+				ui::Canvas c((int)ww, (int)wh, std::move(st.spare));
 				Draw(st, c, t0);
-				gpu::SetMenuPanel(ww, wh, std::move(c.Pixels()));
+				st.spare = gpu::SetMenuPanel(ww, wh, std::move(c.Pixels()));
 				// the cost of a frame (the log, each 120 frames drawn): it is all on this thread, the game held meanwhile
 				static uint32 s_frames = 0;
 				static double s_ms = 0, s_worst = 0;

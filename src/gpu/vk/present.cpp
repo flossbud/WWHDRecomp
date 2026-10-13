@@ -356,15 +356,17 @@ namespace wwhd::gpu
 		}
 	}
 
-	static void SetPanel(Panel& p, sint32 x, sint32 y, uint32 w, uint32 h, std::vector<uint32> rgba)
+	// the panel's new pixels; the ones they replaced handed back
+	static std::vector<uint32> SetPanel(Panel& p, sint32 x, sint32 y, uint32 w, uint32 h, std::vector<uint32> rgba)
 	{
 		std::lock_guard lock(p.lock);
 		p.x = x;
 		p.y = y;
 		p.w = rgba.empty() ? 0 : w;
 		p.h = rgba.empty() ? 0 : h;
-		p.rgba = std::move(rgba);
+		std::swap(p.rgba, rgba);
 		p.version++;
+		return rgba;
 	}
 
 	void SetOverlay(sint32 x, sint32 y, uint32 w, uint32 h, std::vector<uint32> rgba)
@@ -377,9 +379,9 @@ namespace wwhd::gpu
 		SetPanel(s_fps, 0, 0, w, h, std::move(rgba));
 	}
 
-	void SetMenuPanel(uint32 w, uint32 h, std::vector<uint32> rgba)
+	std::vector<uint32> SetMenuPanel(uint32 w, uint32 h, std::vector<uint32> rgba)
 	{
-		SetPanel(s_menu, 0, 0, w, h, std::move(rgba));
+		return SetPanel(s_menu, 0, 0, w, h, std::move(rgba));
 	}
 
 	void SetHintPanel(sint32 x, sint32 y, uint32 w, uint32 h, std::vector<uint32> rgba)

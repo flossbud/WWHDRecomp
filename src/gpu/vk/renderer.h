@@ -40,8 +40,9 @@ namespace wwhd::gpu
 	// The pause menu (frontend/pause_menu.cpp, t-pausemenu): a panel of its own in the window's pixels, over the picture
 	// and the other panels (never in captures; no pixels: none). RequestTvPicture asks for the next swap's TV image as
 	// RGBA8, TakeTvPicture hands it over once. While the game is held (os/savestate.h Held: no swaps) the GPU thread's
-	// idle loop presents the panel alone (ServeHeldPresent, null_gpu.cpp), when it changed
-	void SetMenuPanel(uint32 w, uint32 h, std::vector<uint32> rgba);
+	// idle loop presents the panel alone (ServeHeldPresent, null_gpu.cpp), when it changed. It hands back the pixels it
+	// replaced, for the next frame to be drawn in (at 4K a new 33 MB buffer each frame was mapped, faulted in and zeroed)
+	std::vector<uint32> SetMenuPanel(uint32 w, uint32 h, std::vector<uint32> rgba);
 	// its "Pause" prompt while it is closed (at play's start and after it closes): a panel at (x, y) in the window's
 	// pixels, blended over the picture at SetHintOpacity's opacity (0: not drawn)
 	void SetHintPanel(sint32 x, sint32 y, uint32 w, uint32 h, std::vector<uint32> rgba);

@@ -4288,7 +4288,9 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   the worker, windowed, real time): `tools/sixty/tests/pausehold.sh` (the hold and the release's frames); the
   scratch scripts that drove the menu by keys (xdotool on our own Xvfb, a window grab a step) are easy to redo from
   pausehold.sh's pattern. M4 (landed): Quit to the title (the game's own soft reset), Enhancements ("No enhancements
-  yet"), the Pause prompt. Left: 4K speed (14-21 ms a frame on the worker's CPU), motion polish. pausehold at 60 on the worker can
+  yet"), the Pause prompt. At 4K a frame is drawn in the pixels the panel hands back (SetMenuPanel), no new 33 MB
+  buffer each frame: 12.0 -> 9.2 ms a frame on the desktop worker (14-21 on the worker's CPU before). Left: motion
+  polish. pausehold at 60 on the worker can
   FAIL by a few ms (the release's first frame 45-52 ms against a ~45 limit: its iGPU's frames before the hold are already
   near it); on the desktop worker M3, f8d1a117 (b-lsfg) and M4 all pass, 7-22 ms against ~44 (3 interleaved rounds each).
 - **t-startscreen S1** (the owner's Start Screen design, kept with the design handoff outside git; pause_menu.cpp's
