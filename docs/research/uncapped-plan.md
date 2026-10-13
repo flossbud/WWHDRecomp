@@ -191,6 +191,13 @@ So the half frame costs about what the whole does, not 0.78 of it (the draws are
   branch. Byte-identical by construction (checks MATCH, regress da06a4ee, statetest 0 differ). The desktop worker,
   en-tn:1800, 4 rounds paired: the half frame 7.3 / 8.0-8.3 -> 6.8-6.9 / 7.6-7.9 ms, the work a frame -4.3% (lower
   in every run). About 0.45 of the journal's 1.5 ms; the half frame's 90th percentile is still over 165's 6.06.
+- **u8 closed at cut 3 (2026-10-13).** Left: ~0.3 ms of calls (~21,000 a half frame, ~380 saves) and ~0.5 ms of the test
+  itself. (b), a finer table (a byte per 64-byte line), measured first (a line census probe, the desktop worker, real
+  time, 1,800 half frames): of the calls passed over as saved, en-tn 14,352 a half frame, only 768 (5%) are into a
+  64-byte line wholly saved (256-byte: 115); continue 12,516 -> 625 / 58. Saved and unsaved kept bytes interleave
+  within lines, so it would save ~0.015 ms. Saving whole lines on a first store would make them so, but the rollback
+  would then put back other threads' and converted processes' stores into those bytes: not byte-exact. The test
+  needs (a), the half-frame code as a second generated copy, dropped as too large for its gain.
 - **U5's first rates (session bottom, 2026-10-11):** from the 60 fps switch the vsync runs at 30 N, in real time and
   under the virtual clock, so a frame a vsync is N frames a tick. The Frame rate setting offers 90, 120, 150 and "the
   display's": the most frames a tick its refresh shows, up to 5 (144 Hz 120, 165 Hz 150; for VRR displays), or half
@@ -292,3 +299,19 @@ label is a plain symbol (no mangling, the same on aarch64 and Mach-O; -fPIC read
 and the shards are built without LTO, so the constant declaration never meets the variable's definition.
 A/B on the desktop worker (en-tn:1800, 4 rounds paired, `WWHD_CORES=3`): the work a frame 6.03 -> 5.94 ms (-1.5%,
 lower in every round, every run below every run). The speed worker's A/B was within its noise (cpu -1.2%, overlapping).
+
+After it, the main core's profile (en-tn:1800, the desktop worker): guest code 87%, the biggest single function the game's
+Yaz0 decompressor (f_0275EBC0, 4.4%), run by a loader thread that shares core 1's host thread with the game; then
+f_02759564 2.4%, f_028E8F64 2.2%, `pthread_cond_broadcast` 2.0% and a flat tail. The broadcast is Cemu's
+`CounterSemaphore::increment` in `__OSAddReadyThreadToRunQueue`: real wake-ups of cores 0 and 2's host threads when a
+thread they may run becomes ready, so not a cut. libc's 3.3% has no callers the stack walk can see.
+
+Parked: the decompressor in host code (an override, real time only; the commit is kept on session bottom's branch
+u9-yaz0-parked). The game's code step for step with the guest registers in locals, the same stores with the same guest
+instructions for the journal, dcbz's lines, and yields at the same two loop heads after the game's instruction counts
+(every register in ctx first, so a save state there resumes by interpreting). Its check mode (both on every call, the
+output, the zeroed lines and every register compared) found 0 differences on warp, en-tn and tour3. Measured on the
+desktop worker (on against off in one binary, 3 rounds paired): late frames not worse (warp 9/9/9 -> 9/7/8, en-tn
+6/6/6 -> 5/5/6, tour3 6/6/6 -> 5/6/5), p99 the same, the work a frame flat (warp -0.6%, overlapping); the decompressor
+4.4% -> 3.2% of core 1 (the byte loop is memory-bound). Its time was never on the frame's path, so ~1.2% of core 1
+during loads doesn't pay for another override to keep; to come back if a device profile shows loads hurting (Android).
