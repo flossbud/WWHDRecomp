@@ -326,11 +326,11 @@ namespace
 			action == 0x9C || action == 0xAA || action == 0xAD || action == 0xAE || action == 0xB8 || action == 0xC1 || action == 0xC4 ||
 			action == 0xCE || action == 0xCF || action == 0xD2 || (action == 0xA9 && DemoSixty());
 	}
-	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0, s_edgeFinishes = 0, s_actionStops = 0, s_landSnaps = 0;
+	uint64 s_halfSteps = 0, s_eventStops = 0, s_orderStops = 0, s_endStops = 0, s_edgeFinishes = 0, s_actionStops = 0, s_landSnaps = 0, s_orderHolds = 0;
 	void StepStats()
 	{
-		cemuLog_log(LogType::Force, "wwhd sixty: {} half steps of converted processes; {} stopped by a running event, {} by an ordered one, {} by an ending one; {} of Link's left his new action's call out; {} finished their tick at an event's edge; {} late stores made for stopped ones; {} of Link's landings finished in the half step",
-			s_halfSteps, s_eventStops, s_orderStops, s_endStops, s_actionStops, s_edgeFinishes, s_lateMade, s_landSnaps);
+		cemuLog_log(LogType::Force, "wwhd sixty: {} half steps of converted processes; {} stopped by a running event, {} by an ordered one, {} by an ending one; {} of Link's left his new action's call out; {} of his ran at an order's edge without it; {} finished their tick at an event's edge; {} late stores made for stopped ones; {} of Link's landings finished in the half step",
+			s_halfSteps, s_eventStops, s_orderStops, s_endStops, s_actionStops, s_orderHolds, s_edgeFinishes, s_lateMade, s_landSnaps);
 	}
 
 	// Link's action call (daPy_lk_c::execute's (this->*mCurProcFunc)(); `hold` rules on it, link_actions.txt)
@@ -402,6 +402,30 @@ namespace
 	}
 	uint32 s_linkGroundAtWhole = 0;                   // his ground hit bit as his whole step began
 	uint64 s_groundStops = 0;
+	// An event ordered in the whole step (EventOrdered, above) stopped every converted process in it at the half step,
+	// Link always (InEvent): at 30 nothing runs between the order and the event's start, and his half step could take
+	// it up before the event is set up (his Wind Waker wait cancelled itself). But his half step is half the tick's
+	// move: where he moves at the order (B84: letting go of the grappling hook's swing, the rope's order of its potential
+	// event; Link's speed.y 1.29 over 30's from then on, half a tick of gravity) he lost it for good. At an order another
+	// actor made (no event running or ending, Link no order's first actor) his half step runs with his action call left
+	// out (g_rtHold, as after an action change), so his move and gravity finish the tick. His own orders (a song, a door,
+	// a talk) still stop it: held there, the Ballad of Gales' order was taken back (his action back to 0x89 in the half
+	// step, the song's event never began, route warp didn't warp). WWHD_60FPS_ORDERHOLD=0: stopped.
+	bool OrderHold()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ORDERHOLD"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	bool OrderedByLink(uint32 link)
+	{
+		constexpr uint32 kEvtControl = 0x1046F0B0u + 0x51D0u;
+		const int orders = (sint8)rd8(kEvtControl + 0xC0u);
+		for (int i = 0; i < orders && i < 8; i++)
+			if (rd32(kEvtControl + i * 0x18u + 0x08u) == link)
+				return true;
+		return false;
+	}
+	bool s_linkOrderHold = false;                     // Link's half step at an order's edge: his action call left out
 	// The half step after a whole step whose move landed him finishes the tick's landing (session qa, bug B46): an air
 	// action (his auto jump) coming down on a slope with forward speed landed in the whole step's move (its speed.y then
 	// 0), and the half step's move, with half a tick's gravity, ended 0.02 units above the slope further on: no ground
@@ -4024,11 +4048,36 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 			// the list in the whole tick (the Wind's Requiem's wind change, 0xC4, turning to wait, 0x17: his
 			// turn took half a step there, lost the other, and the event ended a tick late, the camera then
 			// taking the view saved at the song's start); an event that began, is ordered or ends still stops it
+			// (Link at an order runs without his action call: OrderHold, above)
 			const bool running = EventRunning() && !(s_eventAtWhole[proc] && s_stepInEventAtWhole[proc]);
 			const bool ordered = !running && EventOrdered();
 			const bool ending = !running && !ordered && EventEnding();
 			const bool edge = running || ordered || ending;
-			if (edge && !(EventEdgeFinish() && !InEvent(proc)))
+			const bool orderHold = ordered && rd16(proc + 0x08) == 168 && OrderHold() && !OrderedByLink(proc);
+			if (rd16(proc + 0x08) == 168)
+				s_linkOrderHold = orderHold;
+			const bool stop = edge && !(EventEdgeFinish() && !InEvent(proc)) && !orderHold;
+			// WWHD_DEBUG_EDGESTOP=FILE (a probe, B84): each half step an edge stops, or Link's at an order's edge: the
+			// game frame, the process, why (r running, o ordered, e ending; h Link's, run without his action call),
+			// Link's action, speedF and speed.y, and the pending orders (type, the two actors' names)
+			static FILE* const edgelog = [] { const char* e = getenv("WWHD_DEBUG_EDGESTOP"); return e ? fopen(e, "w") : nullptr; }();
+			if (edgelog && (stop || orderHold))
+			{
+				constexpr uint32 kEvtControl = 0x1046F0B0u + 0x51D0u;
+				fprintf(edgelog, "%u %u %c", wwhd::rt::GameFrame(wwhd::os::SwapCount()), rd16(proc + 0x08),
+					orderHold ? 'h' : running ? 'r' : ordered ? 'o' : 'e');
+				if (s_link)
+					fprintf(edgelog, " link %02x %.2f %.2f", rd32(s_link + 0x65F0), std::bit_cast<float>(rd32(s_link + 0x370)),
+						std::bit_cast<float>(rd32(s_link + 0x340)));
+				for (int i = 0, n = (sint8)rd8(kEvtControl + 0xC0u); i < n && i < 8; i++)
+				{
+					const uint32 a = rd32(kEvtControl + i * 0x18u + 0x08u), b = rd32(kEvtControl + i * 0x18u + 0x0Cu);
+					fprintf(edgelog, " [%x %u %u]", rd16(kEvtControl + i * 0x18u), a ? rd16(a + 0x08) : 0u, b ? rd16(b + 0x08) : 0u);
+				}
+				fprintf(edgelog, "\n");
+				fflush(edgelog);
+			}
+			if (stop)
 			{
 				s_eventStops += running;
 				s_orderStops += ordered;
@@ -4038,7 +4087,8 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 			}
 			else
 			{
-				s_edgeFinishes += edge;
+				s_orderHolds += orderHold;
+				s_edgeFinishes += edge && !orderHold;
 				s_halfSteps++;
 				if (!g_rtEarlyStep)
 					s_lateNoted.erase(proc);            // its half step makes them (the tick's last)
@@ -4089,7 +4139,7 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	const bool groundHold = landing || groundLost;
 	s_groundStops += groundHold;
 	g_rtLinkGroundLost = groundLost;
-	const bool hold = (g_rtHalfTick && link && s_linkActionChanged && ActionHold()) || groundHold;
+	const bool hold = (g_rtHalfTick && link && ((s_linkActionChanged && ActionHold()) || s_linkOrderHold)) || groundHold;
 	s_actionStops += hold;
 	g_rtHold = hold || camTick;                     // his half step leaves his new action's call out; the camera's
 	                                                // half step for show leaves its sound and rumble to its replay

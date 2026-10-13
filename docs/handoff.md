@@ -4506,9 +4506,8 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
     executes after the tail, so its whole step reads Gohma's joint as 30's tick does, and the rest came after the
     whole step's half of the tick's rise (gtwhole): rise and rest are `latch` rules now, the tail rests at 30's height
     (3952.72, was 3902.72) with its wait on 30's ticks. gtwhole is unused.
-  - *Found, not fixed (B84)*: letting go of the swing (route gohmarock, f1360, action 0x27), Link's speed.y is 1.29
-    over 30's from the release on (half a tick of gravity: his half step at the release doesn't run, the track has no
-    half-tick key there), so he rises higher and lands later; the swing's old offset hid it.
+  - *Found then (B84, below)*: letting go of the swing (route gohmarock, f1360, action 0x27), Link's speed.y 1.29
+    over 30's from the release on, so he rose higher and landed later; the swing's old offset hid it.
   - *Checked*: gohmatail 54.0 WARN -> 6.4 ok (the rope 801.7 long against 30's 802.4, the swing from the tick's end);
     grapple 7.2 -> 1.9 (farthest 26.7 -> 10.0); gtgrapple 6.6 -> 8.3 (it starts the pull 4.5 units nearer the hook
     than 30, the aim's offset before it: the rope as far off as that); gohmarock 4.8 -> 6.2 (the swing 5-10 units
@@ -4517,6 +4516,26 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
     (main 02c5de52 + the change, the desktop): checks all MATCH (diff 0 mismatches of 1,118,003, 15 captures PSNR
     inf); regress identical (da06a4ee); predeploy 50 ok, 0 WARN, 0 FAIL, blacktest 6 ok, picto ok, statetest 2 ok (0
     differ), bandam ok, the real-time routes ok, the soak 60.1 fps, the real-time state gate 17 ms.
+- **B84, letting go of the grappling hook: Link fell half a tick of gravity short (fixed).** When he lets go (route
+  gohmarock, f1360) the rope (HIMO2 446) orders its potential event with him as partner, as it does when the hook
+  wraps. An event ordered in the whole step stops the half step of every converted process in it (EventOrdered,
+  InEvent: Link and the camera always), as at 30 nothing runs between the order and the event's start. Link was
+  mid-fall (speed.y 25.6): his half step's gravity and move were lost for good, speed.y 1.29 over 30's from then on.
+  - *The fix* (sixty.cpp, OrderHold): at an order another actor made (no event running or ending, Link no order's
+    first actor) his half step runs with his action call left out (g_rtHold, as after an action change): his move
+    and gravity finish the tick, his action can't take the order up. His own orders stay stopped: held at them too,
+    the Ballad of Gales' order was taken back in the half step (his action back to 0x89, the song's event never
+    began, route warp never warped), and the other songs, doors and talks are his. gohmarock 6.2 -> 0.6 (the fall
+    within 2 units, he lands on 30's tick).
+  - *Where*: `WWHD_DEBUG_EDGESTOP=FILE` (a probe) logs each half step an edge stops and each of Link's run at an
+    order (h), with his action and speeds and the orders. On the 52 predeploy routes his half step runs at an order
+    on 8 (the grappling hook's wrap and release, a lifted boulder's (Stone2) and drcjar's jar's (42), the ReDead's
+    (RD), a warp pot's), and
+    he moves at it only in gohmarock's; the 44 others byte-identical to main's runs (each actor's hashes, Link's
+    track), and heavy, drcjar, en-rd and warppot end where they did. Gates (main f8d1a117 + the change, the worker):
+    checks all MATCH (diff 0 mismatches of 1,118,003, 15 captures PSNR inf); regress identical (da06a4ee); all 52
+    routes ok; blacktest 6 ok, picto ok, statetest 2 ok (0 differ), bandam ok; predeploy-rt on the desktop worker ok
+    (the 12 real-time routes, the soak 60.1 fps, the real-time state gate 17 ms).
 
 ## Waiting on the owner
 
