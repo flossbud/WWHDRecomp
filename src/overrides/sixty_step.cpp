@@ -394,6 +394,76 @@ void f_0200F268(PPCInterpreter_t* __restrict ctx)
 	[[clang::musttail]] return orig_f_0200F268(ctx);
 }
 
+// At N > 2 steps a tick (U6) the s16 approaches below step as their scaled divisors and caps say, and the tick's last
+// step ends where 30's approach does: the whole step makes the tick's approach first (unscaled, its result noted, the
+// value put back), and the last step's call, approaching the same target from where the steps left it, sets that. The
+// scaled steps are exact over a tick in real numbers, but each truncates its change to a whole unit and a later step's
+// min step splits to 0: at N 4 Link's facing turned 90-200 units behind 30's, 0.1 units a tick off his path while
+// walking (route tour3: 77 at its end, 0.0 at 2). (Spreading the tick's change over the steps instead put the target's
+// arrival at the last step: Link's action change on his turn's end came a tick late.) N 2 as before.
+// WWHD_60FPS_ANGLEEND=0: off.
+namespace
+{
+	bool AngleEnd()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ANGLEEND"); return !(e && atoi(e) == 0); }();
+		return on && g_rtSteps > 2;
+	}
+	struct AngleTick { uint32 tick; sint16 target, result; };
+	std::unordered_map<uint64, AngleTick> s_angleTicks;   // by the value's address and the call's return address
+	uint64 s_angleEnds = 0, s_angleMoved = 0, s_angleUnnoted = 0;   // last steps set to 30's; target moved; none noted
+	void AngleEndStats()
+	{
+		cemuLog_log(LogType::Force, "wwhd sixty: s16 approaches at a tick's last step: {} ended at 30's, {} with the target moved since the whole step, {} not made in it",
+			s_angleEnds, s_angleMoved, s_angleUnnoted);
+	}
+
+	// before the step's own call: in the whole step the tick's approach (noted); returns whether this is the last step
+	// of a tick whose whole step noted this call's (then *end is 30's result)
+	template <void (*Orig)(PPCInterpreter_t*)>
+	bool AngleTickBefore(PPCInterpreter_t* ctx, sint16* end)
+	{
+		const uint32 ea = GPR(3);
+		const uint64 key = (uint64)ea << 32 | ctx->spr.LR;
+		const uint32 tick = StepId() - (g_rtHalfTick ? g_rtSubStep : 0);
+		if (!g_rtHalfTick)
+		{
+			if (s_angleTicks.size() > 4096)
+				std::erase_if(s_angleTicks, [tick](const auto& e) { return e.second.tick != tick; });
+			uint32 args[5];                           // r3-r7 and the return address, for the step's own call after
+			for (int r = 0; r < 5; r++)
+				args[r] = GPR(3 + r);
+			const uint32 lr = ctx->spr.LR;
+			const uint16 was = rd16(ea);
+			Orig(ctx);
+			s_angleTicks[key] = { tick, (sint16)args[1], (sint16)rd16(ea) };
+			wr16(ea, was);
+			for (int r = 0; r < 5; r++)
+				GPR(3 + r) = args[r];
+			ctx->spr.LR = lr;
+			return false;
+		}
+		if (g_rtEarlyStep)
+			return false;
+		static bool once = [] { atexit(AngleEndStats); at_quick_exit(AngleEndStats); return true; }();
+		(void)once;
+		const auto it = s_angleTicks.find(key);
+		if (it == s_angleTicks.end() || it->second.tick != tick)
+		{
+			s_angleUnnoted++;
+			return false;
+		}
+		if (it->second.target != (sint16)GPR(4))
+		{
+			s_angleMoved++;
+			return false;
+		}
+		s_angleEnds++;
+		*end = it->second.result;
+		return true;
+	}
+}
+
 // cLib_addCalcAngleS(s16* v r3, target r4, scale r5 (a divisor), maxStep r6, minStep r7)
 // Call sites whose approach runs once a tick (kOnceATick, by the return address): in the whole step unscaled, a tick's
 // approach, and left out of the half step; what reads the value then reads 30's for the tick. The boat's tiller
@@ -411,24 +481,37 @@ void f_0200F378(PPCInterpreter_t* __restrict ctx)
 		}
 		[[clang::musttail]] return orig_f_0200F378(ctx);
 	}
+	sint16 end = 0;
+	const bool last = Stepped() && AngleEnd() && AngleTickBefore<orig_f_0200F378>(ctx, &end);
 	if (Stepped())
 	{
 		GPR(5) = ScaledInt(GPR(5), true);
 		GPR(6) = ScaledInt(GPR(6), false);
 		GPR(7) = ScaledInt(GPR(7), false);
 	}
-	[[clang::musttail]] return orig_f_0200F378(ctx);
+	if (!last)
+		[[clang::musttail]] return orig_f_0200F378(ctx);
+	const uint32 ea = GPR(3), target = GPR(4);
+	orig_f_0200F378(ctx);
+	wr16(ea, (uint16)end);
+	GPR(3) = (uint32)(sint32)(sint16)((sint16)target - end);   // its return: target - value
 }
 
 // cLib_addCalcAngleS2(s16* v r3, target r4, scale r5 (a divisor), maxStep r6)
 void f_0200F428(PPCInterpreter_t* __restrict ctx)
 {
+	sint16 end = 0;
+	const bool last = Stepped() && AngleEnd() && AngleTickBefore<orig_f_0200F428>(ctx, &end);
 	if (Stepped())
 	{
 		GPR(5) = ScaledInt(GPR(5), true);
 		GPR(6) = ScaledInt(GPR(6), false);
 	}
-	[[clang::musttail]] return orig_f_0200F428(ctx);
+	if (!last)
+		[[clang::musttail]] return orig_f_0200F428(ctx);
+	const uint32 ea = GPR(3);
+	orig_f_0200F428(ctx);
+	wr16(ea, (uint16)end);
 }
 
 // cLib_addCalcAngleL(s32* v r3, target r4, scale r5 (a divisor), maxStep r6, minStep r7)

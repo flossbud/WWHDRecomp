@@ -4288,13 +4288,80 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   tools/sixty/tests/regress.sh`, `WWHD_STEPS=N PREDEPLOY_BLACK=0 PREDEPLOY_PICTO=0 PREDEPLOY_STATE=0 PREDEPLOY_BANDAM=0
   PREDEPLOY_RT=0 predeploy.sh` (the 30 runs are reused), `WWHD_STEPS=N capture.sh` (swaps 900 + N (frame - 900)) then
   `hz30.py DIR 24 N`, `trial_n.sh ROUTE FROM TO N`.
-- **u6-fixes, what U4 found at N 3 and 4** (main 8dd1e83c + U4; next in the lane). Predeploy's routes at N 3: 42 ok,
-  WARN plants 91, sail 75, tour3 75 (0.0 at 2), en-ph 105; FAIL land3 542, bombs 1248, grapple 372, gtgrapple 2497. At N
-  4: 43 ok, WARN plants 101, tour3 77, en-ph 105; FAIL the same four (542, 1247, 379, 2497). Grapple at N 3: the hook
-  rests 9.4 units off 30's in Link's hand (0.2 at 2) and its throw flies flatter (25 units a tick up against 36), past
-  the stake: no wrap, no event (WWHD_DEBUG_EDGESTOP: 30's order at 1083 and end at 1115 never come); the rope (HIMO2's
-  himo2_control: a pass a step, no time step, 1.6 times a tick's change at 60) and the twirl its throw waits for (m02D8,
-  `keep`) are where to look. Regress at N 4: 215 6.6/8.5, 206 8.7/92.2, 188 9.9/875.4, 191 10.6/825.6 (52.3 at 2), 181
+- **u6-fixes, what U4 found at N 3 and 4** (main 8dd1e83c + U4). Split by main (2026-10-13): top keeps the routes
+  (grapple, gtgrapple, land3, bombs; the WARNs plants, tour3, en-ph, sail), bottom the draw side as u6-draw (sea6's
+  foam, Doc Bandam's banner, the Magtail). Predeploy's routes at N 3: 42 ok, WARN plants 91, sail 75, tour3 75 (0.0 at
+  2), en-ph 105; FAIL land3 542, bombs 1248, grapple 372, gtgrapple 2497. At N 4: 43 ok, WARN plants 101, tour3 77,
+  en-ph 105; FAIL the same four (542, 1247, 379, 2497). Grapple at N 3: the hook rests 9.4 units off 30's in Link's hand
+  (0.2 at 2) and its throw flies flatter (25 units a tick up against 36), past the stake: no wrap, no event
+  (WWHD_DEBUG_EDGESTOP: 30's order at 1083 and end at 1115 never come); the rope (HIMO2's himo2_control: a pass a step,
+  no time step, 1.6 times a tick's change at 60) and the twirl its throw waits for (m02D8, `keep`) are where to look.
+  Closer (grapple at N 3, Link, the hook HIMO2 446, the stake 250 and the camera tracked; trial_n.sh grapple 1000 1100
+  3): the rope rests 4.7 units higher (y 254.75 against 250.05, every point) and none of Link's holds (ANIMHOLD,
+  EXACTFRAME, ANIMEND, ACTIONHOLD) moves it; Link's own fields match 30's at the tick's end but +0x72A2 (0x5556 against
+  0); the camera's differences are N 2's too. The trial's real ones only at 3: Link's upper-body aim spring (f_024022D0:
+  +0x694A/C move by half the aim's change since the last call, at most 512 a call, clamped to -2048..4096) hit -2048 in
+  a later step at 1007 where the game's is -28 (its change a step is a third of a tick's: a spring by calls, no time
+  step), and setItemModel's glint frame (+0xF1C/+0xF2C, + h a step, wrapped at its end) reaching 60 a step's rounding
+  short of the wrap (cosmetic). The throw's angles at 1073's end equal 30's, the rope's old.angle (+0x30C) a step early,
+  and the flight's direction differs from its first tick. tour3 at N 4 (75 at its end, 0.0 at 2): Link leaves 30's path
+  as he starts walking (tick 966, 0.02 units, then 0.04 a tick); the tick before, his +0x700 (a float, 1.0 at 30, 8.0 at
+  N 4; written by f_027DA84C, a blend's frames) shows a blend begun in a later step. Not the blend (+0x700 is 8.0 at N 2
+  too); measured over the whole route (tour3 at N 2 and 4, Link tracked) his speed matches 30's (15.55 a tick walking at
+  all three) and his facing (shape_angle.y) doesn't: 10-40 units off 30's at N 2, 90-200 at N 4, so his path drifts 0.02
+  units a tick at 2 and 0.1 at 4 (by 1450: 9 and 49); at 1500 his action 0x38 brings N 2 back to 0.0, which N 4 misses.
+  The s16 approaches (cLib_addCalcAngleS/S2, f_0200F378/F428) step by the telescoping divisor N s - N + 1 + i with the
+  caps split N ways, exact over a tick in real numbers, but each step truncates its change and a later step's min step
+  splits to 0. Tried: at N > 2 the whole step makes the tick's approach (unscaled) and the steps take its change by
+  rt_step_split: N 3's tour3 ended 0.0 (75 before) but N 4's 122 (77), both 14 off by tick 1000: Link's turn reaches its
+  target only at the tick's last step, and his action change on it (0x17 -> 0x04 at 965, checkNextMode on the turn's
+  end) came a tick late. Not kept. Kept instead (U6 cut 1, sixty_step.cpp's AngleTickBefore, WWHD_60FPS_ANGLEEND): the
+  steps approach as before and the tick's last step ends where 30's approach does (the whole step makes the tick's
+  approach first, unscaled, noted and put back), when the target is the whole step's (tour3 to 1500: about 42500 last
+  steps ended at 30's, 9500 with the target moved, 100-170 not made in the whole step): tour3 at N 3 0.0 at its end
+  (74.7 without; 28 against 48 off by 1450), at N 4 76 (77). At N 4 Link's settled facing still differs (-4209 against
+  30's -4020 at 1400): the heading he turns to is the stick's against the camera's yaw, and the camera follows his
+  facing (its +0x256/+0x28A are his angle; +0x236/+0x2B4, its yaw it seems, 30983 at 30, 31003 at 2, 30894 at 4 by
+  1100): a loop whose per-step difference compounds; the camera's yaw approach per step is the next lead. bombs at N 3
+  (1248 at its end, 8.9 at 2): at the throw (1016, Link 0x71) 30's camera (476 at 0x47C74D58, dCamera at +0x248) changes
+  its style (+0x75C 0x5A -> 0x46, +0x758 0x2000; f_024FE3E8 stores it at 0x024FE7BC from its style table, after the
+  check f_024FB334) and swings 166 degrees behind Link; at N 3 it never does, so the stick's walk off the dock (1085)
+  goes 140 degrees elsewhere. With WWHD_60FPS_CAMTICK=0 at N 3 the change comes at 1016 as at 30 and Link is 0.8 units
+  off at 1090 (50 with it): the camera's tick (sixty.cpp CamTickBefore/After/Restore: its whole step and early steps run
+  for show and its own bytes go back, the last step runs the tick) has two show steps at N 3 against one at 2, and
+  something the throw asks for outside the camera's bytes is spent by the extra one. Next: what the show steps write
+  outside the camera (WWHD_STATE_CENSUS_CHAINS on its steps), then restore that too, or run the early steps' show
+  without it. The camera's tick is most of it: predeploy's 8 problem routes with WWHD_60FPS_CAMTICK=0 (cut 1 in) at N 4:
+  land3 28, tour3 0.0, bombs 7.6, grapple 0.4, gtgrapple 6.8 (all ok), sail 63, plants 92, en-ph 105 (WARN, as with it);
+  at N 3: bombs 4.4, grapple 0.7, gtgrapple 6.0 (ok) but land3 543 and tour3 81 (the camera-relative walk the tick was
+  made for). With it on and cut 1: N 3 44 ok (land3, tour3 ok; bombs, grapple, gtgrapple FAIL), N 4 42 ok (land3, bombs,
+  grapple, gtgrapple FAIL; tour3 76, sail 62, plants 101, en-ph 105). So: the tick's show steps at N > 2 (N - 1 of them)
+  want to be side-effect free outside the camera, then cut 1 and the tick together should clear the FAILs at both. Found
+  (WWHD_DEBUG_CAMSHOW=from-to, a probe: each show step's writes outside the camera, camshow.txt, and others' writes into
+  it between its steps, camothers.txt): at the throw Link hands the camera the bomb (camera +0x378 id 0x21B, +0x37C the
+  actor) between its show steps 0 and 1 at N 3; show step 1 takes it up, and the restore (the camera's own changes only)
+  left it spent for the step that runs the tick. U6 cut 2 (sixty.cpp CamTickOthers, WWHD_60FPS_CAMOTHERS): what others
+  write into the camera between its show steps is noted as each early step's show begins and put back with the restore.
+  With cuts 1 and 2, the 8 routes: N 3 land3 25, tour3 0.0, bombs 5.9, grapple 0.7, gtgrapple 24.4 (all ok), sail 86,
+  plants 82, en-ph 105 (WARN); N 4 bombs 8.6, grapple 0.4, gtgrapple 16.1 (ok), land3 542 (FAIL), tour3 76, sail 62,
+  plants 102, en-ph 105 (WARN). Left at N 4 (land3, tour3: ok with the tick off, 28 and 0.0): Link's early steps
+  (1..N-2) read the show camera, not the tick's start (at N 2 his half step reads the restored one); tried: a swap (at
+  an early step's frame start the tick-start camera for the others' steps, its show state back at its own turn with
+  others' writes since): land3 and tour3 at N 4 unchanged (542, 76), gtgrapple at N 3 40 (24): not kept, so it isn't the
+  camera's own bytes Link's early steps read; its copies in the game info the show steps write (0x1047411C-0x10474133:
+  the eye and centre, camshow.txt) are the next to look at. The WARNs (sail, plants, en-ph) are the same with the tick
+  off: other causes. All of predeploy's routes with cuts 1 and 2: N 3 45 ok (42 before), WARN plants 82, sail 86, en-ph
+  105, FAIL drcjar 714 and medli 204 (both ok before); N 4 44 ok (43), WARN plants 102, sail 62, tour3 76, en-ph 105,
+  FAIL land3 542, drcjar 714. drcjar (N 3, Link and the camera tracked, cut 2 on and off): with it the camera holds the
+  thrown jar as its target (+0x37C 0x47C522E8) as 30's does, without it never; and with it Link turns (0x17) at 1176
+  where 30's walks (0x06), the jar the camera follows (its flight at N 3) the likely cause; without it he stays within
+  1.5 units. Taking others' writes since each early step's frame began, not since the last show step (the draw's
+  matrices out), changed no route but gtgrapple (40 against 24 at N 3) and medli (291 against 204): not kept. trial_n.sh
+  at 3 on bombs, land3 and tour3 (the rest of their "only at 3" lists): the camera's monitor (dCamera +0x238, 476
+  +0x480/4: x0.654) and Link's shape_angle.y copied in at his execute's start (+0x32A, x0.667) look like the trial's own
+  (its sub-steps' ids: the StepRing reads N steps back in a real run), pots (TSUBO 453 +0x6A0-0x6E0: the stepped write
+  0), NPC_YM2's frame +0x9EC and Link's glint wrap a step's rounding short (cosmetic), the weather's f_0256DDF8+0xE14
+  wrapping (+-2023). Regress at N 4: 215 6.6/8.5, 206 8.7/92.2, 188 9.9/875.4, 191 10.6/825.6 (52.3 at 2), 181
   13.5/18.2, 224 0.7/2.1, 216 76.9/166.7 (8.0/98.8 at 2), 209 3.1/10.0, 214 and 234 0. The Magtail (216): trial_n.sh at
   4 in its room (M_NewD2 12): of 95 stores only at 4 all but two are quarter steps' float rounding, and those two are
   its own +0x5A4 (s16 2048 -> 0, f_021D87A0+0x14BC) and +0x1A15 (byte 1 -> 0, +0xC40), stored in a later step only

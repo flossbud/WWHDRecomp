@@ -2743,7 +2743,15 @@ namespace
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_CAMTICK"); return !(e && atoi(e) == 0); }();
 		return on;
 	}
-	struct CamSave { uint32 proc = 0, id = 0, size = 0; std::vector<uint8> before, after; bool restored = false; };
+	// base_process_class (f_pc_base.h: its layer, line and delete tags, the process manager's): not the camera's own
+	constexpr uint32 kBaseProcessSize = 0xB8;
+	struct CamSave
+	{
+		uint32 proc = 0, id = 0, size = 0;
+		std::vector<uint8> before, after;
+		std::vector<uint8> others, otherSet;            // at N > 2: what others wrote into it between its show steps
+		bool restored = false;
+	};
 	CamSave s_cam;
 	// the camera's whole step is about to run (proc, the camera process): its bytes before it
 	void CamTickBefore(uint32 proc)
@@ -2758,14 +2766,107 @@ namespace
 		s_cam.size = size;
 		s_cam.before.assign(memory_base + proc, memory_base + proc + size);
 	}
+	// At N > 2 (U6): what others wrote into the camera since its last show step, as an early step's show begins. A show
+	// step may take it up (Link's throw handing the camera the bomb, its +0x378/+0x37C: id and actor), and the restore
+	// before the tick's last step put back only what the camera changed, so the one-off was gone before the step that
+	// runs the tick: at N 3 the camera never turned to the thrown bomb (30's style 0x46 at the throw), and the stick then
+	// walked Link 140 degrees off (route bombs 1248 units; grapple and gtgrapple the same way). Put back with the
+	// restore. N 2 has no early steps. WWHD_60FPS_CAMOTHERS=0: off.
+	bool CamOthers()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_CAMOTHERS"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	void CamTickOthers()
+	{
+		if (!CamOthers() || !s_cam.proc || s_cam.after.size() != s_cam.size || rd32(s_cam.proc + 0x04) != s_cam.id)
+			return;
+		if (s_cam.others.size() != s_cam.size)
+		{
+			s_cam.others.assign(s_cam.size, 0);
+			s_cam.otherSet.assign(s_cam.size, 0);
+		}
+		const uint8* const p = memory_base + s_cam.proc;
+		for (uint32 i = kBaseProcessSize; i < s_cam.size; i++)
+			if (p[i] != s_cam.after[i])
+				s_cam.others[i] = p[i], s_cam.otherSet[i] = 1;
+	}
 	// ... and after it
 	void CamTickAfter()
 	{
 		if (s_cam.proc)
 			s_cam.after.assign(memory_base + s_cam.proc, memory_base + s_cam.proc + s_cam.size);
 	}
-	// base_process_class (f_pc_base.h: its layer, line and delete tags, the process manager's): not the camera's own
-	constexpr uint32 kBaseProcessSize = 0xB8;
+	// WWHD_DEBUG_CAMSHOW=from-to (a probe, U6): in those game frames, each of the camera's show steps' writes outside
+	// it: the globals' and Link's words it changed (camshow.txt in the state dump's folder: frame, step, where, before,
+	// after)
+	struct CamShowProbe { uint32 from = 0, to = 0, link = 0; std::vector<uint8> globals, linkBytes; };
+	CamShowProbe& CamShow()
+	{
+		static CamShowProbe p = [] {
+			CamShowProbe q;
+			if (const char* e = getenv("WWHD_DEBUG_CAMSHOW"))
+				sscanf(e, "%u-%u", &q.from, &q.to);
+			return q;
+		}();
+		return p;
+	}
+	void CamShowOthers(const char* when);
+	void CamShowBefore(uint32 link)
+	{
+		CamShowProbe& p = CamShow();
+		p.globals.clear();
+		const uint32 frame = wwhd::rt::GameFrame(wwhd::os::SwapCount());
+		if (!p.to || frame < p.from || frame > p.to)
+			return;
+		if (g_rtHalfTick)
+			CamShowOthers("o");                         // the camera's bytes others wrote since its last show step
+		p.globals.assign(memory_base + kGlobalsLow, memory_base + kGlobalsHigh);
+		p.link = link;
+		if (link)
+			p.linkBytes.assign(memory_base + link, memory_base + link + 0x8000);
+	}
+	void CamShowAfter()
+	{
+		CamShowProbe& p = CamShow();
+		if (p.globals.empty())
+			return;
+		static FILE* const f = [] {
+			const char* d = getenv("WWHD_STATE_DUMP");
+			return fopen((std::string(d ? d : ".") + "/camshow.txt").c_str(), "w");
+		}();
+		if (!f)
+			return;
+		const uint32 frame = wwhd::rt::GameFrame(wwhd::os::SwapCount()), step = g_rtHalfTick ? g_rtSubStep : 0;
+		auto word = [](const uint8* b) { return (uint32)b[0] << 24 | (uint32)b[1] << 16 | (uint32)b[2] << 8 | b[3]; };
+		for (uint32 i = 0; i + 4 <= p.globals.size(); i += 4)
+			if (memcmp(&p.globals[i], memory_base + kGlobalsLow + i, 4))
+				fprintf(f, "%u %u g %08x %08x %08x\n", frame, step, kGlobalsLow + i, word(&p.globals[i]), word(memory_base + kGlobalsLow + i));
+		for (uint32 i = 0; p.link && i + 4 <= p.linkBytes.size(); i += 4)
+			if (memcmp(&p.linkBytes[i], memory_base + p.link + i, 4))
+				fprintf(f, "%u %u link+%x %08x %08x\n", frame, step, i, word(&p.linkBytes[i]), word(memory_base + p.link + i));
+		fflush(f);
+		p.globals.clear();
+	}
+	// (the probe) the camera's bytes that differ from its last show step's end: others' writes since
+	void CamShowOthers(const char* when)
+	{
+		CamShowProbe& p = CamShow();
+		const uint32 frame = wwhd::rt::GameFrame(wwhd::os::SwapCount());
+		if (!p.to || frame < p.from || frame > p.to || !s_cam.proc || s_cam.after.size() != s_cam.size)
+			return;
+		static FILE* const f = [] {
+			const char* d = getenv("WWHD_STATE_DUMP");
+			return fopen((std::string(d ? d : ".") + "/camothers.txt").c_str(), "w");
+		}();
+		if (!f)
+			return;
+		for (uint32 i = 0; i < s_cam.size; i++)
+			if (memory_base[s_cam.proc + i] != s_cam.after[i])
+				fprintf(f, "%u %u %s cam+%x %02x %02x (tick start %02x)\n", frame, g_rtHalfTick ? g_rtSubStep : 0, when, i, s_cam.after[i],
+					memory_base[s_cam.proc + i], s_cam.before[i]);
+		fflush(f);
+	}
 	// the half tick's frame begins: what the camera's whole step changed goes back to the tick's start, but its
 	// process header (at N > 2 a scene change deleting the camera between its steps: its delete tag put back left
 	// its layer null, a crash in fpcDt's delete, f_025DDFA8, 27 ticks after a stage warp)
@@ -2777,9 +2878,15 @@ namespace
 			return;
 		}
 		uint8* const p = memory_base + s_cam.proc;
+		const bool others = s_cam.otherSet.size() == s_cam.size;
 		for (uint32 i = kBaseProcessSize; i < s_cam.size; i++)
-			if (p[i] == s_cam.after[i] && s_cam.after[i] != s_cam.before[i])
-				p[i] = s_cam.before[i];
+			if (p[i] == s_cam.after[i])
+			{
+				if (others && s_cam.otherSet[i])
+					p[i] = s_cam.others[i];              // others' write between its show steps (above)
+				else if (s_cam.after[i] != s_cam.before[i])
+					p[i] = s_cam.before[i];
+			}
 		s_cam.restored = true;
 	}
 }
@@ -3396,7 +3503,10 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		s_cam = CamSave{};                           // the camera's whole step (above) keeps its bytes anew
 	}
 	else if (CamTick() && !g_rtEarlyStep)
-		CamTickRestore();                            // the half tick reads the tick-start camera (above); at N > 2 the
+	{
+		CamShowOthers("r");                             // (the probe) others' writes before the restore
+		CamTickRestore();
+	}                            // the half tick reads the tick-start camera (above); at N > 2 the
 	                                                 // tick's last frame (its early steps step the camera for show too)
 	// WWHD_STATE_CENSUS=2 watches whole ticks' frames too (from the switch on), for the trace
 	static const bool censusAll = [] { const char* e = getenv("WWHD_STATE_CENSUS"); return Probe() && e && atoi(e) == 2; }();
@@ -4122,8 +4232,12 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	g_rtStep = 1.0f / g_rtSteps;                     // a tick's step of N (0.5 at 60)
 	s_converting++;
 	const bool camTick = CamTick() && (!g_rtHalfTick || g_rtEarlyStep) && rd16(proc + 0x08) == 476;
+	if (camTick)
+		CamShowBefore(s_link);                      // (a probe)
 	if (camTick && !g_rtHalfTick)
-		CamTickBefore(proc);                        // its whole tick's half step is for show (the camera's tick); at
+		CamTickBefore(proc);
+	else if (camTick)
+		CamTickOthers();                            // (an early step at N > 2: others' writes since the last)                        // its whole tick's half step is for show (the camera's tick); at
 	                                                // N > 2 its early steps too, on from it (B80: each ran a 30 fps tick
 	                                                // over a part-restored camera, which went NaN: a black world)
 	if (link && !g_rtHalfTick)
@@ -4187,7 +4301,10 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	else if (g_rtHalfTick && RndSync())
 		RndMerge(proc);
 	if (camTick)
+	{
 		CamTickAfter();
+		CamShowAfter();
+	}
 	if (notes)
 	{
 		g_rtLateNotes = notesOuter;

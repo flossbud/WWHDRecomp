@@ -268,6 +268,20 @@ building. U1 is the critical one: N 2 byte-identical keeps everything D21 proved
 - **Who:** session bottom U0 (`u0-cost`), U1 (`u1-runtime`), U3 (`u3-overrides`), U5 (`u5-present`); session top U2
   (`u2-rules`), U4 (`u4-checks`), U6 (`u6-fixes`, with the Deck OLED 90 try). U1's gate: N 2 byte-identical.
 
+## Known at N > 2 (U6, session top, 2026-10-13)
+
+The default stays 60 (N 2: WWHD_STEPS unset, the frame rate setting's default); none of this happens at N 2. Predeploy's
+routes after U6 cuts 1 and 2 (the s16 approaches end each tick at 30's; the camera's tick keeps what others write into
+it between its show steps), against 30 as at 2:
+
+| N | ok | WARN | FAIL |
+|---|---|---|---|
+| 3 | 45 (42 before) | plants 82, sail 86, en-ph 105 | drcjar 714, medli 204 (new: the camera follows the thrown jar as 30's does, and its flight at N 3 differs) |
+| 4 | 44 (43 before) | plants 102, sail 62, tour3 76, en-ph 105 | land3 542 (ok with the camera's tick off: Link's early steps), drcjar 714 |
+
+The draw side (sea6's foam, Doc Bandam's banner, the Magtail at N 4) is session bottom's u6-draw. Details and leads:
+docs/handoff.md, u6-fixes.
+
 ## U9: the draw side, the main core's profile (session bottom, 2026-10-12)
 
 The desktop worker, real time, en-tn:1800, `WWHD_CORES=3`, `WWHD_PROFILE_DEPTH=64`, reported for the game's main core
