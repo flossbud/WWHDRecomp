@@ -16,6 +16,8 @@ namespace wwhd::vk
 	{
 		void* lib = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
 		if (!lib)
+			lib = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);   // Android's name
+		if (!lib)
 			return false;
 		s_getInstanceProcAddr = (PFN_vkGetInstanceProcAddr)dlsym(lib, "vkGetInstanceProcAddr");
 		if (!s_getInstanceProcAddr)
@@ -33,10 +35,15 @@ namespace wwhd::vk
 #undef WWHD_VK_LOAD
 	}
 
-	void LoadDevice(VkDevice device)
+	void LoadDevice(VkDevice device, bool renderingKHR)
 	{
 #define WWHD_VK_LOAD(f) f = (PFN_##f)vkGetDeviceProcAddr(device, #f);
 		WWHD_VK_DEVICE(WWHD_VK_LOAD)
 #undef WWHD_VK_LOAD
+		if (renderingKHR)                          // VK_KHR_dynamic_rendering: the same functions, the extension's names
+		{
+			vkCmdBeginRendering = (PFN_vkCmdBeginRendering)vkGetDeviceProcAddr(device, "vkCmdBeginRenderingKHR");
+			vkCmdEndRendering = (PFN_vkCmdEndRendering)vkGetDeviceProcAddr(device, "vkCmdEndRenderingKHR");
+		}
 	}
 }

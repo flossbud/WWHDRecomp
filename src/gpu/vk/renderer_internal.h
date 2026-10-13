@@ -65,6 +65,14 @@ namespace wwhd::gpu
 		bool anisotropy = false;
 		bool float16 = false;                                    // shaderFloat16 and 16-bit storage (FSR 1's fp16 path)
 		bool subgroupHalf = false;                               // and subgroup operations on halves (FSR 3's fp16 path)
+		// what Cemu's pipelines and the game's data use, which a device may lack (b-android-vk): without each, a fallback
+		// chosen at device creation (renderer.cpp Init logs every one); WWHD_VK_MASK takes them away on any device
+		bool logicOp = true;                                     // logic ops (CLEAR blended to zero; SET, OR approximated)
+		bool dualSrc = true;                                     // dual-source blending (SRC1 factors read source 0)
+		bool depthClamp = true;                                  // depth clamp (off: depth clipped instead)
+		bool bc = true;                                          // BC1-5 sampled (off: decoded to 8-bit formats on upload)
+		bool vertex3 = true;                                     // 3-component 8- and 16-bit vertex formats (off: 4)
+		bool dynamicRenderingKHR = false;                        // dynamic rendering by VK_KHR_dynamic_rendering (below 1.3)
 		VkCommandPool pool = VK_NULL_HANDLE;
 		VkCommandBuffer cmd = VK_NULL_HANDLE;
 		VkFence fence = VK_NULL_HANDLE;
@@ -103,6 +111,9 @@ namespace wwhd::gpu
 
 	void Log(const std::string& msg);
 	[[noreturn]] void Fail(const std::string& msg);
+	// WWHD_VK_MASK=name,...: the renderer as if the device lacked these (b-android-vk; each fallback testable on the
+	// desktop): logicOp, dualSrcBlend, depthClamp, bc, vertex3, d24s8, depthClip, border, aniso, fp16, vk13; "all"
+	bool VkMasked(const char* name);
 	void Check(VkResult r, const char* what);
 	uint32 MemoryType(uint32 bits, VkMemoryPropertyFlags props);
 	void SubmitAndWait();                                         // ends rendering first; the GPU idle after it

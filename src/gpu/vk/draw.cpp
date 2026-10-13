@@ -656,11 +656,11 @@ namespace wwhd::gpu
 			case F::HWFMT_32_32_FLOAT: case F::HWFMT_32_32: return VK_FORMAT_R32G32_UINT;
 			case F::HWFMT_32_FLOAT: case F::HWFMT_32: case F::HWFMT_2_10_10_10: return VK_FORMAT_R32_UINT;
 			case F::HWFMT_8_8_8_8: return VK_FORMAT_R8G8B8A8_UINT;
-			case F::HWFMT_8_8_8: return VK_FORMAT_R8G8B8_UINT;
+			case F::HWFMT_8_8_8: return s.vertex3 ? VK_FORMAT_R8G8B8_UINT : VK_FORMAT_R8G8B8A8_UINT;   // b-android-vk: 4 read
 			case F::HWFMT_8_8: return VK_FORMAT_R8G8_UINT;
 			case F::HWFMT_8: return VK_FORMAT_R8_UINT;
 			case F::HWFMT_16_16_16_16: case F::HWFMT_16_16_16_16_FLOAT: return VK_FORMAT_R16G16B16A16_UINT;
-			case F::HWFMT_16_16_16: case F::HWFMT_16_16_16_FLOAT: return VK_FORMAT_R16G16B16_UINT;
+			case F::HWFMT_16_16_16: case F::HWFMT_16_16_16_FLOAT: return s.vertex3 ? VK_FORMAT_R16G16B16_UINT : VK_FORMAT_R16G16B16A16_UINT;
 			case F::HWFMT_16_16: case F::HWFMT_16_16_FLOAT: return VK_FORMAT_R16G16_UINT;
 			case F::HWFMT_16: case F::HWFMT_16_FLOAT: return VK_FORMAT_R16_UINT;
 			default: break;
@@ -918,7 +918,7 @@ namespace wwhd::gpu
 			VkPipelineRasterizationStateCreateInfo rs{ VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
 			rs.rasterizerDiscardEnable = d.rasterizerDiscard;
 			rs.polygonMode = VK_POLYGON_MODE_FILL;
-			rs.depthClampEnable = VK_TRUE;
+			rs.depthClampEnable = s.depthClamp;
 			rs.lineWidth = 1.0f;
 			rs.depthBiasEnable = d.depthBias;
 			rs.cullMode = d.cull;
@@ -934,6 +934,43 @@ namespace wwhd::gpu
 			cb.logicOp = d.logicOp;
 			cb.attachmentCount = d.colorCount;
 			cb.pAttachments = d.blends;
+			VkPipelineColorBlendAttachmentState blends[8];
+			if ((!s.logicOp && d.logicOpEnable) || !s.dualSrc)    // a device without them (b-android-vk): renderer.cpp Init
+			{
+				std::copy(std::begin(d.blends), std::end(d.blends), blends);
+				cb.pAttachments = blends;
+				if (!s.logicOp && d.logicOpEnable)
+				{
+					cb.logicOpEnable = VK_FALSE;
+					LogOnce(fmt::format("logicop{}", (int)d.logicOp), [&] { return fmt::format("a draw needs logic op {} the device lacks: {}",
+						(int)d.logicOp, d.logicOp == VK_LOGIC_OP_CLEAR ? "blended to zero" : d.logicOp == VK_LOGIC_OP_OR ? "blended as max" : "drawn as copy"); });
+					for (uint32 i = 0; i < d.colorCount; i++)
+						if (d.logicOp == VK_LOGIC_OP_CLEAR)       // 0 * source + 0 * destination
+							blends[i].blendEnable = VK_TRUE, blends[i].srcColorBlendFactor = blends[i].dstColorBlendFactor =
+								blends[i].srcAlphaBlendFactor = blends[i].dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+								blends[i].colorBlendOp = blends[i].alphaBlendOp = VK_BLEND_OP_ADD;
+						else if (d.logicOp == VK_LOGIC_OP_OR)     // of 0 and 1 values, the same
+							blends[i].blendEnable = VK_TRUE, blends[i].colorBlendOp = blends[i].alphaBlendOp = VK_BLEND_OP_MAX;
+						else
+							blends[i].blendEnable = VK_FALSE;
+				}
+				if (!s.dualSrc)                              // SRC1 factors: the decompiled shaders write no second source
+				{
+					auto one = [](VkBlendFactor& f) {
+						f = f == VK_BLEND_FACTOR_SRC1_COLOR ? VK_BLEND_FACTOR_SRC_COLOR : f == VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR
+							? VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR : f == VK_BLEND_FACTOR_SRC1_ALPHA ? VK_BLEND_FACTOR_SRC_ALPHA
+							: f == VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA ? VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA : f;
+					};
+					for (uint32 i = 0; i < d.colorCount; i++)
+					{
+						const VkPipelineColorBlendAttachmentState was = blends[i];
+						one(blends[i].srcColorBlendFactor), one(blends[i].dstColorBlendFactor);
+						one(blends[i].srcAlphaBlendFactor), one(blends[i].dstAlphaBlendFactor);
+						if (memcmp(&was, &blends[i], sizeof(was)) != 0)
+							LogOnce("dualsrc", [] { return std::string("a draw blends with a second source the device lacks: source 0 instead"); });
+					}
+				}
+			}
 			VkPipelineDepthStencilStateCreateInfo ds{ VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
 			ds.depthTestEnable = d.depthTest;
 			ds.depthWriteEnable = d.depthWrite;

@@ -385,6 +385,15 @@ static SDL_Window* OpenWindow()
 	w.size = [](uint32& width, uint32& height) { width = s_pixelWidth; height = s_pixelHeight; };
 	w.refresh = [] { return s_refresh.load(); };
 	wwhd::gpu::SetWindow(std::move(w));
+	// Android's pause and resume (b-android-vk): the window's surface goes with the app to the background and a new one
+	// is made when it comes back. An event watch, so the renderer hears of it as it happens, whatever the loop is doing
+	SDL_AddEventWatch([](void*, SDL_Event* ev) {
+		if (ev->type == SDL_EVENT_WILL_ENTER_BACKGROUND || ev->type == SDL_EVENT_DID_ENTER_BACKGROUND)
+			wwhd::gpu::SurfaceLost();
+		else if (ev->type == SDL_EVENT_DID_ENTER_FOREGROUND)
+			wwhd::gpu::SurfaceBack();
+		return true;
+	}, nullptr);
 	cemuLog_log(LogType::Force, "wwhd: window on SDL's {} video driver", SDL_GetCurrentVideoDriver());
 	return window;
 }

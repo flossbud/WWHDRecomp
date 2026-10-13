@@ -47,5 +47,5 @@ namespace wwhd::vk
 
 	bool Load();                                   // libvulkan and the global functions
 	void LoadInstance(VkInstance instance);
-	void LoadDevice(VkDevice device);
+	void LoadDevice(VkDevice device, bool renderingKHR = false);   // renderingKHR: vkCmdBeginRenderingKHR's names (below 1.3)
 }

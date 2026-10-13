@@ -64,6 +64,11 @@ namespace wwhd::gpu
 	void PresentMenuOnly();                                        // the menu's panel alone (before the game: the start screen's Setup)
 	void SaveShaderCache();                                        // the driver's part to disk, now (at exit)
 	void RebuildSwapchain();                                       // at the next present (the settings' vsync)
+	// Android's pause and resume (b-android-vk): the window's surface goes with the app to the background (nothing is
+	// presented meanwhile) and a new one is made from the same window when it comes back. Any thread; the render
+	// thread acts at its next present
+	void SurfaceLost();
+	void SurfaceBack();
 	// shaders translated and pipelines built during play since the last call (first sights: the
 	// hitches), and the time they took
 	struct FirstSights { uint32 shaders = 0, pipelines = 0; double shaderMs = 0, pipelineMs = 0; };

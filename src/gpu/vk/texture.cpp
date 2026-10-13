@@ -37,6 +37,74 @@ namespace wwhd::gpu
 				Log(msg());
 		}
 
+		// ---- BC1-5 on a device that can't sample them (b-android-vk; WWHD_VK_MASK=bc) ------------------------------
+		// Cemu's block decoders (LatteTextureLoader), written as 8-bit texels: BC1-3 RGBA8, BC4 R8, BC5 RG8 (Cemu's own
+		// uncompressing decoders write 32-bit floats: 32 times a BC1 texture's memory, and RGBA32F isn't filterable on
+		// every device)
+		enum class Bc { Rgba1, Rgba2, Rgba3, R4, R4s, Rg5, Rg5s };
+		template<Bc K>
+		class TextureDecoder_BC_To8 : public TextureDecoder, public SingletonClass<TextureDecoder_BC_To8<K>>
+		{
+			static constexpr int kChannels = K == Bc::R4 || K == Bc::R4s ? 1 : K == Bc::Rg5 || K == Bc::Rg5s ? 2 : 4;
+			static constexpr bool kSigned = K == Bc::R4s || K == Bc::Rg5s;
+
+		public:
+			sint32 getBytesPerTexel(LatteTextureLoaderCtx*) override { return kChannels; }
+
+			void decode(LatteTextureLoaderCtx* ctx, uint8* out) override
+			{
+				for (sint32 y = 0; y < ctx->height; y += ctx->stepY)
+					for (sint32 x = 0; x < ctx->width; x += ctx->stepX)
+					{
+						uint8* block = LatteTextureLoader_GetInput(ctx, x, y);
+						float v[4 * 4 * 4];
+						if constexpr (K == Bc::Rgba1)
+							decodeBC1Block(block, v);
+						else if constexpr (K == Bc::Rgba2)
+							decodeBC2Block_UNORM(block, v);
+						else if constexpr (K == Bc::Rgba3)
+							decodeBC3Block_UNORM(block, v);
+						else if constexpr (K == Bc::R4)
+							decodeBC4Block_UNORM(block, v);
+						else if constexpr (K == Bc::Rg5)
+							decodeBC5Block_UNORM(block, v);
+						else if constexpr (K == Bc::Rg5s)
+							decodeBC5Block_SNORM(block, v);
+						else                                      // BC4 SNORM: as BC5 SNORM's first channel
+						{
+							uint8 twice[16];
+							memcpy(twice, block, 8);
+							memcpy(twice + 8, block, 8);
+							float rg[4 * 4 * 2];
+							decodeBC5Block_SNORM(twice, rg);
+							for (int i = 0; i < 16; i++)
+								v[i] = rg[i * 2];
+						}
+						const sint32 bw = std::min(4, ctx->width - x), bh = std::min(4, ctx->height - y);
+						for (sint32 py = 0; py < bh; py++)
+							for (sint32 px = 0; px < bw; px++)
+							{
+								uint8* o = out + ((x + px) + (y + py) * ctx->width) * kChannels;
+								for (int c = 0; c < kChannels; c++)
+								{
+									const float f = v[(px + py * 4) * kChannels + c];
+									o[c] = kSigned ? (uint8)(sint8)std::lround(std::clamp(f, -1.0f, 1.0f) * 127.0f)
+										: (uint8)std::lround(std::clamp(f, 0.0f, 1.0f) * 255.0f);
+								}
+							}
+					}
+			}
+
+			void decodePixelToRGBA(uint8* block, uint8* pixel, uint8 bx, uint8 by) override
+			{
+				TextureDecoder* d = K == Bc::Rgba1 ? (TextureDecoder*)TextureDecoder_BC1::getInstance()
+					: K == Bc::Rgba2 ? (TextureDecoder*)TextureDecoder_BC2::getInstance()
+					: K == Bc::Rgba3 ? (TextureDecoder*)TextureDecoder_BC3::getInstance()
+					: K == Bc::R4 || K == Bc::R4s ? (TextureDecoder*)TextureDecoder_BC4::getInstance() : (TextureDecoder*)TextureDecoder_BC5::getInstance();
+				d->decodePixelToRGBA(block, pixel, bx, by);
+			}
+		};
+
 		// ---- formats (VulkanRenderer::GetTextureFormatInfoVK) ------------------------------------------
 		struct TexFormat
 		{
@@ -73,6 +141,23 @@ namespace wwhd::gpu
 			if (format == (F::R16_G16_B16_A16_FLOAT | F::FMT_BIT_SRGB))
 				format = F::R16_G16_B16_A16_FLOAT;
 			auto set = [&](VkFormat vk, TextureDecoder* d) { f.vk = vk; f.decoder = d; };
+			if (!s.bc)                                         // BC decoded to 8 bits (above); the same images' sizes in texels
+			{
+				switch (format)
+				{
+				case F::BC1_SRGB: set(VK_FORMAT_R8G8B8A8_SRGB, TextureDecoder_BC_To8<Bc::Rgba1>::getInstance()); return f;
+				case F::BC1_UNORM: set(VK_FORMAT_R8G8B8A8_UNORM, TextureDecoder_BC_To8<Bc::Rgba1>::getInstance()); return f;
+				case F::BC2_SRGB: set(VK_FORMAT_R8G8B8A8_SRGB, TextureDecoder_BC_To8<Bc::Rgba2>::getInstance()); return f;
+				case F::BC2_UNORM: set(VK_FORMAT_R8G8B8A8_UNORM, TextureDecoder_BC_To8<Bc::Rgba2>::getInstance()); return f;
+				case F::BC3_SRGB: set(VK_FORMAT_R8G8B8A8_SRGB, TextureDecoder_BC_To8<Bc::Rgba3>::getInstance()); return f;
+				case F::BC3_UNORM: set(VK_FORMAT_R8G8B8A8_UNORM, TextureDecoder_BC_To8<Bc::Rgba3>::getInstance()); return f;
+				case F::BC4_UNORM: set(VK_FORMAT_R8_UNORM, TextureDecoder_BC_To8<Bc::R4>::getInstance()); return f;
+				case F::BC4_SNORM: set(VK_FORMAT_R8_SNORM, TextureDecoder_BC_To8<Bc::R4s>::getInstance()); return f;
+				case F::BC5_UNORM: set(VK_FORMAT_R8G8_UNORM, TextureDecoder_BC_To8<Bc::Rg5>::getInstance()); return f;
+				case F::BC5_SNORM: set(VK_FORMAT_R8G8_SNORM, TextureDecoder_BC_To8<Bc::Rg5s>::getInstance()); return f;
+				default: break;
+				}
+			}
 			switch (format)
 			{
 			case F::R32_G32_B32_A32_FLOAT: set(VK_FORMAT_R32G32B32A32_SFLOAT, TextureDecoder_R32_G32_B32_A32_FLOAT::getInstance()); break;
@@ -978,10 +1063,9 @@ namespace wwhd::gpu
 		CreatePlaceholder(s_nullDepth, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT);
 		VkFormatProperties fp;
 		vkGetPhysicalDeviceFormatProperties(s.physical, VK_FORMAT_D24_UNORM_S8_UINT, &fp);
-		s_d24s8 = fp.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
-		vkGetPhysicalDeviceFormatProperties(s.physical, VK_FORMAT_BC1_RGBA_UNORM_BLOCK, &fp);
-		if (!(fp.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT))
-			Log("the device can't sample BC formats; compressed textures will fail");
+		s_d24s8 = (fp.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) && !VkMasked("d24s8");
+		if (!s_d24s8)
+			Log("the device has no D24S8 depth target: D32S8 instead");
 		s_customBorder = s.customBorder;
 		s_anisotropy = s.anisotropy;
 		if (const char* e = getenv("WWHD_ANISO"); e && s_anisotropy)

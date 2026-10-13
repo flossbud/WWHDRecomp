@@ -24,6 +24,8 @@ namespace wwhd::gpu
 		Window s_window;
 		bool s_hasWindow = false;
 		std::atomic<bool> s_rebuild{ false };                    // RebuildSwapchain: at the next acquire
+		std::atomic<bool> s_surfaceGone{ false };                // SurfaceLost: the swapchain and surface dropped, none presented
+		std::atomic<bool> s_surfaceBack{ false };                // SurfaceBack: a new surface at the next acquire
 
 		struct Swapchain
 		{
@@ -531,6 +533,8 @@ void main()
 	bool HasWindow() { return s_hasWindow; }
 
 	void RebuildSwapchain() { s_rebuild = true; }
+	void SurfaceLost() { s_surfaceGone = true; s_surfaceBack = false; }
+	void SurfaceBack() { s_surfaceBack = true; }
 
 	std::vector<const char*> WindowInstanceExtensions()
 	{
@@ -565,9 +569,58 @@ void main()
 	// the next swapchain image (w.index, w.pending), the swapchain rebuilt first if needed
 	// rebuild: false for frame generation's second image of a swap: a rebuild would destroy its first, which the swap's
 	// commands already draw into (the swapchain is then rebuilt at the next swap)
+	// the swapchain and the surface away (Android's pause; a lost surface): the GPU done with their images first
+	static void DropSurface()
+	{
+		vkQueueWaitIdle(s.queue);
+		WaitPending();
+		for (VkSemaphore sem : w.rendered)
+			vkDestroySemaphore(s.device, sem, nullptr);
+		w.rendered.clear();
+		for (VkImageView v : w.views)
+			vkDestroyImageView(s.device, v, nullptr);
+		w.views.clear();
+		if (w.chain)
+			vkDestroySwapchainKHR(s.device, w.chain, nullptr);
+		w.chain = VK_NULL_HANDLE;
+		w.images.clear();
+		w.width = w.height = 0;
+		w.first = UINT32_MAX;
+		DestroyWindowSurface();
+	}
+
+	// a surface again (Android's resume): from the same window, the swapchain built for it at this acquire
+	static bool NewSurface()
+	{
+		CreateWindowSurface();
+		if (!CanPresent(s.queueFamily))
+		{
+			Log("the window's new surface can't be presented to from the renderer's queue: nothing shown");
+			DestroyWindowSurface();
+			return false;
+		}
+		Log("the window's surface made again (resumed)");
+		return true;
+	}
+
 	static bool Acquire(bool srgb, bool rebuild = true)
 	{
 		w.pending = false;
+		if (s_surfaceGone.load(std::memory_order_relaxed) || !w.surface) [[unlikely]]   // paused, or lost: see SurfaceLost
+		{
+			if (!rebuild)
+				return false;
+			if (w.surface)
+			{
+				DropSurface();
+				Log("the window's surface dropped (paused): nothing presented until it's back");
+			}
+			if (!s_surfaceBack.exchange(false))
+				return false;
+			s_surfaceGone = false;
+			if (!NewSurface())
+				return false;
+		}
 		if (!w.acquired)
 		{
 			VkFenceCreateInfo fci{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
@@ -588,6 +641,13 @@ void main()
 					return false;
 			}
 			VkResult r = vkAcquireNextImageKHR(s.device, w.chain, UINT64_MAX, VK_NULL_HANDLE, w.acquired, &w.index);
+			if (r == VK_ERROR_SURFACE_LOST_KHR)              // the window's surface gone under us: a new one at the next swap
+			{
+				Log("the window's surface was lost: made again at the next swap");
+				s_surfaceGone = true;
+				s_surfaceBack = true;
+				return false;
+			}
 			if (r == VK_ERROR_OUT_OF_DATE_KHR)
 			{
 				if (!rebuild)
@@ -650,6 +710,21 @@ void main()
 	{
 		w.pending = false;
 		w.first = UINT32_MAX;
+		// WWHD_TEST_PAUSE=FROM,TO (or FROM:TO): Android's pause at the window's present FROM and its resume at TO (b-android-vk: the
+		// surface dropped and made again, on the desktop)
+		static const std::pair<uint32, uint32> pause = [] {
+			uint32 a = 0, b = 0;
+			const char* e = getenv("WWHD_TEST_PAUSE");
+			return e && sscanf(e, "%u%*[,:]%u", &a, &b) == 2 ? std::pair{ a, b } : std::pair{ 0u, 0u };
+		}();
+		if (pause.first) [[unlikely]]
+		{
+			static uint32 presents = 0;
+			if (++presents == pause.first)
+				SurfaceLost();
+			else if (presents == pause.second)
+				SurfaceBack();
+		}
 		const bool probing = probe::Begin(scan);                   // WWHD_PRESENT_PROBE: the scan buffer's grid, headless too
 		if (!s_hasWindow || !scan.image)
 			return;
@@ -822,6 +897,8 @@ void main()
 			VkResult r = vkQueuePresentKHR(s.queue, &pi);         // otherwise the submit has finished: nothing to wait for
 			if (r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR)
 				w.width = 0;                                      // rebuild at the next swap
+			else if (r == VK_ERROR_SURFACE_LOST_KHR)
+				s_surfaceGone = true, s_surfaceBack = true;       // a new surface at the next swap
 			else
 				Check(r, "vkQueuePresentKHR");
 			// the FPS overlay's count: every frame shown, frame generation's too

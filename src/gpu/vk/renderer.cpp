@@ -30,6 +30,15 @@ namespace wwhd::gpu
 		cemuLog_log(LogType::Force, "vk renderer: {}", msg);
 	}
 
+	bool VkMasked(const char* name)
+	{
+		static const std::string mask = [] {
+			const char* e = getenv("WWHD_VK_MASK");
+			return e ? fmt::format(",{},", e) : std::string();
+		}();
+		return !mask.empty() && (mask.find(fmt::format(",{},", name)) != std::string::npos || mask.find(",all,") != std::string::npos);
+	}
+
 	[[noreturn]] void Fail(const std::string& msg)
 	{
 		Log("FATAL: " + msg);
@@ -107,16 +116,45 @@ namespace wwhd::gpu
 		VkPhysicalDeviceVulkan12Features v12{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
 		VkPhysicalDeviceVulkan11Features v11{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
 		VkPhysicalDeviceFeatures2 features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
-		features.pNext = &v13;
-		v13.pNext = &v12;
-		v12.pNext = &v11;
+		// below Vulkan 1.3 (or WWHD_VK_MASK=vk13): dynamic rendering by its extension, and 1.1/1.2's features from 1.2
+		VkPhysicalDeviceDynamicRenderingFeaturesKHR rendering{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR };
+		const uint32 api = props.apiVersion;
+		const bool v13ok = VK_API_VERSION_MAJOR(api) > 1 || VK_API_VERSION_MINOR(api) >= 3, v12ok = VK_API_VERSION_MAJOR(api) > 1 ||
+			VK_API_VERSION_MINOR(api) >= 2;
+		s.dynamicRenderingKHR = !v13ok || VkMasked("vk13");
+		void** chain = &v11.pNext;
+		if (!s.dynamicRenderingKHR)
+		{
+			features.pNext = &v13;
+			v13.pNext = &v12;
+			v12.pNext = &v11;
+		}
+		else
+		{
+			features.pNext = &rendering;
+			if (v12ok)
+			{
+				rendering.pNext = &v12;
+				v12.pNext = &v11;
+			}
+			else
+				chain = &rendering.pNext;
+		}
 		vkEnumerateDeviceExtensionProperties(s.physical, nullptr, &n, nullptr);
 		std::vector<VkExtensionProperties> exts(n);
 		vkEnumerateDeviceExtensionProperties(s.physical, nullptr, &n, exts.data());
 		std::vector<const char*> enable;
 		if (HasWindow())
 			enable.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-		void** chain = &v11.pNext;
+		if (s.dynamicRenderingKHR)
+		{
+			if (std::none_of(exts.begin(), exts.end(), [](const VkExtensionProperties& e) {
+					return !strcmp(e.extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME); }))
+				Fail(fmt::format("Vulkan {}.{} without VK_KHR_dynamic_rendering", VK_API_VERSION_MAJOR(api), VK_API_VERSION_MINOR(api)));
+			enable.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+			Log(fmt::format("Vulkan {}.{}{}: dynamic rendering by VK_KHR_dynamic_rendering", VK_API_VERSION_MAJOR(api),
+				VK_API_VERSION_MINOR(api), v13ok ? " (WWHD_VK_MASK=vk13)" : ""));
+		}
 		for (auto& e : exts)
 		{
 			if (!strcmp(e.extensionName, VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME))
@@ -133,8 +171,25 @@ namespace wwhd::gpu
 			}
 		}
 		vkGetPhysicalDeviceFeatures2(s.physical, &features);
-		if (!v13.dynamicRendering)
+		if (!(s.dynamicRenderingKHR ? rendering.dynamicRendering : v13.dynamicRendering))
 			Fail("no dynamic rendering");
+		if (const char* e = getenv("WWHD_VK_MASK"); e && *e)
+			Log(fmt::format("WWHD_VK_MASK={}: the renderer as if the device lacked those", e));
+		VkPhysicalDeviceFeatures& core = features.features;
+		auto mask = [](const char* name, VkBool32& feature) {
+			if (VkMasked(name))
+				feature = VK_FALSE;
+		};
+		mask("logicOp", core.logicOp);
+		mask("dualSrcBlend", core.dualSrcBlend);
+		mask("depthClamp", core.depthClamp);
+		mask("bc", core.textureCompressionBC);
+		mask("aniso", core.samplerAnisotropy);
+		mask("depthClip", clip.depthClipEnable);
+		mask("border", border.customBorderColors);
+		mask("fp16", v12.shaderFloat16);
+		if (!v12ok)
+			v12.shaderFloat16 = VK_FALSE, v11.storageBuffer16BitAccess = VK_FALSE;
 		{
 			const VkBool32 f16 = v12.shaderFloat16, s16 = v11.storageBuffer16BitAccess, sub = v12.shaderSubgroupExtendedTypes;
 			void* next12 = v12.pNext, *next11 = v11.pNext;
@@ -149,6 +204,37 @@ namespace wwhd::gpu
 		s.depthClip = clip.depthClipEnable;
 		s.customBorder = border.customBorderColors && border.customBorderColorWithoutFormat;
 		s.anisotropy = features.features.samplerAnisotropy;
+		// what the game's pipelines and data use (b-android-vk): each fallback named in the log, never silent
+		s.logicOp = core.logicOp;
+		s.dualSrc = core.dualSrcBlend;
+		s.depthClamp = core.depthClamp;
+		{
+			VkFormatProperties fp;
+			vkGetPhysicalDeviceFormatProperties(s.physical, VK_FORMAT_BC1_RGBA_UNORM_BLOCK, &fp);
+			s.bc = core.textureCompressionBC && (fp.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
+			s.vertex3 = !VkMasked("vertex3");
+			for (VkFormat f : { VK_FORMAT_R8G8B8_UINT, VK_FORMAT_R16G16B16_UINT })
+			{
+				vkGetPhysicalDeviceFormatProperties(s.physical, f, &fp);
+				s.vertex3 &= (fp.bufferFeatures & VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT) != 0;
+			}
+		}
+		if (!s.logicOp)
+			Log("the device has no logic ops: CLEAR is blended to zero, SET and OR approximated (a log line when a draw needs one)");
+		if (!s.dualSrc)
+			Log("the device has no dual-source blending: SRC1 blend factors read source 0 (the shaders write no second source)");
+		if (!s.depthClamp)
+			Log("the device has no depth clamp: fragments beyond the depth range are clipped instead of clamped");
+		if (!s.bc)
+			Log("the device can't sample BC1-5: compressed textures are decoded to 8-bit formats on upload");
+		if (!s.vertex3)
+			Log("the device has no 3-component 8- and 16-bit vertex formats: read as 4 components");
+		if (!s.depthClip)
+			Log("the device has no depth-clip control (VK_EXT_depth_clip_enable): depth always clipped");
+		if (!s.customBorder)
+			Log("the device has no custom border colors: the nearest standard border color");
+		if (!s.anisotropy)
+			Log("the device has no anisotropic filtering");
 		VkDeviceCreateInfo dci{ VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
 		dci.pNext = &features;
 		dci.queueCreateInfoCount = 1;
@@ -166,7 +252,7 @@ namespace wwhd::gpu
 			return Init();
 		}
 		Check(created, "vkCreateDevice");
-		LoadDevice(s.device);
+		LoadDevice(s.device, s.dynamicRenderingKHR);
 		vkGetDeviceQueue(s.device, s.queueFamily, 0, &s.queue);
 		VkCommandPoolCreateInfo pci{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
 		pci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
