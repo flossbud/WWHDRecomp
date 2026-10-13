@@ -420,6 +420,7 @@ namespace wwhd::pause_menu
 			bool startGrace = false;                    // Start Game chosen: the game gets no button until none is held
 			bool graceIdle = false;                     // and none was held since
 			bool bgHold = false;                        // the app went to the background before play: held here (Background)
+			bool background = false;                    // the app is in the background: nothing drawn (nothing is shown)
 			// the title's first frame: the game's requests for the title scene (its logo's fade, ~30 frames) end, its stage
 			// loads under black, then its sky: the TV picture sampled every 150 ms until it's bright and settled
 			uint32 titleReqs = 0;                       // sixty TitleRequests when last looked
@@ -2934,8 +2935,8 @@ namespace wwhd::pause_menu
 			st.playSeen = wwhd::sixty::PlayStarts();
 			for (;;)
 			{
-				st.wake.wait_for(lock, std::chrono::milliseconds(st.phase != Phase::Closed || st.hintAt != Clock::time_point{} ||
-					(!st.startDone && StartWanted()) ? 16 : 250));
+				st.wake.wait_for(lock, std::chrono::milliseconds(!st.background && (st.phase != Phase::Closed ||
+					st.hintAt != Clock::time_point{} || (!st.startDone && StartWanted())) ? 16 : 250));
 				const Clock::time_point now = Clock::now();
 				uint32 ww = 0, wh = 0;
 				const bool window = gpu::WindowExtent(ww, wh) && ww && wh;
@@ -3117,6 +3118,8 @@ namespace wwhd::pause_menu
 					wwhd::state::RequestHold(false);
 					continue;
 				}
+				if (st.background)
+					continue;                                   // asleep or behind another app: drawn again when back
 				const Clock::time_point t0 = Clock::now();
 				ui::Canvas c((int)ww, (int)wh, std::move(st.spare));
 				Draw(st, c, t0);
@@ -3180,6 +3183,14 @@ namespace wwhd::pause_menu
 	{
 		State& st = S();
 		std::unique_lock lock(st.lock);
+		st.background = on;
+		// the game's sound stopped too (its sound threads mix on a guest core even while it's held); the start screen
+		// keeps it stopped until Start Game
+		if (on)
+			wwhd::state::PauseSound(true);
+		else if (st.startDone || !StartWanted())
+			wwhd::state::PauseSound(false);
+		st.wake.notify_one();
 		if (on)
 		{
 			if (!st.begun || st.bgHold || st.phase != Phase::Closed)
