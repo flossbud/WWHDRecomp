@@ -30,8 +30,10 @@
 024B7D34    keep:r10    addi            title: a frame count (+0x54) + 1, tested after (200)
 024B7DCC    late        stw             title: a count (+0x64) + 1 up to 100, tested before
 024B7F28    late        stw             title: a countdown (+0x5C) - 1, tested before
-024B7D8C    keep:r10    addi            title: the logo's count (+0x278, from below 0 up to 0) + 1, the boat's place worked out
-#                                       from it after (+0x274, +0x118)
+024B7D8C    keep:r9     addi            title: the logo's count (+0x278, from below 0 up to 0) + 1, the boat's place worked out
+#                                       from it after (+0x274, +0x118). addi r10,r9,1: the count is r9 (keep:r10, until
+#                                       b-titleboat, kept r10's frame count from +0x54: at 60 the first half step put a count
+#                                       of 30 or more there, and the boat stood at its end, opaque, at once: the owner's report)
 024B8770    keep:r7     addi            title (its execute, f_024B8670, mode 3 after the A press): the boat's exit count (+0x278)
 #                                       + 1 a call, its matrix (f_024B83F4) and place worked out from it after
 #
