@@ -44,6 +44,36 @@ below (bionic has no `ucontext`), so the arm64 fiber switch is written first and
   Making them byte-exact would cost a test on every float operation; left as known differences, to look at only if a
   route differs on the device.
 
+## A2 progress (2026-10-13, the app builds)
+
+On the x86 worker, after `tools/android/setup.sh` (the SDK, NDK r27c, platform 35, build-tools, adb in
+`/wwhd/opt/android`; never in git): `tools/android/build.sh` builds `build/android/libwwhd-play.so` and
+`tools/android/apk.sh` packs it with SDL's Java and `android/` into `build/android/windsong.apk` (Gradle-free: javac,
+d8, aapt2, zipalign -P 16, apksigner with a debug key). Both are generated output, never in git.
+- vcpkg: the `arm64-android-wwhd` triplet (API 33, static) with the NDK's toolchain chainloaded and a trimmed manifest
+  (no wxwidgets/tiff/libusb/dbus) (6).
+- Cemu's CMake without a cemu-patch (5): X11/Wayland/bluez/HIDAPI/gamemode/discord/libusb/OpenGL off,
+  `tools/android/cmake` (a header-only FindX11: Cemu's platform.h includes Xlib's headers on every Linux, nothing links
+  it; the image's X11 and xcb headers copied by setup.sh) and `project.cmake` (those headers and a `log/log.h` stub for
+  Cemu's Vulkan headers, everywhere). API 33 for bionic's `backtrace()` (Cemu's exception handler; its ELF symbol
+  table built too).
+- A shared library (7): `wwhd_executable` makes a SHARED library on Android, 16K pages, exports only `SDL_main`,
+  `JNI_OnLoad`, `Java_*` (`src/frontend/android.map`); `android_glue.cpp`'s `SDL_main` calls Cemu's `main()` (it
+  keeps its name: `SDL_MAIN_HANDLED`) and stubs `XInitThreads`. 127 MB with symbols, NEEDED only the NDK's system
+  libraries.
+- TLS (8): `WW_TLS` is plain `thread_local` on Android. The emitter's `stwcx.` uses `__atomic_compare_exchange_n`
+  (libc++ has no `std::atomic_ref`; the same instruction on x86).
+- Paths (9): the activity (`org.windsong.app.WindSongActivity`, an SDLActivity) sets `WWHD_HOME` (the app's external
+  files dir: `cemu/` for Cemu's resources and game profiles, `game/wwhd.wua`, portable/) and the settings
+  (`WWHD_NATIVE=on`, `WWHD_RENDER=vk`), and passes `-g game/wwhd.wua`; `cemu_boot`'s and the pause menu's exe dir is
+  `WWHD_HOME`. For A3 the files are pushed with adb; the system file picker (content URIs) is S3's.
+- X11 (4): window_system.cpp's Xlib and its VRR property are compiled out. The loader name (10) is session bottom's
+  (b-android-vk).
+- Gated on x86 (the change is a no-op there): checks all MATCH, regress da06a4ee, statetest 0 differ.
+Not run on the device yet (A3): it needs the handheld on the tailnet with Wireless debugging paired. Then
+`tools/android/device.sh` (in the worker's container): `pair`/`connect`, `install`, `files` (deploy.sh's layout, the game
+once), `run` (start, then the app's logcat), `stop`, `uninstall` (restores the device).
+
 ## P0: doesn't build, link or start on Android
 
 1. **Fibers** (`src/runtime/fiber/FiberUnix.cpp`): the switch is x86-64 asm; the fallback is `ucontext`, which bionic

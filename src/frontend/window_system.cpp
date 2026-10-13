@@ -36,9 +36,11 @@
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
 #endif
 #include "util/helpers/helpers.h"
+#if !defined(__ANDROID__)       // Android has no X (m-android A2): Cemu's platform.h has Xlib's headers there, nothing links it
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
+#endif
 
 void CemuCommonInit();          // main.cpp
 void LatteOverlay_init();
@@ -307,6 +309,7 @@ static void VariableRefresh(SDL_Window* window)
 	if (!e || atoi(e) != 1)
 		return;
 	const char* driver = SDL_GetCurrentVideoDriver();
+#if !defined(__ANDROID__)
 	if (driver && strcmp(driver, "x11") == 0)
 	{
 		SDL_PropertiesID props = SDL_GetWindowProperties(window);
@@ -324,7 +327,9 @@ static void VariableRefresh(SDL_Window* window)
 		else
 			cemuLog_log(LogType::Force, "wwhd: variable refresh: X11, but no X window from SDL: not asked for");
 	}
-	else if (getenv("GAMESCOPE_WAYLAND_DISPLAY"))
+	else
+#endif
+	if (getenv("GAMESCOPE_WAYLAND_DISPLAY"))
 		cemuLog_log(LogType::Force, "wwhd: variable refresh: in gamescope: its own (start it with --adaptive-sync); presenting FIFO");
 	else if (driver && strcmp(driver, "wayland") == 0)
 		cemuLog_log(LogType::Force, "wwhd: variable refresh: Wayland: the compositor's choice (KDE: Display Configuration, Adaptive "

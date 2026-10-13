@@ -69,6 +69,8 @@ namespace wwhd::pause_menu
 
 		std::string ExeDir()
 		{
+			if (const char* home = getenv("WWHD_HOME"); home && *home)   // the Android app (cemu_boot.cpp's SetupPaths)
+				return home;
 			std::error_code ec;
 			return std::filesystem::read_symlink("/proc/self/exe", ec).parent_path().string();
 		}

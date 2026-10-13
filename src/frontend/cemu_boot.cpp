@@ -25,13 +25,21 @@ namespace wwhd
 
 	// Always portable: user data, config and cache next to the executable (portable/), Cemu's
 	// read-only data (resources/, gameProfiles/) from WWHD_CEMU_DATA or the executable's directory.
+	// WWHD_HOME stands for the executable's directory where there's none of ours (the Android app: /proc/self/exe is
+	// the system's app_process64; it sets its files directory).
 	void SetupPaths()
 	{
-		char buf[4096];
-		ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-		if (n <= 0)
-			Fatal("cannot resolve /proc/self/exe");
-		fs::path exe(std::string(buf, n));
+		fs::path exe;
+		if (const char* home = getenv("WWHD_HOME"); home && *home)
+			exe = fs::path(home) / "wwhd-play";
+		else
+		{
+			char buf[4096];
+			ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+			if (n <= 0)
+				Fatal("cannot resolve /proc/self/exe");
+			exe = fs::path(std::string(buf, n));
+		}
 		fs::path portable = exe.parent_path() / "portable";
 		std::error_code ec;
 		fs::create_directories(portable, ec);

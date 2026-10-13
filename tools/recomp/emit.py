@@ -294,9 +294,10 @@ class Emitter:
         return [f"{{ uint32 ea = {self._ea_x(i)}; bool ok = false;",
                 "\tif (ctx->reservedMemAddr == ea) {",
                 f"\t\tif (g_rtJournalOn && rd32(ea) == ctx->reservedMemValue) rt_journal_store(ea, 4, {hx(ea)});   // it will store",
-                "\t\tstd::atomic_ref<uint32> w(*(uint32*)(memory_base + ea));",
                 "\t\tuint32 expect = __builtin_bswap32(ctx->reservedMemValue);",
-                f"\t\tok = w.compare_exchange_strong(expect, __builtin_bswap32(GPR({i.rT})));",
+                # the builtin, as std::atomic_ref's compare_exchange_strong is (the NDK's libc++ has no atomic_ref)
+                f"\t\tok = __atomic_compare_exchange_n((uint32*)(memory_base + ea), &expect, __builtin_bswap32(GPR({i.rT})), false,",
+                "\t\t\t__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);",
                 "\t\tctx->cr[CR_BIT_SO] = ctx->xer_so;",
                 "\t\tctx->reservedMemAddr = 0; ctx->reservedMemValue = 0;",
                 "\t}",

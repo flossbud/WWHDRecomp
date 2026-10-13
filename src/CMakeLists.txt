@@ -116,6 +116,12 @@ set_property(TARGET wwhd_main PROPERTY COMPILE_OPTIONS "${options}")
 
 add_library(wwhd_frontend OBJECT frontend/cemu_boot.cpp frontend/window_system.cpp frontend/audio_sdl.cpp frontend/overlay.cpp
 	frontend/pause_menu.cpp frontend/ui_draw.cpp frontend/game_files.cpp)
+if(ANDROID)
+	target_sources(wwhd_frontend PRIVATE frontend/android_glue.cpp)
+	# Cemu's exception handler names functions with its ELF reader on every Linux (BOOST_OS_LINUX), but Cemu builds the
+	# reader only where CMake's LINUX is, which Android isn't
+	target_sources(CemuCommon PRIVATE "${CEMU_SRC}/src/Common/ExceptionHandler/ELFSymbolTable.cpp")
+endif()
 wwhd_like_cemu(wwhd_frontend)
 # the build's id for the start screen's version line (.build-id, written by tools/worker/sync.sh; "dev" without it)
 set(build_id_file "${CMAKE_CURRENT_SOURCE_DIR}/../.build-id")
@@ -234,13 +240,25 @@ endif()
 # cache spares a relink most of its code generation.
 get_target_property(bin_options CemuBin LINK_OPTIONS)
 function(wwhd_executable name)
-	add_executable(${name} ${ARGN})
+	if(ANDROID)
+		# the app's library (m-android A2: tools/android/apk.sh packs it as libmain.so): SDL's Java activity loads it and
+		# calls SDL_main, which Cemu's main() is under SDL_main.h
+		add_library(${name} SHARED ${ARGN})
+		set_target_properties(${name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+		set_property(TARGET ${name} APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/frontend/android.map")
+	else()
+		add_executable(${name} ${ARGN})
+	endif()
 	set_target_properties(${name} PROPERTIES LINKER_LANGUAGE CXX INTERPROCEDURAL_OPTIMIZATION ON
 		RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 	if(bin_options)
 		set_property(TARGET ${name} PROPERTY LINK_OPTIONS "${bin_options}")
 	endif()
-	if(CMAKE_EXE_LINKER_FLAGS MATCHES "fuse-ld=lld")         # lld's spelling (tools/arm64/toolchain.cmake)
+	if(ANDROID)   # after Cemu's options, which replace the target's
+		target_link_options(${name} PRIVATE "-Wl,-z,max-page-size=16384"   # 16K-page devices
+			"-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/frontend/android.map")
+	endif()
+	if(ANDROID OR CMAKE_EXE_LINKER_FLAGS MATCHES "fuse-ld=lld")         # lld's spelling (the NDK's, tools/arm64/toolchain.cmake)
 		target_link_options(${name} PRIVATE "-Wl,--thinlto-cache-dir=${CMAKE_BINARY_DIR}/thinlto-cache")
 	elseif(CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 		target_link_options(${name} PRIVATE "-Wl,--plugin-opt,cache-dir=${CMAKE_BINARY_DIR}/thinlto-cache")

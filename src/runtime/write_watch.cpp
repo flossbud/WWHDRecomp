@@ -46,8 +46,14 @@ namespace wwhd::rt::write_watch
 		std::atomic_flag s_lock = ATOMIC_FLAG_INIT;
 		std::atomic<uint64_t> s_faults, s_raced, s_onAlt, s_chained, s_hostWrites, s_protects;
 
-		// read in the handler: initial-exec, so no lazy TLS allocation can happen in it (were this ever in a .so)
+		// read in the handler: initial-exec, so no lazy TLS allocation can happen in it (were this ever in a .so). Not on
+		// Android, where the app is a dlopen'd .so and bionic refuses initial-exec there: its dynamic TLS is allocated on
+		// a thread's first access, which ThreadInit makes for every thread that runs guest code
+#if defined(__ANDROID__)
+#define WW_TLS thread_local
+#else
 #define WW_TLS thread_local __attribute__((tls_model("initial-exec")))
+#endif
 		WW_TLS uintptr_t t_altLo, t_altHi;           // this thread's ThreadInit stack
 		WW_TLS uintptr_t t_raceAddr;
 		WW_TLS uint32_t t_raceCount;

@@ -1,0 +1,11 @@
+/* The Android app's library (m-android A2) exports what SDL's Java side calls and nothing else: everything of ours
+   and Cemu's is local, so ThinLTO drops what nothing reaches (the executables' linking does the same) and calls stay
+   direct. */
+{
+	global:
+		SDL_main;
+		JNI_OnLoad;
+		Java_*;
+	local:
+		*;
+};
