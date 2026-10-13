@@ -2,8 +2,11 @@
 // window (the README): the side panel at the left edge, the prompts and toasts at the right, dialogs centred; the
 // design's PNGs at 1x (s <= 1) or 2x, scaled to s; text from the TTFs at its size times s. M1: the menu, its cursor,
 // prompts, captions and motion, Resume, and Quit to the desktop; M2 Settings; M3 Save; M4 Enhancements (none yet), Quit
-// to the title screen (the game's own soft reset) and the "Pause" prompt while closed.
+// to the title screen (the game's own soft reset) and the "Pause" prompt while closed. The start screen (t-startscreen,
+// the owner's Start Screen design) is drawn here too, on the same layers: S1 Launch over the title's first frame, held.
 #include "pause_menu.h"
+#include "game_files.h"
+#include "config/LaunchSettings.h"
 #include "ui_draw.h"
 #include "../gpu/vk/renderer.h"
 #include "../os/savestate.h"
@@ -403,6 +406,26 @@ namespace wwhd::pause_menu
 			Image backdrop, blurred;                    // the window's picture when it opened, and blurred
 			int bw = 0, bh = 0;
 			bool dirty = true;
+			// the start screen (t-startscreen S1, Launch): up over the title's first frame, held, until Start Game
+			bool start = false;                         // the Launch screen is up (the menu's own items are not)
+			bool startDone = false;                     // shown once a run: after Start Game the menu is the pause menu
+			// the title's first frame: the game's requests for the title scene (its logo's fade, ~30 frames) end, its stage
+			// loads under black, then its sky: the TV picture sampled every 150 ms until it's bright and settled
+			uint32 titleReqs = 0;                       // sixty TitleRequests when last looked
+			Clock::time_point titleQuietSince{};        // when they last went up
+			Clock::time_point probeAt{};                // the sample asked for (0: none out)
+			Clock::time_point nextProbe{};              // and when the next may be
+			float lastLuma = -1;
+			int startView = 0;                          // 0 its menu, 1 Game Files
+			int startItem = 0;                          // the focused button (menu 0-3, Game Files 0-1)
+			Clock::time_point startFocusSince[4];       // each button's focus change (the cross-fade)
+			int startPrev = -1;
+			Image launchBase;                           // the frozen frame with the logo and the footer, as drawn (launchKey)
+			std::string launchKey;
+			game_files::Copy copy;                      // the game files this run started from, and their check
+			bool checked = false;                       // their check is known (from game.txt or a check run here)
+			struct CheckJob { std::atomic<float> progress{ 0 }; std::atomic<bool> done{ false }; game_files::Copy result; };
+			std::shared_ptr<CheckJob> job;              // a check running (Re-verify, or the first at start), on its own thread
 		};
 		State& S()
 		{
@@ -1227,6 +1250,220 @@ namespace wwhd::pause_menu
 					l.button[i][k] = ButtonLayer(s, "menu_460x72", kButtonW, kButtonH, 32, kItems[i], k == 1);
 		}
 
+		// ---- the start screen (t-startscreen S1: Launch; the owner's Start Screen design, README "2. Launch: desktop"):
+		// over the title's first frame, held; the logo, the board with its menu or Game Files, the footer ----
+		const char* const kLaunchItems[4] = { "Start Game", "Settings", "Game Files", "Quit" };
+		const char* const kFilesItems[2] = { "Re-verify", "Change Files" };
+		constexpr float kBoardY = 400, kBoardW = 680, kSheetY = 416, kSheetW = 648;
+		// the board's left (design units): 620 at 16:9, centred on a wider window (README "Desktop at non-16:9")
+		float LaunchOX()
+		{
+			uint32 w = 0, h = 0;
+			if (!gpu::WindowExtent(w, h) || !w || !h)
+				return 0;
+			const float s = std::min(w / 1920.0f, h / 1080.0f);
+			return std::max(0.0f, (w / s - 1920) / 2);
+		}
+		float BoardX() { return 620 + LaunchOX(); }
+		float SheetX() { return 636 + LaunchOX(); }
+		constexpr Colour kWarn = Colour::Hex(0x8a4b14), kKey = Colour::Hex(0x4f7a32);
+		// a TV picture's mean brightness (0..1, a pixel in 16 sampled)
+		float Luma(const std::vector<uint32>& px)
+		{
+			uint64 sum = 0, n = 0;
+			for (size_t i = 0; i < px.size(); i += 16, n++)
+				sum += (px[i] & 0xFF) * 2 + ((px[i] >> 8) & 0xFF) * 5 + ((px[i] >> 16) & 0xFF);
+			return n ? (float)sum / (n * 8 * 255.0f) : 0;
+		}
+
+		float LaunchSheetH(int view) { return view == 0 ? 430 : 516; }
+		// a button's top (design units): the menu's four 90 apart from the sheet's padding; Game Files' two under its rows
+		float LaunchButtonY(int view, int i) { return view == 0 ? kSheetY + 44 + i * 90 : kSheetY + 310 + i * 90; }
+		void LaunchCursorFor(int view, int i, float out[4])
+		{
+			out[0] = SheetX() + (kSheetW - kButtonW) / 2 - 13, out[1] = LaunchButtonY(view, i) - 13, out[2] = kButtonW + 26, out[3] = kButtonH + 26;
+		}
+		int LaunchCount(int view) { return view == 0 ? 4 : 2; }
+
+		std::string RegionOf(const State& st) { return st.copy.region.empty() ? "USA" : st.copy.region; }
+		bool Checking(const State& st) { return st.job && !st.job->done.load(); }
+		std::string StatusLine(const State& st, Colour& col)
+		{
+			col = kInk;
+			if (Checking(st))
+				return fmt::format("Checking\xE2\x80\xA6 {}%", (int)std::lround(st.job->progress.load() * 100));
+			if (st.checked && st.copy.ok)
+				return "Verified";
+			if (st.checked)
+				return col = kWarn, "Couldn\xE2\x80\x99t verify";
+			return "Not checked";
+		}
+
+		// text cut to a width with an ellipsis at its start (a path: its end matters most)
+		std::string FitStart(ui::Font& font, float px, float w, const std::string& t)
+		{
+			if (font.Width(t, px) <= w)
+				return t;
+			const std::vector<uint32> cps = ui::Utf8(t);
+			for (size_t cut = 1; cut < cps.size(); cut++)
+			{
+				std::string tail = "\xE2\x80\xA6";
+				for (size_t i = cut; i < cps.size(); i++)
+				{
+					const uint32 c = cps[i];
+					if (c < 0x80) tail += (char)c;
+					else if (c < 0x800) tail += (char)(0xC0 | (c >> 6)), tail += (char)(0x80 | (c & 0x3F));
+					else if (c < 0x10000) tail += (char)(0xE0 | (c >> 12)), tail += (char)(0x80 | ((c >> 6) & 0x3F)), tail += (char)(0x80 | (c & 0x3F));
+					else tail += (char)(0xF0 | (c >> 18)), tail += (char)(0x80 | ((c >> 12) & 0x3F)), tail += (char)(0x80 | ((c >> 6) & 0x3F)), tail += (char)(0x80 | (c & 0x3F));
+				}
+				if (font.Width(tail, px) <= w)
+					return tail;
+			}
+			return "\xE2\x80\xA6";
+		}
+
+		// the frozen frame, the logo (its shadows: 0 6px 0 #1f5fb0, 0 12px 14px rgba(0,30,90,.35)) and the footer, drawn once
+		void LaunchBase(State& st, Frame& f)
+		{
+			Assets& a = A();
+			ui::Canvas& c = f.c;
+			const float s = f.s;
+			c.Copy(st.backdrop);
+			const Image& logo = a.Get("logo_launch_desktop_h264");
+			const float lx = std::round((c.W() - logo.w) / 2.0f), ly = std::round(64 * s);
+			for (int i = 0; i < 4; i++)                      // the soft one: four offsets spread about 12 px down
+				c.Silhouette(logo, lx + (i % 2 ? 3 : -3) * s, ly + (10 + i) * s, { 0, 30, 90, 255 }, 0.09f);
+			c.Silhouette(logo, lx, ly + 6 * s, Colour::Hex(0x1f5fb0));
+			c.Draw(logo, lx, ly);
+			// the footer: the game and its check at the bottom left, the build at the bottom right (21 px, outlined)
+			Colour col;
+			const std::string status = StatusLine(st, col);
+			const std::string left = "The Wind Waker HD \xC2\xB7 " + RegionOf(st) + (st.checked && st.copy.ok ? " \xC2\xB7 Verified" : "");
+			const std::string right = game_files::Version();
+			const float px = 21 * s, base = c.H() - 34 * s + a.rocknroll.Descent(px);
+			c.Text(a.rocknroll, px, 44 * s, base, left, kWhite, 1, kPromptOutline, 2 * s);
+			c.Text(a.rocknroll, px, c.W() - 44 * s - a.rocknroll.Width(right, px), base, right, kWhite, 1, kPromptOutline, 2 * s);
+		}
+
+		// the board as a layer (drawn once a view, size and status): its shadow (0 20px 50px rgba(10,40,20,.35), blurred), the
+		// felt frame (16 padding, its rims and flourishes), the sheet, and Game Files' title, divider and rows; kShadowM around it
+		constexpr float kShadowM = 70;
+		Image BoardLayer(State& st, float s, int view)
+		{
+			Assets& a = A();
+			const float fw = kBoardW, fh = LaunchSheetH(view) + 32, M = kShadowM;
+			ui::Canvas c((int)std::ceil((fw + 2 * M) * s), (int)std::ceil((fh + 2 * M) * s));
+			{
+				Image mask;                                 // the board's shape, white on black, blurred: its red is the shadow's alpha
+				mask.w = c.W(), mask.h = c.H();
+				mask.px.assign((size_t)mask.w * mask.h, 0xFF000000u);
+				const int x0 = (int)(M * s), y0 = (int)((M + 20) * s), x1 = (int)((M + fw) * s), y1 = std::min(mask.h, (int)((M + 20 + fh) * s));
+				for (int y = y0; y < y1; y++)
+					std::fill(mask.px.begin() + (size_t)y * mask.w + x0, mask.px.begin() + (size_t)y * mask.w + x1, 0xFFFFFFFFu);
+				const Image soft = ui::Blurred(mask, 25 * s, 1, 1);
+				for (size_t i = 0; i < soft.px.size(); i++)
+					c.Pixels()[i] = 10u | 40u << 8 | 20u << 16 | (uint32)((soft.px[i] & 0xFF) * 0.35f) << 24;
+			}
+			Frame f{ c, s };
+			const float x = M, y = M;
+			c.Fill(x * s, y * s, fw * s, fh * s, kFrame);
+			c.Tile(a.Get("texture_frame-felt_tile"), x * s, y * s, fw * s, fh * s);
+			for (auto [inset, col] : { std::pair{ 0.0f, kRimLight }, std::pair{ 5.0f, kRimDark } })
+			{
+				const float t = inset == 0 ? 5 : 2;
+				c.Fill((x + inset) * s, (y + inset) * s, (fw - 2 * inset) * s, t * s, col);
+				c.Fill((x + inset) * s, (y + fh - inset - t) * s, (fw - 2 * inset) * s, t * s, col);
+				c.Fill((x + inset) * s, (y + inset) * s, t * s, (fh - 2 * inset) * s, col);
+				c.Fill((x + fw - inset - t) * s, (y + inset) * s, t * s, (fh - 2 * inset) * s, col);
+			}
+			const float sx = x + 16, sy = y + 16, sh = LaunchSheetH(view);
+			float offs[4] = { 0, -64, 12, -80 };
+			DrawSheet(f, sx, sy, kSheetW, sh, offs, 1);
+			const Image& fl = a.Get("frame_corner-flourish");
+			c.Draw(fl, (x + 6) * s, (y + 6) * s), c.Draw(fl, (x + fw - 6) * s - fl.w, (y + 6) * s, 1, true);
+			c.Draw(fl, (x + 6) * s, (y + fh - 6) * s - fl.h, 1, false, true), c.Draw(fl, (x + fw - 6) * s - fl.w, (y + fh - 6) * s - fl.h, 1, true, true);
+			if (view == 1)
+			{
+				// Game Files: its title (42 px), the divider (160), its rows (key 120 wide at 21 px, the value at 23)
+				TextCentred(f, a.reggae, 42, sx + kSheetW / 2, sy + 44 + 23, "Game Files", kInk);
+				for (int i = 0; i < 13; i++)
+					c.Fill((sx + kSheetW / 2 - 80 + i * 12 + 4) * s, (sy + 106) * s, 4 * s, 4 * s, kDot);
+				Colour statusCol;
+				const std::string status = StatusLine(st, statusCol);
+				const std::string game = "The Wind Waker HD \xC2\xB7 " + RegionOf(st) + " \xC2\xB7 v" + std::to_string(std::max(0, st.copy.version));
+				const std::string rows[3][2] = { { "Game", game }, { "Location", st.copy.path }, { "Status", status } };
+				const float rx = sx + 60, rw = kSheetW - 120;
+				const Image& rule = a.Get("rule_dotted_tile_20x4");
+				for (int i = 0; i < 3; i++)
+				{
+					const float ry = sy + 136 + i * 50;
+					const float base = (ry + 25) * s + (a.rocknroll.Ascent(23 * s) + a.rocknroll.Descent(23 * s)) / 2;
+					c.Text(a.rocknroll, 21 * s, (rx + 6) * s, base, rows[i][0], kKey);
+					c.Text(a.rocknroll, 23 * s, (rx + 146) * s, base, FitStart(a.rocknroll, 23 * s, (rw - 140) * s, rows[i][1]), i == 2 ? statusCol : kInk);
+					c.Tile(rule, rx * s, (ry + 48) * s, rw * s, (float)rule.h);
+				}
+			}
+			return c.Take();
+		}
+
+		struct LaunchLayers
+		{
+			std::string key;                            // the size, view and what Game Files shows
+			Image board;
+			int size = 0;                               // the buttons' size (canvas width)
+			Image buttons[2][4][2];                     // each view's buttons, idle and focused
+		};
+		LaunchLayers& LL()
+		{
+			static LaunchLayers l;
+			return l;
+		}
+
+		void DrawLaunch(State& st, Frame& f, Clock::time_point now, float op)
+		{
+			ui::Canvas& c = f.c;
+			const float s = f.s;
+			const std::string baseKey = fmt::format("{}x{} {} {}", c.W(), c.H(), RegionOf(st), st.checked && st.copy.ok ? 1 : 0);
+			if (baseKey != st.launchKey || st.launchBase.w != c.W() || st.launchBase.h != c.H())
+			{
+				ui::Canvas b(c.W(), c.H());
+				Frame bf{ b, s };
+				LaunchBase(st, bf);
+				st.launchBase = b.Take(), st.launchKey = baseKey;
+			}
+			c.Copy(st.launchBase);
+			if (op <= 0)
+				return;
+			const int view = st.startView;
+			LaunchLayers& l = LL();
+			Colour col;
+			const std::string boardKey = fmt::format("{}x{} {} {}|{}", c.W(), c.H(), view, view == 1 ? StatusLine(st, col) : "", st.copy.path);
+			if (boardKey != l.key)
+				l.board = BoardLayer(st, s, view), l.key = boardKey;
+			if (l.size != c.W())
+			{
+				for (int v = 0; v < 2; v++)
+					for (int i = 0; i < LaunchCount(v); i++)
+						for (int k = 0; k < 2; k++)
+							l.buttons[v][i][k] = ButtonLayer(s, "menu_460x72", kButtonW, kButtonH, 29, v == 0 ? kLaunchItems[i] : kFilesItems[i], k == 1);
+				l.size = c.W();
+			}
+			c.Draw(l.board, std::round((BoardX() - kShadowM) * s), std::round((kBoardY - kShadowM) * s), op);
+			const float bx = SheetX() + (kSheetW - kButtonW) / 2;
+			for (int i = 0; i < LaunchCount(view); i++)
+			{
+				const float fms = std::chrono::duration<float, std::milli>(now - st.startFocusSince[i]).count();
+				float focus = Linear(fms, 0, 140);
+				if (i != st.startItem)
+					focus = st.startPrev == i ? 1 - focus : 0;
+				const bool dim = view == 0 && i == 0 && st.checked && !st.copy.ok;    // Start Game, when the copy didn't verify
+				const float bop = op * (dim ? 0.5f : 1), px = std::round(bx * s), py = std::round(LaunchButtonY(view, i) * s);
+				c.Draw(l.buttons[view][i][0], px, py, bop);
+				if (focus > 0)
+					c.Draw(l.buttons[view][i][1], px, py, bop * focus);
+			}
+		}
+
 		void Draw(State& st, ui::Canvas& c, Clock::time_point now)
 		{
 			Assets& a = A();
@@ -1238,6 +1475,34 @@ namespace wwhd::pause_menu
 			Frame f{ c, s };
 			const float ms = std::chrono::duration<float, std::milli>(now - st.since).count();
 			const bool closing = st.phase == Phase::Closing;
+			// the start screen: Launch over the frozen title frame, in over 400 ms (out the same at Start Game); Settings over
+			// it as the pause menu's panel at its widest, wiping in from the left over 480 ms (out over 400)
+			const bool launch = st.start;
+			float launchWipe = 1;
+			if (launch)
+			{
+				const float sms0 = std::chrono::duration<float, std::milli>(now - st.screenSince).count();
+				const float uiOp = closing ? 1 - Linear(ms, 0, 400) : Linear(ms, 0, 400);
+				launchWipe = st.settings ? Bezier(.3f, .8f, .25f, 1, Linear(sms0, 0, 480)) : 1 - Bezier(.3f, .8f, .25f, 1, Linear(sms0, 0, 400));
+				DrawLaunch(st, f, now, uiOp);
+				if (launchWipe <= 0)
+				{
+					if (!closing && uiOp > 0)
+					{
+						const float g = Bezier(.25f, .8f, .25f, 1, Linear(std::chrono::duration<float, std::milli>(now - st.curSince).count(), 0, 170));
+						float box[4];
+						for (int k = 0; k < 4; k++)
+							box[k] = st.curFrom[k] + (st.curTo[k] - st.curFrom[k]) * g;
+						DrawCursor(f, box, ms, uiOp);
+					}
+					std::vector<std::pair<std::string, std::string>> pr = { { st.pad ? "A" : "Enter", "Select" } };
+					if (st.startView == 1)
+						pr.push_back({ st.pad ? "B" : "Esc", "Back" });
+					DrawPrompts(f, pr, st.pad, uiOp);
+					DrawToast(f, st, now);
+					return;
+				}
+			}
 			if (!closing && UnderDialog(st, c))
 			{
 				DrawDialog(f, st, now, ms);
@@ -1246,7 +1511,9 @@ namespace wwhd::pause_menu
 			}
 			// the backdrop: sharp to blurred over 500 ms (back when closing)
 			const float blur = closing ? 1 - Linear(ms, 0, 500) : Linear(ms, 0, 500);
-			if (blur >= 1)
+			if (launch)
+				;                                           // Launch under it, drawn above
+			else if (blur >= 1)
 				c.Copy(st.blurred);
 			else
 			{
@@ -1255,10 +1522,10 @@ namespace wwhd::pause_menu
 					c.Draw(st.blurred, 0, 0, blur);
 			}
 			// the panel wipes in from the left over 560 ms (out, reversed, without delays)
-			const float wipe = closing ? 1 - Bezier(.3f, .8f, .25f, 1, Linear(ms, 0, 560)) : Bezier(.3f, .8f, .25f, 1, Linear(ms, 0, 560));
+			const float wipe = launch ? launchWipe : closing ? 1 - Bezier(.3f, .8f, .25f, 1, Linear(ms, 0, 560)) : Bezier(.3f, .8f, .25f, 1, Linear(ms, 0, 560));
 			// the panel's width: 680, widening to Settings' 1380 over 480 ms (and back)
 			const float sms = std::chrono::duration<float, std::milli>(now - st.screenSince).count();
-			const float widen = st.settings ? Bezier(.6f, 0, .2f, 1, Linear(sms, 0, 480)) : 1 - Bezier(.6f, 0, .2f, 1, Linear(sms, 0, 480));
+			const float widen = launch ? 1.0f : st.settings ? Bezier(.6f, 0, .2f, 1, Linear(sms, 0, 480)) : 1 - Bezier(.6f, 0, .2f, 1, Linear(sms, 0, 480));
 			const float pw = std::round((kPanelW + (kWidePanelW - kPanelW) * std::clamp(widen, 0.0f, 1.0f)) * s);
 			// its shadow (drop-shadow(10px 0 22px rgba(16,56,24,.4))) beyond its right edge
 			for (int i = 0; i < (int)(32 * s); i++)
@@ -1305,7 +1572,7 @@ namespace wwhd::pause_menu
 			}
 			// the menu's layer: out over 180 ms (30 to the left) as Settings opens, back 200 ms after it closes; Settings in
 			// after 260 ms (opacity 300, from 40 to the right over 380), out over 160
-			const float menuOp = st.settings ? 1 - Linear(sms, 0, 180) : Linear(sms, 200, 200);
+			const float menuOp = launch ? 0.0f : st.settings ? 1 - Linear(sms, 0, 180) : Linear(sms, 200, 200);
 			const float menuDx = st.settings ? -30 * Linear(sms, 0, 180) : -30 * (1 - Linear(sms, 200, 200));
 			const float setOp = (st.settings ? Linear(sms, 260, 300) : 1 - Linear(sms, 0, 160)) * (closing ? 1 - Linear(ms, 0, 260) : 1);
 			const float setDx = st.settings ? 40 * (1 - Bezier(.2f, .8f, .2f, 1, Linear(sms, 260, 380))) : 0;
@@ -1648,8 +1915,80 @@ namespace wwhd::pause_menu
 		}
 
 
+		// the start screen's focus: a button of the view (the cursor glides, the fills cross-fade)
+		void FocusLaunch(State& st, int i, bool instant = false)
+		{
+			const Clock::time_point now = Clock::now();
+			st.startPrev = instant || i == st.startItem ? -1 : st.startItem;
+			st.startItem = i;
+			st.startFocusSince[i] = instant ? now - std::chrono::seconds(10) : now;
+			if (st.startPrev >= 0)
+				st.startFocusSince[st.startPrev] = now;
+			float box[4];
+			LaunchCursorFor(st.startView, i, box);
+			GlideTo(st, box);
+		}
+
+		// the game files' check on its own thread (Re-verify, or the first at start when game.txt has none for them)
+		void StartCheck(State& st)
+		{
+			if (Checking(st) || st.copy.path.empty())
+				return;
+			auto job = std::make_shared<State::CheckJob>();
+			st.job = job;
+			std::thread([job, path = st.copy.path] {
+				job->result = game_files::Check(path, &job->progress);
+				job->done.store(true);
+			}).detach();
+		}
+
+		void ActLaunch(State& st, Input in)
+		{
+			const int n = LaunchCount(st.startView);
+			switch (in)
+			{
+			case Input::Up: case Input::Left: FocusLaunch(st, (st.startItem + n - 1) % n); return;
+			case Input::Down: case Input::Right: FocusLaunch(st, (st.startItem + 1) % n); return;
+			case Input::Back:
+				if (st.startView == 1)                      // Game Files: back to the menu, on Game Files
+					st.startView = 0, FocusLaunch(st, 2, true);
+				return;
+			case Input::Confirm: break;
+			default: return;
+			}
+			if (st.startView == 1)
+			{
+				if (st.startItem == 0)
+					StartCheck(st);                         // Re-verify: ignored while a check runs
+				else
+					ShowToast(st, "Changing the game files comes with Setup, in the next update.");
+				return;
+			}
+			switch (st.startItem)
+			{
+			case 0:
+				if (st.checked && !st.copy.ok)
+					ShowToast(st, "These game files didn\xE2\x80\x99t verify: see Game Files.");
+				else
+					Close(st);                              // Start Game: the hold let go, into the live title
+				return;
+			case 1:
+				if (Categories().empty())
+					return;
+				st.settings = true, st.sub = 0, st.screenSince = Clock::now();
+				st.cat = 0, st.prevRow = -1, st.row = 0, st.rowSince = Clock::now();
+				FocusRow(st, 0);
+				TurnCompass(st, 0);
+				return;
+			case 2: st.startView = 1, FocusLaunch(st, 0, true); return;
+			default: QuitToDesktop();
+			}
+		}
+
 		void Act(State& st, Input in)
 		{
+			if (in == Input::Toggle && st.start)
+				return;                                     // F2 on the start screen: nothing (Esc is its Back)
 			if (in == Input::Toggle)
 			{
 				if (st.phase == Phase::Closed)
@@ -1674,6 +2013,19 @@ namespace wwhd::pause_menu
 				return;
 			if (!st.blackout.empty())
 				return;                                     // a slot loading: nothing until it's done
+			if (st.settings && st.dialog == Dialog::None && st.start && st.sub == 0 && in == Input::Back)
+			{
+				st.settings = false, st.screenSince = Clock::now();   // Settings from the start screen: back to Launch
+				FocusLaunch(st, 1, true);
+				st.dirty = true;
+				return;
+			}
+			if (st.start && !st.settings)
+			{
+				ActLaunch(st, in);
+				st.dirty = true;
+				return;
+			}
 			if (st.settings && st.dialog == Dialog::None)
 			{
 				if (st.sub == 2)
@@ -1827,6 +2179,86 @@ namespace wwhd::pause_menu
 			gpu::SetHintOpacity(ms < 260 ? ms / 260 : ms < 4000 ? 1.0f : 1 - (ms - 4000) / 600);
 		}
 
+		// the start screen at all: a player's run (off under a route's input, CEMU_INPUT_SCRIPT, as the checks run; WWHD_START_SCREEN=0|1)
+		bool StartWanted()
+		{
+			static const bool on = [] {
+				if (const char* e = getenv("WWHD_START_SCREEN"))
+					return strcmp(e, "0") != 0;
+				return getenv("CEMU_INPUT_SCRIPT") == nullptr;
+			}();
+			return on;
+		}
+
+		// Launch over the title: once the game has asked for the title scene and its first frames are shown, the game held
+		// there (its picture the backdrop, frozen), the menu on Start Game; the game files' check from game.txt, or run now
+		void StartLaunch(State& st, bool window)
+		{
+			if (st.startDone || st.start || st.phase != Phase::Closed || !window || !StartWanted())
+				return;
+			if (wwhd::sixty::PlayStarts() != 0)
+			{
+				st.startDone = true;                        // play already (a state loaded at start): no start screen
+				return;
+			}
+			const uint32 reqs = wwhd::sixty::TitleRequests();
+			const Clock::time_point now = Clock::now();
+			if (reqs == 0)
+				return;
+			if (reqs != st.titleReqs)                       // still asking: the logo's fade
+			{
+				st.titleReqs = reqs, st.titleQuietSince = now, st.probeAt = {};
+				return;
+			}
+			if (now - st.titleQuietSince < std::chrono::milliseconds(300))
+				return;
+			// the title's stage loading, then its sky: the first bright, settled picture (20 s at most)
+			bool ready = now - st.titleQuietSince > std::chrono::seconds(20);
+			if (!ready)
+			{
+				if (st.probeAt == Clock::time_point{})
+				{
+					if (now >= st.nextProbe)
+						gpu::RequestTvPicture(), st.probeAt = now;
+					return;
+				}
+				std::vector<uint32> tv;
+				uint32 tw = 0, th = 0;
+				if (!gpu::TakeTvPicture(tv, tw, th))
+				{
+					if (now - st.probeAt > std::chrono::seconds(1))
+						st.probeAt = {};                    // none came: ask again
+					return;
+				}
+				const float luma = Luma(tv);
+				ready = luma > 0.35f && st.lastLuma > 0 && std::abs(luma - st.lastLuma) < 0.02f;
+				st.lastLuma = luma;
+				st.probeAt = {};
+				if (!ready)
+				{
+					st.nextProbe = now + std::chrono::milliseconds(150);
+					return;
+				}
+			}
+			st.start = true, st.startView = 0, st.phase = Phase::Waiting, st.since = now, st.dialog = Dialog::None;
+			st.settings = false, st.screenSince = now - std::chrono::seconds(10);
+			FocusLaunch(st, 0, true);
+			for (int k = 0; k < 4; k++)
+				st.curFrom[k] = st.curTo[k];
+			st.compassFrom = st.compassTo = 0;
+			if (auto game = LaunchSettings::GetLoadFile())
+				st.copy.path = _pathToUtf8(*game);
+			game_files::Copy reg;
+			if (game_files::Registered(reg) && reg.path == st.copy.path && reg.ok)
+				st.copy = reg, st.checked = true;
+			else
+				StartCheck(st);
+			cemuLog_log(LogType::Force, "wwhd: start screen: over the title ({} frames shown, its brightness {:.2f}); the game files {}",
+				gpu::ShownFrames(), st.lastLuma, st.checked ? "verified before" : "being checked");
+			wwhd::state::RequestHold(true);
+			gpu::RequestTvPicture();
+		}
+
 		void Run()
 		{
 			State& st = S();
@@ -1834,11 +2266,22 @@ namespace wwhd::pause_menu
 			st.playSeen = wwhd::sixty::PlayStarts();
 			for (;;)
 			{
-				st.wake.wait_for(lock, std::chrono::milliseconds(st.phase != Phase::Closed || st.hintAt != Clock::time_point{} ? 16 : 250));
+				st.wake.wait_for(lock, std::chrono::milliseconds(st.phase != Phase::Closed || st.hintAt != Clock::time_point{} ||
+					(!st.startDone && StartWanted()) ? 16 : 250));
 				const Clock::time_point now = Clock::now();
 				uint32 ww = 0, wh = 0;
 				const bool window = gpu::WindowExtent(ww, wh) && ww && wh;
 				Hint(st, now, window ? ww : 0, window ? wh : 0);
+				StartLaunch(st, window);
+				if (st.job && st.job->done.load())          // a check of the game files done: its outcome (registered if it passed)
+				{
+					const std::string path = st.copy.path;
+					st.copy = st.job->result, st.copy.path = path, st.checked = true;
+					if (st.copy.ok)
+						game_files::Register(st.copy);
+					cemuLog_log(LogType::Force, "wwhd: start screen: the game files {}{}", st.copy.ok ? "verified" : "didn't verify: ", st.copy.why);
+					st.job.reset(), st.dirty = true;
+				}
 				if (st.phase == Phase::Closed || !window)
 					continue;
 				// the pad's held direction repeats: first after 380 ms, then each 110
@@ -1874,17 +2317,22 @@ namespace wwhd::pause_menu
 						for (int y = 0; y < dh; y++)
 							memcpy(&screen.px[(size_t)(y + oy) * ww + ox], &fit.px[(size_t)y * dw], (size_t)dw * 4);
 					}
-					// blurred at half size (blur(6px) times the scale), then back up
+					// blurred at half size (blur(6px) times the scale), then back up (the start screen's frame stays sharp)
 					const float s = std::min(ww / 1920.0f, wh / 1080.0f);
-					Image half = ui::Scaled(screen, std::max(1, (int)ww / 2), std::max(1, (int)wh / 2));
-					st.blurred = ui::Scaled(ui::Blurred(half, 3 * s, 0.95f, 0.92f), (int)ww, (int)wh);
+					if (!st.start)
+					{
+						Image half = ui::Scaled(screen, std::max(1, (int)ww / 2), std::max(1, (int)wh / 2));
+						st.blurred = ui::Scaled(ui::Blurred(half, 3 * s, 0.95f, 0.92f), (int)ww, (int)wh);
+					}
 					st.backdrop = std::move(screen);
 					st.bw = (int)ww, st.bh = (int)wh;
 					st.phase = Phase::Opening, st.since = Clock::now();
 				}
 				if ((int)ww != st.bw || (int)wh != st.bh)       // resized while up: the backdrop to the new size
 				{
-					st.backdrop = ui::Scaled(st.backdrop, (int)ww, (int)wh), st.blurred = ui::Scaled(st.blurred, (int)ww, (int)wh);
+					st.backdrop = ui::Scaled(st.backdrop, (int)ww, (int)wh);
+					if (!st.blurred.Empty())
+						st.blurred = ui::Scaled(st.blurred, (int)ww, (int)wh);
 					st.bw = (int)ww, st.bh = (int)wh;
 				}
 				// File 1's save: "Saving..." until the game's save thread has written it, "Saved" for 850 ms, then the toast
@@ -1956,6 +2404,12 @@ namespace wwhd::pause_menu
 				if (st.phase == Phase::Closing && ms > 560)
 				{
 					st.phase = Phase::Closed, st.closedAt = Clock::now(), st.hintAt = st.closedAt + std::chrono::milliseconds(300);
+					if (st.start)                               // Start Game: into the live title (no Pause prompt over it)
+					{
+						st.start = false, st.startDone = true, st.hintAt = {};
+						st.launchBase = Image{}, st.launchKey.clear();
+						cemuLog_log(LogType::Force, "wwhd: start screen: Start Game, the title goes on");
+					}
 					gpu::SetMenuPanel(0, 0, {});
 					wwhd::state::RequestHold(false);
 					continue;
@@ -2137,7 +2591,24 @@ namespace wwhd::pause_menu
 		const auto inside = [&](const float box[4]) {   // a cursor box less its 13 on every side: the button
 			return dx >= box[0] + 13 && dy >= box[1] + 13 && dx < box[0] + box[2] - 13 && dy < box[1] + box[3] - 13;
 		};
-		if (st.dialog != Dialog::None)
+		if (st.start && !st.settings)
+		{
+			// the start screen: a button under the mouse takes the focus, a click chooses it; a right click goes back
+			for (int i = 0; i < LaunchCount(st.startView); i++)
+			{
+				float box[4];
+				LaunchCursorFor(st.startView, i, box);
+				if (!inside(box))
+					continue;
+				if (st.startItem != i)
+					FocusLaunch(st, i), st.dirty = true;
+				if (button == 1)
+					Act(st, Input::Confirm);
+			}
+			if (button == 2)
+				Act(st, Input::Back);
+		}
+		else if (st.dialog != Dialog::None)
 		{
 			const DialogSpec d = Spec(st.dialog, st.dialogSlot);
 			const int n = (int)d.buttons.size();

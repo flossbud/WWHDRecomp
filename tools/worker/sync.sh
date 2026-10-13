@@ -17,6 +17,9 @@ case "${1:-up}" in
                 --exclude=/build/ --exclude=__pycache__ --exclude=/.worker-dir --exclude=/.session \
                 --exclude=/tools/worker/hosts.env --exclude=/tools/worker/desktop.env \
                 "$root/" "$W_SSH:$hdir/"
+          # the build's id (the start screen's version line): the commit's short hash and date, "+" if the tree has changes
+          id="$(git -C "$root" log -1 --format='%h %cs' 2>/dev/null || echo dev)$(git -C "$root" status --porcelain 2>/dev/null | grep -q . && echo + || true)"
+          on_host "printf '%s\\n' $(printf %q "$id") > $hdir/.build-id"
           on_host "mkdir -p $hdir/orig && ln -sfn /wwhd/data/orig/0005000010143500_v0 $hdir/orig/0005000010143500_v0 &&
               if [ ! -d $hdir/ghidra/projects ] && [ -d $W_ROOT/WWHDRecomp/ghidra/projects ] && [ $dir != /wwhd/WWHDRecomp ]; then mkdir -p $hdir/ghidra && cp -a $W_ROOT/WWHDRecomp/ghidra/projects $hdir/ghidra/; fi" ;;
     down) shift; for p in "$@"; do rsync -a "$W_SSH:$hdir/$p" "$root/$p"; done ;;

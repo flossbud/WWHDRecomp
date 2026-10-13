@@ -115,8 +115,18 @@ list(REMOVE_ITEM options -O2)                              # Cemu's -O3
 set_property(TARGET wwhd_main PROPERTY COMPILE_OPTIONS "${options}")
 
 add_library(wwhd_frontend OBJECT frontend/cemu_boot.cpp frontend/window_system.cpp frontend/audio_sdl.cpp frontend/overlay.cpp
-	frontend/pause_menu.cpp frontend/ui_draw.cpp)
+	frontend/pause_menu.cpp frontend/ui_draw.cpp frontend/game_files.cpp)
 wwhd_like_cemu(wwhd_frontend)
+# the build's id for the start screen's version line (.build-id, written by tools/worker/sync.sh; "dev" without it)
+set(build_id_file "${CMAKE_CURRENT_SOURCE_DIR}/../.build-id")
+set(WWHD_BUILD_ID "dev")
+if(EXISTS "${build_id_file}")
+	file(STRINGS "${build_id_file}" WWHD_BUILD_ID LIMIT_COUNT 1)
+	set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${build_id_file}")
+endif()
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/gen/build_id.inc.new" "static const char* const kBuildId = \"${WWHD_BUILD_ID}\";\n")
+configure_file("${CMAKE_CURRENT_BINARY_DIR}/gen/build_id.inc.new" "${CMAKE_CURRENT_BINARY_DIR}/gen/build_id.inc" COPYONLY)
+target_include_directories(wwhd_frontend PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/gen")
 target_include_directories(wwhd_frontend PRIVATE "${CEMU_SRC}/dependencies/imgui")   # imstb_truetype.h (the pause menu's text)
 target_link_libraries(wwhd_frontend PRIVATE SDL3::SDL3 CemuAudio)   # SDL3 for the window, sound and gamepad; CemuAudio: cubeb, to close it
 set_source_files_properties(frontend/window_system.cpp PROPERTIES COMPILE_DEFINITIONS WWHD_NULL_GPU)

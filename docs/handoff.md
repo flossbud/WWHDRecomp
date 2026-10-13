@@ -4287,9 +4287,17 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   own save (cking's SaveMgr, symbols.csv: the parked main thread is woken to call saveInGame, SetGameSave). Tests (on
   the worker, windowed, real time): `tools/sixty/tests/pausehold.sh` (the hold and the release's frames); the
   scratch scripts that drove the menu by keys (xdotool on our own Xvfb, a window grab a step) are easy to redo from
-  pausehold.sh's pattern. Left for M4: Quit -> Title Screen (a toast says later), the Enhancements list (the design's
-  rows are placeholders), the Closed-state "Pause" prompt (it would sit on the item buttons: the owner's call), 4K
-  speed, motion polish.
+  pausehold.sh's pattern. M4 (landed): Quit to the title (the game's own soft reset), Enhancements ("No enhancements
+  yet"), the Pause prompt. Left: 4K speed (14-21 ms a frame on the worker's CPU), motion polish, and pausehold at 60: the first
+  frame after the release ran 45-52 ms, over its ~45 ms limit, from M4's tip (M3 to M4 also brought b-lsfg 262af2ac; an
+  A/B of the two waits for the desktop worker).
+- **t-startscreen S1** (the owner's Start Screen design, kept with the design handoff outside git; pause_menu.cpp's
+  Launch, game_files.cpp): the window comes up held at the title's first bright, settled frame under Launch (Start
+  Game, Settings, Game Files, Quit). Off under a route's input (`CEMU_INPUT_SCRIPT`); `WWHD_START_SCREEN=0|1` forces
+  it. The copy's check (title ID, version 0, cking.rpx's sha256) and `portable/game.txt` (its path, size and time,
+  region: the copy is read in place). To see it, run with `WWHD_DEBUG_BOOT=0` (run.sh's 1 skips the title). Next: S2
+  Setup (before the game when no copy is given or registered: drop, Browse, the menu's own browser for the pad and the
+  Deck's Game Mode; Change Files restarts the program on the new copy), S3 Android (after m-android A2).
 
 ### Session bottom (week 2, WW-14): the GPU side
 

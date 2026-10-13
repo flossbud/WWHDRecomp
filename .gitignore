@@ -21,6 +21,8 @@ __pycache__/
 # a parallel session's worker checkout and name (tools/worker/sync.sh, tools/progress/publish.sh)
 /.worker-dir
 /.session
+# the build's id, written by tools/worker/sync.sh for the start screen's version line
+/.build-id
 # the machines' addresses and logins (tools/worker/hosts.sh; desktop.env is the older file)
 /tools/worker/hosts.env
 /tools/worker/desktop.env
