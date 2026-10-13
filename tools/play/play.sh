@@ -26,4 +26,8 @@ if [ -n "${WWHD_SAVE:-}" ]; then
     ls "$WWHD_SAVE"/cking.sav >/dev/null
     rm -rf "$save" && mkdir -p "$save" && cp "$WWHD_SAVE"/*.sav "$save/"
 fi
-cd "$here" && exec ./wwhd-null -g "$here/game/wwhd.wua" "$@"
+# the game files: game/wwhd.wua until the start screen has registered a copy (portable/game.txt: its Change Files' choice),
+# headless always; neither there: the start screen's Setup asks for them
+game=()
+[ -e "$here/game/wwhd.wua" ] && { [ -z "${WWHD_WINDOW:-}" ] || [ ! -s "$here/portable/game.txt" ]; } && game=(-g "$here/game/wwhd.wua")
+cd "$here" && exec ./wwhd-null "${game[@]}" "$@"

@@ -60,6 +60,7 @@ namespace wwhd::gpu
 	// Nothing without WWHD_RENDER=vk.
 	void PrepareShaders(const std::function<void(uint32 done, uint32 total)>& progress);
 	void PresentOverlayOnly();                                     // the overlay alone on black: the progress screen
+	void PresentMenuOnly();                                        // the menu's panel alone (before the game: the start screen's Setup)
 	void SaveShaderCache();                                        // the driver's part to disk, now (at exit)
 	void RebuildSwapchain();                                       // at the next present (the settings' vsync)
 	// shaders translated and pipelines built during play since the last call (first sights: the

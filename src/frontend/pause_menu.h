@@ -22,4 +22,18 @@ namespace wwhd::pause_menu
 	uint32 Swallowed();
 	// the mouse in the window's pixels: button 0 a move, 1 the left button pressed, 2 the right
 	void Mouse(float x, float y, int button);
+
+	// the start screen (t-startscreen): the game files this run reads (the frontend's, before the title is prepared)
+	void SetGame(const std::string& path);
+	// S2 Setup before the game, when no copy is given or registered: its thread up over a sky (the window's loop presents
+	// it, gpu PresentMenuOnly); SetupDone once a copy verified and Start Game was chosen, with its path
+	void BeginSetup();
+	bool SetupDone(std::string& path);
+	// files dragged over the window (true when one enters, false when it leaves or drops) and dropped on it
+	void Drag(bool over);
+	void Drop(const std::string& path);
+	// Browse asked for: the window's loop shows the system's picker (it must, on the main thread) and hands back what
+	// was chosen ("" cancelled; failed: no picker, so the menu's own browser)
+	bool TakeBrowse();
+	void Chosen(const std::string& path, bool failed);
 }

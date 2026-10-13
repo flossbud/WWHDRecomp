@@ -6,6 +6,7 @@
 #include <openssl/sha.h>
 #include <fstream>
 #include <mutex>
+#include <thread>
 #include "build_id.inc"
 
 namespace wwhd::game_files
@@ -114,8 +115,11 @@ namespace wwhd::game_files
 		SHA256_CTX sha;
 		SHA256_Init(&sha);
 		const size_t chunk = 1 << 20;
+		static const int delay = getenv("WWHD_DEBUG_CHECK_DELAY") ? atoi(getenv("WWHD_DEBUG_CHECK_DELAY")) : 0;   // a test's: ms a MB
 		for (size_t at = 0; at < rpx->size(); at += chunk)
 		{
+			if (delay > 0)
+				std::this_thread::sleep_for(std::chrono::milliseconds(delay));
 			SHA256_Update(&sha, rpx->data() + at, std::min(chunk, rpx->size() - at));
 			Set(progress, 0.45f + 0.3f * (float)(at + chunk) / (float)rpx->size());
 			if (cancelled())

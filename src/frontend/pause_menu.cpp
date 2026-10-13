@@ -6,7 +6,6 @@
 // the owner's Start Screen design) is drawn here too, on the same layers: S1 Launch over the title's first frame, held.
 #include "pause_menu.h"
 #include "game_files.h"
-#include "config/LaunchSettings.h"
 #include "ui_draw.h"
 #include "../gpu/vk/renderer.h"
 #include "../os/savestate.h"
@@ -19,11 +18,16 @@
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <mutex>
 #include <sstream>
 #include <thread>
+#include <dirent.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace wwhd::sixty                                // overrides/sixty.cpp: the game's soft reset
 {
@@ -424,8 +428,27 @@ namespace wwhd::pause_menu
 			std::string launchKey;
 			game_files::Copy copy;                      // the game files this run started from, and their check
 			bool checked = false;                       // their check is known (from game.txt or a check run here)
-			struct CheckJob { std::atomic<float> progress{ 0 }; std::atomic<bool> done{ false }; game_files::Copy result; };
+			struct CheckJob { std::atomic<float> progress{ 0 }; std::atomic<bool> done{ false }, cancel{ false }; game_files::Copy result; };
 			std::shared_ptr<CheckJob> job;              // a check running (Re-verify, or the first at start), on its own thread
+			// the start screen's Setup (S2): before the game when no copy is registered, or Change Files from Launch
+			bool setup = false;                         // Setup is up
+			bool setupPre = false;                      // before the game (nothing running: a sky behind it, no hold)
+			int sstate = 0;                             // kIdle, kChecking, kBad, kReady
+			bool help = false;                          // Help's text in place of the body (idle, bad)
+			bool dragging = false;                      // files dragged over the window
+			Clock::time_point dragSeen;                 // the last sign of them (no leave on X11: gone after 400 ms)
+			std::string setupFile;                      // the files chosen (being checked, or checked)
+			game_files::Copy setupCopy;                 // their check's outcome
+			std::shared_ptr<CheckJob> setupJob;
+			bool browseWanted = false;                  // Browse chosen: the window's loop shows the picker
+			std::string setupResult;                    // Start Game from Setup before the game: the copy's path
+			Clock::time_point blackoutAt{};             // Start Game: the blackout's fade (600 ms), then the game
+			// the menu's own file browser (the pad's, for the Deck's Game Mode, where the system's picker can't be used)
+			struct Entry { std::string name, path; int kind; };   // kind: 0 up, 1 a folder, 2 a game folder, 3 a game file
+			bool browsing = false;
+			std::string browseDir;
+			std::vector<Entry> entries;
+			int browseRow = 0, browseTop = 0;
 		};
 		State& S()
 		{
@@ -1348,10 +1371,12 @@ namespace wwhd::pause_menu
 		// the board as a layer (drawn once a view, size and status): its shadow (0 20px 50px rgba(10,40,20,.35), blurred), the
 		// felt frame (16 padding, its rims and flourishes), the sheet, and Game Files' title, divider and rows; kShadowM around it
 		constexpr float kShadowM = 70;
-		Image BoardLayer(State& st, float s, int view)
+		// (view 2: Setup's board, 1200 wide, its sheet 649 tall, nothing on it: its content is a layer of its own)
+		constexpr float kSetupBoardW = 1200, kSetupSheetH = 649;
+		Image BoardLayer(State& st, float s, int view, float extra = 0)
 		{
 			Assets& a = A();
-			const float fw = kBoardW, fh = LaunchSheetH(view) + 32, M = kShadowM;
+			const float fw = view == 2 ? kSetupBoardW : kBoardW, fh = (view == 2 ? kSetupSheetH + extra : LaunchSheetH(view)) + 32, M = kShadowM;
 			ui::Canvas c((int)std::ceil((fw + 2 * M) * s), (int)std::ceil((fh + 2 * M) * s));
 			{
 				Image mask;                                 // the board's shape, white on black, blurred: its red is the shadow's alpha
@@ -1376,9 +1401,9 @@ namespace wwhd::pause_menu
 				c.Fill((x + inset) * s, (y + inset) * s, t * s, (fh - 2 * inset) * s, col);
 				c.Fill((x + fw - inset - t) * s, (y + inset) * s, t * s, (fh - 2 * inset) * s, col);
 			}
-			const float sx = x + 16, sy = y + 16, sh = LaunchSheetH(view);
+			const float sx = x + 16, sy = y + 16, sh = fh - 32;
 			float offs[4] = { 0, -64, 12, -80 };
-			DrawSheet(f, sx, sy, kSheetW, sh, offs, 1);
+			DrawSheet(f, sx, sy, fw - 32, sh, offs, 1);
 			const Image& fl = a.Get("frame_corner-flourish");
 			c.Draw(fl, (x + 6) * s, (y + 6) * s), c.Draw(fl, (x + fw - 6) * s - fl.w, (y + 6) * s, 1, true);
 			c.Draw(fl, (x + 6) * s, (y + fh - 6) * s - fl.h, 1, false, true), c.Draw(fl, (x + fw - 6) * s - fl.w, (y + fh - 6) * s - fl.h, 1, true, true);
@@ -1464,6 +1489,307 @@ namespace wwhd::pause_menu
 			}
 		}
 
+		// ---- the start screen's Setup (t-startscreen S2; README "1. Setup: desktop"): the logo (184 tall), the board (1200
+		// wide at 360,236), its title, body, drop zone and buttons by its state; before the game over a sky, or over the held
+		// title frame from Launch's Change Files ----
+		constexpr int kIdle = 0, kChecking = 1, kBad = 2, kReady = 3;
+		constexpr Colour kZoneText = Colour::Hex(0x3f6a26), kSky = Colour::Hex(0x0bd8f6);
+		const char* const kFormats = "WUA \xC2\xB7 WUX \xC2\xB7 WUD \xC2\xB7 or an extracted game folder";
+		float SetupX() { return 360 + LaunchOX(); }
+		float ZoneX() { return 570 + LaunchOX(); }
+		constexpr float kZoneY = 499, kZoneW = 780, kZoneH = 250, kSetupButtonsY = 779, kSetupButtonW = 340;
+		// the menu's own file browser's rows (in the sheet, under its title and folder)
+		constexpr int kBrowseRows = 9;
+		constexpr float kBrowseX = 440, kBrowseW = 1040, kBrowseY = 440, kBrowseRowH = 46;
+		void BrowseCursorFor(int row, float out[4])
+		{
+			out[0] = kBrowseX + LaunchOX() - 13, out[1] = kBrowseY + row * kBrowseRowH - 13, out[2] = kBrowseW + 26, out[3] = kBrowseRowH + 26;
+		}
+
+		std::vector<std::string> SetupButtons(const State& st)
+		{
+			if (st.browsing)
+				return {};
+			switch (st.sstate)
+			{
+			case kChecking: return { "Cancel" };
+			case kBad: return { "Try Another File", st.help ? "Got It" : "Help" };
+			case kReady: return { "Start Game", "Change Files" };
+			default: return { "Browse Files", st.help ? "Got It" : "Help" };
+			}
+		}
+
+		// text wrapped to a width, two lines balanced (the design's text-wrap: balance)
+		std::vector<std::string> WrapBalanced(ui::Font& font, float px, float w, const std::string& text)
+		{
+			std::vector<std::string> lines = WrapText(font, px, w, text);
+			if (lines.size() < 2)
+				return lines;
+			float lo = 0, hi = w;                           // the narrowest width that wraps to as many lines
+			for (int i = 0; i < 14; i++)
+			{
+				const float mid = (lo + hi) / 2;
+				(WrapText(font, px, mid, text).size() == lines.size() ? hi : lo) = mid;
+			}
+			return WrapText(font, px, hi, text);
+		}
+
+		// the sky, the logo and the version (once a size): before the game the design's sky colour, from Launch the frozen frame
+		void SetupBase(State& st, Frame& f)
+		{
+			Assets& a = A();
+			ui::Canvas& c = f.c;
+			const float s = f.s;
+			if (st.setupPre || st.backdrop.Empty())
+				c.Fill(0, 0, (float)c.W(), (float)c.H(), kSky);   // no title frame yet: the design's sky fallback
+			else
+				c.Copy(st.backdrop);
+			const Image& logo = a.Get("logo_setup_desktop_h184");
+			const float lx = std::round((c.W() - logo.w) / 2.0f), ly = std::round(34 * s);
+			for (int i = 0; i < 4; i++)
+				c.Silhouette(logo, lx + (i % 2 ? 3 : -3) * s, ly + (10 + i) * s, { 0, 30, 90, 255 }, 0.09f);
+			c.Silhouette(logo, lx, ly + 6 * s, Colour::Hex(0x1f5fb0));
+			c.Draw(logo, lx, ly);
+			const std::string right = game_files::Version();
+			const float px = 21 * s, base = c.H() - 34 * s + a.rocknroll.Descent(px);
+			c.Text(a.rocknroll, px, c.W() - 44 * s - a.rocknroll.Width(right, px), base, right, kWhite, 1, kPromptOutline, 2 * s);
+		}
+
+		// Setup's title and body by its state (README "Copy by state")
+		std::pair<std::string, std::string> SetupCopy(const State& st)
+		{
+			std::string title, body;
+			switch (st.sstate)
+			{
+			case kChecking:
+				title = "Checking your game files\xE2\x80\xA6", body = "This only happens once and takes a few seconds."; break;
+			case kBad:
+				title = "That doesn\xE2\x80\x99t look right";
+				body = st.setupCopy.why.empty() ? "This isn\xE2\x80\x99t a supported copy of The Wind Waker HD. Make sure it\xE2\x80\x99s a full Wii U dump and try again."
+					: st.setupCopy.why;
+				break;
+			case kReady:
+				title = "Ready to set sail!", body = "Your game files check out. You won\xE2\x80\x99t be asked for them again."; break;
+			default:
+				title = st.dragging ? "Let go to load" : "Let\xE2\x80\x99s find your game";
+				body = st.dragging ? "We\xE2\x80\x99ll check the files before anything is copied."
+					: "This port runs on your own copy of The Wind Waker HD. Drop your Wii U game files here, or browse for them.";
+			}
+			if (st.help && (st.sstate == kIdle || st.sstate == kBad) && !st.dragging)
+				body = "Dump the game from your own Wii U with a homebrew dumping tool, then choose the output here. Nothing is uploaded; "
+					"your files stay on this PC.";
+			return { title, body };
+		}
+		// the body's lines (25 px, 820 wide, balanced; at most three) and the room a third takes: two are reserved (min-height
+		// 70), a third moves the zone and the buttons down a line and the sheet grows by it (the design's help)
+		std::vector<std::string> SetupBody(const State& st, float s)
+		{
+			static std::map<std::string, std::vector<std::string>> s_wrapped;   // by size and text (the cursor asks each frame)
+			const std::string text = SetupCopy(st).second, key = fmt::format("{} {}", s, text);
+			if (auto it = s_wrapped.find(key); it != s_wrapped.end())
+				return it->second;
+			std::vector<std::string> lines = WrapBalanced(A().rocknroll, 25 * s, 820 * s, text);
+			if (lines.size() > 3)
+				lines.resize(3);
+			if (s_wrapped.size() > 64)
+				s_wrapped.clear();
+			return s_wrapped[key] = lines;
+		}
+		constexpr float kBodyLineH = 36.25f;
+		float SetupExtra(const State& st)
+		{
+			return st.browsing ? 0 : std::max(0, (int)SetupBody(st, 1).size() - 2) * kBodyLineH;
+		}
+		void SetupCursorFor(const State& st, int i, float out[4])
+		{
+			const int n = (int)SetupButtons(st).size();
+			const float x0 = 960 + LaunchOX() - (n * kSetupButtonW + (n - 1) * 40) / 2;
+			out[0] = x0 + i * (kSetupButtonW + 40) - 13, out[1] = kSetupButtonsY + SetupExtra(st) - 13, out[2] = kSetupButtonW + 26, out[3] = kButtonH + 26;
+		}
+
+		std::string FileName(const std::string& path)
+		{
+			std::string p = path;
+			while (p.size() > 1 && p.back() == '/')
+				p.pop_back();
+			const size_t slash = p.rfind('/');
+			return slash == std::string::npos ? p : p.substr(slash + 1);
+		}
+
+		// the sheet's content by the state (a layer over the board, drawn when the state changes): the title (46 px), the
+		// divider, the body (25 px, two lines reserved), the drop zone and what's in it (not the progress: drawn each frame)
+		Image SetupContent(State& st, float s, int w, int h)
+		{
+			Assets& a = A();
+			ui::Canvas c(w, h);
+			Frame f{ c, s };
+			const float cx = 960 + LaunchOX();
+			if (st.browsing)
+			{
+				// the browser: its title, the folder (its end kept), the rows (a game folder or file named as such)
+				TextCentred(f, a.reggae, 46, cx, 331, "Choose your game files", kInk);
+				for (int i = 0; i < 15; i++)
+					c.Fill((cx - 90 + i * 12 + 4) * s, 373 * s, 4 * s, 4 * s, kDot);
+				TextCentred(f, a.rocknroll, 21, cx, 412, FitStart(a.rocknroll, 21 * s, 1000 * s, st.browseDir), kZoneText);
+				const float x = kBrowseX + LaunchOX();
+				const Image& rule = a.Get("rule_dotted_tile_20x4");
+				if (st.entries.empty())
+					TextCentred(f, a.rocknroll, 23, cx, kBrowseY + 60, "No folders or game files here.", kKey);
+				for (int i = 0; i < kBrowseRows && st.browseTop + i < (int)st.entries.size(); i++)
+				{
+					const State::Entry& e = st.entries[st.browseTop + i];
+					const float y = kBrowseY + i * kBrowseRowH;
+					if (st.browseTop + i == st.browseRow)
+						c.Fill(x * s, y * s, kBrowseW * s, kBrowseRowH * s, Colour::Hex(0xb6da78), 0.85f);
+					const float base = (y + kBrowseRowH / 2) * s + (a.rocknroll.Ascent(23 * s) + a.rocknroll.Descent(23 * s)) / 2;
+					const char* kind = e.kind == 0 ? "Up a folder" : e.kind == 1 ? "Folder" : e.kind == 2 ? "Game folder" : "Game file";
+					const float kw = a.rocknroll.Width(kind, 20 * s);
+					c.Text(a.rocknroll, 23 * s, (x + 16) * s, base, FitStart(a.rocknroll, 23 * s, (kBrowseW - 48) * s - kw, e.kind == 0 ? ".." : e.name),
+						e.kind >= 2 ? kInk : kKey);
+					c.Text(a.rocknroll, 20 * s, (x + kBrowseW - 16) * s - kw, base, kind, e.kind >= 2 ? kInk : kZoneText);
+					c.Tile(rule, x * s, (y + kBrowseRowH - 2) * s, kBrowseW * s, (float)rule.h);
+				}
+				if ((int)st.entries.size() > kBrowseRows)
+					TextCentred(f, a.rocknroll, 20, cx, kBrowseY + kBrowseRows * kBrowseRowH + 22,
+						fmt::format("{} of {}", st.browseRow + 1, st.entries.size()), kZoneText);
+				return c.Take();
+			}
+			TextCentred(f, a.reggae, 46, cx, 331, SetupCopy(st).first, kInk);
+			for (int i = 0; i < 15; i++)
+				c.Fill((cx - 90 + i * 12 + 4) * s, 373 * s, 4 * s, 4 * s, kDot);
+			const std::vector<std::string> lines = SetupBody(st, s);
+			for (size_t i = 0; i < lines.size(); i++)
+				TextCentred(f, a.rocknroll, 25, cx, 421 + i * kBodyLineH + (lines.size() == 1 ? 18 : 0), lines[i], kInk);
+			// the zone (a third line of the body moves it and what's in it down): its gloss while files are over it
+			const float e = SetupExtra(st);
+			c.Draw(a.Get(st.dragging && st.sstate != kChecking && st.sstate != kReady ? "dropzone_780x250_drag" : "dropzone_780x250_idle"),
+				ZoneX() * s, (kZoneY + e) * s);
+			const std::string name = FitStart(a.rocknroll, 21 * s, 620 * s, FileName(st.setupFile));
+			switch (st.sstate)
+			{
+			case kChecking:
+				TextCentred(f, a.rocknroll, 21, cx, 581 + e, name, kZoneText);
+				break;
+			case kBad:
+				c.Draw(a.Get("icon_warning_76"), (cx - 38) * s, (536 + e) * s);
+				TextCentred(f, a.rocknroll, 28, cx, 648 + e, "Couldn\xE2\x80\x99t recognise this file", kInk);
+				TextCentred(f, a.rocknroll, 20, cx, 698 + e, FitStart(a.rocknroll, 20 * s, 700 * s, FileName(st.setupFile)), kZoneText);
+				break;
+			case kReady:
+				c.Draw(a.Get("icon_ready-check_70"), (cx - 35) * s, (538 + e) * s);
+				TextCentred(f, a.rocknroll, 30, cx, 645 + e, "The Wind Waker HD", kInk);
+				TextCentred(f, a.rocknroll, 20, cx, 696 + e, (st.setupCopy.region.empty() ? "USA" : st.setupCopy.region) + " \xC2\xB7 Version " +
+					std::to_string(std::max(0, st.setupCopy.version)) + " \xC2\xB7 Verified", kZoneText);
+				break;
+			default:
+				c.Draw(a.Get("icon_drop-target_96"), (cx - 48) * s, (525 + e) * s);
+				TextCentred(f, a.rocknroll, 30, cx, 658 + e, st.dragging ? "Let go to load" : "Drop game files here", kInk);
+				TextCentred(f, a.rocknroll, 20, cx, 708 + e, kFormats, kZoneText);
+			}
+			return c.Take();
+		}
+
+		struct SetupLayers
+		{
+			std::string baseKey, boardKey, contentKey;
+			Image base, board, content;
+			std::map<std::string, std::array<Image, 2>> buttons;   // by label: idle and focused
+			int size = 0;
+		};
+		SetupLayers& SL()
+		{
+			static SetupLayers l;
+			return l;
+		}
+
+		// the checking's progress (each frame): the bar (540 x 24, its fill eased ~100 ms), the percentage, the three steps
+		void DrawProgress(State& st, Frame& f, float op)
+		{
+			Assets& a = A();
+			ui::Canvas& c = f.c;
+			const float s = f.s, cx = 960 + LaunchOX();
+			static float shown = 0;
+			const float p = st.setupJob ? std::clamp(st.setupJob->progress.load(), 0.0f, 1.0f) : 0;
+			shown += (p - shown) * 0.3f;                    // eased towards the real progress
+			if (p < shown)
+				shown = p;
+			const float e = SetupExtra(st), bx = cx - (540 + 18 + 70) / 2.0f, by = 611.5f + e;
+			c.Draw(a.Get("progress_track_540x24"), bx * s, by * s, op);
+			const Image& fill = a.Get("progress_fill_534x18");
+			c.Clip(0, 0, (int)((bx + 3 + 534 * shown) * s), c.H());
+			c.Draw(fill, (bx + 3) * s, (by + 3) * s, op);
+			c.NoClip();
+			c.Text(a.rocknroll, 23 * s, (bx + 540 + 18) * s, (by + 12) * s + (a.rocknroll.Ascent(23 * s) + a.rocknroll.Descent(23 * s)) / 2,
+				fmt::format("{}%", (int)std::lround(p * 100)), kInk, op);
+			const char* const names[3] = { "Reading files", "Verifying", "Preparing assets" };
+			const float ends[3] = { 0.35f, 0.75f, 1.0f };
+			float widths[3], total = 0;
+			for (int i = 0; i < 3; i++)
+				widths[i] = 30 + 8 + a.rocknroll.Width(names[i], 20 * s) / s, total += widths[i] + (i ? 30 : 0);
+			float x = cx - total / 2;
+			for (int i = 0; i < 3; i++)
+			{
+				const bool done = p >= ends[i], current = !done && (i == 0 || p >= ends[i - 1]);
+				c.Draw(a.Get(done ? "step_done_30" : current ? "step_current_30" : "step_pending_30"), x * s, (651 + e) * s, op);
+				if (!done)
+					TextCentred(f, a.rocknroll, 16, x + 15, 666 + e, std::to_string(i + 1), current ? kInk : kKey, op);
+				c.Text(a.rocknroll, 20 * s, (x + 38) * s, (666 + e) * s + (a.rocknroll.Ascent(20 * s) + a.rocknroll.Descent(20 * s)) / 2, names[i],
+					done || current ? kInk : kKey, op);
+				x += widths[i] + 30;
+			}
+		}
+
+		void DrawSetup(State& st, Frame& f, Clock::time_point now, float op)
+		{
+			ui::Canvas& c = f.c;
+			const float s = f.s;
+			SetupLayers& l = SL();
+			const std::string baseKey = fmt::format("{}x{} {}", c.W(), c.H(), st.setupPre ? 1 : 0);
+			if (baseKey != l.baseKey)
+			{
+				ui::Canvas b(c.W(), c.H());
+				Frame bf{ b, s };
+				SetupBase(st, bf);
+				l.base = b.Take(), l.baseKey = baseKey;
+			}
+			const float extra = SetupExtra(st);
+			const std::string boardKey = fmt::format("{} {}", baseKey, extra);
+			if (boardKey != l.boardKey)
+				l.board = BoardLayer(st, s, 2, extra), l.boardKey = boardKey;
+			const std::string contentKey = fmt::format("{}x{} {} {} {} {}|{}|{} {} {} {}", c.W(), c.H(), st.sstate, st.help ? 1 : 0, st.dragging ? 1 : 0,
+				st.setupFile, st.setupCopy.why, st.browsing ? 1 : 0, st.browseDir, st.browseRow, st.browseTop);
+			if (contentKey != l.contentKey)
+				l.content = SetupContent(st, s, c.W(), c.H()), l.contentKey = contentKey;
+			if (l.size != c.W())
+				l.buttons.clear(), l.size = c.W();
+			c.Copy(l.base);
+			if (op > 0)
+			{
+				c.Draw(l.board, std::round((SetupX() - kShadowM) * s), std::round((236 - kShadowM) * s), op);
+				c.Draw(l.content, 0, 0, op);
+				if (st.sstate == kChecking)
+					DrawProgress(st, f, op);
+				const std::vector<std::string> labels = SetupButtons(st);
+				for (int i = 0; i < (int)labels.size(); i++)
+				{
+					auto it = l.buttons.find(labels[i]);
+					if (it == l.buttons.end())
+						it = l.buttons.emplace(labels[i], std::array<Image, 2>{ ButtonLayer(s, "setup_340x72", kSetupButtonW, kButtonH, 29, labels[i], false),
+							ButtonLayer(s, "setup_340x72", kSetupButtonW, kButtonH, 29, labels[i], true) }).first;
+					float box[4];
+					SetupCursorFor(st, i, box);
+					const float fms = std::chrono::duration<float, std::milli>(now - st.startFocusSince[i]).count();
+					float focus = Linear(fms, 0, 140);
+					if (i != st.startItem)
+						focus = st.startPrev == i ? 1 - focus : 0;
+					const float px = std::round((box[0] + 13) * s), py = std::round((box[1] + 13) * s);
+					c.Draw(it->second[0], px, py, op);
+					if (focus > 0)
+						c.Draw(it->second[1], px, py, op * focus);
+				}
+			}
+		}
+
 		void Draw(State& st, ui::Canvas& c, Clock::time_point now)
 		{
 			Assets& a = A();
@@ -1477,6 +1803,48 @@ namespace wwhd::pause_menu
 			const bool closing = st.phase == Phase::Closing;
 			// the start screen: Launch over the frozen title frame, in over 400 ms (out the same at Start Game); Settings over
 			// it as the pause menu's panel at its widest, wiping in from the left over 480 ms (out over 400)
+			if (st.setup)
+			{
+				// Setup: its screen, the cursor (around the zone while files are over it), its prompts, the blackout at Start
+				const float op = st.setupPre ? Linear(ms, 0, 400) : 1.0f;
+				DrawSetup(st, f, now, op);
+				if (st.blackoutAt == Clock::time_point{})
+				{
+					float box[4];
+					if (st.dragging && st.sstate != kChecking && st.sstate != kReady)
+						box[0] = ZoneX() - 13, box[1] = kZoneY + SetupExtra(st) - 13, box[2] = kZoneW + 26, box[3] = kZoneH + 26;
+					else
+					{
+						const float g = Bezier(.25f, .8f, .25f, 1, Linear(std::chrono::duration<float, std::milli>(now - st.curSince).count(), 0, 170));
+						for (int k = 0; k < 4; k++)
+							box[k] = st.curFrom[k] + (st.curTo[k] - st.curFrom[k]) * g;
+					}
+					DrawCursor(f, box, ms, op);
+					std::vector<std::pair<std::string, std::string>> pr;
+					if (st.browsing)
+					{
+						const bool game = !st.entries.empty() && st.entries[st.browseRow].kind >= 2;
+						pr = { { st.pad ? "A" : "Enter", game ? "Choose" : "Open" }, { st.pad ? "B" : "Esc", "Back" }, { st.pad ? "X" : "F", "Close" } };
+					}
+					else if (st.sstate == kChecking)
+						pr = { { st.pad ? "B" : "Esc", "Cancel" } };
+					else if (st.sstate == kReady)
+						pr = { { st.pad ? "A" : "Enter", "Start" }, { st.pad ? "X" : "F", "Change" } };
+					else
+						pr = { { st.pad ? "A" : "Enter", "Browse" }, { st.pad ? "Y" : "H", "Help" } };
+					if (!st.setupPre && st.sstate != kChecking && !st.browsing)
+						pr.push_back({ st.pad ? "B" : "Esc", "Back" });     // Change Files from Launch: back to it
+					DrawPrompts(f, pr, st.pad, op);
+					DrawToast(f, st, now);
+				}
+				else
+				{
+					const float bms = std::chrono::duration<float, std::milli>(now - st.blackoutAt).count();
+					c.Fill(0, 0, (float)c.W(), (float)c.H(), { 0, 0, 0, 255 }, Linear(bms, 0, 600));
+					TextCentred(f, A().rocknroll, 36, c.W() / s / 2, c.H() / s / 2, "Setting sail\xE2\x80\xA6", kWhite, Linear(bms, 0, 600));
+				}
+				return;
+			}
 			const bool launch = st.start;
 			float launchWipe = 1;
 			if (launch)
@@ -1721,7 +2089,7 @@ namespace wwhd::pause_menu
 			st.curSince = Clock::now();
 		}
 
-		enum class Input { Up, Down, Left, Right, Confirm, Back, Toggle, CatPrev, CatNext, Reset };
+		enum class Input { Up, Down, Left, Right, Confirm, Back, Toggle, CatPrev, CatNext, Reset, Help, Alt };
 
 		// the cursor glides to a new box from wherever it is now
 		void GlideTo(State& st, const float box[4])
@@ -1942,6 +2310,271 @@ namespace wwhd::pause_menu
 			}).detach();
 		}
 
+		// ---- Setup's actions (S2) ----
+		void FocusSetup(State& st, int i, bool instant = false)
+		{
+			const Clock::time_point now = Clock::now();
+			if (SetupButtons(st).empty())
+				return;
+			i = std::clamp(i, 0, (int)SetupButtons(st).size() - 1);
+			st.startPrev = instant || i == st.startItem ? -1 : st.startItem;
+			st.startItem = i;
+			st.startFocusSince[i] = instant ? now - std::chrono::seconds(10) : now;
+			if (st.startPrev >= 0)
+				st.startFocusSince[st.startPrev] = now;
+			float box[4];
+			SetupCursorFor(st, i, box);
+			GlideTo(st, box);
+			if (instant)
+				for (int k = 0; k < 4; k++)
+					st.curFrom[k] = st.curTo[k];
+		}
+
+		// what the player chose, as the copy's root: an extracted folder's code/cking.rpx or code/ means the folder
+		std::string GameRoot(std::string path)
+		{
+			while (path.size() > 1 && path.back() == '/')
+				path.pop_back();
+			std::error_code ec;
+			fs::path p = _utf8ToPath(path);
+			if (p.extension() == ".rpx" && p.parent_path().filename() == "code")
+				p = p.parent_path().parent_path();
+			else if (p.filename() == "code" && fs::is_directory(p.parent_path() / "content", ec))
+				p = p.parent_path();
+			return _pathToUtf8(p);
+		}
+
+		void SetupChoose(State& st, const std::string& chosen)
+		{
+			st.setupFile = GameRoot(chosen), st.sstate = kChecking, st.help = false, st.dragging = false;
+			st.setupCopy = game_files::Copy{};
+			auto job = std::make_shared<State::CheckJob>();
+			st.setupJob = job;
+			cemuLog_log(LogType::Force, "wwhd: start screen: Setup checks {}", st.setupFile);
+			std::thread([job, path = st.setupFile] {
+				job->result = game_files::Check(path, &job->progress, &job->cancel);
+				job->done.store(true);
+			}).detach();
+			FocusSetup(st, 0, true);
+		}
+
+		void SetupCancel(State& st)
+		{
+			if (st.setupJob)
+				st.setupJob->cancel.store(true), st.setupJob.reset();
+			st.sstate = kIdle;
+			FocusSetup(st, 0, true);
+		}
+
+		// ---- the menu's own file browser (S2: the pad's, for the Deck's Game Mode): a folder's folders and game files, a game
+		// folder (code/ content/ meta/) chosen as one; A opens or chooses, B goes up, X closes ----
+		bool GameFolder(const fs::path& p)
+		{
+			std::error_code ec;
+			return fs::is_directory(p / "code", ec) && fs::is_directory(p / "content", ec) && fs::is_directory(p / "meta", ec);
+		}
+		void FocusBrowse(State& st, int row)
+		{
+			const int n = (int)st.entries.size();
+			st.browseRow = std::clamp(row, 0, std::max(0, n - 1));
+			if (st.browseRow < st.browseTop)
+				st.browseTop = st.browseRow;
+			if (st.browseRow >= st.browseTop + kBrowseRows)
+				st.browseTop = st.browseRow - kBrowseRows + 1;
+			float box[4];
+			BrowseCursorFor(st.browseRow - st.browseTop, box);
+			GlideTo(st, box);
+		}
+		void ReadDir(State& st, const std::string& dir, const std::string& focusName = "")
+		{
+			std::error_code ec;
+			const fs::path d = _utf8ToPath(dir);
+			st.browseDir = dir, st.entries.clear();
+			if (d != d.root_path() && d.has_parent_path())
+				st.entries.push_back({ "..", _pathToUtf8(d.parent_path()), 0 });
+			std::vector<State::Entry> dirs, files;
+			for (auto it = fs::directory_iterator(d, fs::directory_options::skip_permission_denied, ec); !ec && it != fs::directory_iterator();
+				it.increment(ec))
+			{
+				const std::string name = _pathToUtf8(it->path().filename());
+				if (name.empty() || name[0] == '.')
+					continue;
+				std::error_code ec2;
+				if (it->is_directory(ec2))
+					dirs.push_back({ name, _pathToUtf8(it->path()), GameFolder(it->path()) ? 2 : 1 });
+				else
+				{
+					std::string ext = _pathToUtf8(it->path().extension());
+					for (char& ch : ext)
+						ch = (char)tolower((unsigned char)ch);
+					if (ext == ".wua" || ext == ".wux" || ext == ".wud")
+						files.push_back({ name, _pathToUtf8(it->path()), 3 });
+				}
+				if (dirs.size() + files.size() > 4000)
+					break;
+			}
+			auto byName = [](const State::Entry& a, const State::Entry& b) {
+				return std::lexicographical_compare(a.name.begin(), a.name.end(), b.name.begin(), b.name.end(),
+					[](char x, char y) { return tolower((unsigned char)x) < tolower((unsigned char)y); });
+			};
+			std::sort(dirs.begin(), dirs.end(), byName), std::sort(files.begin(), files.end(), byName);
+			st.entries.insert(st.entries.end(), dirs.begin(), dirs.end());
+			st.entries.insert(st.entries.end(), files.begin(), files.end());
+			int row = 0;
+			for (int i = 0; i < (int)st.entries.size(); i++)
+				if (!focusName.empty() && st.entries[i].name == focusName)
+					row = i;
+			st.browseTop = 0;
+			FocusBrowse(st, row);
+		}
+		// where browsing starts: the folder of the copy last chosen or registered, else home
+		std::string BrowseStart(const State& st)
+		{
+			std::error_code ec;
+			for (const std::string& p : { st.setupFile, game_files::RegisteredPath() })
+				if (!p.empty())
+				{
+					const fs::path parent = _utf8ToPath(p).parent_path();
+					if (fs::is_directory(parent, ec))
+						return _pathToUtf8(parent);
+				}
+			const char* home = getenv("HOME");
+			return home && *home ? home : "/";
+		}
+		// the menu's own browser in place of the system's picker: with the pad, under gamescope (the Deck's Game Mode), or
+		// when there's no picker (WWHD_OWN_BROWSER=1 always)
+		bool OwnBrowser(const State& st)
+		{
+			static const bool gamescope = getenv("GAMESCOPE_WAYLAND_DISPLAY") || getenv("WWHD_OWN_BROWSER");
+			return st.pad || gamescope;
+		}
+		void OpenBrowser(State& st)
+		{
+			st.browsing = true, st.help = false;
+			ReadDir(st, BrowseStart(st));
+			cemuLog_log(LogType::Force, "wwhd: start screen: the file browser at {}", st.browseDir);
+		}
+		void ActBrowse(State& st, Input in)
+		{
+			const int n = (int)st.entries.size();
+			switch (in)
+			{
+			case Input::Up: FocusBrowse(st, st.browseRow - 1); return;
+			case Input::Down: FocusBrowse(st, st.browseRow + 1); return;
+			case Input::Left: FocusBrowse(st, st.browseRow - kBrowseRows); return;
+			case Input::Right: FocusBrowse(st, st.browseRow + kBrowseRows); return;
+			case Input::Alt: case Input::Help: st.browsing = false; FocusSetup(st, 0, true); return;
+			case Input::Back:
+			{
+				const fs::path d = _utf8ToPath(st.browseDir);
+				if (d != d.root_path() && d.has_parent_path())
+					ReadDir(st, _pathToUtf8(d.parent_path()), _pathToUtf8(d.filename()));
+				else
+					st.browsing = false, FocusSetup(st, 0, true);
+				return;
+			}
+			case Input::Confirm:
+				if (n == 0)
+					return;
+				else
+				{
+					const State::Entry e = st.entries[st.browseRow];
+					if (e.kind == 0)
+						ReadDir(st, e.path, _pathToUtf8(_utf8ToPath(st.browseDir).filename()));
+					else if (e.kind == 1)
+						ReadDir(st, e.path);
+					else
+						st.browsing = false, SetupChoose(st, e.path);
+				}
+				return;
+			default: return;
+			}
+		}
+
+		// Change Files from Launch, once the new copy verified: the program again on it (the hold's game can't swap its files)
+		void Restart(const std::string& path)
+		{
+			std::ifstream f("/proc/self/cmdline", std::ios::binary);
+			std::string all((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+			std::vector<std::string> args;
+			for (size_t at = 0; at < all.size();)
+			{
+				const size_t end = all.find('\0', at);
+				args.push_back(all.substr(at, end == std::string::npos ? std::string::npos : end - at));
+				at = end == std::string::npos ? all.size() : end + 1;
+			}
+			for (size_t i = 0; i + 1 < args.size(); i++)
+				if (args[i] == "-g" || args[i] == "--game")
+					args[i + 1] = path;             // without -g the registered copy is read, which is this one now
+			std::vector<char*> argv;
+			for (std::string& a : args)
+				argv.push_back(a.data());
+			argv.push_back(nullptr);
+			cemuLog_log(LogType::Force, "wwhd: start screen: the game files changed to {}: the program starts again", path);
+			gpu::SaveShaderCache();
+			// every file open closes at the exec (the window's connection, the GPU's and the sound's devices, the log)
+			if (DIR* d = opendir("/proc/self/fd"))
+			{
+				while (const dirent* e = readdir(d))
+					if (const int fd = atoi(e->d_name); fd > 2 && fd != dirfd(d))
+						fcntl(fd, F_SETFD, fcntl(fd, F_GETFD) | FD_CLOEXEC);
+				closedir(d);
+			}
+			execv("/proc/self/exe", argv.data());
+			cemuLog_log(LogType::Force, "wwhd: start screen: couldn't start again ({})", strerror(errno));
+		}
+
+		void ActSetup(State& st, Input in)
+		{
+			if (st.blackoutAt != Clock::time_point{})
+				return;                                     // setting sail
+			if (st.browsing)
+			{
+				ActBrowse(st, in);
+				return;
+			}
+			const std::vector<std::string> labels = SetupButtons(st);
+			const int n = (int)labels.size();
+			const bool canHelp = st.sstate == kIdle || st.sstate == kBad;
+			switch (in)
+			{
+			case Input::Up: case Input::Left: FocusSetup(st, (st.startItem + n - 1) % n); return;
+			case Input::Down: case Input::Right: FocusSetup(st, (st.startItem + 1) % n); return;
+			case Input::Help: case Input::Reset:
+				if (canHelp)
+					st.help = !st.help, FocusSetup(st, st.startItem, true);   // a third line moves the buttons
+				return;
+			case Input::Alt:
+				if (st.sstate == kReady)
+					OwnBrowser(st) ? OpenBrowser(st) : (void)(st.browseWanted = true);   // Change
+				return;
+			case Input::Back:
+				if (st.sstate == kChecking)
+					SetupCancel(st);
+				else if (st.help)
+					st.help = false;
+				else if (!st.setupPre)                      // Change Files from Launch: back to its Game Files
+				{
+					if (st.setupJob)
+						st.setupJob->cancel.store(true), st.setupJob.reset();
+					st.setup = false, st.startView = 1;
+					FocusLaunch(st, 1, true);
+				}
+				return;
+			case Input::Confirm: break;
+			default: return;
+			}
+			const std::string& b = labels[std::clamp(st.startItem, 0, n - 1)];
+			if (b == "Browse Files" || b == "Try Another File" || b == "Change Files")
+				OwnBrowser(st) ? OpenBrowser(st) : (void)(st.browseWanted = true);
+			else if (b == "Help" || b == "Got It")
+				st.help = !st.help, FocusSetup(st, st.startItem, true);
+			else if (b == "Cancel")
+				SetupCancel(st);
+			else if (b == "Start Game")
+				st.blackoutAt = Clock::now();
+		}
+
 		void ActLaunch(State& st, Input in)
 		{
 			const int n = LaunchCount(st.startView);
@@ -1961,7 +2594,12 @@ namespace wwhd::pause_menu
 				if (st.startItem == 0)
 					StartCheck(st);                         // Re-verify: ignored while a check runs
 				else
-					ShowToast(st, "Changing the game files comes with Setup, in the next update.");
+				{
+					// Change Files: Setup over the held title; the copy registered stays so until a new one verifies
+					st.setup = true, st.setupPre = false, st.sstate = kIdle, st.help = false, st.dragging = false;
+					st.setupFile.clear(), st.setupCopy = game_files::Copy{};
+					FocusSetup(st, 0, true);
+				}
 				return;
 			}
 			switch (st.startItem)
@@ -1987,7 +2625,7 @@ namespace wwhd::pause_menu
 
 		void Act(State& st, Input in)
 		{
-			if (in == Input::Toggle && st.start)
+			if (in == Input::Toggle && (st.start || st.setup))
 				return;                                     // F2 on the start screen: nothing (Esc is its Back)
 			if (in == Input::Toggle)
 			{
@@ -2017,6 +2655,12 @@ namespace wwhd::pause_menu
 			{
 				st.settings = false, st.screenSince = Clock::now();   // Settings from the start screen: back to Launch
 				FocusLaunch(st, 1, true);
+				st.dirty = true;
+				return;
+			}
+			if (st.setup)
+			{
+				ActSetup(st, in);
 				st.dirty = true;
 				return;
 			}
@@ -2179,6 +2823,12 @@ namespace wwhd::pause_menu
 			gpu::SetHintOpacity(ms < 260 ? ms / 260 : ms < 4000 ? 1.0f : 1 - (ms - 4000) / 600);
 		}
 
+		std::string& GamePath()
+		{
+			static std::string path;                    // the game files this run reads (SetGame)
+			return path;
+		}
+
 		// the start screen at all: a player's run (off under a route's input, CEMU_INPUT_SCRIPT, as the checks run; WWHD_START_SCREEN=0|1)
 		bool StartWanted()
 		{
@@ -2246,8 +2896,7 @@ namespace wwhd::pause_menu
 			for (int k = 0; k < 4; k++)
 				st.curFrom[k] = st.curTo[k];
 			st.compassFrom = st.compassTo = 0;
-			if (auto game = LaunchSettings::GetLoadFile())
-				st.copy.path = _pathToUtf8(*game);
+			st.copy.path = GamePath();
 			game_files::Copy reg;
 			if (game_files::Registered(reg) && reg.path == st.copy.path && reg.ok)
 				st.copy = reg, st.checked = true;
@@ -2273,6 +2922,34 @@ namespace wwhd::pause_menu
 				const bool window = gpu::WindowExtent(ww, wh) && ww && wh;
 				Hint(st, now, window ? ww : 0, window ? wh : 0);
 				StartLaunch(st, window);
+				if (st.setupJob && st.setupJob->done.load())   // Setup's check done: ready (registered) or wrong
+				{
+					st.setupCopy = st.setupJob->result, st.setupCopy.path = st.setupFile;
+					st.sstate = st.setupCopy.ok ? kReady : kBad;
+					if (st.setupCopy.ok)
+						game_files::Register(st.setupCopy);
+					cemuLog_log(LogType::Force, "wwhd: start screen: Setup: {} {}{}", st.setupFile, st.setupCopy.ok ? "verified" : "didn't verify: ",
+						st.setupCopy.why);
+					st.setupJob.reset(), st.dirty = true;
+					FocusSetup(st, 0, true);
+				}
+				if (st.dragging && now - st.dragSeen > std::chrono::milliseconds(400))
+					st.dragging = false;                    // dragged away (X11 says nothing when files leave)
+				if (st.setup && st.blackoutAt != Clock::time_point{} && now - st.blackoutAt > std::chrono::milliseconds(700))
+				{
+					if (st.setupPre)
+					{
+						if (st.setupResult.empty())
+							st.setupResult = st.setupCopy.path;   // the window's loop takes it (SetupDone): the game is prepared
+					}
+					else
+					{
+						Restart(st.setupCopy.path);             // back only when it failed: the copy is registered, the next start reads it
+						st.blackoutAt = {}, st.sstate = kBad, st.dirty = true;
+						st.setupCopy.why = "WindSong couldn\xE2\x80\x99t restart on these files. Quit and open it again to play them.";
+						FocusSetup(st, 0, true);
+					}
+				}
 				if (st.job && st.job->done.load())          // a check of the game files done: its outcome (registered if it passed)
 				{
 					const std::string path = st.copy.path;
@@ -2524,6 +3201,8 @@ namespace wwhd::pause_menu
 		case SDLK_Q: in = Input::CatPrev; break;
 		case SDLK_E: in = Input::CatNext; break;
 		case SDLK_R: in = Input::Reset; break;
+		case SDLK_H: in = Input::Help; break;
+		case SDLK_F: in = Input::Alt; break;
 		default: return true;                           // the game doesn't see keys while the menu is up
 		}
 		if (!repeat || in != Input::Confirm)
@@ -2573,7 +3252,9 @@ namespace wwhd::pause_menu
 		else if (pressed & B::R)
 			Act(st, Input::CatNext);
 		else if (pressed & B::Y)
-			Act(st, Input::Reset);
+			Act(st, st.setup ? Input::Help : Input::Reset);
+		else if (pressed & B::X)
+			Act(st, Input::Alt);
 		st.wake.notify_one();
 	}
 
@@ -2591,7 +3272,45 @@ namespace wwhd::pause_menu
 		const auto inside = [&](const float box[4]) {   // a cursor box less its 13 on every side: the button
 			return dx >= box[0] + 13 && dy >= box[1] + 13 && dx < box[0] + box[2] - 13 && dy < box[1] + box[3] - 13;
 		};
-		if (st.start && !st.settings)
+		if (st.setup && st.browsing)
+		{
+			// the browser: a row under the mouse takes the focus, a click opens or chooses it; a right click goes up
+			for (int i = 0; i < kBrowseRows && st.browseTop + i < (int)st.entries.size(); i++)
+			{
+				float box[4];
+				BrowseCursorFor(i, box);
+				if (!inside(box))
+					continue;
+				if (st.browseRow != st.browseTop + i)
+					FocusBrowse(st, st.browseTop + i), st.dirty = true;
+				if (button == 1)
+				{
+					Act(st, Input::Confirm);
+					break;
+				}
+			}
+			if (button == 2)
+				Act(st, Input::Back);
+		}
+		else if (st.setup)
+		{
+			// Setup: a button under the mouse takes the focus, a click chooses it; a right click goes back
+			const int n = (int)SetupButtons(st).size();
+			for (int i = 0; i < n; i++)
+			{
+				float box[4];
+				SetupCursorFor(st, i, box);
+				if (!inside(box))
+					continue;
+				if (st.startItem != i)
+					FocusSetup(st, i), st.dirty = true;
+				if (button == 1)
+					Act(st, Input::Confirm);
+			}
+			if (button == 2)
+				Act(st, Input::Back);
+		}
+		else if (st.start && !st.settings)
 		{
 			// the start screen: a button under the mouse takes the focus, a click chooses it; a right click goes back
 			for (int i = 0; i < LaunchCount(st.startView); i++)
@@ -2706,6 +3425,85 @@ namespace wwhd::pause_menu
 			if (button == 2)
 				Act(st, Input::Back);
 		}
+		st.wake.notify_one();
+	}
+
+	void SetGame(const std::string& path)
+	{
+		State& st = S();
+		std::lock_guard lock(st.lock);
+		GamePath() = path;
+	}
+
+	void BeginSetup()
+	{
+		if (!Available())
+			return;
+		State& st = S();
+		std::lock_guard lock(st.lock);
+		Start(st);
+		const Clock::time_point now = Clock::now();
+		st.setup = true, st.setupPre = true, st.startDone = true;   // after Setup's Start Game, no Launch at the title
+		st.sstate = kIdle, st.phase = Phase::Opening, st.since = now, st.screenSince = now;
+		FocusSetup(st, 0, true);
+		cemuLog_log(LogType::Force, "wwhd: start screen: Setup (no game files given or registered)");
+		st.wake.notify_one();
+	}
+
+	bool SetupDone(std::string& path)
+	{
+		State& st = S();
+		std::lock_guard lock(st.lock);
+		if (st.setupResult.empty())
+			return false;
+		path = st.setupResult;
+		st.setupResult.clear(), st.setup = false, st.setupPre = false, st.blackoutAt = {};
+		st.phase = Phase::Closed, st.closedAt = Clock::now();
+		gpu::SetMenuPanel(0, 0, {});
+		return true;
+	}
+
+	void Drag(bool over)
+	{
+		State& st = S();
+		std::lock_guard lock(st.lock);
+		if (!st.setup || st.sstate == kChecking || st.sstate == kReady || st.blackoutAt != Clock::time_point{})
+			return;
+		st.dragging = over, st.dragSeen = Clock::now(), st.dirty = true;
+		st.wake.notify_one();
+	}
+
+	void Drop(const std::string& path)
+	{
+		State& st = S();
+		std::lock_guard lock(st.lock);
+		st.dragging = false;
+		if (!st.setup || st.sstate == kChecking || st.sstate == kReady || st.blackoutAt != Clock::time_point{} || path.empty())
+			return;                                     // dropped where Setup doesn't take files (README: idle, drag, bad)
+		SetupChoose(st, path);
+		st.wake.notify_one();
+	}
+
+	bool TakeBrowse()
+	{
+		State& st = S();
+		std::lock_guard lock(st.lock);
+		const bool want = st.browseWanted;
+		st.browseWanted = false;
+		return want;
+	}
+
+	void Chosen(const std::string& path, bool failed)
+	{
+		State& st = S();
+		std::lock_guard lock(st.lock);
+		if (!st.setup)
+			return;
+		if (failed)
+			OpenBrowser(st);                            // no system picker: the menu's own
+		else if (!path.empty())
+			SetupChoose(st, path);
+		st.dirty = true;
 		st.wake.notify_one();
 	}
 

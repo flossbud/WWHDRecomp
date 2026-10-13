@@ -23,6 +23,7 @@
 #include "../os/aspect.h"
 #include "../os/erreula.h"
 #include "pause_menu.h"
+#include "game_files.h"
 #include "input/InputManager.h"
 #include "audio/CubebAPI.h"
 #include "audio/CubebInputAPI.h"
@@ -416,6 +417,81 @@ static void PrepareShaders(SDL_Window* window)
 		wwhd::gpu::SetOverlay(0, 0, 0, 0, {});
 }
 
+// the start screen's Browse (t-startscreen S2): the system's file picker (the main thread's to show), its choice to the
+// menu; an extracted folder by its code/cking.rpx. No picker on this system (no portal or zenity): the menu says so
+static void ShowBrowse(SDL_Window* window)
+{
+	static const SDL_DialogFileFilter kFilters[] = { { "Wii U game files (.wua .wux .wud, or an extracted folder's code/cking.rpx)",
+		"wua;wux;wud;rpx" }, { "All files", "*" } };
+	SDL_ShowOpenFileDialog([](void*, const char* const* files, int) {
+		if (!files)
+			cemuLog_log(LogType::Force, "wwhd: start screen: no file picker ({})", SDL_GetError());
+		wwhd::pause_menu::Chosen(files && files[0] ? files[0] : "", files == nullptr);
+	}, nullptr, window, kFilters, 2, nullptr, false);
+}
+
+// files dragged over the window and dropped on it (the start screen's Setup takes them)
+static void DropEvent(const SDL_Event& ev)
+{
+	switch (ev.type)
+	{
+	case SDL_EVENT_DROP_BEGIN: case SDL_EVENT_DROP_POSITION: wwhd::pause_menu::Drag(true); break;
+	case SDL_EVENT_DROP_FILE: if (ev.drop.data) wwhd::pause_menu::Drop(ev.drop.data); break;
+	case SDL_EVENT_DROP_COMPLETE: wwhd::pause_menu::Drag(false); break;
+	default: break;
+	}
+}
+
+// Before the game (t-startscreen S2), when no game files were given (-g) or registered: the start screen's Setup in the
+// window, presented from here (no GPU thread yet), its input taken here, until a copy verified and Start Game was chosen
+static std::string SetupLoop(SDL_Window* window)
+{
+	if (!window || !wwhd::gpu::RendererOn() || !wwhd::pause_menu::Available())
+		wwhd::Fatal("usage: wwhd -g <game.wua | title dir | .rpx> (no game files registered, and no window for the start screen)");
+	wwhd::pause_menu::BeginSetup();
+	for (;;)
+	{
+		std::string path;
+		if (wwhd::pause_menu::SetupDone(path))
+			return path;
+		if (wwhd::pause_menu::TakeBrowse())
+			ShowBrowse(window);
+		wwhd::gpu::PresentMenuOnly();
+		SDL_Event ev;
+		if (!SDL_WaitEventTimeout(&ev, 8))
+			continue;
+		do
+		{
+			switch (ev.type)
+			{
+			case SDL_EVENT_QUIT: case SDL_EVENT_WINDOW_CLOSE_REQUESTED: _exit(0);
+			case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: case SDL_EVENT_WINDOW_DISPLAY_CHANGED: StorePixelSize(window); break;
+			case SDL_EVENT_WINDOW_FOCUS_GAINED: case SDL_EVENT_WINDOW_FOCUS_LOST:
+				g_windowInfo.app_active = ev.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
+				break;
+			case SDL_EVENT_KEY_DOWN:
+				if (!ev.key.repeat && (ev.key.key == SDLK_F11 || (ev.key.key == SDLK_RETURN && (ev.key.mod & SDL_KMOD_ALT))))
+					SDL_SetWindowFullscreen(window, !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN));
+				else
+					wwhd::pause_menu::Key((uint32)ev.key.key, ev.key.repeat);
+				break;
+			case SDL_EVENT_MOUSE_MOTION: case SDL_EVENT_MOUSE_BUTTON_DOWN:
+			{
+				const float density = SDL_GetWindowPixelDensity(window);
+				const bool move = ev.type == SDL_EVENT_MOUSE_MOTION;
+				wwhd::pause_menu::Mouse((move ? ev.motion.x : ev.button.x) * density, (move ? ev.motion.y : ev.button.y) * density,
+					move ? 0 : ev.button.button == SDL_BUTTON_LEFT ? 1 : ev.button.button == SDL_BUTTON_RIGHT ? 2 : -1);
+				break;
+			}
+			case SDL_EVENT_GAMEPAD_ADDED: OpenGamepad(ev.gdevice.which); PublishInput(); break;
+			case SDL_EVENT_GAMEPAD_REMOVED: CloseGamepad(ev.gdevice.which); PublishInput(); break;
+			case SDL_EVENT_GAMEPAD_BUTTON_DOWN: case SDL_EVENT_GAMEPAD_BUTTON_UP: case SDL_EVENT_GAMEPAD_AXIS_MOTION: PublishInput(); break;
+			default: DropEvent(ev); break;
+			}
+		} while (SDL_PollEvent(&ev));
+	}
+}
+
 [[noreturn]] static void EventLoop(SDL_Window* window)
 {
 	for (;;)
@@ -453,6 +529,8 @@ static void PrepareShaders(SDL_Window* window)
 			}
 		}
 		wwhd::pause_menu::Begin();                                 // its thread (the Pause prompt at play's start), once
+		if (wwhd::pause_menu::TakeBrowse())                       // the start screen's Change Files: the system's picker
+			ShowBrowse(window);
 		bool typing = wwhd::os::swkbd::Current().open;
 		if (typing != SDL_TextInputActive(window))
 			typing ? SDL_StartTextInput(window) : SDL_StopTextInput(window);
@@ -564,7 +642,7 @@ static void PrepareShaders(SDL_Window* window)
 			break;
 		case SDL_EVENT_GAMEPAD_ADDED: OpenGamepad(ev.gdevice.which); break;
 		case SDL_EVENT_GAMEPAD_REMOVED: CloseGamepad(ev.gdevice.which); PublishInput(); break;
-		default: break;
+		default: DropEvent(ev); break;
 		}
 	}
 }
@@ -589,9 +667,15 @@ void WindowSystem::Create()
 #endif
 	CemuCommonInit();
 
-	auto game = LaunchSettings::GetLoadFile();
+	// the game files: -g's, else the start screen's registered copy (still there: Launch checks it again if it changed),
+	// else the start screen's Setup asks for them once the window is up
+	std::optional<fs::path> game = LaunchSettings::GetLoadFile();
+	if (wwhd::game_files::Copy reg; !game && wwhd::game_files::Registered(reg) && fs::exists(_utf8ToPath(reg.path)))
+		game = _utf8ToPath(reg.path);
+#ifndef WWHD_NULL_GPU
 	if (!game)
 		wwhd::Fatal("usage: wwhd -g <game.wua | title dir | .rpx>");
+#endif
 	setSize(1920, 1080);
 	g_windowInfo.dpi_scale = 1.0;
 	g_windowInfo.pad_open = false;
@@ -606,6 +690,9 @@ void WindowSystem::Create()
 	if (!sound && window && !cemuAudio)
 		sound = wwhd::OpenAudio();
 	QuietCemuAudio(!sound && (cemuAudio || window));    // else silent: headless, or the hash
+	if (!game)
+		game = _utf8ToPath(SetupLoop(window));
+	wwhd::pause_menu::SetGame(_pathToUtf8(*game));
 	wwhd::PrepareTitle(*game);
 	wwhd::rt::Install();    // the execution seam: interprets, or runs diff mode (src/runtime)
 	PrepareShaders(window);

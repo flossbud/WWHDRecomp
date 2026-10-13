@@ -729,6 +729,28 @@ void main()
 		PresentQueue();
 	}
 
+	// before the game starts (the start screen's Setup, t-startscreen S2): the menu's panel alone, from the main thread (no
+	// GPU thread yet), when it changed
+	void PresentMenuOnly()
+	{
+		if (!RendererOn() || !s_hasWindow)
+			return;
+		{
+			std::lock_guard lock(s_menu.lock);
+			if (!s_menu.w || s_menu.version == s_menuShown)
+				return;
+			s_menuShown = s_menu.version;
+		}
+		if (!Acquire(w.chain ? w.srgb : false))
+			return;
+		VkImage target = w.images[w.index];
+		Barrier(target, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		DrawMenu(target);
+		Barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+		SubmitAndWait();
+		PresentQueue();
+	}
+
 	// while the pause menu holds the game: its panel alone, presented when it changed (the GPU thread, between commands)
 	void ServeHeldPresent()
 	{

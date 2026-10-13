@@ -4288,16 +4288,24 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   the worker, windowed, real time): `tools/sixty/tests/pausehold.sh` (the hold and the release's frames); the
   scratch scripts that drove the menu by keys (xdotool on our own Xvfb, a window grab a step) are easy to redo from
   pausehold.sh's pattern. M4 (landed): Quit to the title (the game's own soft reset), Enhancements ("No enhancements
-  yet"), the Pause prompt. Left: 4K speed (14-21 ms a frame on the worker's CPU), motion polish, and pausehold at 60: the first
-  frame after the release ran 45-52 ms, over its ~45 ms limit, from M4's tip (M3 to M4 also brought b-lsfg 262af2ac; an
-  A/B of the two waits for the desktop worker).
+  yet"), the Pause prompt. Left: 4K speed (14-21 ms a frame on the worker's CPU), motion polish. pausehold at 60 on the worker can
+  FAIL by a few ms (the release's first frame 45-52 ms against a ~45 limit: its iGPU's frames before the hold are already
+  near it); on the desktop worker M3, f8d1a117 (b-lsfg) and M4 all pass, 7-22 ms against ~44 (3 interleaved rounds each).
 - **t-startscreen S1** (the owner's Start Screen design, kept with the design handoff outside git; pause_menu.cpp's
   Launch, game_files.cpp): the window comes up held at the title's first bright, settled frame under Launch (Start
   Game, Settings, Game Files, Quit). Off under a route's input (`CEMU_INPUT_SCRIPT`); `WWHD_START_SCREEN=0|1` forces
   it. The copy's check (title ID, version 0, cking.rpx's sha256) and `portable/game.txt` (its path, size and time,
-  region: the copy is read in place). To see it, run with `WWHD_DEBUG_BOOT=0` (run.sh's 1 skips the title). Next: S2
-  Setup (before the game when no copy is given or registered: drop, Browse, the menu's own browser for the pad and the
-  Deck's Game Mode; Change Files restarts the program on the new copy), S3 Android (after m-android A2).
+  region: the copy is read in place). To see it, run with `WWHD_DEBUG_BOOT=0` (run.sh's 1 skips the title).
+- **t-startscreen S2** (Setup): before the game when no copy is given (-g) or registered, the window shows Setup over
+  the design's sky (window_system SetupLoop, presented from the main thread: gpu PresentMenuOnly): drop files on the
+  window, Browse (SDL's file picker; the menu's own browser with a pad, under gamescope, without a picker, or with
+  `WWHD_OWN_BROWSER=1`), the check's three steps, Start Game into the boot. Launch's Change Files opens Setup over the
+  held title and, once the new copy verifies, starts the program again on it (execv of /proc/self/exe, -g replaced,
+  every fd closed at the exec). play.sh passes game/wwhd.wua only until a copy is registered (headless always).
+  Tests: drive it through run.sh (the save route; `WWHD_GAME=` another copy, `WWHD_START_SCREEN=1`,
+  `WWHD_DEBUG_BOOT=0`), as a bare windowed launch with no input script sits on the loading tablet on the worker (old:
+  pre-S1 binaries too; fine on the desktop worker). `WWHD_DEBUG_CHECK_DELAY=MS` slows the check (ms a MB) to see its
+  progress. Next: S3 Android (after m-android A2); disc states are out (main's call).
 
 ### Session bottom (week 2, WW-14): the GPU side
 
