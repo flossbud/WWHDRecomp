@@ -11,13 +11,18 @@
 #                           environment variables in it
 #   log [SECONDS]           the app's logcat (default: until Ctrl-C)
 #   stop                    stop the app
+#   perf [SECONDS] [LIB]    a CPU profile of the running app (m-android A4): the NDK's simpleperf on the device
+#                           (--app: the debuggable APK), SECONDS (default 30) at 4000 Hz with frame-pointer call
+#                           graphs, pulled to build/android/perf/perf.data and reported per thread against LIB (default
+#                           build/android/libwwhd-play.so, the unstripped library the APK's libmain.so came from):
+#                           build/android/perf/report.txt (the threads, then the scheduler thread's own functions)
 #   uninstall               remove the app and its files (restores the device)
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 sdk=${ANDROID_DIR:-/wwhd/opt/android}
 adb=$sdk/platform-tools/adb
 pkg=org.windsong.app
-cmd=${1:?usage: device.sh pair|connect|install|files|run|log|stop|uninstall}; shift
+cmd=${1:?usage: device.sh pair|connect|install|files|run|log|stop|perf|uninstall}; shift
 if [ -z "${ANDROID_SERIAL:-}" ] && [ -f "$sdk/serial" ]; then export ANDROID_SERIAL=$(cat "$sdk/serial"); fi
 dir=/sdcard/Android/data/$pkg/files
 sh() { "$adb" shell "$@"; }
@@ -26,6 +31,21 @@ push_tar() {   # stdin (a tar) unpacked into $dir/$1 on the device
 }
 case "$cmd" in
 pair) "$adb" pair "$1" "$2" ;;
+perf)
+    secs=${1:-30}; lib=${2:-$root/build/android/libwwhd-play.so}
+    sp=$sdk/ndk/27.2.12479018/simpleperf; out=$root/build/android/perf; rm -rf "$out"; mkdir -p "$out/symfs"
+    "$adb" push "$sp/bin/android/arm64/simpleperf" /data/local/tmp/simpleperf >/dev/null
+    sh "chmod 755 /data/local/tmp/simpleperf"
+    sh "/data/local/tmp/simpleperf record --app $pkg --duration $secs -f 4000 --call-graph fp -o /data/local/tmp/perf.data"
+    "$adb" pull /data/local/tmp/perf.data "$out/perf.data" >/dev/null
+    # the library as the device maps it (its path in the APK's install dir), for the symbols
+    path=$(sh "pm path $pkg" | sed 's/^package://; s#/base.apk##' | tr -d '\r')
+    mkdir -p "$out/symfs$path/lib/arm64" && cp "$lib" "$out/symfs$path/lib/arm64/libmain.so"
+    rep="$sp/bin/linux/x86_64/simpleperf report -i $out/perf.data --symfs $out/symfs"
+    { echo "== by thread"; $rep --sort tid,comm 2>/dev/null | head -30
+      echo "== the scheduler thread (core 1), by function"; $rep --comms "OSSched[core=1]" --sort symbol 2>/dev/null | head -60
+      echo "== all threads, by library"; $rep --sort dso 2>/dev/null | head -20; } > "$out/report.txt"
+    cat "$out/report.txt" ;;
 connect) "$adb" connect "$1" && echo "$1" > "$sdk/serial" && "$adb" -s "$1" shell getprop ro.product.model ;;
 install) "$adb" install -r "${1:-$root/build/android/windsong.apk}" ;;
 files)

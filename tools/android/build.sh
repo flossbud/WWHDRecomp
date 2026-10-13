@@ -38,7 +38,8 @@ args=(-DCEMU_SRC="$cemu" -DWWHD_SDL3= -DWWHD_VCPKG_MANIFEST="$out/manifest" -DWW
       # Cemu's desktop extras the app doesn't use (the renderer is ours; no Wiimotes, Wayland or gamemode)
       -DENABLE_OPENGL=OFF -DENABLE_WAYLAND=OFF -DENABLE_BLUEZ=OFF -DENABLE_HIDAPI=OFF -DENABLE_FERAL_GAMEMODE=OFF
       -DENABLE_DISCORD_RPC=OFF -DENABLE_LIBUSB=OFF
-      -DWWHD_RECOMP_DIR="${RECOMP_DIR-$root/build/recomp}" -DWWHD_PLAY_BUILD=ON)
+      -DWWHD_RECOMP_DIR="${RECOMP_DIR-$root/build/recomp}" -DWWHD_PLAY_BUILD=ON
+      -DWWHD_PLAY_OPT="${PLAY_OPT:-}")                    # PLAY_OPT: the generated code's extra options (tools/android/pgo.sh)
 [ -f "$out/CMakeCache.txt" ] || args+=(-G Ninja -DCMAKE_BUILD_TYPE=Release
       -DVCPKG_TARGET_TRIPLET=arm64-android-wwhd -DVCPKG_OVERLAY_TRIPLETS="$root/tools/android/triplets"
       -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"

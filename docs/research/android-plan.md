@@ -86,6 +86,29 @@ once), `run` (start, then the app's logcat), `stop`, `uninstall` (restores the d
   lldb-server on an abstract socket, the app has no INTERNET permission), Cemu's log in the app's external files
   (portable/log.txt), `adb shell screenrecord` for frame-by-frame looks.
 
+## A4 performance (2026-10-13, session top: a4-perf)
+The device's scheduler thread (the game's core 1) was 72-80% busy at 60 in the title on three host threads. Off the
+device first, with the same real-time run on both machines (wwhd-play, `WWHD_CORES=3`, no renderer, soak.sh's play from
+the 100% save, 2 minutes at 60, the profiler at 64-deep stacks: a scratch script in the shape of soak.sh's):
+- **The arm64 worker** (the Mac VM, native): 60.1 fps, the work a frame 7.55 ms (45% of a core); core 1's samples
+  84% guest code, the scheduler 6.9%, the runtime 2.4%, HLE 1.3%, fiber switches 1.3%. The biggest host function:
+  pthread_cond_broadcast, 5.2% of core 1 (3.6% of all cores), all from `__OSAddReadyThreadToRunQueue` (Cemu's
+  CounterSemaphore: a mutex and notify_all on each run queue's 0 -> 1).
+- **x86** (the desktop worker): the work a frame 4.65 ms (28%), guest code 87%, the scheduler 3.8%,
+  pthread_cond_broadcast 1.5% of core 1.
+- Tried on arm64, A/B interleaved, 2 rounds each (the work a frame's median): PGO (pgo.sh run on the arm64 worker,
+  the profile matching) 7.55 -> 7.48 ms (~1%, against x86's 11%); `-march=armv8.2-a` (LSE atomics inline, not the
+  outline helpers) 7.55 -> 7.53 (none); the run queues' counts as an atomic with the wake only while a core sleeps
+  (no mutex or broadcast otherwise) 7.52 -> 7.45, pthread_cond_broadcast 3.4% -> 3.2% of all cores: the broadcasts are
+  real wakes of the sleeping cores 0 and 2, not idle ones. None kept but PGO's tools.
+- So the device's gap (72-80% against 45% on the Mac's cores) is the device's own: profile it there. Tools:
+  `tools/android/pgo.sh [PROFILE [OUT]]` (the app's library with pgo.sh's profile: the workers' LLVM 19 writes it, the
+  NDK's clang 18 can't read that indexed format, so it goes through llvm-profdata's text format), then `apk.sh
+  OUT/libwwhd-play.so OUT/windsong-pgo.apk`; `tools/android/device.sh perf [SECONDS] [LIB]` (simpleperf on the
+  device, --app, frame-pointer call graphs, reported per thread and for the scheduler thread's functions against the
+  unstripped library). On the device: the plain and the PGO APKs, perf on each in the title and in play, then the
+  scheduler thread's top functions against the Mac's (above): what the device spends that the Mac doesn't.
+
 ## P0: doesn't build, link or start on Android
 
 1. **Fibers** (`src/runtime/fiber/FiberUnix.cpp`): the switch is x86-64 asm; the fallback is `ucontext`, which bionic
