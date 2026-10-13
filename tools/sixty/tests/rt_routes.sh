@@ -18,7 +18,7 @@
 # (WWHD_THREAD_DUMP: VARIANT.threads) and the emulator's log (VARIANT.emu.log).
 set -uo pipefail
 source "$(dirname "$0")/common.sh"
-routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land3 sidle2 pot plants slash sail menus tour3 boomerang bombs grapple boots hammer armor mirror heavy drcjar fwbud tgbeam wtspring medli gtrock en-rd en-ph en-pz en-bo tgstatue medliharp gtgrapple fwswitch crate slope warppot climb)
+routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land3 sidle2 pot plants slash sail menus tour3 boomerang bombs grapple boots hammer armor mirror heavy drcjar fwbud tgbeam wtspring medli gtrock en-rd en-ph en-pz en-bo tgstatue medliharp gtgrapple fwswitch crate slope warppot climb gohmatail gohmarock)
 variants=(${RT_VARIANTS:-st1 st2 mt1 mt2})
 jobs=${RT_JOBS:-4}
 rate=${RT_RATE:-60}                             # RT_RATE=30: the routes at 30 instead

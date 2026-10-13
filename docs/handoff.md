@@ -4584,6 +4584,17 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
     checks all MATCH (diff 0 mismatches of 1,118,003, 15 captures PSNR inf); regress identical (da06a4ee); all 52
     routes ok; blacktest 6 ok, picto ok, statetest 2 ok (0 differ), bandam ok; predeploy-rt on the desktop worker ok
     (the 12 real-time routes, the soak 60.1 fps, the real-time state gate 17 ms).
+- **B83 and B84 retested on the owner's copy** (deploy 14, main 76ae1920, 2026-10-13; fixed, waiting on the owner's
+  verified). The owner's `~/wwhd-play/wwhd-null` is the real-time build (wwhd-play, PGO) under wwhd-null's name: it
+  refuses the virtual clock, so predeploy's routes on it fail at the start ("no 'Run title' after 60s"; tools/reference/run.sh
+  drops its "wwhd-play is the real-time build" line). A retest there takes two links: the same commit's wwhd-null at 60
+  against 30 (predeploy's routes), then the owner's binary against that wwhd-null in real time
+  (`PLAY_BIN=<a copy of it> PREDEPLOY_RT_SOAK=0 PREDEPLOY_RT_STATE=0 tools/sixty/tests/predeploy-rt.sh ROUTE...`; copy
+  it out of ~/wwhd-play, never run there). Deploy 14's wwhd-null: gohmatail 6.4, gohmarock 0.6, grapple 1.9, gtgrapple
+  8.2, warp 16.8, all ok, and the 9 routes B84's survey hashed (each actor's hashes, Link's track) bit-identical to B84's
+  gated build. The owner's binary in real time: gohmatail, gohmarock and grapple 0.0 units from wwhd-null; gtgrapple's
+  two outcomes (12.9 apart) come from both builds (real time's noise). gohmatail and gohmarock are in predeploy's default
+  routes since (52; and rt_routes.sh's): a deploy's predeploy didn't cover B83 or B84 before.
 
 ## Waiting on the owner
 
