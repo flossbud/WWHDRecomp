@@ -8,6 +8,21 @@
 
 thread_local sint32 s_schedulerLockCount = 0;   // this host thread's holds (it may hold it across fiber switches)
 
+// The count through a call on arm64, as Cemu's TLS_WORKAROUND_NOINLINE does for the current instance: a fiber that
+// locks, switches and unlocks (PPCCore_switchToScheduler) may come back on another host thread, and arm64 code reads
+// the thread pointer once a function, so the unlock counted on the first thread's hold and the lock stayed held (the
+// device's real-time build on 3 host threads, its first frame). The empty asm keeps the call from being taken as pure.
+#if defined(__aarch64__)
+__attribute__((noinline)) static sint32& LockCount()
+{
+	sint32* p = &s_schedulerLockCount;
+	asm volatile("" : "+r"(p));
+	return *p;
+}
+#else
+static inline sint32& LockCount() { return s_schedulerLockCount; }
+#endif
+
 // wwhd: the scheduler lock, inline, in place of a recursive pthread mutex (a PLT call and an owner
 // check in libc on every OS call that touches the scheduler: ~6% of the CPU thread, design doc
 // "Profile of the native build"). Three states, as a futex lock: free, held, held with waiters;
@@ -57,34 +72,34 @@ static inline void SchedulerLockRelease()
 
 void __OSLockScheduler(void* obj)
 {
-	if (s_schedulerLockCount == 0)
+	if (LockCount() == 0)
 		SchedulerLockAcquire();
-	s_schedulerLockCount++;
-	cemu_assert_debug(s_schedulerLockCount <= 1); // >= 2 should not happen. Scheduler lock does not allow recursion
+	LockCount()++;
+	cemu_assert_debug(LockCount() <= 1); // >= 2 should not happen. Scheduler lock does not allow recursion
 }
 
 bool __OSHasSchedulerLock()
 {
-	return s_schedulerLockCount > 0;
+	return LockCount() > 0;
 }
 
 bool __OSTryLockScheduler(void* obj)
 {
-	if (s_schedulerLockCount == 0)
+	if (LockCount() == 0)
 	{
 		uint32 c = 0;
 		if (!s_schedulerLock.compare_exchange_strong(c, 1, std::memory_order_acquire))
 			return false;
 	}
-	s_schedulerLockCount++;
+	LockCount()++;
 	return true;
 }
 
 void __OSUnlockScheduler(void* obj)
 {
-	s_schedulerLockCount--;
-	cemu_assert_debug(s_schedulerLockCount >= 0);
-	if (s_schedulerLockCount == 0)
+	LockCount()--;
+	cemu_assert_debug(LockCount() >= 0);
+	if (LockCount() == 0)
 		SchedulerLockRelease();
 }
 
