@@ -26,6 +26,14 @@ public class WindSongActivity extends SDLActivity {
             Os.setenv("WWHD_WINDOW", "1", false);
             Os.setenv("WWHD_CEMU_DATA", dir + "/cemu", false);
             Os.setenv("CEMU_NO_GAMEPAD", "1", false);
+            // tests: am start ... --es env "NAME=VALUE;NAME=VALUE" (tools/android/device.sh run's ENV)
+            String env = getIntent() != null ? getIntent().getStringExtra("env") : null;
+            if (env != null)
+                for (String kv : env.split(";")) {
+                    int eq = kv.indexOf('=');
+                    if (eq > 0)
+                        Os.setenv(kv.substring(0, eq), kv.substring(eq + 1), true);
+                }
         } catch (ErrnoException e) {
             throw new RuntimeException(e);
         }

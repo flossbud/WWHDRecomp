@@ -14,6 +14,27 @@ thread_local sint32 s_schedulerLockCount = 0;   // this host thread's holds (it 
 // recursion per host thread comes from s_schedulerLockCount, as the pthread mutex gave it.
 static std::atomic<uint32> s_schedulerLock{ 0 };  // 0 free, 1 held, 2 held and a thread waits
 
+// The wait and the wake. libc++'s (Android) atomic wait on a uint32 sleeps on a slot of a shared table, not on the
+// atomic, and its notify_one wakes one sleeper of the slot: a thread waiting on another atomic there takes the wake and
+// ours sleeps on, the lock free (seen on the device: the GPU thread and a core both asleep at state 2). A futex on the
+// lock word itself there; libstdc++'s wait (x86) wakes every sleeper of its slot.
+#if defined(__ANDROID__)
+#include <linux/futex.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+static inline void SchedulerLockSleep()
+{
+	syscall(SYS_futex, reinterpret_cast<uint32*>(&s_schedulerLock), FUTEX_WAIT_PRIVATE, 2u, nullptr, nullptr, 0);
+}
+static inline void SchedulerLockWake()
+{
+	syscall(SYS_futex, reinterpret_cast<uint32*>(&s_schedulerLock), FUTEX_WAKE_PRIVATE, 1, nullptr, nullptr, 0);
+}
+#else
+static inline void SchedulerLockSleep() { s_schedulerLock.wait(2, std::memory_order_relaxed); }
+static inline void SchedulerLockWake() { s_schedulerLock.notify_one(); }
+#endif
+
 static inline void SchedulerLockAcquire()
 {
 	uint32 c = 0;
@@ -23,7 +44,7 @@ static inline void SchedulerLockAcquire()
 		c = s_schedulerLock.exchange(2, std::memory_order_acquire);
 	while (c != 0)
 	{
-		s_schedulerLock.wait(2, std::memory_order_relaxed);
+		SchedulerLockSleep();
 		c = s_schedulerLock.exchange(2, std::memory_order_acquire);
 	}
 }
@@ -31,7 +52,7 @@ static inline void SchedulerLockAcquire()
 static inline void SchedulerLockRelease()
 {
 	if (s_schedulerLock.exchange(0, std::memory_order_release) == 2) [[unlikely]]
-		s_schedulerLock.notify_one();
+		SchedulerLockWake();
 }
 
 void __OSLockScheduler(void* obj)

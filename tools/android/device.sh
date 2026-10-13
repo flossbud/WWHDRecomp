@@ -7,7 +7,8 @@
 #   install [APK]           install the app (default build/android/windsong.apk), keeping its files
 #   files                   the app's files as tools/play/deploy.sh lays them out: Cemu's resources, the settings, the
 #                           pause menu's assets, the game (1.5 GB, once). Game data: on the device only.
-#   run                     start the app, then the log (Ctrl-C ends the log, not the app)
+#   run [SECONDS]           start the app, then the log (Ctrl-C ends the log, not the app); ENV="A=1;B=2" sets
+#                           environment variables in it
 #   log [SECONDS]           the app's logcat (default: until Ctrl-C)
 #   stop                    stop the app
 #   uninstall               remove the app and its files (restores the device)
@@ -44,7 +45,8 @@ files)
     sh "du -sh $dir" ;;
 run)
     "$adb" logcat -c
-    sh am start -W -n "$pkg/.WindSongActivity"
+    sh input keyevent KEYCODE_WAKEUP      # a sleeping screen pauses the app at once
+    sh am start -W -n "$pkg/.WindSongActivity" ${ENV:+--es env "'$ENV'"}
     exec "$0" log "$@" ;;
 log)
     pid=""

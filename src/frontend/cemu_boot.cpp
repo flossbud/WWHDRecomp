@@ -13,6 +13,9 @@
 #include <boost/algorithm/string.hpp>
 #include <fstream>
 #include <unistd.h>
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
 
 namespace wwhd
 {
@@ -20,6 +23,10 @@ namespace wwhd
 	{
 		cemuLog_log(LogType::Force, "wwhd: {}", msg);
 		fprintf(stderr, "wwhd: %.*s\n", (int)msg.size(), msg.data());
+#if defined(__ANDROID__)
+		// stderr reaches logcat through android_glue.cpp's pipe, which _exit doesn't wait for
+		__android_log_print(ANDROID_LOG_ERROR, "wwhd", "%.*s", (int)msg.size(), msg.data());
+#endif
 		_exit(1);
 	}
 

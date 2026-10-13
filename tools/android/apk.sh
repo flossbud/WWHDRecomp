@@ -20,7 +20,7 @@ javac -nowarn --release 17 -classpath "$jar" -d "$w/classes" $(find "$w/src" -na
 "$bt/d8" --release --min-api 33 --lib "$jar" --output "$w/dex" $(find "$w/classes" -name '*.class')
 "$bt/aapt2" compile --dir "$root/android/res" -o "$w/res.zip"
 "$bt/aapt2" link -I "$jar" --manifest "$root/android/AndroidManifest.xml" -o "$w/base.apk" "$w/res.zip" \
-    --min-sdk-version 33 --target-sdk-version $api
+    --min-sdk-version 33 --target-sdk-version $api --debug-mode   # debuggable: run-as for maps, simpleperf (A3)
 llvm-objcopy --strip-debug "$lib" "$w/lib/arm64-v8a/libmain.so"
 cp "$w/base.apk" "$w/unaligned.apk"
 (cd "$w/dex" && zip -q -X "$w/unaligned.apk" classes.dex)

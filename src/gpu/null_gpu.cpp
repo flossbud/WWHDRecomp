@@ -1071,8 +1071,13 @@ void LatteAsyncCommands_waitUntilAllProcessed() {}
 int BreathOfTheWildChildProcessMain() { return 0; }
 
 // No Vulkan in this build (only logging asks), and no renderer to take screenshots
-// (GX2's screenshot hook checks g_renderer first).
+// (GX2's screenshot hook checks g_renderer first). On Android it's true: GetGraphicsAPI() (that logging) falls back from
+// the settings' Vulkan to OpenGL, which the Android build hasn't, and asserts.
+#if defined(__ANDROID__)
+bool g_vulkan_available = true;
+#else
 bool g_vulkan_available = false;
+#endif
 void Renderer::RequestScreenshot(ScreenshotSaveFunction) { }
 
 // wwhd: save states (os/savestate.h; the GPU thread has retired everything submitted, at rest): the command processor's

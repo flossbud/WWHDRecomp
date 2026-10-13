@@ -19,6 +19,10 @@ d = json.load(open(sys.argv[1]))
 drop = {"wxwidgets", "tiff", "libusb", "dbus"}
 name = lambda e: e if isinstance(e, str) else e["name"]
 d["dependencies"] = [e for e in d["dependencies"] if name(e) not in drop]
+# SDL's Vulkan surface (SDL_WINDOW_VULKAN; Cemu's desktop build makes its own from X11/Wayland): its vulkan feature
+for e in d["dependencies"]:
+    if isinstance(e, dict) and e["name"] == "sdl3":
+        e["features"] = sorted(set(e.get("features", [])) | {"vulkan"})
 d["overrides"] = [e for e in d.get("overrides", []) if e["name"] not in drop]
 new = json.dumps(d, indent=2) + "\n"
 try:
