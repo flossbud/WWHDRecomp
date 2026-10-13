@@ -29,6 +29,41 @@
 #include "audio/CubebInputAPI.h"
 #include <chrono>
 #include <SDL3/SDL.h>
+#include <map>
+#include <mutex>
+
+// WWHD_DEBUG_EVENTS=1 (a probe, m-android A4): every 10 s the log gets the events SDL queued, by type (an event watch,
+// from any thread), and the window loop's waits that ended without one. On the device its thread was 42% of the app's
+// CPU, in SDL's Android event wait (every event queued wakes it: what keeps it awake?)
+static void EventProbe(bool got)
+{
+	static const bool on = [] { const char* e = getenv("WWHD_DEBUG_EVENTS"); return e && atoi(e) == 1; }();
+	if (!on)
+		return;
+	static std::mutex lock;
+	static std::map<uint32, uint64> counts;
+	static uint64 waits = 0, empty = 0;
+	static auto last = std::chrono::steady_clock::now();
+	static const bool watch = [] {
+		SDL_AddEventWatch([](void*, SDL_Event* ev) { std::lock_guard l(lock); counts[ev->type]++; return true; }, nullptr);
+		return true;
+	}();
+	(void)watch;
+	waits++;
+	empty += !got;
+	if (std::chrono::steady_clock::now() - last < std::chrono::seconds(10))
+		return;
+	last = std::chrono::steady_clock::now();
+	std::string line;
+	{
+		std::lock_guard l(lock);
+		for (const auto& [type, n] : counts)
+			line += fmt::format(" 0x{:x}:{}", type, n);
+		counts.clear();
+	}
+	cemuLog_log(LogType::Force, "wwhd events: {} waits ({} empty) in 10 s; queued by type:{}", waits, empty, line);
+	waits = empty = 0;
+}
 #include <SDL3/SDL_vulkan.h>
 #include <algorithm>
 #else
@@ -347,6 +382,14 @@ static SDL_Window* OpenWindow()
 		return nullptr;
 	if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
 		wwhd::Fatal(fmt::format("SDL video: {}", SDL_GetError()));
+#if defined(__ANDROID__)
+	// No poll sentinel (m-android A4). SDL 3.4's Android event wait pumps on every pass, and each pump takes the pending
+	// sentinel out and queues a new one, which wakes the wait (every event queued sends Android's lifecycle WAKE): the
+	// window's 50 ms waits never slept, and its thread was 41% of the app's CPU on the device (SDL_UpdateJoysticks'
+	// device checks and the clock, thousands of passes a second, no event queued: WWHD_DEBUG_EVENTS). Without the
+	// sentinel the wait blocks on its semaphore until an event or the timeout; the loop never relied on poll cycles
+	SDL_SetEventEnabled(SDL_EVENT_POLL_SENTINEL, false);
+#endif
 	// The gamepad plays without the window having the focus: SDL drops a controller's events when
 	// no window of ours is focused, and a window started from a service (a remote session's
 	// systemd-run) or behind another on Wayland isn't, so the game got no input at all
@@ -581,7 +624,9 @@ static std::string SetupLoop(SDL_Window* window)
 		if (typing != SDL_TextInputActive(window))
 			typing ? SDL_StartTextInput(window) : SDL_StopTextInput(window);
 		SDL_Event ev;
-		if (!SDL_WaitEventTimeout(&ev, 50))
+		const bool got = SDL_WaitEventTimeout(&ev, 50);
+		EventProbe(got);
+		if (!got)
 			continue;
 		switch (ev.type)
 		{
