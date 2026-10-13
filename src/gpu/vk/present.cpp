@@ -42,6 +42,7 @@ namespace wwhd::gpu
 			std::vector<VkSemaphore> rendered;                   // per image: the lazy path's swap submit signals it
 			bool signalled = false;                              // this swap's present waits for rendered[index]
 			uint32 first = UINT32_MAX;                           // frame generation: the frame between, presented before index
+			bool turned = false;                                 // drawn IDENTITY on a turned display: SUBOPTIMAL is expected
 		} w;
 
 		// a panel laid over the picture: the frontend's pixels, uploaded to its image when they change
@@ -278,8 +279,25 @@ namespace wwhd::gpu
 		bool Build(uint32 width, uint32 height, bool srgb)
 		{
 			VkSurfaceCapabilitiesKHR caps;
-			Check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(s.physical, w.surface, &caps), "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
+			const VkResult got = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(s.physical, w.surface, &caps);
+			if (got == VK_ERROR_SURFACE_LOST_KHR)                // Android: the window went with the app to the background
+			{
+				s_surfaceGone = true;
+				return false;
+			}
+			Check(got, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
 			VkExtent2D extent = caps.currentExtent;
+			// a display turned from its panel's native orientation (Android: the Odin's panel is portrait): the compositor
+			// turns our images (IDENTITY; the extent Android reports is the window's, already turned); otherwise drawn as
+			// the surface wants
+			VkSurfaceTransformFlagBitsKHR transform = caps.currentTransform;
+			if ((caps.currentTransform & (VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR | VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR)) &&
+				(caps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR))
+			{
+				transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+				Log(fmt::format("the display is turned {} degrees from its panel: the compositor turns the picture",
+					caps.currentTransform == VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR ? 90 : 270));
+			}
 			if (extent.width == UINT32_MAX)
 				extent = { std::clamp(width, caps.minImageExtent.width, caps.maxImageExtent.width),
 					std::clamp(height, caps.minImageExtent.height, caps.maxImageExtent.height) };
@@ -311,14 +329,21 @@ namespace wwhd::gpu
 			ci.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | (probe::s_swapSrc ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0) |
 				(caps.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);   // the blended panels (DrawHint)
 			ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-			ci.preTransform = caps.currentTransform;
+			ci.preTransform = transform;
+			w.turned = transform != caps.currentTransform;
 			ci.compositeAlpha = (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) ? VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR
 				: (VkCompositeAlphaFlagBitsKHR)(caps.supportedCompositeAlpha & -caps.supportedCompositeAlpha);
 			ci.presentMode = PresentMode();
 			ci.clipped = VK_TRUE;
 			ci.oldSwapchain = w.chain;
 			VkSwapchainKHR chain;
-			Check(vkCreateSwapchainKHR(s.device, &ci, nullptr, &chain), "vkCreateSwapchainKHR");
+			const VkResult made = vkCreateSwapchainKHR(s.device, &ci, nullptr, &chain);
+			if (made == VK_ERROR_SURFACE_LOST_KHR || made == VK_ERROR_NATIVE_WINDOW_IN_USE_KHR)
+			{
+				s_surfaceGone = true;                              // its window gone under us (Android's pause): the old
+				return false;                                      // swapchain stays until the surface is dropped
+			}
+			Check(made, "vkCreateSwapchainKHR");
 			// the lazy path's frames in flight may still draw into the old images and its presents wait for their
 			// semaphores: the queue idle first (a rebuild is rare: a resize)
 			vkQueueWaitIdle(s.queue);
@@ -592,7 +617,9 @@ void main()
 	// a surface again (Android's resume): from the same window, the swapchain built for it at this acquire
 	static bool NewSurface()
 	{
-		CreateWindowSurface();
+		w.surface = (VkSurfaceKHR)s_window.createSurface(s.instance);
+		if (!w.surface)                                          // no window surface yet (Android: before surfaceCreated)
+			return false;
 		if (!CanPresent(s.queueFamily))
 		{
 			Log("the window's new surface can't be presented to from the renderer's queue: nothing shown");
@@ -615,11 +642,17 @@ void main()
 				DropSurface();
 				Log("the window's surface dropped (paused): nothing presented until it's back");
 			}
+			static uint32 wait = 0;                              // a failed try: again 30 presents later
+			if (wait && --wait)
+				return false;
 			if (!s_surfaceBack.exchange(false))
 				return false;
-			s_surfaceGone = false;
 			if (!NewSurface())
+			{
+				s_surfaceBack = true, wait = 30;
 				return false;
+			}
+			s_surfaceGone = false;
 		}
 		if (!w.acquired)
 		{
@@ -895,8 +928,10 @@ void main()
 				pi.pWaitSemaphores = &w.rendered[index];
 			}
 			VkResult r = vkQueuePresentKHR(s.queue, &pi);         // otherwise the submit has finished: nothing to wait for
-			if (r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR)
+			if (r == VK_ERROR_OUT_OF_DATE_KHR || (r == VK_SUBOPTIMAL_KHR && !w.turned))
 				w.width = 0;                                      // rebuild at the next swap
+			else if (r == VK_SUBOPTIMAL_KHR)
+				;                                                 // the compositor turns it, as asked
 			else if (r == VK_ERROR_SURFACE_LOST_KHR)
 				s_surfaceGone = true, s_surfaceBack = true;       // a new surface at the next swap
 			else

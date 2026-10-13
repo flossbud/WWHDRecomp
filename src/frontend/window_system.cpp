@@ -359,12 +359,19 @@ static SDL_Window* OpenWindow()
 	if (const char* size = getenv("WWHD_WINDOW_SIZE"); size && sscanf(size, "%dx%d", &width, &height) != 2)
 		width = 1920, height = 1080;
 	const char* full = getenv("WWHD_FULLSCREEN");
-	if (!(full && strcmp(full, "1") == 0))
+	bool fullscreen = full && strcmp(full, "1") == 0;
+#if defined(__ANDROID__)
+	fullscreen = true;                                           // the whole screen, immersive (no status or navigation bar)
+#endif
+	if (!fullscreen)
 		FitToDesktop(width, height);
 	SDL_Window* window = SDL_CreateWindow("The Legend of Zelda: The Wind Waker HD", std::max(width, 320), std::max(height, 180),
-		SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | (full && strcmp(full, "1") == 0 ? SDL_WINDOW_FULLSCREEN : 0));
+		SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | (fullscreen ? SDL_WINDOW_FULLSCREEN : 0));
 	if (!window)
 		wwhd::Fatal(fmt::format("SDL window: {}", SDL_GetError()));
+#if defined(__ANDROID__)
+	SDL_SyncWindow(window);                                      // fullscreen applied, so the size below is the screen's
+#endif
 	StorePixelSize(window);
 	VariableRefresh(window);
 	Uint32 n = 0;
@@ -513,10 +520,19 @@ static std::string SetupLoop(SDL_Window* window)
 		// the system's keyboard and dialogs come and go with the game: look at least every 50 ms
 		wwhd::UpdateOverlay();
 		wwhd::UpdateFpsOverlay();
+#if defined(__ANDROID__)
+		// the window's size as it is (Android resizes the surface as the system bars go: the aspect follows it)
+		if (int pw = 0, ph = 0; SDL_GetWindowSizeInPixels(window, &pw, &ph) && pw > 0 && ph > 0 &&
+			((uint32)pw != s_pixelWidth || (uint32)ph != s_pixelHeight))
+			StorePixelSize(window);
+#endif
 		// the settings page's live changes (src/os/settings.h): the display and vsync
 		if (bool full, vsync; true)
 			if (int w, h; wwhd::os::settings::TakeWindowRequest(full, w, h, vsync))
 			{
+#if defined(__ANDROID__)
+				full = true;                                     // always the whole screen there (OpenWindow)
+#endif
 				if (full != ((SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0))
 					SDL_SetWindowFullscreen(window, full);
 				if (!full && w > 0 && h > 0)

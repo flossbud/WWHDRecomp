@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app's window (b-android-vk): fullscreen and laid out over the display's cutout and the system bars' areas, so
+     the picture reaches every edge (the bars themselves hidden by SDL's immersive fullscreen) -->
+<resources>
+    <style name="WindSong" parent="@android:style/Theme.NoTitleBar.Fullscreen">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>
