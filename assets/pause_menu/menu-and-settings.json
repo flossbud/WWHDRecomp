@@ -350,6 +350,23 @@
           "default": true,
           "applies": "not confirmed",
           "description": "Soft shading where surfaces meet, like under ledges and in corners."
+        },
+        {
+          "id": "gpuDriver",
+          "label": "GPU Driver",
+          "type": "choice",
+          "platform": "android",
+          "default": "System",
+          "applies": "next game start",
+          "description": "The Vulkan driver the game draws with: the system's, or a Turnip or Adreno driver you imported. A newer driver is often faster. If one fails to load, the game uses the system's."
+        },
+        {
+          "id": "gpuDriverImport",
+          "label": "Import GPU Driver",
+          "type": "action",
+          "platform": "android",
+          "applies": "immediately",
+          "description": "Add a driver package (a .zip with meta.json, as other Android emulators use, such as Mr. Purple's Turnip builds). It then shows up under GPU Driver."
         }
       ]
     },

@@ -40,5 +40,6 @@ namespace wwhd::pause_menu
 	// Browse asked for: the window's loop shows the system's picker (it must, on the main thread) and hands back what
 	// was chosen ("" cancelled; failed: no picker, so the menu's own browser)
 	bool TakeBrowse();
+	bool BrowsingDriver();                  // the picker asked for is for a GPU driver package (zips), not game files
 	void Chosen(const std::string& path, bool failed);
 }

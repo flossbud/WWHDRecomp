@@ -46,6 +46,7 @@ namespace wwhd::vk
 #undef WWHD_VK_DECLARE
 
 	bool Load();                                   // libvulkan and the global functions
+	bool ImportedDriver();                         // Load took a GPU driver the player imported (Android, a4-drivers)
 	void LoadInstance(VkInstance instance);
 	void LoadDevice(VkDevice device, bool renderingKHR = false);   // renderingKHR: vkCmdBeginRenderingKHR's names (below 1.3)
 }

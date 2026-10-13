@@ -13,7 +13,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <atomic>
+#include <algorithm>
 #include <cstring>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -33,7 +35,7 @@ namespace
 		const char* performance;                    // its value in the Performance preset, or nullptr: no preset's
 		int def = 0;                                // which value is the program's default (no file, no switch)
 	};
-	const std::vector<Option> kOptions = {
+	std::vector<Option> kOptions = {
 		// 40 and 50 run 60's logic with a fixed share of its half frames left out (pacing.cpp, WWHD_FPS_CAP): smoother at 30 or 60
 		// 60 by default (the owner's ask: new players start at 60); an ini line or WWHD_FRAMERATE/WWHD_60FPS still wins.
 		// 90, 120 and 150 (uncapped U5): 3, 4 and 5 frames a tick (WWHD_STEPS); for a display of that rate or more and a machine that
@@ -87,6 +89,64 @@ namespace
 		{ "WWHD_BARRIERS", "Precise barriers", { { "1", "on" }, { "all", "off" } }, false, nullptr },
 		{ "WWHD_CLEAR_LOADOP", "Clears as load ops", { { "1", "on" }, { "0", "off" } }, false, nullptr },
 	};
+	// a4-drivers (Android): WWHD_GPU_DRIVER, the GPU driver the renderer loads (gpu/vk/vk.cpp): the system's, or one the
+	// player imported (Settings' Import GPU Driver: a package's meta.json and library in WWHD_DRIVERS_DIR/<id>/). Its
+	// values are the drivers there, listed at start and after an import (RescanDrivers)
+	constexpr const char* kDriverKey = "WWHD_GPU_DRIVER";
+	std::deque<std::string> s_driverText;           // the driver option's values and names (its Values point into them)
+	Option DriverOption()
+	{
+		Option o{ kDriverKey, "GPU driver", { { "system", "System" } }, false, nullptr };
+		const char* dir = getenv("WWHD_DRIVERS_DIR");
+		std::error_code ec;
+		if (!dir || !*dir || !std::filesystem::is_directory(dir, ec))
+			return o;
+		std::vector<std::pair<std::string, std::string>> found;
+		for (const auto& e : std::filesystem::directory_iterator(dir, ec))
+		{
+			std::ifstream meta(e.path() / "meta.json");
+			if (!meta)
+				continue;
+			const std::string json((std::istreambuf_iterator<char>(meta)), std::istreambuf_iterator<char>());
+			std::string name = e.path().filename().string();
+			// "name": "..." (the packages' display name; no JSON parser here)
+			if (size_t k = json.find("\"name\""); k != std::string::npos)
+				if (size_t q0 = json.find('"', json.find(':', k) + 1); q0 != std::string::npos)
+					if (size_t q1 = json.find('"', q0 + 1); q1 != std::string::npos && q1 > q0 + 1)
+						name = json.substr(q0 + 1, q1 - q0 - 1);
+			// the menu's box is narrow: "Turnip Adreno Driver T30 (@Mr_Purple_666)" shows as "Turnip T30"
+			std::string shortName;
+			for (size_t i = 0, depth = 0; i < name.size(); i++)
+				if (name[i] == '(')
+					depth++;
+				else if (name[i] == ')')
+					depth = depth ? depth - 1 : 0;
+				else if (!depth)
+					shortName += name[i];
+			std::string words;
+			for (size_t i = 0; i < shortName.size();)
+			{
+				const size_t j = std::min(shortName.find(' ', i), shortName.size());
+				const std::string w = shortName.substr(i, j - i);
+				if (!w.empty() && w != "Adreno" && w != "Driver" && w != "Vulkan" && w != "driver")
+					words += (words.empty() ? "" : " ") + w;
+				i = j + 1;
+			}
+			if (words.size() > 20)
+				words = words.substr(0, 19) + "\xE2\x80\xA6";
+			found.push_back({ e.path().filename().string(), words.empty() ? name : words });
+		}
+		std::sort(found.begin(), found.end());
+		for (const auto& [id, name] : found)
+		{
+			s_driverText.push_back(id);
+			const char* value = s_driverText.back().c_str();
+			s_driverText.push_back(name);
+			o.values.push_back({ value, s_driverText.back().c_str() });
+		}
+		return o;
+	}
+
 	constexpr const char* kPresetKey = "WWHD_PRESET";
 	const char* const kPresets[] = { "auto", "performance", "quality" };
 
@@ -210,6 +270,14 @@ namespace
 
 namespace wwhd::os::settings
 {
+	void RescanDrivers()
+	{
+		std::lock_guard lock(s_lock);
+		for (Option& o : kOptions)
+			if (strcmp(o.key, kDriverKey) == 0)
+				o = DriverOption();
+	}
+
 	void Load(const std::string& portableDir)
 	{
 		std::lock_guard lock(s_lock);
@@ -218,6 +286,9 @@ namespace wwhd::os::settings
 		s_active = !(use && strcmp(use, "0") == 0) && window && strcmp(window, "1") == 0 && !getenv("CEMU_VIRTUAL_CLOCK");
 		if (!s_active)
 			return;
+#if defined(__ANDROID__)
+		kOptions.push_back(DriverOption());
+#endif
 		s_path = portableDir + "/wwhd.ini";
 		std::ifstream in(s_path);
 		for (std::string line; std::getline(in, line);)

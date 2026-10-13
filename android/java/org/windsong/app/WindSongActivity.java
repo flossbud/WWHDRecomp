@@ -28,6 +28,10 @@ public class WindSongActivity extends SDLActivity {
             Os.setenv("WWHD_WINDOW", "1", false);
             Os.setenv("WWHD_CEMU_DATA", dir + "/cemu", false);
             Os.setenv("CEMU_NO_GAMEPAD", "1", false);
+            // a4-drivers: libadrenotools' hooks are in the app's native library dir (extracted at install: the
+            // manifest's extractNativeLibs); imported GPU drivers in the internal files, where dlopen may load from
+            Os.setenv("WWHD_NATIVE_LIB_DIR", getApplicationInfo().nativeLibraryDir, true);
+            Os.setenv("WWHD_DRIVERS_DIR", getFilesDir().getAbsolutePath() + "/gpu_drivers", false);
             // tests: am start ... --es env "NAME=VALUE;NAME=VALUE" (tools/android/device.sh run's ENV)
             String env = getIntent() != null ? getIntent().getStringExtra("env") : null;
             if (env != null)

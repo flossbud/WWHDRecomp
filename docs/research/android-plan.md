@@ -82,6 +82,11 @@ once), `run` (start, then the app's logcat), `stop`, `uninstall` (restores the d
   read once a function (the lock count through a call), SDL's orientation and system bars, the start screen's input.
 - Open: the title's boat snaps in at 60 (its 60 rules; session bottom); SDL's event wait spins on Android (a core);
   Change Files' restart (execv of /proc/self/exe) is wrong there (S3).
+- GPU drivers (a4-drivers): Settings' GPU Driver and Import GPU Driver (Android only): a driver package (zip: meta.json
+  and its library, as other Android emulators take) unpacked into the app's internal files and loaded by libadrenotools
+  (setup.sh pins it; its hooks in the APK, extracted at install) in place of the system's; the system's when it fails.
+  Mr. Purple's Turnip T30 on the Odin: the title's heaviest pan 43.5 fps (frames 28 ms apart, GPU 13 ms) against the
+  system driver's 34 (36 ms, GPU 16 ms).
 - Tools: `tools/android/device.sh` (ENV="A=1;B=2" for run's variables), the APK debuggable (run-as: simpleperf,
   lldb-server on an abstract socket, the app has no INTERNET permission), Cemu's log in the app's external files
   (portable/log.txt), `adb shell screenrecord` for frame-by-frame looks.

@@ -24,7 +24,12 @@ javac -nowarn --release 17 -classpath "$jar" -d "$w/classes" $(find "$w/src" -na
 llvm-objcopy --strip-debug "$lib" "$w/lib/arm64-v8a/libmain.so"
 cp "$w/base.apk" "$w/unaligned.apk"
 (cd "$w/dex" && zip -q -X "$w/unaligned.apk" classes.dex)
-(cd "$w" && zip -q -X -0 "$w/unaligned.apk" lib/arm64-v8a/libmain.so)
+# libadrenotools' hooks (a4-drivers), loaded from the native library dir the installer extracts them to
+for h in hook_impl main_hook file_redirect_hook gsl_alloc_hook; do
+    f=$(dirname "$lib")/src/adrenotools/src/hook/lib$h.so
+    [ -f "$f" ] && llvm-objcopy --strip-debug "$f" "$w/lib/arm64-v8a/lib$h.so"
+done
+(cd "$w" && zip -q -X -0 "$w/unaligned.apk" lib/arm64-v8a/*.so)
 "$bt/zipalign" -f -P 16 4 "$w/unaligned.apk" "$w/aligned.apk"
 ks=$sdk/debug.keystore
 [ -f "$ks" ] || keytool -genkeypair -keystore "$ks" -storepass android -keypass android -alias debug \

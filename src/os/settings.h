@@ -46,6 +46,7 @@ namespace wwhd::os::settings
 	int Find(const std::string& key);
 	OptionView View(int option);
 	void Set(int option, int value);               // to that value (an index into values), saved at once
+	void RescanDrivers();                          // Android: the GPU driver option's values again (after an import)
 	void ResetToDefaults(const std::vector<std::string>& keys);   // their lines dropped (the preset's own values back)
 
 	// what applies live: the event loop takes the requests (window_system.cpp): the display (fullscreen, window size;

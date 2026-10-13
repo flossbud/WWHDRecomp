@@ -25,6 +25,7 @@
 #include <mutex>
 #include <sstream>
 #include <thread>
+#include "boot.h"
 #include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -144,7 +145,7 @@ namespace wwhd::pause_menu
 		// ({"label", "value"}), in the menu's order, paired by value (CheckRows logs what doesn't pair) ----
 		struct Row
 		{
-			std::string id, label, type, description, env;  // type: choice, toggle, info
+			std::string id, label, type, description, env;  // type: choice, toggle, info, action (a4-drivers' import)
 			std::vector<std::string> options, values;       // a choice row's choices: their labels and the switch's values
 			std::string key;                                // the switch ("" none: an info row)
 		};
@@ -156,6 +157,7 @@ namespace wwhd::pause_menu
 		}
 		// the design's row ids and the switches they set
 		const std::map<std::string, std::string> kRowKeys = { { "preset", "WWHD_PRESET" }, { "fps", "WWHD_FRAMERATE" },
+			{ "gpuDriver", "WWHD_GPU_DRIVER" },
 			{ "renderScale", "WWHD_RENDER_SCALE" }, { "upscaler", "WWHD_UPSCALER" }, { "frameGen", "WWHD_FRAMEGEN" },
 			{ "aniso", "WWHD_ANISO" }, { "fxaa", "WWHD_FXAA" }, { "ao", "WWHD_AO" }, { "display", "WWHD_FULLSCREEN" },
 			{ "resolution", "WWHD_WINDOW_SIZE" }, { "aspect", "WWHD_ASPECT" }, { "vsync", "WWHD_VSYNC" }, { "vrr", "WWHD_VRR" },
@@ -189,6 +191,10 @@ namespace wwhd::pause_menu
 				for (const auto& r : c["rows"].GetArray())
 				{
 					Row row{ str(r, "id"), str(r, "label"), str(r, "type"), str(r, "description"), str(r, "envVar"), {}, {} };
+#if !defined(__ANDROID__)
+					if (str(r, "platform") == "android")
+						continue;                           // the GPU driver's rows (a4-drivers)
+#endif
 					if (r.HasMember("options") && r["options"].IsArray())
 						for (const auto& o : r["options"].GetArray())
 							if (o.IsObject() && !o.HasMember("planned"))
@@ -258,6 +264,11 @@ namespace wwhd::pause_menu
 						continue;
 					}
 					const os::settings::OptionView v = os::settings::View(i);
+					if (r.values.empty() || r.id == "gpuDriver")   // no choices in the design: the switch's own (the drivers)
+					{
+						r.values = v.values, r.options = v.shown;
+						continue;
+					}
 					for (size_t c = 0; c < r.values.size();)
 						if (std::find(v.values.begin(), v.values.end(), r.values[c]) == v.values.end())
 						{
@@ -276,6 +287,11 @@ namespace wwhd::pause_menu
 		Look LookAt(const Row& r)
 		{
 			Look k;
+			if (r.type == "action")
+			{
+				k.value = "Choose\xE2\x80\xA6";               // a4-drivers' Import GPU Driver: the system's picker
+				return k;
+			}
 			if (r.id == "keepSpeed")
 			{
 				k.on = true, k.value = "On", k.locked = true, k.lockWhy = "The game always keeps full speed.";
@@ -449,6 +465,7 @@ namespace wwhd::pause_menu
 			game_files::Copy setupCopy;                 // their check's outcome
 			std::shared_ptr<CheckJob> setupJob;
 			bool browseWanted = false;                  // Browse chosen: the window's loop shows the picker
+			bool browseDriver = false;                  // the picker is for a GPU driver package (a4-drivers), not game files
 			std::string setupResult;                    // Start Game from Setup before the game: the copy's path
 			Clock::time_point blackoutAt{};             // Start Game: the blackout's fade (600 ms), then the game
 			// the menu's own file browser (the pad's, for the Deck's Game Mode, where the system's picker can't be used)
@@ -989,7 +1006,7 @@ namespace wwhd::pause_menu
 					f.c.Text(a.rocknroll, 23 * s, (tx - 12) * s - a.rocknroll.Width(t, 23 * s),
 						vcy * s + (a.rocknroll.Ascent(23 * s) + a.rocknroll.Descent(23 * s)) / 2, t, ink, vop);
 				}
-				else if (r.type == "info" || k.locked)
+				else if (r.type == "info" || r.type == "action" || k.locked)
 					f.c.Text(a.rocknroll, 23 * s, vr * s - a.rocknroll.Width(k.value, 23 * s),
 						vcy * s + (a.rocknroll.Ascent(23 * s) + a.rocknroll.Descent(23 * s)) / 2, k.value, ink, vop);
 				else
@@ -2046,7 +2063,7 @@ namespace wwhd::pause_menu
 					const Row& r = cats[st.cat].rows[st.row];
 					const Look k = LookAt(r);
 					if (!k.locked && r.type != "info")
-						pr.push_back({ st.pad ? "A" : "Enter", r.type == "toggle" ? "Toggle" : "Change" });
+						pr.push_back({ st.pad ? "A" : "Enter", r.type == "toggle" ? "Toggle" : r.type == "action" ? "Choose" : "Change" });
 				}
 				if (st.sub == 0)
 				{
@@ -2236,6 +2253,12 @@ namespace wwhd::pause_menu
 				{
 					if (in == Input::Confirm && !k.lockWhy.empty())
 						ShowToast(st, k.lockWhy);
+					return;
+				}
+				if (r.type == "action")
+				{
+					if (in == Input::Confirm && r.id == "gpuDriverImport")
+						st.browseDriver = true, st.browseWanted = true;
 					return;
 				}
 				if (r.type == "info" || k.option < 0)
@@ -3559,10 +3582,51 @@ namespace wwhd::pause_menu
 		return want;
 	}
 
+	bool BrowsingDriver()
+	{
+		State& st = S();
+		std::lock_guard lock(st.lock);
+		return st.browseDriver;
+	}
+
 	void Chosen(const std::string& path, bool failed)
 	{
 		State& st = S();
 		std::lock_guard lock(st.lock);
+		if (st.browseDriver)
+		{
+			st.browseDriver = false;
+			if (failed)
+				ShowToast(st, "No file picker here.");
+#if defined(__ANDROID__)
+			else if (!path.empty())
+			{
+				ShowToast(st, "Importing the driver\xE2\x80\xA6");
+				std::thread([path] {                       // the copy and unpacking (tens of MB) off the menu's thread
+					std::string name, id, why;
+					const bool ok = wwhd::ImportGpuDriver(path, name, id, why);
+					State& st = S();
+					std::lock_guard lock(st.lock);
+					if (ok)
+					{
+						// chosen at once (the reason it was imported); GPU Driver's choices again
+						const int option = os::settings::Find("WWHD_GPU_DRIVER");
+						const os::settings::OptionView v = os::settings::View(option);
+						if (auto it = std::find(v.values.begin(), v.values.end(), id); option >= 0 && it != v.values.end())
+							os::settings::Set(option, (int)(it - v.values.begin()));
+						CheckRows();
+					}
+					ShowToast(st, ok ? name + " imported and chosen. It\xE2\x80\x99s used from the next start."
+						: "Couldn\xE2\x80\x99t import it: " + why + ".");
+					st.dirty = true;
+					st.wake.notify_one();
+				}).detach();
+			}
+#endif
+			st.dirty = true;
+			st.wake.notify_one();
+			return;
+		}
 		if (!st.setup)
 			return;
 		if (failed)

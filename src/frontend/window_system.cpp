@@ -458,11 +458,13 @@ static void ShowBrowse(SDL_Window* window)
 {
 	static const SDL_DialogFileFilter kFilters[] = { { "Wii U game files (.wua .wux .wud, or an extracted folder's code/cking.rpx)",
 		"wua;wux;wud;rpx" }, { "All files", "*" } };
+	static const SDL_DialogFileFilter kDriverFilters[] = { { "GPU driver packages (.zip)", "zip" }, { "All files", "*" } };
+	const bool driver = wwhd::pause_menu::BrowsingDriver();     // Settings' Import GPU Driver (a4-drivers)
 	SDL_ShowOpenFileDialog([](void*, const char* const* files, int) {
 		if (!files)
 			cemuLog_log(LogType::Force, "wwhd: start screen: no file picker ({})", SDL_GetError());
 		wwhd::pause_menu::Chosen(files && files[0] ? files[0] : "", files == nullptr);
-	}, nullptr, window, kFilters, 2, nullptr, false);
+	}, nullptr, window, driver ? kDriverFilters : kFilters, 2, nullptr, false);
 }
 
 // files dragged over the window and dropped on it (the start screen's Setup takes them)

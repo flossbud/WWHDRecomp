@@ -12,6 +12,9 @@ namespace wwhd
 	bool OpenAudioHash();           // WWHD_AUDIO_HASH=path: a device that hashes the sound instead (audio_sdl.cpp)
 	bool OpenAAudio();              // Android: the TV's sound straight on AAudio, OpenAudio's first choice there (audio_aaudio.cpp)
 	void AudioBackground(bool on);  // Android: the app in the background: AAudio's stream paused (audio_aaudio.cpp)
+	// Android: a GPU driver package (zip: meta.json and its library) from a path or content:// URI into the app's
+	// drivers; name: its own, id: its folder (Settings' value), why: what's wrong when it can't (gpu_drivers.cpp)
+	bool ImportGpuDriver(const std::string& source, std::string& name, std::string& id, std::string& why);
 	void UpdateOverlay();           // the system's keyboard and dialogs over the game (overlay.cpp, wwhd-null)
 	void UpdateFpsOverlay();        // the settings' FPS overlay (overlay.cpp)
 	// the debug menu's item at a point of the 1920x1080 TV frame: its index, -1 on the panel but no

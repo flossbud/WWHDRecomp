@@ -77,13 +77,33 @@ namespace wwhd::gpu
 		ici.pApplicationInfo = &app;
 		ici.enabledExtensionCount = (uint32)instanceExtensions.size();
 		ici.ppEnabledExtensionNames = instanceExtensions.data();
-		Check(vkCreateInstance(&ici, nullptr, &s.instance), "vkCreateInstance");
+		// an imported GPU driver (Android, a4-drivers) that can't make the instance, a device or the device: the system's
+		auto systemDriver = [](const std::string& why) {
+			Log(fmt::format("the imported GPU driver failed ({}): the system's driver", why));
+			if (s.instance)
+			{
+				DestroyWindowSurface();
+				vkDestroyInstance(s.instance, nullptr);
+			}
+			s.instance = VK_NULL_HANDLE;
+			setenv("WWHD_GPU_DRIVER", "system", 1);
+			return Init();
+		};
+		const VkResult instance = vkCreateInstance(&ici, nullptr, &s.instance);
+		if (instance != VK_SUCCESS && ImportedDriver())
+		{
+			s.instance = VK_NULL_HANDLE;
+			return systemDriver(fmt::format("vkCreateInstance {}", (int)instance));
+		}
+		Check(instance, "vkCreateInstance");
 		LoadInstance(s.instance);
 		CreateWindowSurface();
 		uint32 n = 0;
 		vkEnumeratePhysicalDevices(s.instance, &n, nullptr);
 		std::vector<VkPhysicalDevice> devices(n);
 		vkEnumeratePhysicalDevices(s.instance, &n, devices.data());
+		if (devices.empty() && ImportedDriver())
+			return systemDriver("no device");
 		if (devices.empty())
 			Fail("no Vulkan device");
 		s.physical = devices[0];                                    // VK_ICD_FILENAMES picks lavapipe (run.sh REF_GPU=llvmpipe)
@@ -251,6 +271,8 @@ namespace wwhd::gpu
 			lsfg::Disable(fmt::format("lsfg-vk failed on this GPU (vkCreateDevice {})", (int)created));
 			return Init();
 		}
+		if (created != VK_SUCCESS && ImportedDriver())
+			return systemDriver(fmt::format("vkCreateDevice {}", (int)created));
 		Check(created, "vkCreateDevice");
 		LoadDevice(s.device, s.dynamicRenderingKHR);
 		vkGetDeviceQueue(s.device, s.queueFamily, 0, &s.queue);
