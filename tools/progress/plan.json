@@ -605,6 +605,12 @@
       "name": "Round 14: [7] A steady 165, the draw side (after u8-journal): the whole frame's p90 is 6.7-7.1 ms on en-tn even with the journal off (a frame's draws cost a frame, whatever its step): the processes' draws (fpcM_Draw, 31% of a half frame) and RenderDisplay::draw's render lists (25%); profile them on the desktop, cut the exact wins, and measure each against 6.06 ms; N 2 byte-identical"
     },
     {
+      "id": "b-android-vk",
+      "lane": "bottom",
+      "complexity": 6,
+      "name": "Round 15: [6] The renderer on Android (m-android's GPU half, after u8/u9): what our Vulkan renderer requires (version, features: logicOp, depthClamp, geometryShader, BC textures, dualSrcBlend; extensions: transform feedback for streamout, custom border colour, dynamic rendering; limits; the host-visible ring) against the Odin's Adreno 740 under Qualcomm's driver and Turnip (their gpuinfo.org reports); a fallback chosen at device creation for each one missing, logged, never silent; each fallback testable on the desktop with a mask (WWHD_VK_MASK) and checked there with captures; the surface lost and recreated on Android's pause and resume (the swapchain remade on SDL's foreground events). The desktop byte-identical without a mask"
+    },
+    {
       "id": "q-savestate",
       "lane": "qa",
       "complexity": 9,
