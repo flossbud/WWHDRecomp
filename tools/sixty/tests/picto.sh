@@ -14,7 +14,8 @@ source "$(dirname "$0")/common.sh"
 rate=${PICTO_RATE:-30}
 W=$OUT/picto-$rate-${PICTO_TAG:-plain}; rm -rf "$W"; mkdir -p "$W/bin"     # PICTO_TAG: runs side by side
 cp build/wwhd/wwhd-null "$W/bin/" || exit 2
-at() { [ "$rate" = 60 ] && echo $((900 + 2 * ($1 - 900))) || echo "$1"; }
+steps=2; [[ ${WWHD_STEPS:-} =~ ^[3-8]$ ]] && steps=$WWHD_STEPS   # (WWHD_STEPS: N steps a tick, U4; as soak.sh reads it)
+at() { [ "$rate" = 60 ] && echo $((900 + steps * ($1 - 900))) || echo "$1"; }
 f1=$(at 1340) f2=$(at 1700)
 SIXTY_FRAMES=2900 CEMU_BIN=$W/bin/wwhd-null SIXTY_OUT=$W tools/sixty/tests/shots.sh picto "$f1,$f2" "$rate" > /dev/null
 fail=0

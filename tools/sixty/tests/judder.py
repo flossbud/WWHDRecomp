@@ -3,7 +3,9 @@ process PROC moves from frame to frame between game frames FROM and TO: for each
 0x314, the position; 0x390 is the eye point) the mean move made by whole-tick frames and by half-tick
 frames, per axis and in length, and how often a frame moves against the one before (a sign flip on an
 axis that is moving). A converted actor that judders moves unevenly: the two kinds of frame differ, or
-it steps back every other frame (session qa: Link on stairs, his eye 250, 237.6, 246.4)."""
+it steps back every other frame (session qa: Link on stairs, his eye 250, 237.6, 246.4). At N steps a tick (WWHD_STEPS,
+U4) the track keeps a tick's whole step and its last: a half-tick key is (N - 1)/N of a tick after the whole one and
+1/N before the next, so each kind's move is also given per tick (even motion: the same for both)."""
 import math
 import os
 import struct
@@ -14,6 +16,8 @@ import compare  # noqa: E402
 
 d, proc, a, b = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
 offs = [int(x, 16) for x in sys.argv[5:]] or [0x314]
+steps = int(os.environ["WWHD_STEPS"]) if os.environ.get("WWHD_STEPS", "").isdigit() else 2   # (display: the frame log's "# steps N")
+span = {"half": (steps - 1) / steps, "whole": 1 / steps}     # the share of a tick each kind of move covers
 T = compare.load_track(d + "/track.bin")
 recs = {}
 for k in T:
@@ -43,4 +47,5 @@ for off in offs:
         n = len(ms)
         mean = [sum(m[i] for m in ms) / n for i in range(3)]
         length = sum(math.sqrt(sum(c * c for c in m)) for m in ms) / n
-        print(f"   {kind:5} frames: mean move ({mean[0]:8.3f} {mean[1]:8.3f} {mean[2]:8.3f}), mean length {length:.3f}  ({n} moves)")
+        print(f"   {kind:5} frames: mean move ({mean[0]:8.3f} {mean[1]:8.3f} {mean[2]:8.3f}), mean length {length:.3f}, "
+              f"{length / span[kind]:.3f} a tick  ({n} moves)")

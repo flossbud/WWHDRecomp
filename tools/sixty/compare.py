@@ -19,6 +19,7 @@ ticks how far they are from the midpoint of the 30-tick run's two ticks around t
 """
 import argparse
 import collections
+import os
 import struct
 
 
@@ -90,10 +91,12 @@ def f32(b, off):
     return struct.unpack('>f', b[off:off + 4])[0]
 
 
-def track_report(a_dir, b_dir, names, first):
+def track_report(a_dir, b_dir, names, first, steps=2):
     """Converted processes within a tolerance: at whole ticks the position (+0x314) error and the
     float fields that differ most; at half ticks (B only) how far the position is from the midpoint
-    of A's two whole ticks around it, against the distance moved in that tick."""
+    of A's two whole ticks around it (at N steps (N - 1)/N of the way: the half key is the tick's last step), against the
+    distance moved in that tick."""
+    frac = (steps - 1) / steps
     ta, tb = load_track(f'{a_dir}/track.bin'), load_track(f'{b_dir}/track.bin')
     if not tb:
         print('\nno track.bin in B (WWHD_STATE_TRACK)')
@@ -123,7 +126,8 @@ def track_report(a_dir, b_dir, names, first):
                 p0 = [f32(a[2 * n], 0x314 + 4 * i) for i in range(3)]
                 p1 = [f32(a[2 * (n + 1)], 0x314 + 4 * i) for i in range(3)]
                 ph = [f32(b[t], 0x314 + 4 * i) for i in range(3)]
-                mids.append(sum((ph[i] - (p0[i] + p1[i]) / 2) ** 2 for i in range(3)) ** 0.5)
+                # the half key holds the tick's last step (U4: at N steps, (N - 1)/N of the way; the midpoint at N 2)
+                mids.append(sum((ph[i] - (p0[i] + (p1[i] - p0[i]) * frac)) ** 2 for i in range(3)) ** 0.5)
                 moved.append(sum((p1[i] - p0[i]) ** 2 for i in range(3)) ** 0.5)
         name = key[0]
         print(f'  {name} at {key[1]}: {len(whole)} whole ticks, position error max {worst:.3f} (tick {worst_t})')
@@ -142,12 +146,14 @@ def main():
     ap.add_argument('b')
     ap.add_argument('--from', dest='first', type=int, default=0)
     ap.add_argument('--fields', type=int, default=60)
+    ap.add_argument('--steps', type=int, default=int(os.environ['WWHD_STEPS']) if os.environ.get('WWHD_STEPS', '').isdigit() else 2,
+                    help='frames a tick of B (U1: WWHD_STEPS; 2 at 60): its half key is the last step, (N-1)/N of a tick on')
     ap.add_argument('--names')
     ap.add_argument('--globals-only', action='store_true', help='only the globals in the full dumps')
     ap.add_argument('--track', action='store_true', help='only the tracked processes (track.bin), within a tolerance')
     args = ap.parse_args()
     if args.track:
-        track_report(args.a, args.b, args.names, args.first)
+        track_report(args.a, args.b, args.names, args.first, args.steps)
         return
     names = {}
     if args.names:

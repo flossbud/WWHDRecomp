@@ -8,7 +8,7 @@
 # of the functions FILTER names (CEMU_HLE_TRACE_FILTER prefixes) to OUT/RATE/trace.zst, for
 # tools/sixty/sound.py. Both rates run with WWHD_VIRTUAL_SPEED (default 3 here):
 # the emulated CPU that fast, so that a 60 fps frame fits in one vsync of guest time and both runs
-# keep the same guest time per game frame. SIXTY_FRAMES=N ends the route early, at game frame N.
+# keep the same guest time per game frame (at N steps the 60 run's is n N/2 from the switch: PPCTimer.cpp). SIXTY_FRAMES=N ends the route early, at game frame N.
 # Extra environment passes through (WWHD_STATE_DUMP_EVERY, CEMU_SHOT_FRAMES with doubled
 # frames at 60, WWHD_RENDER=vk REF_GPU=llvmpipe). Run it on the worker: tools/worker/job start NAME ...
 # The dumps are game memory: keep OUT_DIR on the worker.
@@ -40,7 +40,8 @@ for rate in "${rates[@]}"; do
     dir=$out/$rate
     rm -rf "$dir" && mkdir -p "$dir"
     from=${SIXTY_FROM:-900}
-    steps=${WWHD_STEPS:-2}                         # frames a tick (U1: WWHD_STEPS=N, 30 N fps): the same game frames
+    # frames a tick (U1: WWHD_STEPS=N, 30 N fps): the same game frames ("display" is the window's: 2 here, no window)
+    steps=2; [[ ${WWHD_STEPS:-} =~ ^[3-8]$ ]] && steps=$WWHD_STEPS
     if [ "$rate" = 60 ]; then sixty=1 exit_frame=$((from + steps * (frames - from))); else sixty= exit_frame=$frames; fi
     echo "run.sh: $which at $rate ticks a second, to swap $exit_frame, state in $dir"
     start=$(date +%s)

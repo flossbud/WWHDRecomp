@@ -4278,6 +4278,33 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   real time, so every test keeps its own rate; an ini line or the launcher's WWHD_FRAMERATE/WWHD_60FPS wins.
 - **u2-rules** (docs/research/uncapped-plan.md "U2"): the lags and halfadd's three kinds at N steps, the trial at N
   (`WWHD_STEPS=N` at 30), `tools/sixty/tests/trial_n.sh ROUTE FROM TO [N]` (what differs at N but not at 2).
+- **u4-checks** (uncapped-plan.md "U4"): the tools at N frames a tick (`WWHD_STEPS=N`). The track keeps a tick's whole
+  step (key 2t) and its last (every later step writes 2t+1; the last stays), so predeploy's pairing and paths.py
+  (regress) read the tick's end at any N as they are. compare.py `--track`: the half key (N-1)/N of a tick on
+  (`--steps`, from WWHD_STEPS); hz30.py by the frame's step in its tick (from N 4: 85% on N/2 of the N phases, so a step
+  left at 60's rhythm shows too); judder.py per tick; picto.sh and run.sh read N as soak.sh does ("display" is 2 there).
+  The virtual clock's speed is n N/2 from the switch, rounded up (PPCTimer.cpp): with 3 throughout, sail and warp at N 5
+  missed 7 vsyncs of 3500 (none at N 4), the states the same either way. To measure at N: `WWHD_STEPS=N
+  tools/sixty/tests/regress.sh`, `WWHD_STEPS=N PREDEPLOY_BLACK=0 PREDEPLOY_PICTO=0 PREDEPLOY_STATE=0 PREDEPLOY_BANDAM=0
+  PREDEPLOY_RT=0 predeploy.sh` (the 30 runs are reused), `WWHD_STEPS=N capture.sh` (swaps 900 + N (frame - 900)) then
+  `hz30.py DIR 24 N`, `trial_n.sh ROUTE FROM TO N`.
+- **u6-fixes, what U4 found at N 3 and 4** (main 8dd1e83c + U4; next in the lane). Predeploy's routes at N 3: 42 ok,
+  WARN plants 91, sail 75, tour3 75 (0.0 at 2), en-ph 105; FAIL land3 542, bombs 1248, grapple 372, gtgrapple 2497. At N
+  4: 43 ok, WARN plants 101, tour3 77, en-ph 105; FAIL the same four (542, 1247, 379, 2497). Grapple at N 3: the hook
+  rests 9.4 units off 30's in Link's hand (0.2 at 2) and its throw flies flatter (25 units a tick up against 36), past
+  the stake: no wrap, no event (WWHD_DEBUG_EDGESTOP: 30's order at 1083 and end at 1115 never come); the rope (HIMO2's
+  himo2_control: a pass a step, no time step, 1.6 times a tick's change at 60) and the twirl its throw waits for (m02D8,
+  `keep`) are where to look. Regress at N 4: 215 6.6/8.5, 206 8.7/92.2, 188 9.9/875.4, 191 10.6/825.6 (52.3 at 2), 181
+  13.5/18.2, 224 0.7/2.1, 216 76.9/166.7 (8.0/98.8 at 2), 209 3.1/10.0, 214 and 234 0. The Magtail (216): trial_n.sh at
+  4 in its room (M_NewD2 12): of 95 stores only at 4 all but two are quarter steps' float rounding, and those two are
+  its own +0x5A4 (s16 2048 -> 0, f_021D87A0+0x14BC) and +0x1A15 (byte 1 -> 0, +0xC40), stored in a later step only
+  (frames 1029 and 1095). 181's last step sits 1/4 of a tick behind 30's tick at N 2 and 3/8 at N 3 and 4 (its "apart"
+  is mostly that). hz30 at N 4 at 14 places (121 swaps from game frame 1300): 11 at 0 or the HUD's block; sea6 37 (the
+  foam beside the boat steps into the whole tick: 2.07 against 0.6 a step; at N 2 1.06 against 0.81, under the scan's
+  bar; the sea's two rules, lag and drawlag, are even at N), Doc Bandam's 5 (the banner on the spear: 1.07 on step 0 ->
+  1, 0.40 the others; at N 2 too, 1.89 against 0.69, so 60's: no process's conversion changes it (each of the room's
+  left out in turn), as with a draw reading a count the whole tick's draw has already moved on, the plants'
+  g_Counter.mTimer; not found yet), the Earth Temple's 2 (Link's cap's tip, the skull door's top: small).
 - **t-pausemenu M1-M3** (the owner's design: assets/pause_menu, its README the spec; frontend/pause_menu.cpp,
   ui_draw.cpp): Esc/F2 or the pad's SELECT (−, no longer the game's) opens it; the game held at a whole tick's top
   (os/savestate RequestHold), silent, over its blurred last frame; the menu drawn in software at the window's size from
