@@ -4356,22 +4356,33 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   thrown jar as its target (+0x37C 0x47C522E8) as 30's does, without it never; and with it Link turns (0x17) at 1176
   where 30's walks (0x06), the jar the camera follows (its flight at N 3) the likely cause; without it he stays within
   1.5 units. Taking others' writes since each early step's frame began, not since the last show step (the draw's
-  matrices out), changed no route but gtgrapple (40 against 24 at N 3) and medli (291 against 204): not kept. trial_n.sh
-  at 3 on bombs, land3 and tour3 (the rest of their "only at 3" lists): the camera's monitor (dCamera +0x238, 476
-  +0x480/4: x0.654) and Link's shape_angle.y copied in at his execute's start (+0x32A, x0.667) look like the trial's own
-  (its sub-steps' ids: the StepRing reads N steps back in a real run), pots (TSUBO 453 +0x6A0-0x6E0: the stepped write
-  0), NPC_YM2's frame +0x9EC and Link's glint wrap a step's rounding short (cosmetic), the weather's f_0256DDF8+0xE14
-  wrapping (+-2023). Regress at N 4: 215 6.6/8.5, 206 8.7/92.2, 188 9.9/875.4, 191 10.6/825.6 (52.3 at 2), 181
-  13.5/18.2, 224 0.7/2.1, 216 76.9/166.7 (8.0/98.8 at 2), 209 3.1/10.0, 214 and 234 0. The Magtail (216): trial_n.sh at
-  4 in its room (M_NewD2 12): of 95 stores only at 4 all but two are quarter steps' float rounding, and those two are
-  its own +0x5A4 (s16 2048 -> 0, f_021D87A0+0x14BC) and +0x1A15 (byte 1 -> 0, +0xC40), stored in a later step only
-  (frames 1029 and 1095). 181's last step sits 1/4 of a tick behind 30's tick at N 2 and 3/8 at N 3 and 4 (its "apart"
-  is mostly that). hz30 at N 4 at 14 places (121 swaps from game frame 1300): 11 at 0 or the HUD's block; sea6 37 (the
-  foam beside the boat steps into the whole tick: 2.07 against 0.6 a step; at N 2 1.06 against 0.81, under the scan's
-  bar; the sea's two rules, lag and drawlag, are even at N), Doc Bandam's 5 (the banner on the spear: 1.07 on step 0 ->
-  1, 0.40 the others; at N 2 too, 1.89 against 0.69, so 60's: no process's conversion changes it (each of the room's
-  left out in turn), as with a draw reading a count the whole tick's draw has already moved on, the plants'
-  g_Counter.mTimer; not found yet), the Earth Temple's 2 (Link's cap's tip, the skull door's top: small).
+  matrices out), changed no route but gtgrapple (40 against 24 at N 3) and medli (291 against 204): not kept. After cuts
+  1 and 2 (main b77607aa), land3 at N 4 with the tick on and off (Link and the camera tracked): both drift alike while
+  walking (Link's facing at 1200: 30's -1587, on -1756, off -1795; the camera's yaw, +0x236, 31191, 31012, 30983), then
+  at 1300 (Link stopped, 0x04) the camera resets behind him: on lands 189 off 30's (8186 against 8375) and stays (Link's
+  facing after the turn at 1382 -4209 against -4020, as tour3's), off lands 877 off (9252) and converges to 30's within
+  3 units by 1382, and the route then meets 30's at 1500 (his 0x38). So at N 4 two things: the walk's facing drift (cut
+  1 ends 82% of the s16 approaches at 30's; the rest have a moving target) and, with the tick, the camera not converging
+  after its reset (its show steps' state at N 4: three of them). Tried again, the swap with the game info's eye and
+  centre too (0x1047411C, 24 bytes: the tick start's for the others' early steps, the show's back at the camera's turn):
+  land3 542 and tour3 76 at N 4 unchanged, gtgrapple 40 and medli 291 at N 3 (24, 204 without): not kept. What Link's
+  heading reads of the camera in his early steps is still to find (a store trace on his stick angle, m34E8, in an early
+  step: WWHD_STATE_CENSUS_TRACE). trial_n.sh at 3 on bombs, land3 and tour3 (the rest of their "only at 3" lists): the
+  camera's monitor (dCamera +0x238, 476 +0x480/4: x0.654) and Link's shape_angle.y copied in at his execute's start
+  (+0x32A, x0.667) look like the trial's own (its sub-steps' ids: the StepRing reads N steps back in a real run), pots
+  (TSUBO 453 +0x6A0-0x6E0: the stepped write 0), NPC_YM2's frame +0x9EC and Link's glint wrap a step's rounding short
+  (cosmetic), the weather's f_0256DDF8+0xE14 wrapping (+-2023). Regress at N 4: 215 6.6/8.5, 206 8.7/92.2, 188
+  9.9/875.4, 191 10.6/825.6 (52.3 at 2), 181 13.5/18.2, 224 0.7/2.1, 216 76.9/166.7 (8.0/98.8 at 2), 209 3.1/10.0, 214
+  and 234 0. The Magtail (216): trial_n.sh at 4 in its room (M_NewD2 12): of 95 stores only at 4 all but two are quarter
+  steps' float rounding, and those two are its own +0x5A4 (s16 2048 -> 0, f_021D87A0+0x14BC) and +0x1A15 (byte 1 -> 0,
+  +0xC40), stored in a later step only (frames 1029 and 1095). 181's last step sits 1/4 of a tick behind 30's tick at N
+  2 and 3/8 at N 3 and 4 (its "apart" is mostly that). hz30 at N 4 at 14 places (121 swaps from game frame 1300): 11 at
+  0 or the HUD's block; sea6 37 (the foam beside the boat steps into the whole tick: 2.07 against 0.6 a step; at N 2
+  1.06 against 0.81, under the scan's bar; the sea's two rules, lag and drawlag, are even at N), Doc Bandam's 5 (the
+  banner on the spear: 1.07 on step 0 -> 1, 0.40 the others; at N 2 too, 1.89 against 0.69, so 60's: no process's
+  conversion changes it (each of the room's left out in turn), as with a draw reading a count the whole tick's draw has
+  already moved on, the plants' g_Counter.mTimer; not found yet), the Earth Temple's 2 (Link's cap's tip, the skull
+  door's top: small).
 - **t-pausemenu M1-M3** (the owner's design: assets/pause_menu, its README the spec; frontend/pause_menu.cpp,
   ui_draw.cpp): Esc/F2 or the pad's SELECT (−, no longer the game's) opens it; the game held at a whole tick's top
   (os/savestate RequestHold), silent, over its blurred last frame; the menu drawn in software at the window's size from
