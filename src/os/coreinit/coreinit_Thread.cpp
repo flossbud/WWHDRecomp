@@ -29,6 +29,11 @@ namespace wwhd::rt { bool TakeExactSwitch(); }     // runtime/dispatch.cpp
 #include <pthread.h>
 #include <string>
 #include <tuple>
+#if defined(__ANDROID__)
+#include <linux/futex.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
 
 #if defined(__aarch64__) || defined(__arm64__)
 #if defined(__clang__)
@@ -103,7 +108,100 @@ namespace coreinit
 	SysAllocator<OSThreadQueue> g_activeThreadQueue; // list of all threads (can include non-detached inactive threads)
 
 	SysAllocator<OSThreadQueue, 3> g_coreRunQueue;
-	CounterSemaphore g_coreRunQueueThreadCount[3];
+
+	// wwhd: a run queue's count of threads, in place of Cemu's CounterSemaphore (a mutex, and a condition variable's
+	// notify_all on each 0 -> 1 and 1 -> 0, a futex call each on Android whether a thread waits or not). In real time on
+	// three host threads, cores 0 and 2 wait here for work and core 1 queues most of theirs (a message readies a thread:
+	// ~190 a frame in sail at 60 on the Odin, cores 0 and 2 sleeping and woken ~6,700 and ~4,900 times a second): each
+	// wake cost core 1 a futex call, ~4.5 us, 6% of its cycles. The queuer now wakes only a waiter that sleeps, and on
+	// arm64 a waiter first waits 100 us for an event (wfe: the core clock-gated) before it sleeps: two thirds of the
+	// sleeps go, core 1's cycles a frame -3% (sail at 60 on the Odin: 36.6 -> 35.5 M), cores 0 and 2 ~1.2 G cycles more in
+	// 20 s each (a pause loop: ~6.5 G; android-plan.md "a4-cpu"). x86 waits no time by default (a pause loop costs a
+	// handheld's power; AMD's MWAITX would do as wfe). The single host thread (deterministic, the virtual clock) never
+	// waits here.
+	class RunQueueCount
+	{
+	public:
+		void reset() { m_count.store(0, std::memory_order_seq_cst); }
+		void increment()
+		{
+			if (m_count.fetch_add(1, std::memory_order_seq_cst) == 0 && m_sleepers.load(std::memory_order_seq_cst) != 0)
+				Wake();
+		}
+		void decrement() { m_count.fetch_sub(1, std::memory_order_seq_cst); }
+		bool isZero() const { return m_count.load(std::memory_order_relaxed) == 0; }
+		void waitUntilNonZero()
+		{
+			if (m_count.load(std::memory_order_acquire) != 0)
+				return;
+			if (const auto spin = SpinTime(); spin.count() > 0)
+			{
+				const auto until = std::chrono::steady_clock::now() + spin;
+#if defined(__aarch64__)
+				// arm64: the wait for an event. ldaxr arms the exclusive monitor on the count's line and wfe idles the
+				// core at low power until a store there (the queuer's increment) clears it, or until the kernel's event
+				// stream (10 kHz) for the deadline's check: spinning without the power (WWHD_RUNQ_WFE=0: pause, as x86)
+				if (WfeWait())
+				{
+					// (nothing between the ldaxr and the wfe: a call there could clear the monitor, the wake then up to
+					// the event stream's 100 us late)
+					while (std::chrono::steady_clock::now() < until)
+					{
+						uint32 v;
+						asm volatile("ldaxr %w0, [%1]" : "=&r"(v) : "r"(&m_count) : "memory");
+						if (v != 0)
+							break;
+						asm volatile("wfe" ::: "memory");
+					}
+					asm volatile("clrex" ::: "memory");
+				}
+				else
+#endif
+				for (uint32 i = 1; m_count.load(std::memory_order_acquire) == 0; i++)
+				{
+					_mm_pause();
+					if ((i & 31) == 0 && std::chrono::steady_clock::now() >= until)
+						break;
+				}
+			}
+			// sleep: announced first, so a queuer that saw no sleeper is one whose count this sees (both seq_cst)
+			m_sleepers.fetch_add(1, std::memory_order_seq_cst);
+			while (m_count.load(std::memory_order_seq_cst) == 0)
+				Sleep();
+			m_sleepers.fetch_sub(1, std::memory_order_seq_cst);
+		}
+
+	private:
+		// how long a waiter spins before it sleeps: WWHD_RUNQ_SPIN_US (default 100 us on arm64, where it waits with wfe;
+		// 0 elsewhere: it sleeps at once, as before)
+		static std::chrono::microseconds SpinTime()
+		{
+#if defined(__aarch64__)
+			constexpr int kDefault = 100;
+#else
+			constexpr int kDefault = 0;
+#endif
+			static const std::chrono::microseconds t{ getenv("WWHD_RUNQ_SPIN_US") ? atoi(getenv("WWHD_RUNQ_SPIN_US")) : kDefault };
+			return t;
+		}
+		static bool WfeWait()
+		{
+			static const bool on = !getenv("WWHD_RUNQ_WFE") || atoi(getenv("WWHD_RUNQ_WFE")) != 0;
+			return on;
+		}
+		// a futex on the count itself (libc++'s atomic wait on Android sleeps on a slot of a shared table, whose
+		// notify can wake another sleeper of the slot: coreinit_Scheduler.cpp); libstdc++'s wait is one elsewhere
+#if defined(__ANDROID__)
+		void Sleep() { syscall(SYS_futex, reinterpret_cast<sint32*>(&m_count), FUTEX_WAIT_PRIVATE, 0, nullptr, nullptr, 0); }
+		void Wake() { syscall(SYS_futex, reinterpret_cast<sint32*>(&m_count), FUTEX_WAKE_PRIVATE, INT32_MAX, nullptr, nullptr, 0); }
+#else
+		void Sleep() { m_count.wait(0, std::memory_order_seq_cst); }
+		void Wake() { m_count.notify_all(); }
+#endif
+		std::atomic<sint32> m_count{ 0 };
+		std::atomic<sint32> m_sleepers{ 0 };
+	};
+	RunQueueCount g_coreRunQueueThreadCount[3];
 
 	bool g_isMulticoreMode;
 

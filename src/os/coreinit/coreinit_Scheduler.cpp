@@ -50,11 +50,27 @@ static inline void SchedulerLockSleep() { s_schedulerLock.wait(2, std::memory_or
 static inline void SchedulerLockWake() { s_schedulerLock.notify_one(); }
 #endif
 
+// A taker spins a while before it sleeps (WWHD_LOCK_SPIN, iterations: default 256, about 2-5 us; 0 none): the lock is
+// held a few microseconds at a time, and a taker that slept cost the holder a futex wake at its release (core 1 on the
+// Odin in sail at 60: ~1% of its cycles). Real time on three host threads only: one host thread never contends.
+static uint32 LockSpin()
+{
+	static const uint32 n = getenv("WWHD_LOCK_SPIN") ? (uint32)atoi(getenv("WWHD_LOCK_SPIN")) : 256;
+	return n;
+}
+
 static inline void SchedulerLockAcquire()
 {
 	uint32 c = 0;
 	if (s_schedulerLock.compare_exchange_strong(c, 1, std::memory_order_acquire)) [[likely]]
 		return;
+	for (uint32 i = LockSpin(); i > 0 && c != 2; i--)
+	{
+		_mm_pause();
+		c = s_schedulerLock.load(std::memory_order_relaxed);
+		if (c == 0 && s_schedulerLock.compare_exchange_weak(c, 1, std::memory_order_acquire))
+			return;
+	}
 	if (c != 2)
 		c = s_schedulerLock.exchange(2, std::memory_order_acquire);
 	while (c != 0)

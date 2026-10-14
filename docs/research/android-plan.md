@@ -203,6 +203,42 @@ didn't suspend between runs.) The routes share their first ~1000 frames: 30 to f
   effect (branch adpf-parked). The ~2.7 GHz ceiling (the X3's top is 3.19) is likely the device's performance mode:
   the owner's per-app performance and fan modes (OdinTools) may set WindSong higher.
 
+## a4-cpu: the game thread's host cost (2026-10-14, session top)
+Sail at 60 (route.sh's test home, main 3e469320), simpleperf at 4000 Hz with fp call graphs over 40 s, each kernel
+sample read back to the user frame that entered the kernel and our frames above it (a scratch script over
+simpleperf_report_lib):
+- **The game thread (OSSched[core=1])**: guest code 79%, our runtime 9.4%, the kernel 8.0%, the linker's TLS resolver
+  1.4%, libc 1.3%. Its kernel time is futex calls:
+  - 6.1% from `__OSAddReadyThreadToRunQueue` (5.6% through OSSendMessage's readying a thread, 0.6% through alarms):
+    Cemu's CounterSemaphore notify_all-ed on each 0 -> 1 of a run queue's count. Cores 0 and 2's host threads sleep
+    there and were woken ~6,700 and ~4,900 times a second (context switches, against core 1's own ~1,500): ~190 real
+    wakes a frame, ~4.5 us each.
+  - 1.0% the scheduler lock's wake at its release (a taker slept at once, without a spin).
+  - Page faults: 48 a second on the game thread, so not the write watch.
+  - The syscall tracepoint (raw_syscalls:sys_enter) records in an app's profile without root (core 1: ~25,700 a
+    second), but without its fields (no syscall numbers); the call chains named them instead.
+- **The fix** (real time on three host threads; the single host thread of the checks never waits or contends there):
+  - The run queues' counts are atomics that wake only a sleeper.
+  - On arm64 a waiter first waits 100 us for an event (`ldaxr` arms the exclusive monitor on the count, `wfe` idles
+    the core clock-gated until the queuer's store, the kernel's 10 kHz event stream for the deadline) before it sleeps.
+  - The scheduler lock's taker spins 256 pauses (a few us) before its futex sleep.
+  - Knobs for A/Bs: `WWHD_RUNQ_SPIN_US`, `WWHD_RUNQ_WFE`, `WWHD_LOCK_SPIN`.
+- **A/B** (one APK, env switches, 20 s of simpleperf stat in the 60 part; off/pause/wfe/off/wfe):
+
+  | | core 1 cycles | cores 0/2 cycles | cores 0/2 on CPU | cores 0/2 sleeps | fps |
+  |---|---|---|---|---|---|
+  | off | 42.8 G | 11.7 / 7.6 G | 4.6 / 3.0 s | 135k / 97k | 58.4-58.6 |
+  | 100 us of pause | 41.4 G | 19.6 / 13.2 G | 7.6 / 5.1 s | 45k / 37k | 58.9 |
+  | 100 us of wfe | 41.8 G | 12.8 / 8.9 G | 8.1 / 5.4 s | 48k / 32k | 58.8-58.9 |
+
+  Core 1's cycles a frame: 36.6 -> 35.5 M (-3%); its busy share 81-82% -> 79-80%. The wfe wait spends a fifth of the
+  pause loop's extra cycles, as the cores sit clock-gated while they wait (the device was charging, so no current
+  was measured). An earlier run with a pause loop of 300 us: core 1 -4.5%, cores 0/2 +8 G.
+- **x86** waits no time by default: no sleep is saved there, but only sleepers are woken (the mutex and notify_all go).
+  A pause loop would cost a handheld's power (the Deck); AMD's MWAITX could do what wfe does.
+- Left on the game thread: the runtime's 9.4% (psq_store, rt_journal_store's 60 fps journal, the HLE imports' wrappers,
+  a `std::unordered_map<uint32, ...>` insertion in two game functions), the TLS resolver's 1.4%.
+
 ## P0: doesn't build, link or start on Android
 
 1. **Fibers** (`src/runtime/fiber/FiberUnix.cpp`): the switch is x86-64 asm; the fallback is `ucontext`, which bionic
