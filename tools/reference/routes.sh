@@ -9,6 +9,7 @@ route_info() {
         tour2) route=tour2-100.txt frames=2190 save=/wwhd/data/saves/wwhd_100 trace= ;;
         land2) route=land2-100.txt frames=2080 save=/wwhd/data/saves/wwhd_100 trace= ;;
         tour3) route=tour3-100.txt frames=2190 save=/wwhd/data/saves/wwhd_100 trace= ;;
+        b16rec) route=b16rec.txt frames=7200 save=${B16REC_SAVE:-/wwhd/data/saves/wwhd_100} trace= ;;   # B16 as the owner played it (their save: B16REC_SAVE)
         land3) route=land3-100.txt frames=2080 save=/wwhd/data/saves/wwhd_100 trace= ;;
         potthrow) route=potthrow-100.txt frames=1200 save=/wwhd/data/saves/wwhd_100 trace= ;;
         ladspawn) route=ladspawn-100.txt frames=1220 save=/wwhd/data/saves/wwhd_100 trace= ;;
@@ -93,4 +94,4 @@ route_info() {
         *) return 1 ;;
     esac
 }
-route_names="save route bandam gohmatail gohmarock tour tour2 land2 tour3 land3 potthrow ladspawn auction sidle2 sail menus picto menus2 telescope warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo tgstatue medliharp gtgrapple fwswitch moveramp moveangle movecircle moveturn movejump crate slope warppot climb drchaze"
+route_names="save route b16rec bandam gohmatail gohmarock tour tour2 land2 tour3 land3 potthrow ladspawn auction sidle2 sail menus picto menus2 telescope warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo tgstatue medliharp gtgrapple fwswitch moveramp moveangle movecircle moveturn movejump crate slope warppot climb drchaze"

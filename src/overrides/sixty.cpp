@@ -532,7 +532,7 @@ namespace
 	// microseconds (its low word), all host order). The owner plays, sees something wrong, presses F9: the frames that led to
 	// it. Game memory: it goes off the desktop to the worker.
 	std::deque<std::vector<uint8>> s_flight;
-	std::atomic<int> s_flightAsk{ 0 };              // 1: write at the next frame; 2: written
+	std::atomic<int> s_flightAsk{ 0 };              // 1: write at the next frame; 2: written; 3: the periodic write
 	uint32 s_flightDumps = 0;
 	void FlightWrite();
 	bool Flight()
@@ -548,11 +548,20 @@ namespace
 		return on;
 	}
 
+	// WWHD_FLIGHT_EVERY=SECONDS: the recorder also writes itself that often, to one file (PATH-latest.bin, replaced), for
+	// a device with no F9 (the Odin: the owner plays a route to be recorded, tools/sixty/flight2route.py makes it one)
+	uint32 FlightEvery()
+	{
+		static const uint32 every = [] { const char* e = getenv("WWHD_FLIGHT_EVERY"); return e ? (uint32)atoi(e) : 0u; }();
+		return every;
+	}
+
 	void FlightWrite()
 	{
 		static const std::string path = getenv("WWHD_FLIGHT");
 		static const long long started = (long long)time(nullptr);
-		const std::string name = path + "-" + std::to_string(started) + "-" + std::to_string(++s_flightDumps) + ".bin";
+		const std::string name = s_flightAsk.load() == 3 ? path + "-latest.bin"
+			: path + "-" + std::to_string(started) + "-" + std::to_string(++s_flightDumps) + ".bin";
 		if (FILE* f = fopen(name.c_str(), "wb"))
 		{
 			for (const auto& frame : s_flight)
@@ -592,6 +601,18 @@ namespace
 		{
 			FlightWrite();
 			s_flightAsk.store(2);
+		}
+		else if (const uint32 every = FlightEvery(); every && (tick2 & 1) == 0)
+		{
+			static auto s_last = std::chrono::steady_clock::now();
+			const auto now = std::chrono::steady_clock::now();
+			if (now - s_last >= std::chrono::seconds(every))
+			{
+				s_last = now;
+				const int was = s_flightAsk.exchange(3);       // 3: the periodic file
+				FlightWrite();
+				s_flightAsk.store(was);
+			}
 		}
 	}
 	std::vector<uint32> s_processes;               // every process that executed this whole tick
