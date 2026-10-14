@@ -4397,6 +4397,23 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   f_0251D864, reading the current buffer) saw that buffer as it was two steps before: even sim, drawn 0.40 into whole
   frames and 0.16 into half ones. Now the move's and the copy's stores aren't hidden (sixty.cpp's s_clothMove, the
   draw-list and JAudio stores' kind): Pdrgsh hz30 at N 2 4 blocks -> 0 (WWHD_60FPS_HIDE=0 showed it first).
+  The Magtail at N 4, fixed (u6-magtail, session qa; regress's stage_test 216, M_NewD2 room 12): not its line of sight
+  (+0x1A15, one of the trial's two stores only at N 4, differs from 30's only after the paths part). Its crawl on a
+  wall (+0x5AA at 0) builds a matrix from its pose (yaw +0x322, pitch +0x320, roll +0x324 at f_021D87A0's
+  021D94B8-021D94D0), casts four or six line checks from it, moves toward the point they find (cLib_addCalc2, stepped)
+  and stores the pitch of the surface they find (021D9714), which its tests then read (|pitch| < 0x1000: the path's
+  branch, which sets +0x5A4 = 0x800 and moves on, else 021D9BBC, which zeroes it). At 30 the tick's matrix is the pose
+  as the tick began. At N the later steps built it from the pitch the step before had stored, a pose 30 takes a tick
+  later: turning onto the wall (f1027-1032) its probes and target led 30's, its height stayed 1.2 units off (the tick
+  ends compared: 30's key 2t with N's last step 2t+1; the whole step's 2t is a quarter of a move along), and its pitch
+  passed the test 3 ticks early (the path at f1066, 30's at 1069), 21 ticks out of step from there. The crawl's
+  approaches once a tick (WWHD_DEBUG_ONCEATICK on their three calls) left it as it was; `late` on the pitch's store
+  brought it to 6.8. The fix: the step rule `start` (generate.py, rt_step_start in sixty_step.cpp: on an integer load,
+  the whole step notes what it loaded and the tick's later steps load that) on the three pose loads, `whole` on the
+  pitch's store (the tick's tests read the whole step's pitch, as 30's read the tick's). stage_test 216 at N 4
+  77.0/166.6 -> 6.6/95.4 (mean/max apart), at N 2 8.0/98.8 -> 6.4/94.4; its pitch on 30's in every tick of the crawl.
+  Known, not chased (at N 2 as before it): from f1274 it's 11.8 units off (after a 92-tick wait, both N), arrives late
+  at its path's point and walks past it where 30 stops for 72 ticks at f1382: the ~95 at the route's end.
 - **t-pausemenu M1-M3** (the owner's design: assets/pause_menu, its README the spec; frontend/pause_menu.cpp,
   ui_draw.cpp): Esc/F2 or the pad's SELECT (−, no longer the game's) opens it; the game held at a whole tick's top
   (os/savestate RequestHold), silent, over its blurred last frame; the menu drawn in software at the window's size from

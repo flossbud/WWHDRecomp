@@ -279,8 +279,10 @@ it between its show steps), against 30 as at 2:
 | 3 | 45 (42 before) | plants 82, sail 86, en-ph 105 | drcjar 714, medli 204 (new: the camera follows the thrown jar as 30's does, and its flight at N 3 differs) |
 | 4 | 44 (43 before) | plants 102, sail 62, tour3 76, en-ph 105 | land3 542 (ok with the camera's tick off: Link's early steps), drcjar 714 |
 
-The draw side (sea6's foam, Doc Bandam's banner, the Magtail at N 4) is session bottom's u6-draw. Details and leads:
-docs/handoff.md, u6-fixes.
+The draw side (sea6's foam, Doc Bandam's banner) is session bottom's u6-draw. The Magtail at N 4 (session qa's
+u6-magtail, fixed): its wall crawl's matrix at later steps came from the pitch the step before found, a tick ahead of
+30's; the step rule `start` keeps the tick's start pose (regress's 216 at N 4 77.0/166.6 -> 6.6/95.4, at N 2 8.0/98.8
+-> 6.4/94.4). Details and leads: docs/handoff.md, u6-fixes.
 
 ## U9: the draw side, the main core's profile (session bottom, 2026-10-12)
 

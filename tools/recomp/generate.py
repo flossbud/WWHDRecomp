@@ -116,6 +116,10 @@ rules, for the code of processes that run every frame with a time step h
                (the outcome that doesn't act) up to the tick's last step, which reads the noted one: the action at
                the tick's end, after its whole move, as at 30 (tested on its own steps, the half step started the
                swing after half a tick's move, half a move farther out: Link's grappling hook, procRopeReady)
+  start        on an integer load (lwz, lhz, lha, lbz) of a field the tick then changes: the load 30's tick makes
+               as the tick began, in every step of a stepping process's tick (rt_step_start, sixty_step.cpp): its
+               whole step notes what it loaded, the steps after it load that (the Magtail's pose for its line
+               checks' matrix: 30's matrix all tick, not the pose the step before found)
   drawsplit@REG a per-tick add in a converted actor's draw (a joint callback: a fan's spin): in a draw at 60
                (step 1) REG - REG/2 in the whole tick's draw, REG/2 in the half tick's, so its two draws add
                a tick's amount (an unconverted actor's half-tick draw is put back after the frame: only for
@@ -344,7 +348,7 @@ class Program:
                     assert ea not in rules, f"tick_rules.txt:{n}: {ea:08X} listed twice"
                     rules[ea] = (kind, arg, expect, what)
                     continue
-                if kind in ("spliti", "lagi", "drawlagi", "eqwhole", "gtwhole", "ltwhole"):
+                if kind in ("spliti", "lagi", "drawlagi", "eqwhole", "gtwhole", "ltwhole", "start"):
                     assert not arg, f"tick_rules.txt:{n}: {kind} takes no argument"
                     value = None
                 elif kind == "latch":
@@ -445,6 +449,8 @@ class Program:
                 return f"{ea:08X}: exact applies to an instruction writing a float (frsp, fmr, fsub...), not {i.op}"
             if kind == "lagw" and (i.op != "mullw" or r3 not in (f"r{i.rA}", f"r{i.rB}")):
                 return f"{ea:08X}: lagw applies to mullw rD, rA, rB with the multiplier rA or rB, not {i.op} ({r3})"
+            if kind == "start" and i.op not in START_OPS:
+                return f"{ea:08X}: start applies to an integer load ({', '.join(sorted(START_OPS))}), not {i.op}"
             if kind == "keep" and i.op not in KEEP_OPS:
                 return f"{ea:08X}: keep applies to {', '.join(sorted(KEEP_OPS))}, not {i.op}"
             return None
@@ -682,6 +688,8 @@ def emit_blocks(body, labels, loops=frozenset(), entry=None):
 
 
 WRITE = re.compile(r"\bwr(8|16|32|64)\(")   # a generated store's memory write (ppc_ops.h)
+# start's loads (rT the field as the tick began)
+START_OPS = {"lwz", "lhz", "lha", "lbz"}
 KEEP_OPS = {"addi", "addic", "add", "fadds", "fsubs", "fadd", "fsub", "fmuls", "fmadds", "fmsubs", "fnmadds", "fnmsubs"}
 # halfadd's instructions: those writing rD (rT for the loads), and the logical ones writing rA
 HALFADD_LOADS = {"lwz", "lhz", "lha", "lbz", "lwzx", "lhzx", "lhax"}
@@ -756,6 +764,10 @@ def apply_tick_rule(rule, i, lines, ea=0):
         idle = {"lt": "CR_BIT_LT", "gt": "CR_BIT_GT", "eq": "CR_BIT_EQ", "all": "-1"}[arg]
         return lines + [f"if (RT_STEPPED()) {{ void rt_step_latch(uint8*, uint32, int); rt_step_latch(ctx->cr + {i.crfD} * 4, "
                         f"{emit.hx(ea)}, {idle}); }}   // step rule: {what}"]
+    if kind == "start":
+        # a stepping process's whole step notes the load; the steps after it in the tick load that
+        return lines + [f"if (RT_STEPPED()) {{ uint32 rt_step_start(uint32, uint32); GPR({i.rT}) = rt_step_start(GPR({i.rT}), "
+                        f"{emit.hx(ea)}); }}   // step rule: {what}"]
     if kind == "spliti":
         imm = emit.hx(i.simm & 0xFFFFFFFF)
         return lines + [f"if (RT_STEPPED()) GPR({i.rD}) = GPR({i.rD}) - {imm} + rt_step_split({imm});   // step rule: {what}"]

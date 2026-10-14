@@ -204,6 +204,32 @@ void rt_step_latch(uint8* cr, uint32 site, int idle)
 	cr[idle] = 1;
 }
 
+// start step rules (tools/recomp/generate.py): a load of a field the tick then changes, read where 30's tick reads it as
+// the tick began. A whole step notes what it loaded by the process and the rule; the steps after it in the tick load
+// that. The Magtail (MT 216) builds its line checks' matrix from its pose (+0x322, +0x320, +0x324) and then stores the
+// pitch it finds (+0x320): at N the later steps built it from the pose the step before had found, a pose 30 only
+// takes the next tick, and while it turned onto the wall its probes and the point it moves toward led 30's, its
+// height 1.2 units off for good, its pitch over its 0x1000 test three ticks early (u6-magtail). A step whose whole
+// step noted none this tick (a branch the whole step didn't take) loads its own.
+namespace
+{
+	struct Start { uint32 tick, v; };
+	std::unordered_map<uint64, Start> s_start;
+}
+uint32 rt_step_start(uint32 v, uint32 site)
+{
+	const uint64 key = (uint64)g_rtActor << 32 | site;
+	const uint32 tick = wwhd::rt::SixtyFrom() != ~0u ? wwhd::os::SwapCount() - g_rtSubStep : wwhd::os::SwapCount();
+	if (!g_rtHalfTick)
+	{
+		s_start[key] = { tick, v };
+		return v;
+	}
+	if (const auto it = s_start.find(key); it != s_start.end() && it->second.tick == tick)
+		return it->second.v;
+	return v;
+}
+
 // surf step rules (tools/recomp/generate.py): a height put back on a surface (the water's) that the actor's
 // posMove then moves off by speed.y (+0x340). At 30 the tick puts it back and moves it a tick: speed.y + gravity
 // (+0x374), at least maxFallSpeed (+0x378). Sinking (speed.y <= 0: each step ends under the surface again and is

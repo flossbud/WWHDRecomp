@@ -6,6 +6,9 @@
 # mnemonic); `whole:r3=N` also sets r3 when a skipped call's caller tests the result. Evidence: the
 # GameCube decomp's functions (zeldaret/tww) matched call by call, and the 60 fps state probe and
 # store census (src/overrides/sixty.cpp, tools/sixty).
+# Step rules, for processes that step at 60 and above (*h@, k:, keep:, split@, eqwhole, latch:, start, ...): each
+# kind and what it does is in tools/recomp/generate.py's docstring (start: a load that reads, in every step of a
+# tick, what the whole step loaded: a field as 30's tick began).
 #
 # address   rule        instruction     what
 #
@@ -824,6 +827,17 @@
 021D8D54    whole       sth             mt: a countdown (+0x466) - 1
 021D8DD4    whole       sth             mt: a countdown (+0x582) - 1
 021D8DB0    whole       sth             mt: the counter +0x5AC back down (its + 1 is ruled above)
+# Its crawl on a wall (+0x5AA at 0; u6-magtail, session qa): it builds a matrix from its pose (yaw +0x322, pitch
+# +0x320, roll +0x324), casts its line checks from it, moves toward the point they find and stores the pitch of the
+# surface they find (+0x320), which its tests (|pitch| < 0x1000: the path, else 021D9BBC) then read. At 30 the tick's
+# matrix is the pose as the tick began, its tests the pitch it found. At N the later steps built the matrix from the
+# pitch the step before found, a pose 30 takes a tick later: turning onto the wall (route stage_test 216, M_NewD2 room
+# 12, f1027-1032) its probes and the point it moves toward led 30's, its height 1.2 units off from then on, and its
+# pitch passed the test three ticks early (it left its crawl at 1066 where 30's does at 1069): 77 units apart at N 4.
+021D94B8    start       lha             mt: the probes' matrix: its yaw (+0x322) as the tick began, in every step
+021D94C4    start       lha             mt: the probes' matrix: its pitch (+0x320) as the tick began, in every step
+021D94D0    start       lha             mt: the probes' matrix: its roll (+0x324) as the tick began, in every step
+021D9714    whole       sth             mt: the pitch its probes find (+0x320), once a tick: the whole step's, which the tick's tests read
 021DB1C8    *h@f10      fadds           mt move (1): current.pos.x += speed.x
 021DB1BC    *h@f0       fadds           mt move (1): current.pos.y += speed.y
 021DB1E8    *h@f7       fadds           mt move (1): current.pos.z += speed.z
