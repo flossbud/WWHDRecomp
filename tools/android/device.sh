@@ -55,7 +55,7 @@ files)
 run)
     "$adb" logcat -c
     sh input keyevent KEYCODE_WAKEUP      # a sleeping screen pauses the app at once
-    sh am start -W -n "$pkg/.WindSongActivity" ${ENV:+--es env "'$ENV'"}
+    sh am start -S -W -f 0x10008000 -n "$pkg/.WindSongActivity" ${ENV:+--es env "'$ENV'"}   # a new task: ENV always applies
     exec "$0" log "$@" ;;
 log)
     pid=""

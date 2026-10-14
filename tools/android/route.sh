@@ -36,7 +36,9 @@ while IFS= read -r line; do env="$env;${line#\#env }"; done < <(grep '^#env [A-Z
 echo "route.sh: $which ($route, $frames game frames: exit at swap $exit_frame) on the device"
 sh "logcat -c"
 sh "input keyevent KEYCODE_WAKEUP"
-sh "am start -W -n $pkg/.WindSongActivity --es env '$env'" >/dev/null
+# a new task every time (-S stops a backgrounded WindSong first; NEW_TASK|CLEAR_TASK): a plain start brings an old task
+# forward with its old intent, the env extra ignored, and the run would play in the player's own home
+sh "am start -S -W -f 0x10008000 -n $pkg/.WindSongActivity --es env '$env'" >/dev/null
 start=$(date +%s)
 for _ in $(seq 1 "${secs:-$((exit_frame / 40 + 60))}"); do
     sleep 1
