@@ -32,6 +32,7 @@ from=900; exit_frame=$((from + 2 * (frames - from)))
 env="WWHD_HOME=$home;CEMU_INPUT_SCRIPT=$home/route.txt;WWHD_START_SCREEN=0;WWHD_DEBUG_BOOT=1;WWHD_60FPS=1"
 env="$env;WWHD_60FPS_FROM=$from;WWHD_EXIT_FRAME=$exit_frame"
 while IFS= read -r line; do env="$env;${line#\#env }"; done < <(grep '^#env [A-Z_0-9]*=' "$ref/routes/$route" || true)
+[ -n "${ENV:-}" ] && env="$env;$ENV"                 # ENV="A=1;B=2": more of the run's variables (a test's)
 echo "route.sh: $which ($route, $frames game frames: exit at swap $exit_frame) on the device"
 sh "logcat -c"
 sh "input keyevent KEYCODE_WAKEUP"
@@ -42,4 +43,4 @@ for _ in $(seq 1 "${secs:-$((exit_frame / 40 + 60))}"); do
     [ -n "$(sh "pidof $pkg" | tr -d '\r')" ] || break
 done
 echo "route.sh: $(( $(date +%s) - start )) s"
-sh "cat $home/portable/log.txt" | grep -E "wwhd real time|Fatal|exit frame|FATAL" | cut -c1-220 || true
+sh "cat $home/portable/log.txt" | grep -E "wwhd real time|Fatal|exit frame|FATAL" | cut -c1-500 || true

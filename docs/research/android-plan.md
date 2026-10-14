@@ -164,6 +164,12 @@ the 100% save, 2 minutes at 60, the profiler at 64-deep stacks: a scratch script
     6-minute doze, the title with no start screen, 10 s periods: hints on 57.0, 58.3, 59.4, 59.9, 60.1 fps; off 57.2,
     58.5, 59.5, 59.6, 60.2: the same, and the ~51 fps state didn't come either time. Not kept; try again if the slow
     state is reproduced on purpose.
+  - **Two more tried in play (2026-10-14, session main; route sail, the system driver, 20 s simpleperf stat in the
+    60 part, A/B/A/B), neither kept:** (1) the write watch sparing the renderer's per-program compare (ProgramHash's
+    memcmp): the GPU thread 30.2 -> 29.6-30.9 M cycles a frame, within noise, sail's fps the same (branch phw-parked);
+    (2) WWHD_PIN=1, core 1's host thread on the X3 and the others on the A715s: 57.8-58.1 -> 58.3-58.5 fps, core 1's
+    thread 2.67 -> 2.70 GHz, but its pin doesn't hold (its Cpus_allowed back to 0-7 within seconds, something on the
+    device resets it; the 3-6 pins hold) (branch pin-parked). Sail's game thread runs ~2.7 GHz of the X3's 3.19.
 
 ## P0: doesn't build, link or start on Android
 
