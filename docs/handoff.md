@@ -4695,6 +4695,12 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
     checks all MATCH (diff 0 mismatches of 1,118,003, 15 captures PSNR inf); regress identical (da06a4ee); all 52
     routes ok; blacktest 6 ok, picto ok, statetest 2 ok (0 differ), bandam ok; predeploy-rt on the desktop worker ok
     (the 12 real-time routes, the soak 60.1 fps, the real-time state gate 17 ms).
+- **Deploy 15** (2026-10-14, main 071538da with PGO, on the owner's PC): the start screen fading into the live title,
+  the title's boat (b-titleboat), Doc Bandam's banner at N 2, the Android work's shared parts (window wait, the stores'
+  table, drivers' settings rows hidden off Android). predeploy (the desktop worker) 60 ok, 0 WARN, 0 FAIL, blacktest,
+  picto and bandam ok; predeploy-rt on the tip ok (the 12 real-time routes, the soak 60.1 fps, the state gate 17 ms);
+  the PGO build's own predeploy-rt ok (soak 60.1 fps, 0.1% late, work 99.9th 14.4 ms). Capture
+  shot-20261014-064605-591 (the save at f1100).
 - **B83 and B84 retested on the owner's copy** (deploy 14, main 76ae1920, 2026-10-13; fixed, waiting on the owner's
   verified). The owner's `~/wwhd-play/wwhd-null` is the real-time build (wwhd-play, PGO) under wwhd-null's name: it
   refuses the virtual clock, so predeploy's routes on it fail at the start ("no 'Run title' after 60s"; tools/reference/run.sh

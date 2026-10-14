@@ -159,6 +159,11 @@ the 100% save, 2 minutes at 60, the profiler at 64-deep stacks: a scratch script
     tried: if it's the governor ramping slowly after a deep doze (or the device's performance mode), a sustained
     performance hint from the app (Activity.setSustainedPerformanceMode, or Android's game mode API) may hold the
     clocks steady.
+    Tried 2026-10-14 (session main): Android's performance hints (ADPF: a session over the guest cores' host threads and
+    the GPU thread, each frame's critical work reported against 16.67 ms; branch adpf-parked, not merged). After a
+    6-minute doze, the title with no start screen, 10 s periods: hints on 57.0, 58.3, 59.4, 59.9, 60.1 fps; off 57.2,
+    58.5, 59.5, 59.6, 60.2: the same, and the ~51 fps state didn't come either time. Not kept; try again if the slow
+    state is reproduced on purpose.
 
 ## P0: doesn't build, link or start on Android
 
