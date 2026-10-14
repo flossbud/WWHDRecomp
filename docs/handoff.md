@@ -4390,6 +4390,13 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   step 0 -> 1, 0.40 the others; at N 2 too, 1.89 against 0.69, so 60's: no process's conversion changes it (each of the
   room's left out in turn), as with a draw reading a count the whole tick's draw has already moved on, the plants'
   g_Counter.mTimer; not found yet), the Earth Temple's 2 (Link's cap's tip, the skull door's top: small).
+  Doc Bandam's banner, found (u6-draw, session bottom): the two stands (STANDITEM 462, converted) share one dCloth
+  simulation whose points, normals and speeds are in .bss, two buffers a step apart (the move f_0251D4EC writes one
+  from the other and toggles the cloth's +0x1C0; a follower's f_0251EE3C copies the leader's). A half tick's draw pass
+  hides what converted executes wrote into .data/.bss (HideConvertedGlobals), so the banner's draw (its vertex fill
+  f_0251D864, reading the current buffer) saw that buffer as it was two steps before: even sim, drawn 0.40 into whole
+  frames and 0.16 into half ones. Now the move's and the copy's stores aren't hidden (sixty.cpp's s_clothMove, the
+  draw-list and JAudio stores' kind): Pdrgsh hz30 at N 2 4 blocks -> 0 (WWHD_60FPS_HIDE=0 showed it first).
 - **t-pausemenu M1-M3** (the owner's design: assets/pause_menu, its README the spec; frontend/pause_menu.cpp,
   ui_draw.cpp): Esc/F2 or the pad's SELECT (−, no longer the game's) opens it; the game held at a whole tick's top
   (os/savestate RequestHold), silent, over its blurred last frame; the menu drawn in software at the window's size from

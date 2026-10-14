@@ -996,13 +996,21 @@ namespace
 			(pc >= 0x027F1508u && pc < 0x027F1518u) || (pc >= 0x02801444u && pc < 0x0280E03Cu);
 	}
 
+	// - The cloth's points (dCloth, d_cloth_packet.cpp): a shared cloth (the Bandam banners' STANDITEM, two of them on
+	//   one simulation) keeps its points, normals and speeds in .bss, two buffers a frame apart (the move f_0251D4EC
+	//   writes one from the other and toggles +0x1C0; the others' copy, f_0251EE3C, takes the leader's). Only the cloth
+	//   reads them, its own draw (f_0251D864 fills the vertex arrays from the current buffer). Hidden, a converted
+	//   stand's half step left the draw pass the buffer it wrote two frames before: the banners moved 0.40 into whole
+	//   frames and 0.16 into half ones (hz30: 4 blocks on one phase in Pdrgsh). Not hidden: the draw sees its frame's.
+	int s_clothMove = 0;
+
 	void HalfTickStore(uint32 ea, uint32 size, uint32 pc)
 	{
 		if (Census())
 			CensusStore(ea, size, pc);
 		if (LiveStore(pc))
 			return;
-		if (s_converting && !s_convGlobalsHidden && size <= 32 && ea >= kGlobalsLow && ea < kGlobalsHigh &&
+		if (s_converting && !s_clothMove && !s_convGlobalsHidden && size <= 32 && ea >= kGlobalsLow && ea < kGlobalsHigh &&
 			PPCInterpreter_getCurrentInstance() == s_frameThread)
 		{
 			Saved& e = s_convGlobals.emplace_back();
@@ -1912,6 +1920,21 @@ namespace
 
 void orig_f_025B8B94(PPCInterpreter_t* __restrict ctx);
 // dSv_event_c::getEventReg(event r3, register r4) -> r3: forced under WWHD_DEBUG_FLAGS's er: (above)
+// dCloth's move and its shared copy (above, HalfTickStore): their stores into .bss aren't hidden from the draw pass
+void f_0251D4EC(PPCInterpreter_t* __restrict ctx)
+{
+	s_clothMove++;
+	orig_f_0251D4EC(ctx);
+	s_clothMove--;
+}
+
+void f_0251EE3C(PPCInterpreter_t* __restrict ctx)
+{
+	s_clothMove++;
+	orig_f_0251EE3C(ctx);
+	s_clothMove--;
+}
+
 void f_025B8BB0(PPCInterpreter_t* __restrict ctx)
 {
 	const ForcedFlags& f = Forced();
