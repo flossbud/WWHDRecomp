@@ -645,6 +645,42 @@
       "lane": "main",
       "complexity": 9,
       "name": "Round 14: [9] An Android port (the owner's ask, 2026-10-12; tested in game on the owner's AYN Odin 2 Portal: Snapdragon 8 Gen 2, Adreno 740, on the tailnet): A1 arm64: the runtime, our forks and Cemu's parts and the recompiled program built with the NDK for arm64 (Cemu's own arm64 paths; the x86-only spots: write_watch, PPCTimer, fibers, spinlocks, threads, profile), floats byte-exact (-ffp-contract=off), an arm64 Linux build's checks MATCH under qemu-user on the worker; A2 the app: SDL3's Android activity, Vulkan on Adreno (Qualcomm's driver, Turnip the fallback), the built-in pad as a gamepad, touch for the menu, the player's own dump chosen with the system's file picker (never shipped), portable/ in the app's storage, pause and resume; built on the worker (NDK, Gradle), the APK never in git; A3 on the Odin over adb on the tailnet: the routes, captures reviewed, 60 at its 1080p, thermals, the handheld preset; A4 the pause menu by touch, battery, 16K pages; custom GPU drivers (the owner's ask, Android only): import a driver package (a zip with meta.json and its .so: Qualcomm's Adreno drivers, Mesa's Turnip) into the app's storage and pick one in Setup and in Settings (Graphics: GPU driver: System / each imported one, Next start), loaded with libadrenotools (BSD-2) in place of the system's Vulkan driver; a driver that fails to start falls back to the system's with a note. Main starts A1 between deploys; A2 on goes to the first lane free. The worker's disk is at 93%: clean before the NDK and arm64 deps"
+    },
+    {
+      "id": "a4-cpu",
+      "lane": "top",
+      "complexity": 5,
+      "name": "Round 15: [5] Android speed, the game thread's host cost on the Odin (the owner's focus, 2026-10-14): kernel (the run queues' wakes, the scheduler lock), runtime, TLS; measured in play with tools/android/route.sh"
+    },
+    {
+      "id": "a4-gpu",
+      "lane": "bottom",
+      "complexity": 5,
+      "name": "Round 15: [5] Android speed, the GPU thread on the Odin: our renderer's per-draw cost (uniform uploads and zero fill, index copies, descriptors), measured in play"
+    },
+    {
+      "id": "a4-codegen",
+      "lane": "qa",
+      "complexity": 6,
+      "name": "Round 15: [6] Android speed, the generated code's quality on arm64 (byte-swapped memory, unused CR/XER, spills, the yield check): fixes in tools/recomp that help x86 too"
+    },
+    {
+      "id": "g-rework",
+      "lane": "bottom",
+      "complexity": 9,
+      "name": "Round 15: [9] Graphics rework for low-end devices (the owner's ask, 2026-10-14): research first (docs/research/graphics-rework.md), then the plan: not tweaks but whole systems, e.g. a native renderer of the game's scenes from its own draw structures instead of translating GX2 command streams draw by draw, our own shaders in place of the decompiled ones, batching and instancing, cheaper effects passes, render paths for tile-based mobile GPUs; each step measured on the Odin and the Deck class"
+    },
+    {
+      "id": "m-nocemu",
+      "lane": "main",
+      "complexity": 9,
+      "name": "Round 15: [9] No Cemu (the owner's ask, 2026-10-14): research first (docs/research/no-cemu-plan.md): every part of Cemu the program still builds, links or reads (OS libraries and our forks, Latte's shader decompiler, texture and address code, audio, config, logging, the vcpkg manifest, resources and game profiles, names), then the plan to replace each with our own until nothing named Cemu is built, linked or shipped"
+    },
+    {
+      "id": "m-windows",
+      "lane": "top",
+      "complexity": 8,
+      "name": "Round 15: [8] Windows port: the survey is done (docs/research/windows-plan.md); parked behind Android speed (the owner's choice, 2026-10-14)"
     }
   ],
   "later": [
