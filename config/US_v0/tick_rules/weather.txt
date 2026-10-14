@@ -11,11 +11,6 @@
 02578404    whole       bl 02577138     dKyw_wether_move (f_0257836C): the thunder's move once a tick
 02585C78    *h@f0       fadds           kyeff execute (the title screen): its sky's time (env +0x1020) + c a tick
 0257C11C    whole       bl 0256ca54     wether_move_draw: the poison mist's move once a tick
-025837FC    whole       bl 0256bb6c     f_02583678 (the fog's setup): the clouds' shadows' move once a tick
-0258392C    whole       bl 0256bb6c     f_02583678: the clouds' shadows' move (another branch)
-0258397C    whole       bl 0256bb6c     f_02583678: the clouds' shadows' move (another branch)
-025839B0    whole       bl 0256bb6c     f_02583678: the clouds' shadows' move (another branch)
-02583A8C    whole       bl 0256bb6c     f_02583678: the clouds' shadows' move (another branch)
 #
 # ---- the dust motes (housi; dKyr_housi_move f_02567F68, d_kankyo_rain.cpp; 300 of 0x50 bytes in the packet at
 # env +0xA78, from +0x9C): each drifts with the wind and its own speed factor (+0x34), wobbles on three
@@ -45,6 +40,40 @@
 025686DC    spliti      addi            housi: its alpha's phase + 600 a tick (put back near)
 0256877C    spliti      addi            housi: its alpha's phase + 600 a tick (put back)
 025687D0    spliti      addi            housi: its alpha's phase + 600 a tick (waiting)
+#
+# ---- the clouds' shadows, the Wind Temple's swirling mist (moya; cloud_shadow_move f_0256BB6C, d_kankyo_rain.cpp,
+# called from f_02583678, the moya setup in wether_move_draw; held whole there before: hz30 at N 4 in kaze,0
+# showed the mist moving on the tick's frame only). HD's differs from the GameCube's: up to 100 puffs of 0x4C bytes
+# in the packet at env +0xA84 (from +0xA0; their count +0x9C), its pulse phase (+0x988, + 260 a tick) and a scroll
+# (+0x98C, - c (1 + the wind's power) a tick, put back at a floor); a puff drifts with the wind by 40 (10 rising, mode
+# 1) x its speed (+0x38), rises c x its speed (mode 1) or its speed (M_DragB), takes a point wind's kick into +0x1C
+# (x 9 a tick, under 30; then cLib_addCalc toward 0, stepped) and moves by it x (1 + rndFX), drifts by its own
+# (+0x28..+0x30 / 360 - 0.5) x a stage's speed, and its phase (+0x3C) + c (1 + the wind's power) a tick; far from
+# the camera it is put back near it (random: a half step's draws are put back), its alpha and size made from where
+# it is each call. A step takes h of each
+0256BD28    spliti      addi            moya: the pulse phase (+0x988) + 260 a tick
+0256BD14    *h@f11      fsubs           moya: the scroll (+0x98C) - c (1 + the wind's power) a tick
+0256BF98    split@r23   add             moya: a puff's phase (+0x3C) + c (1 + the wind's power) a tick
+0256C0C0    *h@f13      fmadds          moya: y += c x its speed (+0x38) a tick (mode 1: rising)
+0256C0F0    *h@f9       fadds           moya: y += its speed a tick (M_DragB)
+0256C120    *h@f7       fmadds          moya: x += wind x 40 x its speed a tick
+0256C134    *h@f13      fmadds          moya: y += wind x 40 x its speed a tick
+0256C148    *h@f12      fmadds          moya: z += wind x 40 x its speed a tick
+0256C194    *h@f7       fmadds          moya: x += wind x 10 x its speed a tick (mode 1)
+0256C1A8    *h@f13      fmadds          moya: y += wind x 10 x its speed a tick (mode 1)
+0256C1BC    *h@f12      fmadds          moya: z += wind x 10 x its speed a tick (mode 1)
+0256C1F8    *h@f13      fmadds          moya: its kick x (+0x1C) += a point wind's x x 9 a tick
+0256C20C    *h@f12      fmadds          moya: its kick y (+0x20) += a point wind's y x 9 a tick
+0256C224    *h@f9       fmadds          moya: its kick z (+0x24) += a point wind's z x 9 a tick
+0256C28C    *h@f13      fmadds          moya: x += its kick x x (1 + rndFX) a tick
+0256C2A8    *h@f7       fmadds          moya: y += its kick y x (1 + rndFX) a tick
+0256C2C4    *h@f11      fmadds          moya: z += its kick z x (1 + rndFX) a tick
+0256C3F8    *h@f11      fmadds          moya: x += (+0x28 / 360 - 0.5) x speed a tick (its own drift)
+0256C408    *h@f0       fmadds          moya: y += (+0x2C / 360 - 0.5) x speed a tick
+0256C410    *h@f8       fmadds          moya: z += (+0x30 / 360 - 0.5) x speed a tick
+0256C4E0    *h@f11      fmadds          moya: x += (+0x28 / 360 - 0.5) x speed a tick (another stage's speed)
+0256C4F0    *h@f0       fmadds          moya: y += (+0x2C / 360 - 0.5) x speed a tick (another stage's speed)
+0256C4F8    *h@f8       fmadds          moya: z += (+0x30 / 360 - 0.5) x speed a tick (another stage's speed)
 #
 # ---- the wind lines (dKyr_wind_move f_025642AC, d_kankyo_rain.cpp; 30 at the env's mpWind): particle emitters set
 # where each line flies a tick: its swerve's phase (+0x2C, + 800 x the wind's power), its angles (+0x2E, +0x30)

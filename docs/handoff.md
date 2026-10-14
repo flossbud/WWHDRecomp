@@ -2533,7 +2533,7 @@ it in a window; D21 "Step 2"):**
     update lowers them): hz30 at the Outset dock in rain 355 blocks (held) -> 0, in snow 816 -> 0; a drop
     -60 a tick at 30, -30 a frame at 60; a flake's phase 0.02 a tick, 0.01 a frame; the sky's scroll
     +100 a tick, +50 a frame, 60's half frames equal to 30's ticks. Still held whole: the poison mist
-    (f_0256CA54, ~20 per-tick stores), the clouds' shadows (f_0256BB6C, ~21, several states), thunder (its
+    (f_0256CA54, ~20 per-tick stores), the clouds' shadows (f_0256BB6C, ~21, several states; stepped since moya, below), thunder (its
     flashes start on a random draw a tick: whole is right). Two calls must not be held: f_02560E08 (a
     getter: its f1 result would be stale) and f_0256DC04 (the mist's packet setup).
     Session top's outdoor sweep left weather leads (its handoff entry). Read so far: the day clock
@@ -4441,6 +4441,23 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   2 -> 0 (the middle third by phase 0.22/0.18/0.15/0.34 -> 0.07/0.07/0.07/0.08), at N 2 the change a swap halves;
   Pdrgsh at N 4 0 (Doc Bandam's 5, the banner above), sea6 0. A lead: sea6 at N 4 a few blocks below the middle
   (x 888-1008, y 720-744) change ~4x more into one phase than the others, under hz30's bar.
+  The Wind Temple's mist at N 4, fixed (moya, session bottom): a sweep at N 4 with CamPace on (121 swaps from game
+  frame 1300 at sea,0,2, kaze,0, Siren,0,6, Omori,0, M_NewD2,8,2, sea,0,44,2, and sea6 and M_Dai,0 with the camera
+  swung: 0 blocks, or a few that CamPace off left the same) found kaze,0's swirling mist moving on the tick's frame
+  only (the change a swap by phase, top/middle/bottom thirds, 0.25/0.43/0.34 then about 0.00/0.10/0.14 three times;
+  a box of it 0.8-1.4 on the tick's frame, 0.00 on the others). It is the clouds' shadows (moya, cloud_shadow_move
+  f_0256BB6C, HD's own: up to 100 puffs of 0x4C bytes in env +0xA84's packet), held whole in tick_rules/weather.txt
+  since the weather work. Now stepped (weather.txt, its rules' block): the packet's pulse phase and scroll, each
+  puff's drift with the wind, rise, point-wind kick and the move by it, its own drift and its phase; its approaches
+  are the stepped cLib_addCalc/cLib_chaseF; its alpha and size are made from where it is each call. hz30 in kaze,0
+  at N 4: 0.08/0.21/0.21, 0.10/0.21/0.20, 0.09/0.20/0.20, 0.08/0.21/0.20; at N 2 0.33/0.44/0.36 and 0.03/0.26/0.16
+  -> 0.08/0.34/0.61 and 0.08/0.35/0.63; swung at N 4, 0 blocks. M_NewD2,8,2 (moya too) at N 4: 0 -> 2 blocks, both
+  noisy on every phase (the lava's flicker, 1-8 a swap on all four), the thirds a little more even. Its puffs put back
+  near the camera draw random numbers; a half step's are made up by RNDSYNC. The stream in kaze (WWHD_DEBUG_RNDSEED
+  from 1000, seeds as each process's execute starts, 499 ticks): ticks first apart after KYEFF (478) at N 2 75 before
+  and 76 after, at N 4 81 and 74. So moya leaves it as it was. Leads: there, ~380 ticks first apart after Link (168),
+  before and after (a draw count of his own at 60 in kaze); the poison mist (f_0256CA54, the Earth Temple's) still
+  held whole.
 - **t-pausemenu M1-M3** (the owner's design: assets/pause_menu, its README the spec; frontend/pause_menu.cpp,
   ui_draw.cpp): Esc/F2 or the pad's SELECT (−, no longer the game's) opens it; the game held at a whole tick's top
   (os/savestate RequestHold), silent, over its blurred last frame; the menu drawn in software at the window's size from
