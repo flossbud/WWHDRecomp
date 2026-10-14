@@ -284,6 +284,32 @@ game thread 41.91/42.17 -> 39.18/39.18 G cycles (-6.8%; 15.81/15.86 -> 15.26/15.
 2.57 GHz), the scheduler thread 79-80% -> 76-77% busy, sail's late windows 58.5/58.8 and 59.1/58.4 -> 59.5/58.7 and
 59.4/59.4 fps, the GPU thread 37.2/36.9 -> 36.4/36.0 G.
 
+## A4 the GPU thread (2026-10-14, session bottom: a4-gpu)
+- **Where the NullGPU thread's cycles go on the Odin** (top's 18:29 profile, 40 s, 70.4 G cycles; each sample put on
+  the innermost function of ours on its stack, then split by where the leaf is: ours 36%, the driver 33%, libc 26%,
+  the kernel 4%): RendererDraw's own calls 20.7% (the driver 10.9: binds, draws; libc 8.0: the copies),
+  BeginRendering 13.6% (vkCmdBeginRendering: Qualcomm's driver allocates GPU memory at each, gsl_memory_alloc ->
+  kgsl_sharedmem_alloc -> an ioctl), Descriptors 10.5% (ours 5.0, the driver's set allocation and update 4.6),
+  BeginSlot 8.6% (the per-submit resets of the command buffer and the descriptor pool), SampleTexture 4.9%,
+  ProgramHash 4.8%, processBuffer 4.8%, Submit 3.9%, packet 3.4%, hash map lookups ~4.5%, PipelineLayout 2.4%.
+  (A scratch script over the NDK's simpleperf_report_lib; the profile and its output stay on the worker.)
+- **What a frame uploads** (WWHD_RENDER_STATS=N now also prints, every N frames, a frame's bytes into the ring by kind,
+  how much of each repeats an upload earlier in the ring's space, the binds, and the render passes with the calls that
+  ended them; sail at 60, ~1,300 draws): uniform vars 860 KB (31% a repeat), uniform blocks 134 KB copied + 4.2 MB
+  of zeros (92% a repeat: a dynamically indexed block takes a 64 KB range, filled past its bytes with zeros every
+  draw), indices from the decode cache 1 MB (72% a repeat), vertices 6.1 MB (after the dedupe), no descriptor bind
+  the last draw's, 413 KB of programs compared.
+- **Kept: the ring's repeats reused** (draw.cpp): a uniform block whose address and sizes match an upload earlier in
+  the ring's current space binds that copy when its bytes still equal it (memcmp of its bytes only, against a copy
+  kept beside), and a decode-cache hit already copied into the ring this frame binds that copy. The draws read the
+  same bytes: checks all MATCH, captures PSNR inf. Sail at 60: blocks 134 KB + 4.2 MB -> 20 KB + 316 KB a frame.
+  On the Odin (sail, the system driver, gpustat.sh, A/B/A/B by WWHD_UBLOCK_REUSE=0 and WWHD_INDEX_REUSE=0): the
+  NullGPU thread 34.99 / 35.04 G cycles in 20 s off, 34.60 / 34.35 on (-1.5%, both on below both off), fps the same
+  (58.0-58.6): the zeros' memset was 2.8% of the thread in the profile.
+- **Next**: the render passes. BeginRendering is 13.6% of the thread on Qualcomm's driver: fewer passes a frame
+  (the counts and their ending calls are in the stats line now), passes that share their targets merged, and load
+  and store ops the tiler needs no reload for; then the descriptor sets (10.5%) and BeginSlot's resets (8.6%).
+
 ## P0: doesn't build, link or start on Android
 
 1. **Fibers** (`src/runtime/fiber/FiberUnix.cpp`): the switch is x86-64 asm; the fallback is `ucontext`, which bionic

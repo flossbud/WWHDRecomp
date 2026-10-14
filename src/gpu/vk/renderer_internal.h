@@ -5,6 +5,7 @@
 #include "vk.h"
 #include <map>
 #include <set>
+#include <source_location>
 #include <span>
 #include <unordered_map>
 
@@ -209,7 +210,7 @@ namespace wwhd::gpu
 	// draw.cpp
 	void DrawInit();
 	void QueueReadback(uint32 addr, uint32 gx2, uint32 pitch, uint32 h);   // a linear colour buffer drawn into (RendererReadbacks)
-	void EndRendering();                                          // before anything outside a render pass
+	void EndRendering(std::source_location where = std::source_location::current());   // before anything outside a render pass
 	void OnSubmitted();                                           // per-frame resources can be reused
 	void ForgetSets();                                            // an image view is destroyed: no set may be reused
 	void DrawStats(uint32 frame);

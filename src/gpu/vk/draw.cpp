@@ -80,6 +80,9 @@ namespace wwhd::gpu
 		// content's, as before; hashing every program byte by byte each frame was still 9% of the
 		// render thread (docs/research/perf-baseline.md). The per-draw table is larger too: two
 		// programs sharing a slot of the old 1,024 hashed each other out within a frame.
+		void StatProgram(uint32 size);                          // WWHD_RENDER_STATS (below)
+		void StatPass();
+
 		uint64 ProgramHash(const uint8* code, uint32 size)
 		{
 			struct Entry { const uint8* code; uint32 size, frame; uint64 hash; };
@@ -90,6 +93,7 @@ namespace wwhd::gpu
 			struct Known { std::vector<uint8> bytes; uint64 hash; };
 			static std::unordered_map<const uint8*, Known> s_known;
 			Known& k = s_known[code];
+			StatProgram(size);
 			if (k.bytes.size() != size || memcmp(k.bytes.data(), code, size) != 0)
 			{
 				k.bytes.assign(code, code + size);
@@ -641,6 +645,7 @@ namespace wwhd::gpu
 			ri.pDepthAttachment = t.depth ? &depth : nullptr;
 			ri.pStencilAttachment = t.depth && (t.depth->aspect & VK_IMAGE_ASPECT_STENCIL_BIT) ? &depth : nullptr;
 			vkCmdBeginRendering(s.cmd, &ri);
+			StatPass();
 			s_current = t;
 			s_rendering = true;
 		}
@@ -1116,10 +1121,38 @@ namespace wwhd::gpu
 					((uint64)k.type << 4 | k.quads << 2 | k.strip << 1 | k.u32) * 0x9E3779B97F4A7C15ull);
 			}
 		};
-		struct IndexEntry { std::vector<uint8> src, out; uint32 count = 0, max = 0; };
+		struct IndexEntry { std::vector<uint8> src, out; uint32 count = 0, max = 0; VkDeviceSize ringOff = 0; uint64 ringEpoch = ~0ull; };
 		std::unordered_map<IndexKey, IndexEntry, IndexKeyHash> s_indexCache;
 		size_t s_indexCacheBytes = 0;
 		uint64 s_indexHits = 0, s_indexMisses = 0;            // WWHD_RENDER_STATS's line
+		uint32 s_statsEvery = 0;
+
+		// WWHD_RENDER_STATS's upload counts (a4-gpu): the bytes a frame put into the ring by kind, and how many of them repeat
+		// an upload of the same bytes earlier in the ring's current space (what reusing its offset would spare)
+		struct UploadStats
+		{
+			uint64 varsBytes = 0, varsRepeat = 0, blockBytes = 0, blockZero = 0, blockRepeat = 0, idxBytes = 0, idxRepeat = 0,
+				vtxBytes = 0, binds = 0, bindsSame = 0, vbufBinds = 0, progCmp = 0, draws = 0, passes = 0;
+			std::map<std::string, uint64> ends;                  // render passes ended, by the call that ended them
+			std::unordered_set<uint64> seen;
+			uint64 epoch = ~0ull;
+			bool Seen(uint64 h)
+			{
+				if (epoch != s.ring.epoch)
+					seen.clear(), epoch = s.ring.epoch;
+				return !seen.insert(h).second;
+			}
+		} s_up;
+		void StatPass()
+		{
+			if (s_statsEvery)
+				s_up.passes++;
+		}
+		void StatProgram(uint32 size)
+		{
+			if (s_statsEvery)
+				s_up.progCmp += size;
+		}
 		bool IndexCacheOn()
 		{
 			static const bool on = [] { const char* e = getenv("WWHD_INDEXCACHE"); return !(e && atoi(e) == 0); }();
@@ -1145,10 +1178,25 @@ namespace wwhd::gpu
 			auto it = s_indexCache.find(key);
 			if (it != s_indexCache.end() && (!src || memcmp(it->second.src.data(), src, srcBytes) == 0))
 			{
-				const IndexEntry& e = it->second;
+				IndexEntry& e = it->second;
 				Indices out;
-				out.offset = RingAlloc((VkDeviceSize)e.out.size() + 4, 4);
-				memcpy(s.ring.data + out.offset, e.out.data(), e.out.size());
+				// an entry already copied into the ring's current space binds that copy (a4-gpu: 72% of the index bytes a
+				// frame on sail): its bytes are the entry's, which a miss would have replaced. WWHD_INDEX_REUSE=0: copied each draw
+				static const bool reuse = [] { const char* v = getenv("WWHD_INDEX_REUSE"); return !(v && atoi(v) == 0); }();
+				if (reuse && e.ringEpoch == s.ring.epoch)
+					out.offset = e.ringOff;
+				else
+				{
+					out.offset = RingAlloc((VkDeviceSize)e.out.size() + 4, 4);
+					memcpy(s.ring.data + out.offset, e.out.data(), e.out.size());
+					e.ringOff = out.offset, e.ringEpoch = s.ring.epoch;
+				}
+				if (s_statsEvery)
+				{
+					s_up.idxBytes += e.out.size();
+					if (s_up.Seen(Mix(Mix(Mix(Mix(key.addr, key.count), key.restart), key.type | key.quads << 8 | key.strip << 9 | key.u32 << 10), 0x3333)))
+						s_up.idxRepeat += e.out.size();
+				}
 				out.count = e.count;
 				out.max = e.max;
 				out.type = u32 ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
@@ -1169,6 +1217,7 @@ namespace wwhd::gpu
 			e.out.assign(s.ring.data + out.offset, s.ring.data + out.offset + (size_t)out.count * elem);
 			e.count = out.count;
 			e.max = out.max;
+			e.ringOff = out.offset, e.ringEpoch = s.ring.epoch;     // the decode's own output: the same bytes
 			s_indexCacheBytes += e.src.size() + e.out.size();
 			return out;
 		}
@@ -1323,6 +1372,12 @@ namespace wwhd::gpu
 				float v[4] = { s_fragScale[0], s_fragScale[1], (float)(sint32)viewportW, (float)(sint32)viewportH };
 				memcpy(at(sh.uniforms.offset_fragCoordScale), v, 16);
 			}
+			if (s_statsEvery)
+			{
+				s_up.varsBytes += size;
+				if (s_up.Seen(Mix(Mix(HashBytes(data, size), size), 0x1111)))
+					s_up.varsRepeat += size;
+			}
 			return off;
 		}
 
@@ -1349,11 +1404,41 @@ namespace wwhd::gpu
 			static const bool full = [] { const char* e = getenv("WWHD_UBLOCK_FULL"); return e && atoi(e) == 1; }();
 			if (full)
 				readable = 65536;
-			VkDeviceSize off = RingAlloc(readable, s.props.limits.minUniformBufferOffsetAlignment);
 			uint32 copy = phys ? std::min<uint32>(size, readable) : 0;
+			const uint8* src = copy ? memory_getPointerFromPhysicalOffset(phys) : nullptr;
+			// a block an earlier draw put in the ring's current space with the same bytes binds that copy (a4-gpu: on sail 92%
+			// of the block bytes a frame repeat one, nearly all of them the zeros after a dynamically indexed block's bytes):
+			// keyed by its address and sizes, its bytes checked against the copy's, so the draw reads what it would have.
+			// WWHD_UBLOCK_REUSE=0: filled each draw
+			static const bool reuse = [] { const char* e = getenv("WWHD_UBLOCK_REUSE"); return !(e && atoi(e) == 0); }();
+			struct Filled { MPTR phys; uint32 copy, readable; uint64 epoch; VkDeviceSize off; std::vector<uint8> bytes; };
+			static std::unordered_map<uint64, Filled> s_filled;
+			Filled* f = nullptr;
+			if (reuse)
+			{
+				f = &s_filled[(uint64)phys << 32 ^ (uint64)copy << 15 ^ readable];
+				if (f->epoch == s.ring.epoch && f->phys == phys && f->copy == copy && f->readable == readable &&
+					(!copy || memcmp(f->bytes.data(), src, copy) == 0))
+				{
+					s_lastBlock = { f->off, copy, readable, phys ? phys : 1u };
+					return f->off;
+				}
+			}
+			VkDeviceSize off = RingAlloc(readable, s.props.limits.minUniformBufferOffsetAlignment);
 			if (copy)
-				memcpy(s.ring.data + off, memory_getPointerFromPhysicalOffset(phys), copy);
+				memcpy(s.ring.data + off, src, copy);
 			memset(s.ring.data + off + copy, 0, readable - copy);
+			if (f)
+			{
+				f->phys = phys, f->copy = copy, f->readable = readable, f->epoch = s.ring.epoch, f->off = off;
+				f->bytes.assign(src, src + copy);
+			}
+			if (s_statsEvery)
+			{
+				s_up.blockBytes += copy, s_up.blockZero += readable - copy;
+				if (s_up.Seen(Mix(Mix(HashBytes(s.ring.data + off, readable), readable), 0x2222)))
+					s_up.blockRepeat += readable;
+			}
 			s_lastBlock = { off, copy, readable, phys ? phys : 1u };   // WWHD_MOTION's history (phys 0 marks the vars)
 			return off;
 		}
@@ -1508,7 +1593,6 @@ namespace wwhd::gpu
 		}
 
 		uint64 s_draws = 0, s_skipped = 0;
-		uint32 s_statsEvery = 0;
 
 		// WWHD_RENDER_TRACE=FRAME:ADDR logs every draw into the color target at ADDR (hex) during swap
 		// interval FRAME (after the FRAME-1th swap): programs, alpha test, depth, and each pixel
@@ -1735,10 +1819,13 @@ namespace wwhd::gpu
 			s_statsEvery = (uint32)atoi(e);
 	}
 
-	void EndRendering()
+	void EndRendering(std::source_location where)
 	{
 		if (s_rendering)
 		{
+			if (s_statsEvery)
+				s_up.ends[fmt::format("{}:{}", std::string_view(where.file_name()).substr(std::string_view(where.file_name()).rfind('/') + 1),
+					where.line())]++;
 			vkCmdEndRendering(s.cmd);
 			s_rendering = false;
 			timing::Mark(timing::Kind::Other);
@@ -1761,6 +1848,28 @@ namespace wwhd::gpu
 	// WWHD_RENDER_STATS=N: a line every N frames
 	void DrawStats(uint32 frame)
 	{
+		if (s_statsEvery && frame % s_statsEvery == 0)
+		{
+			const double n = s_statsEvery, kb = 1024.0 * n;
+			Log(fmt::format("frame {}: a frame {:.0f} draws; uniform vars {:.0f} KB ({:.0f}% a repeat), blocks {:.0f} KB copied + {:.0f} KB "
+				"zeros ({:.0f}% a repeat), indices from the cache {:.0f} KB ({:.0f}% a repeat), vertices {:.0f} KB; descriptor binds "
+				"{:.0f} ({:.0f}% the last draw's), vertex buffer binds {:.0f}; program bytes compared {:.0f} KB",
+				frame, s_up.draws / n, s_up.varsBytes / kb, s_up.varsBytes ? 100.0 * s_up.varsRepeat / s_up.varsBytes : 0.0,
+				s_up.blockBytes / kb, s_up.blockZero / kb, s_up.blockBytes + s_up.blockZero ? 100.0 * s_up.blockRepeat / (s_up.blockBytes + s_up.blockZero) : 0.0,
+				s_up.idxBytes / kb, s_up.idxBytes ? 100.0 * s_up.idxRepeat / s_up.idxBytes : 0.0, s_up.vtxBytes / kb,
+				s_up.binds / n, s_up.binds ? 100.0 * s_up.bindsSame / s_up.binds : 0.0, s_up.vbufBinds / n, s_up.progCmp / kb));
+			s_up.varsBytes = s_up.varsRepeat = s_up.blockBytes = s_up.blockZero = s_up.blockRepeat = s_up.idxBytes = s_up.idxRepeat = 0;
+			std::vector<std::pair<uint64, std::string>> ends;
+			for (auto& [where, k] : s_up.ends)
+				ends.push_back({ k, where });
+			std::sort(ends.rbegin(), ends.rend());
+			std::string top;
+			for (size_t i = 0; i < ends.size() && i < 8; i++)
+				top += fmt::format("{}{} {:.1f}", i ? ", " : "", ends[i].second, ends[i].first / n);
+			Log(fmt::format("frame {}: a frame {:.1f} render passes; ended by {}", frame, s_up.passes / n, top));
+			s_up.ends.clear();
+			s_up.vtxBytes = s_up.binds = s_up.bindsSame = s_up.vbufBinds = s_up.progCmp = s_up.draws = s_up.passes = 0;
+		}
 		if (s_statsEvery && frame % s_statsEvery == 0)
 			Log(fmt::format("frame {}: {} draws, {} skipped; {} shaders, {} pipelines; decoded indices {} reused, {} decoded; "
 				"descriptor sets {} reused, {} written",
@@ -2196,6 +2305,8 @@ namespace wwhd::gpu
 				if (!seen.insert(((uint64)b[0] << 32) | bytes).second)
 					repeat += bytes;
 			}
+			if (s_statsEvery)
+				s_up.vtxBytes += bytes;
 			if (b[0])
 				memcpy(s.ring.data + off, memory_getPointerFromPhysicalOffset(b[0]), bytes);
 			else
@@ -2253,6 +2364,17 @@ namespace wwhd::gpu
 		const bool known = bindCache && b.valid;
 		if (!known || b.pipeline != pipeline)
 			vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+		if (s_statsEvery)
+		{
+			static VkDescriptorSet lastSets[2];
+			static std::vector<uint32> lastOffsets;
+			static VkPipelineLayout lastLayout;
+			s_up.binds++, s_up.draws++;
+			if (known && lastLayout == layout && lastSets[0] == sets[0] && lastSets[1] == sets[1] && lastOffsets == dynamicOffsets)
+				s_up.bindsSame++;
+			lastSets[0] = sets[0], lastSets[1] = sets[1], lastOffsets = dynamicOffsets, lastLayout = layout;
+			s_up.vbufBinds += vbufs.size();
+		}
 		vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 2, sets, (uint32)dynamicOffsets.size(), dynamicOffsets.data());
 		for (auto& [binding, off] : vbufs)
 			vkCmdBindVertexBuffers(s.cmd, binding, 1, &s.ring.buffer, &off);
