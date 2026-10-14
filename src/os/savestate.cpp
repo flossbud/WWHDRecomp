@@ -71,8 +71,9 @@ namespace wwhd::state
 	{
 		constexpr uint32 kSavePoint = 0x0274C264;      // fw_procFrame: where the parked main thread resumes
 		// what a record carries changes: kVersion goes up (savestate.h, Record). 2: each record framed with its length;
-		// 3: sixty.step's toe and position histories as U3 keeps them (N steps a tick): a 2 failed in that record, half loaded
-		constexpr uint32 kVersion = 3;
+		// 3: sixty.step's toe and position histories as U3 keeps them (N steps a tick): a 2 failed in that record, half loaded;
+		// 4: the 60 fps layer's camera pace (u6-draw)
+		constexpr uint32 kVersion = 4;
 		constexpr uint32 kBlock = 0x10000;
 
 		enum class Action { None, Census, Save, Load, Hold };

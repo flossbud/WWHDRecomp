@@ -4414,6 +4414,23 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   77.0/166.6 -> 6.6/95.4 (mean/max apart), at N 2 8.0/98.8 -> 6.4/94.4; its pitch on 30's in every tick of the crawl.
   Known, not chased (at N 2 as before it): from f1274 it's 11.8 units off (after a 92-tick wait, both N), arrives late
   at its path's point and walks past it where 30 stops for 72 ticks at f1382: the ~95 at the route's end.
+  sea6's foam at N 4, found (u6-draw, session bottom): not the sea. Its counts step evenly at N 4 (a probe of GetRatio,
+  AddCounter and the draw's scroll: the ratios 0.00125 a step, the scroll c + 1 + i/4), and the near sea moved ~1.6x on
+  the swap into the tick's last frame while the far sea and the sky moved evenly: the camera. Its show steps (subs 0
+  to N - 2, the camera's tick above) chase their targets from the tick's start a step at a time and land short of their
+  share of 30's tick (the eye sinking with the boat 1.435, 1.437, 1.427 a step, then the tick's step 1.76). Now a show
+  step's view (fovy, eye, center) is drawn as the tick's start plus its move times the last tick's move over its show
+  steps' (their (N - 1)/N share), clamped 1/2..2, cuts (300 units, 10 degrees) and a camera at rest as they are, to
+  the bit; the camera's bytes are put back after its draw (sixty.cpp's CamPace, WWHD_60FPS_CAMPACE=0 off). sea6 hz30
+  at N 4 38 blocks -> 0, the change a swap by phase 1.64/1.58/1.60/2.56 -> 1.85/1.80/1.81/1.86 (the bottom third); at
+  N 2 0 as before, its two phases 2.16/2.19. What a draw makes of the drawn view does reach the game: paced in
+  first-person aim, gohmarock FAILed (Link 185.8 units from 30's at the end, 0.6 unpaced): Link's draw puts his sight on
+  the screen with the drawn view (+0x5908/+0x5918) and the camera's tick after the throw reads it (its fovy 60.59
+  against 59.28 there). Found by pacing windows of game frames (only 1131-1170 mattered) and a probe of Link's draw's
+  writes; the camera's own draw writes (its +0x204-0x20C, +0x85C-0x974, the matrix at 0x104B45F8) put back at the next
+  frame's top changed nothing. So a first-person aim draws as it is: camera +0x848 is 1 in every one (bow, boomerang,
+  hookshot, grappling hook; 0 or 2 otherwise, sailing too). The ratios are host state: in save states (statetest
+  tour3 2 differ and sail 1 without; the state format's version 3 -> 4).
 - **t-pausemenu M1-M3** (the owner's design: assets/pause_menu, its README the spec; frontend/pause_menu.cpp,
   ui_draw.cpp): Esc/F2 or the pad's SELECT (−, no longer the game's) opens it; the game held at a whole tick's top
   (os/savestate RequestHold), silent, over its blurred last frame; the menu drawn in software at the window's size from
@@ -4627,7 +4644,7 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
     controller's sampling; the 60 fps layer's carried values; pacing), then guest memory: every mapped range in 64 KiB
     blocks, zero ones flagged, written on a load only where they differ (untouched pages stay unbacked; the write watch
     unprotects first so the texture cache hashes again).
-  - *The format's version* (savestate.cpp kVersion, 3): a change to what a record carries bumps it (savestate.h,
+  - *The format's version* (savestate.cpp kVersion, 4 since u6-draw's camera pace): a change to what a record carries bumps it (savestate.h,
     Record), and a state of another version is refused before anything is applied ("a state of another build's format":
     the menu says so and the game goes on). U3 changed sixty.step's histories without it, and a state from before U3
     (deploy 11's slots, the Deck's B16 captures) failed in that record, half loaded: the process stopped.

@@ -2912,6 +2912,115 @@ namespace
 			}
 		s_cam.restored = true;
 	}
+
+	// The show steps drawn at the tick's pace (u6-draw, session bottom). Each show step chases its targets from the
+	// tick's start a step at a time, and a step's approach toward a target that moves on with it lands short of its
+	// share of 30's tick: on the sea at N 4 (sea,0,6, the camera sinking ~6 units a tick with the boat) the show steps
+	// moved the eye 1.43 each and the tick's step 1.76, and the near sea (the foam) stepped into the tick's last frame
+	// (hz30 38 blocks; at N 2 1.06 against 0.81, under the scan's bar). As the camera draws a show step, its view
+	// (fovy +0xD4, eye +0xDC, center +0xE8: what its draw makes the view matrix of) is drawn as the tick's start plus
+	// the show step's move times r, the last tick's move over its show steps' (their (N - 1)/N share), clamped to
+	// 1/2..2; the camera's own bytes are put back after its draw (what the draw makes of the view, its matrices, stays
+	// to the next draw, as a show step's did). A camera at rest, and a cut (over 300 units or 10 degrees in a tick or a
+	// show step: the boat's camera moves ~60 a tick), draws as it is, to the bit, and so does a first-person aim
+	// (camera +0x848 1: the bow's, the boomerang's, the hookshot's, the grappling hook's): Link's draw puts his sight
+	// on the screen with the drawn view (+0x5908/+0x5918, its screen place) and the camera's tick after the throw
+	// reads it (gohmarock paced there: the camera's fovy 1.3 degrees off at the throw's tick, Link 185.8 units from
+	// 30's at the end against 0.6). The ratios are in save states. WWHD_60FPS_CAMPACE=0: off.
+	bool CamPace()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_CAMPACE"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	constexpr uint32 kCamView[7] = { 0xD4, 0xDC, 0xE0, 0xE4, 0xE8, 0xEC, 0xF0 };   // fovy, eye, center
+	constexpr uint32 kCamGroup[7] = { 0, 1, 1, 1, 2, 2, 2 };
+	constexpr double kCamStill[3] = { 1e-6, 0.01, 0.01 };      // a move's square below this: at rest (fovy in degrees)
+	constexpr double kCamCut[3] = { 100.0, 9e4, 9e4 };         // ... above this: a cut (10 degrees, 300 units)
+	constexpr uint32 kCamAim = 0x848;                          // 1 in a first-person aim (below)
+	struct CamPaceState
+	{
+		uint32 proc = 0, id = 0, frame = ~0u;          // the last tick's last show step: its camera and game frame
+		float start[7] = {}, show[7] = {};              // its tick's start, its view after that show step
+		float r[3] = { 1, 1, 1 };                       // this tick's ratios (fovy, eye, center)
+	};
+	CamPaceState s_camPace;
+	struct CamPaced { uint32 proc = 0; uint32 drawn[7] = {}, kept[7] = {}; };
+
+	void CamPaceBefore(uint32 proc, CamPaced& paced)
+	{
+		const uint32 i = g_rtHalfTick ? g_rtSubStep : 0;
+		if (!CamPace() || !CamTick() || !g_rtSixty || i + 1 >= g_rtSteps || rd16(proc + 0x08) != 476 || s_cam.proc != proc ||
+			rd32(proc + 0x04) != s_cam.id || s_cam.before.size() != s_cam.size || s_cam.size < kCamAim + 4 ||
+			rd32(proc + kCamAim) == 1)
+			return;
+		auto before = [](uint32 off) {
+			const uint8* b = &s_cam.before[off];
+			return std::bit_cast<float>((uint32)b[0] << 24 | (uint32)b[1] << 16 | (uint32)b[2] << 8 | b[3]);
+		};
+		float start[7], now[7];
+		for (uint32 k = 0; k < 7; k++)
+		{
+			start[k] = before(kCamView[k]);
+			now[k] = std::bit_cast<float>(rd32(proc + kCamView[k]));
+		}
+		const uint32 frame = wwhd::rt::GameFrame(wwhd::os::SwapCount());
+		CamPaceState& p = s_camPace;
+		if (i == 0)                                     // a new tick: its ratios from the last one's
+		{
+			const bool last = p.proc == proc && p.id == s_cam.id && p.frame + 1 == frame;
+			const float share = (float)(g_rtSteps - 1) / (float)g_rtSteps;
+			for (uint32 g = 0; g < 3; g++)
+			{
+				double moved = 0, shown = 0, whole = 0;
+				for (uint32 k = 0; k < 7; k++)
+					if (kCamGroup[k] == g)
+					{
+						const double t = (double)start[k] - p.start[k], s = (double)p.show[k] - p.start[k];
+						moved += t * s;
+						shown += s * s;
+						whole += t * t;
+					}
+				const bool paced = last && shown > kCamStill[g] && whole < kCamCut[g];
+				p.r[g] = paced ? (float)std::clamp(share * moved / shown, 0.5, 2.0) : 1.0f;
+			}
+		}
+		if (i + 2 == g_rtSteps)                         // the tick's last show step: for the next tick's ratios
+		{
+			p.proc = proc;
+			p.id = s_cam.id;
+			p.frame = frame;
+			std::copy(start, start + 7, p.start);
+			std::copy(now, now + 7, p.show);
+		}
+		float r[3] = { p.r[0], p.r[1], p.r[2] };
+		for (uint32 g = 0; g < 3; g++)                   // a cut in this show step: drawn as it is
+		{
+			double shown = 0;
+			for (uint32 k = 0; k < 7; k++)
+				if (kCamGroup[k] == g)
+					shown += ((double)now[k] - start[k]) * ((double)now[k] - start[k]);
+			if (shown >= kCamCut[g])
+				r[g] = 1.0f;
+		}
+		if (r[0] == 1.0f && r[1] == 1.0f && r[2] == 1.0f)
+			return;                                     // drawn as it is, to the bit
+		paced.proc = proc;
+		for (uint32 k = 0; k < 7; k++)
+		{
+			paced.kept[k] = rd32(proc + kCamView[k]);
+			const float rk = r[kCamGroup[k]];
+			paced.drawn[k] = rk == 1.0f ? paced.kept[k] : std::bit_cast<uint32>(start[k] + (now[k] - start[k]) * rk);
+			wr32(proc + kCamView[k], paced.drawn[k]);
+		}
+	}
+	void CamPaceAfter(const CamPaced& paced)
+	{
+		if (!paced.proc)
+			return;
+		for (uint32 k = 0; k < 7; k++)
+			if (rd32(paced.proc + kCamView[k]) == paced.drawn[k])
+				wr32(paced.proc + kCamView[k], paced.kept[k]);
+	}
 }
 
 // ---- collision pushes at 60 (session bottom's "pushes") ---------------------------------------------
@@ -4623,8 +4732,11 @@ void f_025DE2CC(PPCInterpreter_t* __restrict ctx)
 	s_drawing = GPR(3);
 	std::vector<std::pair<uint32, uint32>> chains;   // its chains moved on for this draw (the chains, below)
 	ChainArrays(s_drawing, chains);
+	CamPaced paced;                                  // the camera's show step drawn at the tick's pace (above)
+	CamPaceBefore(s_drawing, paced);
 	if (!(g_rtHalfTick && !s_held.empty() && HeldDraw(ctx, orig_f_025DE2CC)))
 		orig_f_025DE2CC(ctx);
+	CamPaceAfter(paced);
 	ChainRestore(chains);
 	s_drawing = outer;
 }
@@ -5164,7 +5276,7 @@ void f_027F1174(PPCInterpreter_t* __restrict ctx)
 
 // save states (os/savestate.h): what the 60 fps layer carries from one tick to the next (the census in the save state
 // inventory: actors seen, Link, a grab, the boss refights, mode holds, the Co pushes a half tick halves, the half
-// steps' random draws, Link's reset flags, the fades); the rest is rebuilt at each whole tick's start
+// steps' random draws, Link's reset flags, the fades, the camera's pace); the rest is rebuilt at each whole tick's start
 static void StateRecordSixty(wwhd::state::Archive& ar)
 {
 	ar.Map(s_knownActors);
@@ -5254,6 +5366,7 @@ static void StateRecordSixty(wwhd::state::Archive& ar)
 	ar.Pod(s_fadeLastSwap);
 	ar.Pod(s_fadePerSwap);
 	ar.Pod(s_fadeHoldAtWhole);
+	ar.Pod(s_camPace);
 	if (ar.Loading() && ar.Ok())
 	{
 		s_arena = arena;
