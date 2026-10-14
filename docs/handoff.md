@@ -4426,7 +4426,26 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   Tests: drive it through run.sh (the save route; `WWHD_GAME=` another copy, `WWHD_START_SCREEN=1`,
   `WWHD_DEBUG_BOOT=0`), as a bare windowed launch with no input script sits on the loading tablet on the worker (old:
   pre-S1 binaries too; fine on the desktop worker). `WWHD_DEBUG_CHECK_DELAY=MS` slows the check (ms a MB) to see its
-  progress. Next: S3 Android (after m-android A2); disc states are out (main's call).
+  progress. Disc states are out (main's call).
+- **t-startscreen S3** (Android; the detail in `docs/research/android-plan.md`): Browse opens the system's picker and
+  the chosen document is copied into the app's files (game_files::CopyIn: the .wua footer and the free space first,
+  game/wwhd-new.wua under the progress bar, checked, renamed over game/wwhd.wua once verified); Change Files restarts
+  the activity (Restarter.java); Display/Resolution/VRR hidden there. The app's own files (Cemu's resources and
+  game profiles, the shader list, the menus' assets, the first settings.xml) ship in the APK and are extracted when
+  their hash changes (WindSongActivity.extractAssets); `device.sh files` only pushes the game. On x86,
+  `WWHD_COPY_IN=DIR` takes the same path and `WWHD_SETUP_CHOOSE=FILE` picks without a browser (tests). Left: the
+  touch layout, Back and no Quit on Android, the pad's focus there.
+- **A bare launch needs the game profile** (found testing S3 on the worker): without
+  `portable/gameProfiles/0005000010143500.ini` (tools/reference's, `cpuMode = 0`, which deploy.sh and the APK install)
+  Cemu runs its default multi-core recompiler and wwhd-play segfaults in the first seconds (the audio callback's
+  f_028A826C -> f_028A7748 -> Interpret), main's build as well. A test that runs a copied binary in a fresh dir must
+  put the ini there (and `MESA_VK_WSI_DEBUG=sw` on Xvfb, as tools/reference/run.sh does).
+- **m-android A4 (a4-perf)**: on Android the window's event wait now sleeps (SDL's poll sentinel off: the window's
+  thread 41% -> 0.06% of the app's CPU) and the generated stores read the store-test table through ctx->rspTemp, set in
+  `__OSLoadThread` (the dynamic-TLS resolver 4.8% -> 1.7% of the game's core, ~1.5-2% fewer cycles a frame). That
+  relies on Cemu's JIT being off (cpuMode 0, the APK's default game profile). apk.sh packs libadrenotools' hooks.
+  Leads (android-plan.md, not tried): the scheduling choice, and a sustained-performance hint for the slow first run
+  after a doze.
 
 ### Session bottom (week 2, WW-14): the GPU side
 
