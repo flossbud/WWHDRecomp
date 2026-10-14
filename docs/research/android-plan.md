@@ -239,6 +239,32 @@ simpleperf_report_lib):
 - Left on the game thread: the runtime's 9.4% (psq_store, rt_journal_store's 60 fps journal, the HLE imports' wrappers,
   a `std::unordered_map<uint32, ...>` insertion in two game functions), the TLS resolver's 1.4%.
 
+## A4 codegen (2026-10-14, session qa: a4-codegen)
+
+Where the game core's time goes inside the generated code, on the arm64 worker (the Mac VM: a4prof.sh's run,
+wwhd-play, WWHD_CORES=3, 2 minutes at 60): the profiler records each sample's leaf PC, so the core's samples map to
+host instructions (scratch: the top 150 functions, objdump). Of the samples in them: stores into ctx 32%, loads from
+ctx 23%, guest loads 13%, ALU 10%; by mnemonic ldr 36%, str 19%, strb 10.5%. By ctx field: the CR's bytes (cr0's four,
+stored one by one on every compare) ~12%, remainingCycles 7.9% (5.1% the load at each function's entry; but the build
+without any counting, WWHD_RT_NOCOUNT, is no faster: 7.38/7.41/7.18 against 7.38/7.25/7.31 ms a frame, as on x86 when
+the real-time build landed, so those samples are the cost of entering a function, its fetch and the call, charged to
+its first instructions), the FPRs 6.7%, LR and CTR ~3%; mfcr's 32-pass loop (f_02017D84/D98) 1.4%.
+
+Also: in a large generated function clang's inliner stops at its size limit and calls shard-local copies of the
+helpers (in 50 of the 156 shards ~12,500 calls to wr32, ~10,400 to the lfs conversion, ~5,900 to stfs's, ~7,600 to
+wr16/wr8, ~1,200 to rt_fcmpu; x86 the same): a call per guest store or float access, and the guest registers read
+again from ctx after it.
+
+Changed (tools/recomp: ppc_ops.h, emit.py; every result as before, the fuzzer on both hosts, FTZ on and off, and the
+checks): those helpers always inlined; lfs and stfs written from the ISA (a normal number or a zero widened by the
+host, exact under any FTZ/DAZ mode; NaNs, infinities and denormals by the ISA's bit rules, out of line; Cemu's
+conversions no longer called); fcmpu one host compare, its CR field one word store, the signalling-NaN test only when
+unordered; every CR field write (compares, Rc=1, mtcrf) one word; mfcr eight bytes at a time. .text: arm64 116.6 ->
+108.0 MB (-7.4%), x86 133.0 -> 120.9 MB (-9.1%). The Mac, 3 interleaved rounds of 2 minutes: the work a frame
+7.48/7.49/7.45 -> 7.28/7.48/7.28 ms, the game thread 7.41/7.44/7.41 -> 7.30/7.43/7.28 (~-1.5%). x86 (the desktop
+worker, the same run): the work a frame 4.39/4.27/4.42 -> 3.87/3.87/3.75 ms, the game thread 4.44/4.27/4.45 ->
+3.90/3.88/3.75 (~-12%).
+
 ## P0: doesn't build, link or start on Android
 
 1. **Fibers** (`src/runtime/fiber/FiberUnix.cpp`): the switch is x86-64 asm; the fallback is `ucontext`, which bionic

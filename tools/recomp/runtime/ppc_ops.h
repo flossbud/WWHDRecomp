@@ -11,6 +11,13 @@
 #include "Cafe/HW/Espresso/Interpreter/PPCInterpreterHelper.h"
 
 extern uint8* memory_base;
+// The helpers below that every guest load, store, compare and float conversion goes through are always inlined
+// (a4-codegen, session qa): in a large generated function clang's inliner stopped at its size limit and called
+// shard-local copies instead (in 50 of the 156 shards, ~12,500 calls to wr32, ~10,400 to ConvertToDoubleNoFTZ, ~5,900
+// to ConvertToSingleNoFTZ, ~7,600 to wr16/wr8 and ~1,200 to rt_fcmpu, on x86 and arm64 alike): a call per guest store
+// or float access, its registers clobbered, and the guest registers read again from ctx after every store (the call
+// may write anything).
+#define RT_INLINE [[gnu::always_inline]] static inline
 // The recompiled program (WWHD_RT_GENERATED, src/CMakeLists.txt) reads the base through a constant: under
 // -fno-strict-aliasing a guest store may alias any global, so through memory_base every access after a store reloads
 // it; a constant global no store can change. The runtime sets the variable behind it once, before any recompiled code
@@ -224,31 +231,73 @@ static inline rt_fn rt_direct_at(uint32 target)
 // Cemu's fcmpu_espresso (PPCInterpreterFPU.cpp), inline: CR field crfD from comparing a and b (LT,
 // GT, EQ, or SO when unordered), FPSCR's FPCC, and VXSNAN for a signalling NaN. The fuzzer checks it
 // against Cemu's interpreter (fcmpu, ps_cmpu0/1, ps_cmpo0).
-static inline void rt_fcmpu(PPCInterpreter_t* ctx, int crfD, double a, double b)
+// One host compare gives all four (unordered: a NaN, as IS_NAN), the field's four bytes go in one store, and the
+// signalling-NaN test runs only when unordered (a4-codegen, session qa: ~50 instructions a compare on both hosts
+// before, two NaN tests by integer masks, four byte stores, the SNaN tests every time).
+static_assert(std::endian::native == std::endian::little && CR_BIT_LT == 0 && CR_BIT_GT == 1 && CR_BIT_EQ == 2 && CR_BIT_SO == 3,
+	"a CR field's four bytes as one little-endian word");
+RT_INLINE void rt_fcmpu(PPCInterpreter_t* ctx, int crfD, double a, double b)
 {
-	uint64 ia, ib;
-	memcpy(&ia, &a, 8);
-	memcpy(&ib, &b, 8);
-	uint32 c = (IS_NAN(ia) || IS_NAN(ib)) ? 1 : a < b ? 8 : a > b ? 4 : 2;
-	ctx->cr[crfD + CR_BIT_LT] = (c >> 3) & 1;
-	ctx->cr[crfD + CR_BIT_GT] = (c >> 2) & 1;
-	ctx->cr[crfD + CR_BIT_EQ] = (c >> 1) & 1;
-	ctx->cr[crfD + CR_BIT_SO] = c & 1;
-	if (IS_SNAN(ia) || IS_SNAN(ib))
-		ctx->fpscr |= FPSCR_VXSNAN;
-	ctx->fpscr = (ctx->fpscr & 0xffff0fff) | (c << 12);
+	const uint32 lt = a < b, gt = a > b, eq = a == b, un = __builtin_isunordered(a, b);
+	const uint32 field = lt | gt << 8 | eq << 16 | un << 24;
+	memcpy(ctx->cr + crfD, &field, 4);
+	if (un) [[unlikely]]
+	{
+		uint64 ia, ib;
+		memcpy(&ia, &a, 8);
+		memcpy(&ib, &b, 8);
+		if (IS_SNAN(ia) || IS_SNAN(ib))
+			ctx->fpscr |= FPSCR_VXSNAN;
+	}
+	ctx->fpscr = (ctx->fpscr & 0xffff0fff) | (lt << 15 | gt << 14 | eq << 13 | un << 12);
+}
+
+// lfs (the PowerPC ISA's Load Floating-Point Single): the single's bits widened to the FPR's double format, exactly and
+// without any rounding or quieting: a signalling NaN stays signalling, a denormal becomes the normal double of the same
+// value. A normal number or a zero widens exactly in hardware under any FTZ/DAZ mode, so those (nearly every load) take
+// the host's conversion (a4-codegen, session qa: the bit conversion's normal path was ~11 instructions and two
+// branches on both hosts); an infinity, a NaN or a denormal goes to rt_lfs_rare.
+[[gnu::noinline, gnu::cold]] static uint64 rt_lfs_rare(uint32 x)
+{
+	const uint64 sign = (uint64)(x >> 31) << 63, frac = x & 0x7FFFFFu;
+	if ((x & 0x7F800000u) == 0x7F800000u)              // an infinity or a NaN: the exponent all ones, the fraction kept
+		return sign | 0x7FF0000000000000ULL | frac << 29;
+	// a denormal (frac x 2^-149): its highest one, bit p, becomes the hidden bit, the exponent p - 149 (biased p + 874)
+	const int p = 31 - std::countl_zero((uint32)frac);
+	return sign | (uint64)(p + 874) << 52 | ((frac << (52 - p)) & 0xFFFFFFFFFFFFFULL);
+}
+RT_INLINE uint64 rt_lfs_bits(uint32 x)
+{
+	const uint32 e = (x >> 23) & 0xFF;
+	if (e - 1 < 254 || (x << 1) == 0) [[likely]]
+		return std::bit_cast<uint64>((double)std::bit_cast<float>(x));
+	return rt_lfs_rare(x);
+}
+
+// stfs (the ISA's Store Floating-Point Single, which truncates and never rounds): the sign and the exponent's top bit,
+// then the double's bits 5-34 (its exponent's low seven and the fraction's top 23), for every exponent but those of a
+// single's denormal range (biased 874-896: -149 to -127), where the significand with its hidden one is shifted right
+// until the exponent is -126. (Below that range the ISA leaves the result undefined; the interpreter stores the plain
+// bits there too.)
+RT_INLINE uint32 rt_stfs_bits(uint64 x)
+{
+	const uint32 e = (uint32)(x >> 52) & 0x7FF;
+	if (e - 874 > 22) [[likely]]
+		return (uint32)(x >> 32 & 0xC0000000u) | (uint32)(x >> 29 & 0x3FFFFFFFu);
+	const uint32 sig = 0x800000u | (uint32)(x >> 29 & 0x7FFFFFu);
+	return (uint32)(x >> 32 & 0x80000000u) | sig >> (897 - e);
 }
 
 // ---- memory (big-endian guest, identity-mapped at memory_base) ----------------------------------
-static inline uint8 rd8(uint32 ea) { return RT_MEM[ea]; }
-static inline uint16 rd16(uint32 ea) { uint16 v; memcpy(&v, RT_MEM + ea, 2); return __builtin_bswap16(v); }
-static inline uint32 rd32(uint32 ea) { uint32 v; memcpy(&v, RT_MEM + ea, 4); return __builtin_bswap32(v); }
-static inline uint64 rd64(uint32 ea) { uint64 v; memcpy(&v, RT_MEM + ea, 8); return __builtin_bswap64(v); }
-static inline void wr8(uint32 ea, uint8 v, uint32 pc = 0) { RT_STORE(ea, 1, pc); RT_MEM[ea] = v; }
-static inline void wr16(uint32 ea, uint16 v, uint32 pc = 0) { RT_STORE(ea, 2, pc); v = __builtin_bswap16(v); memcpy(RT_MEM + ea, &v, 2); }
-static inline void wr32(uint32 ea, uint32 v, uint32 pc = 0) { RT_STORE(ea, 4, pc); v = __builtin_bswap32(v); memcpy(RT_MEM + ea, &v, 4); }
-static inline void wr64(uint32 ea, uint64 v, uint32 pc = 0) { RT_STORE(ea, 8, pc); v = __builtin_bswap64(v); memcpy(RT_MEM + ea, &v, 8); }
-static inline void zero_line(uint32 ea, uint32 pc = 0) { ea &= ~31u; RT_STORE(ea, 32, pc); memset(RT_MEM + ea, 0, 32); }   // dcbz
+RT_INLINE uint8 rd8(uint32 ea) { return RT_MEM[ea]; }
+RT_INLINE uint16 rd16(uint32 ea) { uint16 v; memcpy(&v, RT_MEM + ea, 2); return __builtin_bswap16(v); }
+RT_INLINE uint32 rd32(uint32 ea) { uint32 v; memcpy(&v, RT_MEM + ea, 4); return __builtin_bswap32(v); }
+RT_INLINE uint64 rd64(uint32 ea) { uint64 v; memcpy(&v, RT_MEM + ea, 8); return __builtin_bswap64(v); }
+RT_INLINE void wr8(uint32 ea, uint8 v, uint32 pc = 0) { RT_STORE(ea, 1, pc); RT_MEM[ea] = v; }
+RT_INLINE void wr16(uint32 ea, uint16 v, uint32 pc = 0) { RT_STORE(ea, 2, pc); v = __builtin_bswap16(v); memcpy(RT_MEM + ea, &v, 2); }
+RT_INLINE void wr32(uint32 ea, uint32 v, uint32 pc = 0) { RT_STORE(ea, 4, pc); v = __builtin_bswap32(v); memcpy(RT_MEM + ea, &v, 4); }
+RT_INLINE void wr64(uint32 ea, uint64 v, uint32 pc = 0) { RT_STORE(ea, 8, pc); v = __builtin_bswap64(v); memcpy(RT_MEM + ea, &v, 8); }
+RT_INLINE void zero_line(uint32 ea, uint32 pc = 0) { ea &= ~31u; RT_STORE(ea, 32, pc); memset(RT_MEM + ea, 0, 32); }   // dcbz
 // Android (m-android A4): the app's library is loaded by dlopen, so a thread_local is dynamic TLS there, every access a
 // call into bionic's resolver (tlsdesc_resolver_dynamic), and the store test's g_rtStoreTable was read that way on every
 // guest store (4.8% of the game's core on the device). The generated code reads it through its context instead: ctx->
@@ -262,7 +311,7 @@ static inline void zero_line(uint32 ea, uint32 pc = 0) { ea &= ~31u; RT_STORE(ea
 #if defined(WWHD_RT_CTX_TABLE) && defined(WWHD_RT_GENERATED)
 const uint8* rt_store_table_tls();   // diff.cpp: the thread_local, out of line (inline, its address was taken on every
                                      // store anyway, the resolver's call made before the test that needed it)
-static inline const uint8* rt_store_table(const PPCInterpreter_t* ctx)
+RT_INLINE const uint8* rt_store_table(const PPCInterpreter_t* ctx)
 {
 	if (const void* p = ctx->rspTemp) [[likely]]
 		return *static_cast<const uint8* const*>(p);
@@ -271,11 +320,11 @@ static inline const uint8* rt_store_table(const PPCInterpreter_t* ctx)
 #define RT_STORE_T(t, ea, n, pc) do { if (const uint8* rt_t = (t)) [[unlikely]] { \
 	if (rt_t[(uint32)(ea) >> 12] | rt_t[((uint32)(ea) + (n) - 1) >> 12]) \
 		rt_journal_store((ea), (n), (pc)); } } while (0)
-static inline void rt_wr8(const uint8* t, uint32 ea, uint8 v, uint32 pc = 0) { RT_STORE_T(t, ea, 1, pc); RT_MEM[ea] = v; }
-static inline void rt_wr16(const uint8* t, uint32 ea, uint16 v, uint32 pc = 0) { RT_STORE_T(t, ea, 2, pc); v = __builtin_bswap16(v); memcpy(RT_MEM + ea, &v, 2); }
-static inline void rt_wr32(const uint8* t, uint32 ea, uint32 v, uint32 pc = 0) { RT_STORE_T(t, ea, 4, pc); v = __builtin_bswap32(v); memcpy(RT_MEM + ea, &v, 4); }
-static inline void rt_wr64(const uint8* t, uint32 ea, uint64 v, uint32 pc = 0) { RT_STORE_T(t, ea, 8, pc); v = __builtin_bswap64(v); memcpy(RT_MEM + ea, &v, 8); }
-static inline void rt_zero_line(const uint8* t, uint32 ea, uint32 pc = 0) { ea &= ~31u; RT_STORE_T(t, ea, 32, pc); memset(RT_MEM + ea, 0, 32); }
+RT_INLINE void rt_wr8(const uint8* t, uint32 ea, uint8 v, uint32 pc = 0) { RT_STORE_T(t, ea, 1, pc); RT_MEM[ea] = v; }
+RT_INLINE void rt_wr16(const uint8* t, uint32 ea, uint16 v, uint32 pc = 0) { RT_STORE_T(t, ea, 2, pc); v = __builtin_bswap16(v); memcpy(RT_MEM + ea, &v, 2); }
+RT_INLINE void rt_wr32(const uint8* t, uint32 ea, uint32 v, uint32 pc = 0) { RT_STORE_T(t, ea, 4, pc); v = __builtin_bswap32(v); memcpy(RT_MEM + ea, &v, 4); }
+RT_INLINE void rt_wr64(const uint8* t, uint32 ea, uint64 v, uint32 pc = 0) { RT_STORE_T(t, ea, 8, pc); v = __builtin_bswap64(v); memcpy(RT_MEM + ea, &v, 8); }
+RT_INLINE void rt_zero_line(const uint8* t, uint32 ea, uint32 pc = 0) { ea &= ~31u; RT_STORE_T(t, ea, 32, pc); memset(RT_MEM + ea, 0, 32); }
 #define RT_WR8(ea, v, pc) rt_wr8(rt_store_table(ctx), (ea), (v), (pc))     // in a helper that has ctx
 #define RT_WR16(ea, v, pc) rt_wr16(rt_store_table(ctx), (ea), (v), (pc))
 #define RT_WR32(ea, v, pc) rt_wr32(rt_store_table(ctx), (ea), (v), (pc))
@@ -291,29 +340,44 @@ static inline void late_wr32(uint32 ea, uint32 v, uint32 = 0) { if (g_rtLateNote
 static inline void late_wr64(uint32 ea, uint64 v, uint32 = 0) { if (g_rtLateNotes) rt_late_note(ea, 8, v); }
 
 // ---- condition register ------------------------------------------------------------------------
-static inline void cr_record(PPCInterpreter_t* ctx, uint32 r)       // Rc=1: CR0 from a result
+// A CR field is four bytes (LT, GT, EQ, SO: 0 or 1) and is written as one little-endian word (a4-codegen, session qa:
+// four byte stores a compare were ~10% of the game core's samples on arm64, its stores the busiest instructions).
+RT_INLINE void cr_set(PPCInterpreter_t* ctx, int crf, uint32 lt, uint32 gt, uint32 eq, uint32 so)
 {
-	ctx->cr[CR_BIT_SO] = ctx->xer_so;
-	ctx->cr[CR_BIT_LT] = (sint32)r < 0;
-	ctx->cr[CR_BIT_EQ] = r == 0;
-	ctx->cr[CR_BIT_GT] = (sint32)r > 0;
+	const uint32 field = lt | gt << 8 | eq << 16 | so << 24;
+	memcpy(ctx->cr + crf * 4, &field, 4);
+}
+
+RT_INLINE void cr_record(PPCInterpreter_t* ctx, uint32 r)       // Rc=1: CR0 from a result
+{
+	cr_set(ctx, 0, (sint32)r < 0, (sint32)r > 0, r == 0, ctx->xer_so);
 }
 
 template<typename T>
-static inline void cr_compare(PPCInterpreter_t* ctx, int crf, T a, T b)
+RT_INLINE void cr_compare(PPCInterpreter_t* ctx, int crf, T a, T b)
 {
-	uint8* c = ctx->cr + crf * 4;
-	c[CR_BIT_LT] = a < b;
-	c[CR_BIT_GT] = a > b;
-	c[CR_BIT_EQ] = a == b;
-	c[CR_BIT_SO] = ctx->xer_so;
+	cr_set(ctx, crf, a < b, a > b, a == b, ctx->xer_so);
 }
 
-static inline uint32 cr_pack(PPCInterpreter_t* ctx)
+// mtcrf: field crf from the nibble n (LT the high bit), its four bytes as one word
+RT_INLINE void cr_set_field(PPCInterpreter_t* ctx, int crf, uint32 n)
+{
+	cr_set(ctx, crf, n >> 3 & 1, n >> 2 & 1, n >> 1 & 1, n & 1);
+}
+
+// mfcr: CR bit i (byte i, any non-zero byte a 1) at bit 31 - i, eight bytes at a time: each byte's non-zero-ness to its
+// low bit, then a multiply gathers the eight low bits, byte 0 to the top (the terms are distinct powers of two: no
+// carries). Before, a 32-pass loop: ~1.4% of the game core on arm64 (f_02017D84/D98).
+RT_INLINE uint32 cr_pack(PPCInterpreter_t* ctx)
 {
 	uint32 v = 0;
-	for (int i = 0; i < 32; i++)
-		v = (v << 1) | (ctx->cr[i] != 0);
+	for (int g = 0; g < 4; g++)
+	{
+		uint64 w;
+		memcpy(&w, ctx->cr + g * 8, 8);
+		const uint64 nz = ((w | ((w & 0x7F7F7F7F7F7F7F7FULL) + 0x7F7F7F7F7F7F7F7FULL)) >> 7) & 0x0101010101010101ULL;
+		v = v << 8 | (uint32)((nz * 0x8040201008040201ULL) >> 56);
+	}
 	return v;
 }
 
@@ -410,7 +474,7 @@ static inline void psq_write(PPCInterpreter_t* ctx, uint32 ea, sint32 type, uint
 		psq_write(ctx, ea + psq_size(type), type, quantize((float)ctx->fpr[frS].fp1, type, scale), pc);
 }
 
-static inline void psq_load(PPCInterpreter_t* ctx, int frD, uint32 ea, int gqr, bool single)
+RT_INLINE void psq_load(PPCInterpreter_t* ctx, int frD, uint32 ea, int gqr, bool single)
 {
 	if (ctx->spr.UGQR[gqr] & 0x40000) [[unlikely]]
 		return psq_load_q(ctx, frD, ea, gqr, single);
@@ -418,7 +482,7 @@ static inline void psq_load(PPCInterpreter_t* ctx, int frD, uint32 ea, int gqr, 
 	ctx->fpr[frD].fp1 = single ? 1.0 : (double)std::bit_cast<float>(rd32(ea + 4));
 }
 
-static inline void psq_store(PPCInterpreter_t* ctx, int frS, uint32 ea, int gqr, bool single, uint32 pc = 0)
+RT_INLINE void psq_store(PPCInterpreter_t* ctx, int frS, uint32 ea, int gqr, bool single, uint32 pc = 0)
 {
 	if (ctx->spr.UGQR[gqr] & 4) [[unlikely]]
 		return psq_store_q(ctx, frS, ea, gqr, single, pc);

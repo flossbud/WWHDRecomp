@@ -323,11 +323,11 @@ class Emitter:
 
     # floating-point loads/stores ---------------------------------------------------------------
     def _lfs(self, i, ea_expr, update):
-        return [f"{{ uint32 ea = {ea_expr}; uint64 v = ConvertToDoubleNoFTZ(rd32(ea)); "
+        return [f"{{ uint32 ea = {ea_expr}; uint64 v = rt_lfs_bits(rd32(ea)); "
                 f"FPR({i.rT}).fp0int = v; FPR({i.rT}).fp1int = v;" + (f" GPR({i.rA}) = ea;" if update else "") + " }"]
 
     def _stfs(self, i, ea_expr, update, pc):
-        return [f"{{ uint32 ea = {ea_expr}; wr32(ea, ConvertToSingleNoFTZ(FPR({i.rT}).fp0int), {hx(pc)});"
+        return [f"{{ uint32 ea = {ea_expr}; wr32(ea, rt_stfs_bits(FPR({i.rT}).fp0int), {hx(pc)});"
                 + (f" GPR({i.rA}) = ea;" if update else "") + " }"]
 
     def _lfd(self, i, ea_expr, update):
@@ -536,7 +536,7 @@ class Emitter:
         out = [f"{{ uint32 s = GPR({i.rS});"]
         for f in range(8):
             if i.crm & (0x80 >> f):
-                out += [f"\tCRB({f * 4 + b}) = (s >> {31 - (f * 4 + b)}) & 1;" for b in range(4)]
+                out += [f"\tcr_set_field(ctx, {f}, s >> {28 - 4 * f});"]
         return out + ["}"]
 
     # special registers ----------------------------------------------------------------------------
