@@ -278,7 +278,22 @@ Order rationale:
   the HLE table, the scheduler's entry points, CafeSystem's boot), so the hub (N6) and the boot (N7) go last.
 - Until then each rewrite exports, in one bridge file, the few names Cemu's remaining code calls.
 
-## 4. Open decisions for the owner
+## 4. The owner's decisions (2026-10-14)
+
+- **Baselines: all new.** Where the oracle records Cemu's own inventions (the mixer's float formulas and the sound
+  hash, the PM4 stream with its `IT_HLE_*` packets, the decompiler's GLSL and the captures), our rewrite sets a new
+  baseline after a reviewed comparison (sound by ear and spectrum against the old recordings, the stream by what the
+  GPU draws, captures by eye and PSNR against the old ones); nothing is reproduced from Cemu's arithmetic or encoding.
+  The console-visible facts (what the guest reads back, structure layouts, call results) stay exact.
+- **Clean room: spec first.** A written behaviour spec per subsystem, then code from the spec with Cemu's file
+  closed, by the current sessions.
+- **ZArchive: kept**, vendored from its own repository (MIT-0, not named Cemu).
+- **Docs may mention Cemu as history** (research notes, old commits); nothing built, linked or shipped does.
+- The rest as proposed below unless the owner says otherwise: the reference Cemu frozen after N0 and its patches moved
+  out of the public repo; no GPL emulator code as a source; the shared font decided by N0's finding; diff mode decided
+  after N6.
+
+## 5. The open decisions as first written
 
 1. **Exact to Cemu, or a new baseline?** In three places the oracle records Cemu's own inventions, not the console's:
    - the mixer's float formulas (the sound hash);
