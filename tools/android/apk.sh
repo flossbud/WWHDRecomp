@@ -24,11 +24,17 @@ javac -nowarn --release 17 -classpath "$jar" -d "$w/classes" $(find "$w/src" -na
 llvm-objcopy --strip-debug "$lib" "$w/lib/arm64-v8a/libmain.so"
 cp "$w/base.apk" "$w/unaligned.apk"
 (cd "$w/dex" && zip -q -X "$w/unaligned.apk" classes.dex)
-# libadrenotools' hooks (a4-drivers), loaded from the native library dir the installer extracts them to
+# libadrenotools' hooks (a4-drivers), loaded from the native library dir the installer extracts them to: from
+# ADRENOTOOLS_HOOKS, else LIB's build dir's, else build/android's (a LIB copied elsewhere has none beside it); without
+# them an imported GPU driver doesn't load and the system's is used
+hooks=${ADRENOTOOLS_HOOKS:-$(dirname "$lib")/src/adrenotools/src/hook}
+[ -d "$hooks" ] || hooks=$root/build/android/src/adrenotools/src/hook
+n=0
 for h in hook_impl main_hook file_redirect_hook gsl_alloc_hook; do
-    f=$(dirname "$lib")/src/adrenotools/src/hook/lib$h.so
-    [ -f "$f" ] && llvm-objcopy --strip-debug "$f" "$w/lib/arm64-v8a/lib$h.so"
+    f=$hooks/lib$h.so
+    [ -f "$f" ] && llvm-objcopy --strip-debug "$f" "$w/lib/arm64-v8a/lib$h.so" && n=$((n + 1))
 done
+[ $n -eq 4 ] || echo "android: warning: $n of libadrenotools' 4 hooks in $hooks (an imported GPU driver won't load)" >&2
 (cd "$w" && zip -q -X -0 "$w/unaligned.apk" lib/arm64-v8a/*.so)
 "$bt/zipalign" -f -P 16 4 "$w/unaligned.apk" "$w/aligned.apk"
 ks=$sdk/debug.keystore
