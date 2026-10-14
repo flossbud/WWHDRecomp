@@ -171,6 +171,32 @@ the 100% save, 2 minutes at 60, the profiler at 64-deep stacks: a scratch script
     thread 2.67 -> 2.70 GHz, but its pin doesn't hold (its Cpus_allowed back to 0-7 within seconds, something on the
     device resets it; the 3-6 pins hold) (branch pin-parked). Sail's game thread runs ~2.7 GHz of the X3's 3.19.
 
+## A4 in play (2026-10-14, session top: a4-play)
+Three routes played at 60 on the device by `tools/android/route.sh` (the 836f8997 APK, three host threads): tour3,
+sail and wfw, each with the system driver and with Turnip (purpleT30 from a test folder, `ENV=` in route.sh, removed
+after each run), simpleperf over the whole run (2000 Hz, frame-pointer call graphs, CLOCK_MONOTONIC) and the samples
+split by the route's 10 s real-time windows. (The log's wall times map to the monotonic clock through a log line seen in
+both `logcat -v monotonic` and `-v time`: the offset was the same to 1 ms over the four runs that had both, so the device
+didn't suspend between runs.) The routes share their first ~1000 frames: 30 to f900 (WWHD_60FPS_FROM), then 60.
+- **At 30**: 26.8, 30.1, 28.6 fps: the third window has the first sights (51 shaders 132 ms, 57 pipelines 26 ms), its
+  99th 125-143 ms. No first sights after it.
+- **The first window at 60** is 54-55 fps on every route with both drivers, with one ~103 ms frame (worst 102-106 ms in
+  all six): probably the 30 -> 60 switch at f900, a route's artifact (not checked against the switch's frame). The
+  scheduler thread is 77-83% busy in it.
+- **After it**: tour3 59.5-60.1 (both drivers), wfw ends there. Sail stays at 57.4-58.1 with the system driver, the
+  scheduler thread at 83% throughout; Turnip 59.3-59.5 at the same 83%.
+- **The scheduler thread** (OSSched[core=1], at 60): guest code 76-78% of its cycles, a flat profile (the top f_
+  function ~1.5%; f_02759564, 4-16%, is where it idles), the runtime 12-13% (psq_store 1.2%, rt_journal_store 1.1%,
+  the TLS resolver 1.5%), the kernel 8-10% (one address 6-7%). Not shader compiles, and not the driver.
+- **The GPU thread** (NullGPU): Turnip takes ~33% fewer of its cycles (9.4-10k samples a 10 s window against
+  14.1-14.8k; the driver's share 19-20% against 31-33%), so the game's thread waits less on it: sail's 1.5 fps. Our
+  own part of it, both drivers: memcpy 5-11%, the renderer's Descriptors() 4-7%, memcmp 4-7%, ProgramHash() 4-6% (a
+  shader program hashed each draw), atomics ~4%: about a quarter to a third of the thread (session main took it,
+  shared with the PC and the Deck).
+- **ADPF on sail** (session main, A/B/A/B, simpleperf stat): core 1 at 2.68 GHz either way, 57.5-58.7 fps both: no
+  effect (branch adpf-parked). The ~2.7 GHz ceiling (the X3's top is 3.19) is likely the device's performance mode:
+  the owner's per-app performance and fan modes (OdinTools) may set WindSong higher.
+
 ## P0: doesn't build, link or start on Android
 
 1. **Fibers** (`src/runtime/fiber/FiberUnix.cpp`): the switch is x86-64 asm; the fallback is `ucontext`, which bionic
