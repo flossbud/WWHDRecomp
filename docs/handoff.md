@@ -4456,8 +4456,22 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   near the camera draw random numbers; a half step's are made up by RNDSYNC. The stream in kaze (WWHD_DEBUG_RNDSEED
   from 1000, seeds as each process's execute starts, 499 ticks): ticks first apart after KYEFF (478) at N 2 75 before
   and 76 after, at N 4 81 and 74. So moya leaves it as it was. Leads: there, ~380 ticks first apart after Link (168),
-  before and after (a draw count of his own at 60 in kaze); the poison mist (f_0256CA54, the Earth Temple's) still
-  held whole.
+  before and after (a draw count of his own at 60 in kaze, b-rng-link below); the poison mist (f_0256CA54, the Earth
+  Temple's) still held whole (b-poisonmist, parked: only in M_Dai rooms 3, 9, 11, 13 and 15, poison_move's room table;
+  room 0 has none, so the entrance's scans never showed it; spawn points there: 4 (room 3), 11, 13, 14, 17 and 24).
+  The random stream after Link, closed (b-rng-link, session bottom): phase, not rate; nothing to change. In kaze at
+  30 Link's execute draws 4-6 numbers a tick: checkNormalFace (023dd680), setTextureAnime (023dd88c; an eye look's
+  start, cM_rnd() < 0.025, 023ddb58), playTextureAnime's blink start (cM_rnd() < 0.012, 023fbf28) and setItemModel's
+  glints (02404e2c, 024050cc); at N 2 his whole step draws 2-4, because a blink, glint or face started on other ticks
+  than 30's is running and its start test is skipped. (A cM_rndF under his draw, 020198f8 from an environment call,
+  is at 30 too.) The rates match: starts per 1000 ticks over 1900 idle ticks at 30 / N 2 / N 4 (WWHD_DEBUG_RNDLOG,
+  a run of ticks without the start test): blinks 9.5 / 8.9 / 9.5, glint 2 8.9 / 8.9 / 7.9, glint 3 7.9 / 10.0 /
+  6.8, face changes 1.6 each, eye looks 3.7 / 2.6 / 3.2. The half steps' tests add no starts. The stream itself
+  isn't 30's on any route from the 100% save (it parts at f902-909, before Link matters: "testaids" above), and
+  starts held to whole steps changed which numbers 60 drew later (link_qa.txt's glint note: gohmarock 4.8 ->
+  190.7). Not done (main's call): a sweep of other places' start tests by rate. Link's eye-look timer
+  (daPy_matAnm_c's m_maba_timer, 0x101CEF19; flag 0x101CEF18, morf frame 0x101CEF1B; WWHD_60FPS_WATCH) counts once
+  a tick at N 2.
   The N > 2 leftovers (u6-fixes, session qa, 2026-10-14). drcjar 714 at N 3 and 4: not the jar's flight. The camera,
   holding the thrown jar as its target (+0x37C) as 30's does, went NaN (eye, centre and matrices; its yaw +0x236 read
   as 0x8000, the stick then walked Link 180 degrees off at 1177) in the tick after the jar broke (N 3 1064, N 4 1065:
