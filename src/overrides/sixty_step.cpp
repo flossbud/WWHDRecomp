@@ -752,6 +752,21 @@ namespace
 // checked before its set-up (procHangMove passing frame 0 set itself up again every tick; session top).
 // Under a `tick` rule (g_rtTickWindow, its call made in the whole step only) the window is the whole tick's: from
 // where the whole step's starts, a tick's rate long (Link's slash while moving: its speed drop on 30's tick).
+// At N steps the tick's end frame is N - 1 steps on from the whole step's, which his last step reaches, so his windows
+// start N - 1 steps on (u6-fixes, session qa): one step on, N 3's tick began a third of a tick before 30's (its whole
+// step's window in 30's tick before), and a pass came a step late. Route medli at N 3: his throw (procGrabThrow) let
+// go of Medli in the step after the whole step, which had carried her on through the wall she meets at 30, so her
+// first line check began past it: no wall hit, her flutter never turned to a fall, and she flew out of the world
+// (the camera following her and the stick Link: 204 units). Now his windows tile 30's tick and the throw lets go in
+// the whole step, as at 30 and N 2 (ThrowPlace, sixty.cpp). WWHD_60FPS_PASSAHEAD=0: one step on, as before.
+namespace
+{
+	bool PassAhead()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_PASSAHEAD"); return !(e && atoi(e) == 0); }();
+		return on && g_rtSteps > 2;
+	}
+}
 thread_local constinit bool g_rtTickWindow = false;
 void f_027F2BF8(PPCInterpreter_t* __restrict ctx)
 {
@@ -768,7 +783,8 @@ void f_027F2BF8(PPCInterpreter_t* __restrict ctx)
 			return;
 		}
 		const uint32 frame = rd32(frameCtrl + 4);
-		const float r = std::bit_cast<float>(rate), ahead = std::bit_cast<float>(frame) + r * Step();
+		const float r = std::bit_cast<float>(rate),
+			ahead = std::bit_cast<float>(frame) + (PassAhead() ? r * Step() * float(g_rtSteps - 1) : r * Step());
 		if (rd8(frameCtrl + 0xE) != 2 && (r >= 0.0f ? ahead >= float(sint16(rd16(frameCtrl + 0xA))) - 0.001f
 			: ahead < float(sint16(rd16(frameCtrl + 8)))))
 		{

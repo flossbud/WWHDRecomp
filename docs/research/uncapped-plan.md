@@ -279,6 +279,23 @@ it between its show steps), against 30 as at 2:
 | 3 | 45 (42 before) | plants 82, sail 86, en-ph 105 | drcjar 714, medli 204 (new: the camera follows the thrown jar as 30's does, and its flight at N 3 differs) |
 | 4 | 44 (43 before) | plants 102, sail 62, tour3 76, en-ph 105 | land3 542 (ok with the camera's tick off: Link's early steps), drcjar 714 |
 
+After session qa's u6-fixes cuts (2026-10-14: the camera's late notes dropped where an event's edge stops its show
+steps; Link's animation passes looked for N - 1 steps on, so his windows tile 30's tick), predeploy's 52 routes (with
+gohmatail and gohmarock, added since), both cuts off on the same build in brackets:
+
+| N | ok | WARN | FAIL |
+|---|---|---|---|
+| 3 | 50 (47) | sail 86, en-ph 74 (plants 82, sail 86, en-ph 105) | none (drcjar 714, medli 204) |
+| 4 | 46 (45) | plants 52, sail 62, tour3 76, en-ph 72 (plants 102, sail 62, tour3 76, en-ph 105) | land3 542, gohmarock 191 (land3 542, drcjar 714, gohmarock 192) |
+
+drcjar wasn't the jar's flight: the camera went NaN (handoff.md, u6-fixes). medli at N 4 6.4 -> 34.0 (ok: Medli let go
+of in the step after the whole step, a step earlier than before, her landing 48 units from 30's and the camera
+following her). gohmarock at N 4 fails with the cuts off too (not chased; a lead, from session bottom's CamPace:
+Link's draw puts his first-person sight on the screen with the drawn view and the camera's tick after the throw reads
+it, and at N 4 the show steps' drawn view isn't the tick's). land3 at N 4: the camera's right-stick swing is 30's to
+the unit plus a constant -189, the walk's facing drift before it (from its first walking tick's speed; handoff.md,
+u6-fixes).
+
 The draw side (sea6's foam, Doc Bandam's banner) is session bottom's u6-draw. The Magtail at N 4 (session qa's
 u6-magtail, fixed): its wall crawl's matrix at later steps came from the pitch the step before found, a tick ahead of
 30's; the step rule `start` keeps the tick's start pose (regress's 216 at N 4 77.0/166.6 -> 6.6/95.4, at N 2 8.0/98.8

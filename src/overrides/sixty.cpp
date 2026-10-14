@@ -2800,6 +2800,19 @@ namespace
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_CAMOTHERS"); return !(e && atoi(e) == 0); }();
 		return on;
 	}
+	// At N > 2 (u6-fixes, session qa): an event's edge that stops the camera's early step (its show) left the whole step's
+	// late stores to MakeLateNotes, as for a process whose tick ends there; but the camera's tick is its last step, from
+	// the restored tick start, and the late stores made into it differed from its bytes after the whole step, so the
+	// restore kept them: the tick ran on a camera with a show step's late stores (its counts and ramps) already made.
+	// Route drcjar: the camera, still holding the broken jar as its target as 30's does, went NaN in that tick (N 3
+	// 1064, N 4 1065: its early steps stopped), its yaw read as 0x8000, and the stick walked Link 180 degrees off (714
+	// units at both). The camera's late notes are dropped there; its last step makes the tick's. N 2 has no early
+	// steps. WWHD_60FPS_CAMLATEDROP=0: off.
+	bool CamLateDrop()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_CAMLATEDROP"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
 	void CamTickOthers()
 	{
 		if (!CamOthers() || !s_cam.proc || s_cam.after.size() != s_cam.size || rd32(s_cam.proc + 0x04) != s_cam.id)
@@ -4331,7 +4344,10 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 				s_orderStops += ordered;
 				s_endStops += ending;
 				s_stepping[proc] = false;
-				MakeLateNotes(proc);                    // the tick's late stores, which its half step would make
+				if (CamTick() && CamLateDrop() && proc == s_cam.proc)
+					s_lateNoted.erase(proc);            // the camera's show steps' (CamLateDrop, above)
+				else
+					MakeLateNotes(proc);                // the tick's late stores, which its half step would make
 			}
 			else
 			{

@@ -4458,6 +4458,34 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   and 76 after, at N 4 81 and 74. So moya leaves it as it was. Leads: there, ~380 ticks first apart after Link (168),
   before and after (a draw count of his own at 60 in kaze); the poison mist (f_0256CA54, the Earth Temple's) still
   held whole.
+  The N > 2 leftovers (u6-fixes, session qa, 2026-10-14). drcjar 714 at N 3 and 4: not the jar's flight. The camera,
+  holding the thrown jar as its target (+0x37C) as 30's does, went NaN (eye, centre and matrices; its yaw +0x236 read
+  as 0x8000, the stick then walked Link 180 degrees off at 1177) in the tick after the jar broke (N 3 1064, N 4 1065:
+  the tick a camera event began), of the ticks probed (WWHD_DEBUG_CAMSHOW, 1060-1067) the only ones whose early show
+  steps an event's edge stopped (no show at steps 1-2). The stop ran MakeLateNotes for the camera as for a process
+  whose tick ends there: the whole step's (show's) late stores went into its bytes, the restore kept them (they
+  differed from its bytes after the whole step), and its tick at the last step ran on them. Dropping the camera's late
+  notes there (sixty.cpp CamLateDrop, WWHD_60FPS_CAMLATEDROP): no NaN, drcjar 0.0 at N 3, 0.7 at N 4. medli 204 at N
+  3: not the camera either (it only follows her, as 30's). The thrown Medli (NPC_MD 367; her modes: f_02291094 the
+  flutter, state +0x4220 6, then the fall, f_022919D4, state 0xd, on a wall hit, her +0x464 & 0x10) never hit the wall
+  30's meets at 1271, kept fluttering past it over the void and fell out of the world: Link's throw (procGrabThrow
+  f_0242E010, checkPass on his +0x5898) let go of her in the step after the whole step, which had carried her
+  (setGrabItemPos, no collision) through the wall plane (z 6400.8 against 30's 6379.65 at the let-go), so her first
+  line check began past it. ThrowPlace (B29) covers a let-go in the whole step only. The cause: Link's checkPass
+  windows look one step on (sixty_step.cpp), right at N 2 only; at N 3 the whole step's window was in 30's tick before
+  ([1.533, 1.8) against 30's tick's [1.8, 2.6)), every pass a step late. Now N - 1 steps on (PassAhead,
+  WWHD_60FPS_PASSAHEAD): his windows tile 30's tick, the throw lets go in the whole step as at 30 and N 2, Medli at
+  30's z 6380 with the wall hit: medli 33.6 at N 3 (Link: the camera following her, 9.7 units from 30's landing). Both
+  act at N > 2 only (N 2's tracks byte-identical). Predeploy's 52 routes at N 3: 50 ok (47 with both off), WARN sail
+  86, en-ph 74; at N 4: 46 ok (45), FAIL land3 542 and gohmarock 191 (192 with them off), WARN plants 52, sail 62,
+  tour3 76, en-ph 72 (uncapped-plan.md). land3 at N 4, looked at, not fixed: the camera's tick is exact (the
+  right-stick swing at 1230-1320 is 30's to the unit, plus a constant -189); the 189 is the walk's facing drift before
+  it (Link's heading is the camera's yaw + the stick, the camera follows him: a loop). It starts in the first walking
+  tick (966): the whole step's speedF 1.4223 at N 3 and 4 against 30's 1.4088 (N 2 1.4098), the inputs differing at
+  965's end in Link's old angle copies (+0x30C, +0x6918, +0x6924) and animation frames (+0x770 on); by 1006 the facing
+  is 3-7 off at N 2, 45 at N 3, 35 at N 4. Not the camera's show steps' writes outside it: they write only the game
+  info's eye and centre (0x1047411C, 24 bytes; no Link field), and putting those back with the restore (tried) changed
+  nothing at N 4. Next: which of those inputs the walk's speed reads (setSpeedAndAngleNormal, Link's procedure 0x06).
 - **t-pausemenu M1-M3** (the owner's design: assets/pause_menu, its README the spec; frontend/pause_menu.cpp,
   ui_draw.cpp): Esc/F2 or the pad's SELECT (−, no longer the game's) opens it; the game held at a whole tick's top
   (os/savestate RequestHold), silent, over its blurred last frame; the menu drawn in software at the window's size from
