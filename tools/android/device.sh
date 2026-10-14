@@ -5,8 +5,8 @@
 #   pair HOST:PORT CODE     pair once (the device's "Pair device with pairing code" screen)
 #   connect HOST:PORT       connect (the Wireless debugging screen's address; its port changes when it's turned on)
 #   install [APK]           install the app (default build/android/windsong.apk), keeping its files
-#   files                   the app's files as tools/play/deploy.sh lays them out: Cemu's resources, the settings, the
-#                           pause menu's assets, the game (1.5 GB, once). Game data: on the device only.
+#   files                   the game for tests (1.5 GB, once; game data: on the device only), in place of Setup's
+#                           copy (t-startscreen S3). The app's own files come from its APK (WindSongActivity)
 #   run [SECONDS]           start the app, then the log (Ctrl-C ends the log, not the app); ENV="A=1;B=2" sets
 #                           environment variables in it
 #   log [SECONDS]           the app's logcat (default: until Ctrl-C)
@@ -26,9 +26,6 @@ cmd=${1:?usage: device.sh pair|connect|install|files|run|log|stop|perf|uninstall
 if [ -z "${ANDROID_SERIAL:-}" ] && [ -f "$sdk/serial" ]; then export ANDROID_SERIAL=$(cat "$sdk/serial"); fi
 dir=/sdcard/Android/data/$pkg/files
 sh() { "$adb" shell "$@"; }
-push_tar() {   # stdin (a tar) unpacked into $dir/$1 on the device
-    sh "mkdir -p $dir/$1 && tar -x -C $dir/$1"
-}
 case "$cmd" in
 pair) "$adb" pair "$1" "$2" ;;
 perf)
@@ -49,15 +46,7 @@ perf)
 connect) "$adb" connect "$1" && echo "$1" > "$sdk/serial" && "$adb" -s "$1" shell getprop ro.product.model ;;
 install) "$adb" install -r "${1:-$root/build/android/windsong.apk}" ;;
 files)
-    sh "mkdir -p $dir/game $dir/cemu $dir/portable/gameProfiles $dir/portable/controllerProfiles $dir/assets"
-    sh "test -d $dir/cemu/resources" || tar -c -C /wwhd/opt/cemu-src/bin resources gameProfiles | push_tar cemu
-    ref=$root/tools/reference
-    "$adb" push "$ref/settings.xml" "$dir/portable/settings.xml" >/dev/null
-    "$adb" push "$ref/0005000010143500.ini" "$dir/portable/gameProfiles/0005000010143500.ini" >/dev/null
-    "$adb" push "$ref/controller0.xml" "$dir/portable/controllerProfiles/controller0.xml" >/dev/null
-    list=$root/config/US_v0/shader_list.txt
-    [ -f "$list" ] && sh "mkdir -p $dir/cemu/wwhd" && "$adb" push "$list" "$dir/cemu/wwhd/shader_list.txt" >/dev/null
-    tar -c -C "$root/assets" pause_menu | push_tar assets
+    sh "mkdir -p $dir/game"
     if ! sh "test -f $dir/game/wwhd.wua"; then
         echo "copying the game (1.5 GB)"
         "$adb" push /wwhd/data/rom/*.wua "$dir/game/wwhd.wua.part" && sh "mv $dir/game/wwhd.wua.part $dir/game/wwhd.wua"

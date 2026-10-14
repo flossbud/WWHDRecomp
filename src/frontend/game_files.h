@@ -18,7 +18,19 @@ namespace wwhd::game_files
 	// checks a copy: the title ID and version (Cemu's TitleInfo), then cking.rpx's sha256 (orig/README.md's); progress
 	// (0..1) through the three steps (reading the files to .35, verifying to .75, preparing to 1) as it goes. Cancel
 	// (set by another thread) stops it with why "cancelled"
-	Copy Check(const std::string& path, std::atomic<float>* progress = nullptr, std::atomic<bool>* cancel = nullptr);
+	// (from and span: where its 0..1 falls in the progress shown, when a copy comes first)
+	Copy Check(const std::string& path, std::atomic<float>* progress = nullptr, std::atomic<bool>* cancel = nullptr,
+		float from = 0, float span = 1);
+
+	// Android (t-startscreen S3): the system's picker gives a content:// URI, which the game can't read in place, so
+	// the choice is copied in first: to <dir>/game/wwhd.wua, the app's files (WWHD_HOME, the activity's -g). Elsewhere
+	// only with WWHD_COPY_IN=DIR, a test's
+	bool CopiesIn();
+	// the copy taken in: a .wua's footer looked at first (anything else is turned away before 1.5 GB are copied), the
+	// room for it, then copied to game/wwhd-new.wua (progress 0 to .35: the first step, "Copying files"), checked there
+	// (.35 to 1). Verified: renamed over game/wwhd.wua (a copy there before stays until then), its path the result's;
+	// else removed. Cancel stops it as Check's does
+	Copy CopyIn(const std::string& chosen, std::atomic<float>* progress = nullptr, std::atomic<bool>* cancel = nullptr);
 
 	// the registered copy: its path, and whether its check passed for the file as it is now (its size and time)
 	bool Registered(Copy& out);

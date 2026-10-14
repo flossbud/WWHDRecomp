@@ -4,9 +4,12 @@
 #include "Cafe/TitleList/TitleInfo.h"
 #include "config/ActiveSettings.h"
 #include <openssl/sha.h>
+#include <SDL3/SDL_iostream.h>
+#include <cstdio>
 #include <fstream>
 #include <mutex>
 #include <thread>
+#include <vector>
 #include "build_id.inc"
 
 namespace wwhd::game_files
@@ -61,12 +64,13 @@ namespace wwhd::game_files
 		}
 	}
 
-	Copy Check(const std::string& path, std::atomic<float>* progress, std::atomic<bool>* cancel)
+	Copy Check(const std::string& path, std::atomic<float>* progress, std::atomic<bool>* cancel, float from, float span)
 	{
 		std::lock_guard lock(s_lock);
 		Copy c;
 		c.path = path;
 		auto cancelled = [&] { return cancel && cancel->load(std::memory_order_relaxed); };
+		auto Set = [&](std::atomic<float>* p, float v) { game_files::Set(p, from + span * v); };
 		// reading the files (0 to .35): the format and the title's XML
 		Set(progress, 0.02f);
 		TitleInfo title{ _utf8ToPath(path) };
@@ -139,6 +143,120 @@ namespace wwhd::game_files
 		Set(progress, 1.0f);
 		c.ok = true;
 		return c;
+	}
+
+	namespace
+	{
+		// where a copy taken in goes: WWHD_COPY_IN's folder (a test's, any system), else the Android app's files
+		std::string CopyInDir()
+		{
+			if (const char* d = getenv("WWHD_COPY_IN"); d && *d)
+				return d;
+#if defined(__ANDROID__)
+			if (const char* home = getenv("WWHD_HOME"); home && *home)
+				return home;
+#endif
+			return "";
+		}
+
+		// a ZArchive (.wua) ends with its footer: ..., its total size (8 bytes), version (4), magic (4), big-endian
+		// (Cemu's dependencies/ZArchive, zarchivecommon.h). True also when the end can't be read (a stream that can't
+		// seek): the check after the copy decides then
+		bool LooksLikeWua(SDL_IOStream* in, Sint64 size)
+		{
+			uint8 tail[16];
+			if (size < (Sint64)sizeof(tail) || SDL_SeekIO(in, size - (Sint64)sizeof(tail), SDL_IO_SEEK_SET) < 0)
+				return true;
+			const bool read = SDL_ReadIO(in, tail, sizeof(tail)) == sizeof(tail);
+			SDL_SeekIO(in, 0, SDL_IO_SEEK_SET);
+			if (!read)
+				return true;
+			auto be = [&](int at, int n) { uint64 v = 0; for (int i = 0; i < n; i++) v = v << 8 | tail[at + i]; return v; };
+			return be(12, 4) == 0x169f52d6 && be(0, 8) == (uint64)size;
+		}
+	}
+
+	bool CopiesIn()
+	{
+		return !CopyInDir().empty();
+	}
+
+	Copy CopyIn(const std::string& chosen, std::atomic<float>* progress, std::atomic<bool>* cancel)
+	{
+		static std::mutex s_copyLock;                  // one at a time: a cancelled copy removes its part before the next writes it
+		std::lock_guard lock(s_copyLock);
+		Copy c;
+		c.path = chosen;
+		auto cancelled = [&] { return cancel && cancel->load(std::memory_order_relaxed); };
+		const fs::path dir = _utf8ToPath(CopyInDir()) / "game", into = dir / "wwhd.wua", part = dir / "wwhd-new.wua";
+		std::error_code ec;
+		fs::create_directories(dir, ec);
+		Set(progress, 0.0f);
+		SDL_IOStream* in = SDL_IOFromFile(chosen.c_str(), "rb");
+		if (!in)
+		{
+			cemuLog_log(LogType::Force, "wwhd: start screen: couldn't open {} ({})", chosen, SDL_GetError());
+			c.why = "The file couldn't be opened.";
+			return c;
+		}
+		const Sint64 size = SDL_GetIOSize(in);
+		if (!LooksLikeWua(in, size))
+		{
+			SDL_CloseIO(in);
+			c.why = "This isn\xE2\x80\x99t a .wua file. WindSong takes the game here as one .wua (Cemu can make one from a dump).";
+			return c;
+		}
+		if (const fs::space_info room = fs::space(dir, ec); !ec && size > 0 && room.available < (uintmax_t)size + (64u << 20))
+		{
+			SDL_CloseIO(in);
+			c.why = fmt::format("There isn\xE2\x80\x99t room for it: it needs {:.1f} GB free, and there\xE2\x80\x99s {:.1f} GB.",
+				(double)size / 1e9, (double)room.available / 1e9);
+			return c;
+		}
+		cemuLog_log(LogType::Force, "wwhd: start screen: copying {} ({} bytes) to {}", chosen, size, _pathToUtf8(part));
+		FILE* out = fopen(_pathToUtf8(part).c_str(), "wb");
+		bool ok = out != nullptr;
+		std::vector<char> buf(4 << 20);
+		uint64 done = 0;
+		while (ok)
+		{
+			const size_t n = SDL_ReadIO(in, buf.data(), buf.size());
+			if (n == 0)
+			{
+				ok = SDL_GetIOStatus(in) == SDL_IO_STATUS_EOF;
+				break;
+			}
+			ok = fwrite(buf.data(), 1, n, out) == n;
+			done += n;
+			Set(progress, 0.35f * (size > 0 ? std::min(1.0f, (float)done / (float)size) : 0.5f));
+			if (cancelled())
+				break;
+		}
+		SDL_CloseIO(in);
+		if (out && fclose(out) != 0)
+			ok = false;
+		if (!ok || cancelled() || (size > 0 && done != (uint64)size))
+		{
+			fs::remove(part, ec);
+			c.why = cancelled() ? "cancelled" : "It couldn\xE2\x80\x99t be copied (is the storage full, or the file gone?).";
+			return c;
+		}
+		Copy checked = Check(_pathToUtf8(part), progress, cancel, 0.35f, 0.65f);
+		if (checked.ok)
+		{
+			fs::rename(part, into, ec);                // over the copy before, which a running game may still read (its inode stays)
+			if (ec)
+				checked.ok = false, checked.why = "It couldn\xE2\x80\x99t be put in place (" + ec.message() + ").";
+			else
+				checked.path = _pathToUtf8(into);
+		}
+		if (!checked.ok)
+		{
+			fs::remove(part, ec);
+			checked.path = chosen;
+		}
+		cemuLog_log(LogType::Force, "wwhd: start screen: copied in {} bytes: {}", done, checked.ok ? checked.path : checked.why);
+		return checked;
 	}
 
 	bool Registered(Copy& out)

@@ -166,6 +166,23 @@ namespace wwhd::pause_menu
 			{ "barriers", "WWHD_BARRIERS" }, { "clearLoadop", "WWHD_CLEAR_LOADOP" } };
 
 		void CheckRows();
+		// a row's "platform": "android" (shown only there), or { "not": "android" } (shown everywhere else); none: everywhere
+		bool ForThisPlatform(const rapidjson::Value& r)
+		{
+#if defined(__ANDROID__)
+			const std::string self = "android";
+#else
+			const std::string self = "desktop";
+#endif
+			if (!r.HasMember("platform"))
+				return true;
+			const rapidjson::Value& p = r["platform"];
+			if (p.IsString())
+				return self == p.GetString();
+			if (p.IsObject() && p.HasMember("not") && p["not"].IsString())
+				return self != p["not"].GetString();
+			return true;
+		}
 		bool LoadCategories(const std::string& path)
 		{
 			FILE* f = fopen(path.c_str(), "rb");
@@ -191,10 +208,8 @@ namespace wwhd::pause_menu
 				for (const auto& r : c["rows"].GetArray())
 				{
 					Row row{ str(r, "id"), str(r, "label"), str(r, "type"), str(r, "description"), str(r, "envVar"), {}, {} };
-#if !defined(__ANDROID__)
-					if (str(r, "platform") == "android")
-						continue;                           // the GPU driver's rows (a4-drivers)
-#endif
+					if (!ForThisPlatform(r))
+						continue;                           // the GPU driver's rows off Android (a4-drivers), the window's on it
 					if (r.HasMember("options") && r["options"].IsArray())
 						for (const auto& o : r["options"].GetArray())
 							if (o.IsObject() && !o.HasMember("planned"))
@@ -462,6 +477,8 @@ namespace wwhd::pause_menu
 			bool dragging = false;                      // files dragged over the window
 			Clock::time_point dragSeen;                 // the last sign of them (no leave on X11: gone after 400 ms)
 			std::string setupFile;                      // the files chosen (being checked, or checked)
+			bool setupCopiesIn = false;                 // Android: they're copied into the app first (game_files::CopyIn, S3)
+			std::string setupName;                      // their name as the picker gives it (Android: a content URI's), "" from the path
 			game_files::Copy setupCopy;                 // their check's outcome
 			std::shared_ptr<CheckJob> setupJob;
 			bool browseWanted = false;                  // Browse chosen: the window's loop shows the picker
@@ -1519,7 +1536,13 @@ namespace wwhd::pause_menu
 		// title frame from Launch's Change Files ----
 		constexpr int kIdle = 0, kChecking = 1, kBad = 2, kReady = 3;
 		constexpr Colour kZoneText = Colour::Hex(0x3f6a26), kSky = Colour::Hex(0x0bd8f6);
+#if defined(__ANDROID__)
+		const char* const kFormats = "A .wua: Cemu\xE2\x80\x99s archive of a Wii U dump";
+		const char* const kZoneIdle = "Browse for your game file";   // (no files dropped on an app)
+#else
 		const char* const kFormats = "WUA \xC2\xB7 WUX \xC2\xB7 WUD \xC2\xB7 or an extracted game folder";
+		const char* const kZoneIdle = "Drop game files here";
+#endif
 		float SetupX() { return 360 + LaunchOX(); }
 		float ZoneX() { return 570 + LaunchOX(); }
 		constexpr float kZoneY = 499, kZoneW = 780, kZoneH = 250, kSetupButtonsY = 779, kSetupButtonW = 340;
@@ -1587,7 +1610,10 @@ namespace wwhd::pause_menu
 			switch (st.sstate)
 			{
 			case kChecking:
-				title = "Checking your game files\xE2\x80\xA6", body = "This only happens once and takes a few seconds."; break;
+				title = "Checking your game files\xE2\x80\xA6";
+				body = st.setupCopiesIn ? "This only happens once: the game is copied into WindSong\xE2\x80\x99s own storage, then checked."
+					: "This only happens once and takes a few seconds.";
+				break;
 			case kBad:
 				title = "That doesn\xE2\x80\x99t look right";
 				body = st.setupCopy.why.empty() ? "This isn\xE2\x80\x99t a supported copy of The Wind Waker HD. Make sure it\xE2\x80\x99s a full Wii U dump and try again."
@@ -1597,12 +1623,21 @@ namespace wwhd::pause_menu
 				title = "Ready to set sail!", body = "Your game files check out. You won\xE2\x80\x99t be asked for them again."; break;
 			default:
 				title = st.dragging ? "Let go to load" : "Let\xE2\x80\x99s find your game";
+#if defined(__ANDROID__)
+				body = "This port runs on your own copy of The Wind Waker HD. Browse for its .wua file; it\xE2\x80\x99s copied into WindSong once.";
+#else
 				body = st.dragging ? "We\xE2\x80\x99ll check the files before anything is copied."
 					: "This port runs on your own copy of The Wind Waker HD. Drop your Wii U game files here, or browse for them.";
+#endif
 			}
 			if (st.help && (st.sstate == kIdle || st.sstate == kBad) && !st.dragging)
+#if defined(__ANDROID__)
+				body = "Dump the game from your own Wii U with a homebrew dumping tool, make a .wua of it with Cemu, then choose it here. "
+					"Nothing is uploaded; your files stay on this device.";
+#else
 				body = "Dump the game from your own Wii U with a homebrew dumping tool, then choose the output here. Nothing is uploaded; "
 					"your files stay on this PC.";
+#endif
 			return { title, body };
 		}
 		// the body's lines (25 px, 820 wide, balanced; at most three) and the room a third takes: two are reserved (min-height
@@ -1635,6 +1670,17 @@ namespace wwhd::pause_menu
 		std::string FileName(const std::string& path)
 		{
 			std::string p = path;
+			if (p.rfind("content://", 0) == 0)          // Android's picker: content://AUTHORITY/document/primary%3ADownload%2Fx.wua
+			{
+				std::string d;
+				for (size_t i = 0; i < p.size(); i++)
+					if (p[i] == '%' && i + 2 < p.size() && isxdigit((unsigned char)p[i + 1]) && isxdigit((unsigned char)p[i + 2]))
+						d += (char)std::stoi(p.substr(i + 1, 2), nullptr, 16), i += 2;
+					else
+						d += p[i];
+				const size_t cut = d.find_last_of("/:");
+				return cut == std::string::npos ? d : d.substr(cut + 1);
+			}
 			while (p.size() > 1 && p.back() == '/')
 				p.pop_back();
 			const size_t slash = p.rfind('/');
@@ -1689,7 +1735,8 @@ namespace wwhd::pause_menu
 			const float e = SetupExtra(st);
 			c.Draw(a.Get(st.dragging && st.sstate != kChecking && st.sstate != kReady ? "dropzone_780x250_drag" : "dropzone_780x250_idle"),
 				ZoneX() * s, (kZoneY + e) * s);
-			const std::string name = FitStart(a.rocknroll, 21 * s, 620 * s, FileName(st.setupFile));
+			const std::string shown = st.setupName.empty() ? FileName(st.setupFile) : st.setupName;
+			const std::string name = FitStart(a.rocknroll, 21 * s, 620 * s, shown);
 			switch (st.sstate)
 			{
 			case kChecking:
@@ -1698,7 +1745,7 @@ namespace wwhd::pause_menu
 			case kBad:
 				c.Draw(a.Get("icon_warning_76"), (cx - 38) * s, (536 + e) * s);
 				TextCentred(f, a.rocknroll, 28, cx, 648 + e, "Couldn\xE2\x80\x99t recognise this file", kInk);
-				TextCentred(f, a.rocknroll, 20, cx, 698 + e, FitStart(a.rocknroll, 20 * s, 700 * s, FileName(st.setupFile)), kZoneText);
+				TextCentred(f, a.rocknroll, 20, cx, 698 + e, FitStart(a.rocknroll, 20 * s, 700 * s, shown), kZoneText);
 				break;
 			case kReady:
 				c.Draw(a.Get("icon_ready-check_70"), (cx - 35) * s, (538 + e) * s);
@@ -1708,7 +1755,7 @@ namespace wwhd::pause_menu
 				break;
 			default:
 				c.Draw(a.Get("icon_drop-target_96"), (cx - 48) * s, (525 + e) * s);
-				TextCentred(f, a.rocknroll, 30, cx, 658 + e, st.dragging ? "Let go to load" : "Drop game files here", kInk);
+				TextCentred(f, a.rocknroll, 30, cx, 658 + e, st.dragging ? "Let go to load" : kZoneIdle, kInk);
 				TextCentred(f, a.rocknroll, 20, cx, 708 + e, kFormats, kZoneText);
 			}
 			return c.Take();
@@ -1746,7 +1793,7 @@ namespace wwhd::pause_menu
 			c.NoClip();
 			c.Text(a.rocknroll, 23 * s, (bx + 540 + 18) * s, (by + 12) * s + (a.rocknroll.Ascent(23 * s) + a.rocknroll.Descent(23 * s)) / 2,
 				fmt::format("{}%", (int)std::lround(p * 100)), kInk, op);
-			const char* const names[3] = { "Reading files", "Verifying", "Preparing assets" };
+			const char* const names[3] = { st.setupCopiesIn ? "Copying files" : "Reading files", "Verifying", "Preparing assets" };
 			const float ends[3] = { 0.35f, 0.75f, 1.0f };
 			float widths[3], total = 0;
 			for (int i = 0; i < 3; i++)
@@ -2377,13 +2424,19 @@ namespace wwhd::pause_menu
 
 		void SetupChoose(State& st, const std::string& chosen)
 		{
-			st.setupFile = GameRoot(chosen), st.sstate = kChecking, st.help = false, st.dragging = false;
+			st.setupCopiesIn = game_files::CopiesIn();
+			st.setupName.clear();
+#if defined(__ANDROID__)
+			if (chosen.rfind("content://", 0) == 0)
+				st.setupName = android::DisplayName(chosen);   // (a provider's URI may end in a document id, not the name)
+#endif
+			st.setupFile = st.setupCopiesIn ? chosen : GameRoot(chosen), st.sstate = kChecking, st.help = false, st.dragging = false;
 			st.setupCopy = game_files::Copy{};
 			auto job = std::make_shared<State::CheckJob>();
 			st.setupJob = job;
-			cemuLog_log(LogType::Force, "wwhd: start screen: Setup checks {}", st.setupFile);
-			std::thread([job, path = st.setupFile] {
-				job->result = game_files::Check(path, &job->progress, &job->cancel);
+			cemuLog_log(LogType::Force, "wwhd: start screen: Setup {} {}", st.setupCopiesIn ? "copies in" : "checks", st.setupFile);
+			std::thread([job, path = st.setupFile, in = st.setupCopiesIn] {
+				job->result = in ? game_files::CopyIn(path, &job->progress, &job->cancel) : game_files::Check(path, &job->progress, &job->cancel);
 				job->done.store(true);
 			}).detach();
 			FocusSetup(st, 0, true);
@@ -2476,8 +2529,12 @@ namespace wwhd::pause_menu
 		// when there's no picker (WWHD_OWN_BROWSER=1 always)
 		bool OwnBrowser(const State& st)
 		{
+#if defined(__ANDROID__)
+			return false;                               // the system's picker (pad, touch): an app can't list the shared storage
+#else
 			static const bool gamescope = getenv("GAMESCOPE_WAYLAND_DISPLAY") || getenv("WWHD_OWN_BROWSER");
 			return st.pad || gamescope;
+#endif
 		}
 		void OpenBrowser(State& st)
 		{
@@ -2525,6 +2582,17 @@ namespace wwhd::pause_menu
 		// Change Files from Launch, once the new copy verified: the program again on it (the hold's game can't swap its files)
 		void Restart(const std::string& path)
 		{
+#if defined(__ANDROID__)
+			// Android: the system starts an app's activities, so no exec: the activity starts again (WindSongActivity.restart:
+			// a relaunch from a second process, which ends this one), and its -g is the copy taken in, game/wwhd.wua
+			cemuLog_log(LogType::Force, "wwhd: start screen: the game files changed to {}: the app starts again", path);
+			gpu::SaveShaderCache();
+			if (android::RestartActivity())
+				for (int i = 0; i < 100; i++)               // ended from the other process within moments; else back, failed
+					std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			cemuLog_log(LogType::Force, "wwhd: start screen: couldn't start again");
+			return;
+#endif
 			std::ifstream f("/proc/self/cmdline", std::ios::binary);
 			std::string all((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
 			std::vector<std::string> args;
@@ -2967,7 +3035,9 @@ namespace wwhd::pause_menu
 				StartLaunch(st, window);
 				if (st.setupJob && st.setupJob->done.load())   // Setup's check done: ready (registered) or wrong
 				{
-					st.setupCopy = st.setupJob->result, st.setupCopy.path = st.setupFile;
+					st.setupCopy = st.setupJob->result;
+					if (st.setupCopy.path.empty())
+						st.setupCopy.path = st.setupFile;       // (a copy taken in: its place in the app, game/wwhd.wua)
 					st.sstate = st.setupCopy.ok ? kReady : kBad;
 					if (st.setupCopy.ok)
 						game_files::Register(st.setupCopy);
@@ -3536,6 +3606,8 @@ namespace wwhd::pause_menu
 		st.sstate = kIdle, st.phase = Phase::Opening, st.since = now, st.screenSince = now;
 		FocusSetup(st, 0, true);
 		cemuLog_log(LogType::Force, "wwhd: start screen: Setup (no game files given or registered)");
+		if (const char* chosen = getenv("WWHD_SETUP_CHOOSE"); chosen && *chosen)
+			SetupChoose(st, chosen);                    // a test's: these files, as if picked (WWHD_COPY_IN=DIR: copied in first)
 		st.wake.notify_one();
 	}
 

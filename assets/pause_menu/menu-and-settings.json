@@ -376,6 +376,7 @@
       "rows": [
         {
           "id": "display",
+          "platform": { "not": "android" },
           "label": "Display",
           "type": "choice",
           "options": [
@@ -394,6 +395,7 @@
         },
         {
           "id": "resolution",
+          "platform": { "not": "android" },
           "label": "Resolution",
           "type": "choice",
           "options": [
@@ -458,6 +460,7 @@
         },
         {
           "id": "vrr",
+          "platform": { "not": "android" },
           "label": "Variable Refresh",
           "type": "toggle",
           "default": false,

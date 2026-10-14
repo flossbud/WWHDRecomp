@@ -2,12 +2,15 @@
 #define SDL_MAIN_HANDLED        // as Cemu's main.cpp: SDL_main.h renames nothing here
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_hints.h>
+#include <SDL3/SDL_system.h>
+#include <jni.h>
 #include <android/log.h>
 #include <dlfcn.h>
 #include <pthread.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <unistd.h>
 
 // Cemu's main() calls Xlib's XInitThreads on every Linux, Android too (main.cpp, BOOST_OS_LINUX): there's no X there
@@ -67,6 +70,53 @@ static void LogToLogcat()
 		close(2);
 		pthread_join(s_logThread, nullptr);
 	});
+}
+
+namespace wwhd::android
+{
+	bool RestartActivity()
+	{
+		JNIEnv* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());   // (attaches this thread)
+		jobject activity = static_cast<jobject>(SDL_GetAndroidActivity());
+		if (!env || !activity)
+			return false;
+		jclass cls = env->GetObjectClass(activity);
+		const jmethodID restart = env->GetMethodID(cls, "restart", "()V");
+		if (restart)
+			env->CallVoidMethod(activity, restart);
+		const bool ok = restart && !env->ExceptionCheck();
+		if (env->ExceptionCheck())
+			env->ExceptionDescribe(), env->ExceptionClear();
+		env->DeleteLocalRef(cls);
+		env->DeleteLocalRef(activity);
+		return ok;
+	}
+
+	std::string DisplayName(const std::string& uri)
+	{
+		JNIEnv* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
+		jobject activity = static_cast<jobject>(SDL_GetAndroidActivity());
+		if (!env || !activity)
+			return "";
+		std::string name;
+		jclass cls = env->GetObjectClass(activity);
+		const jmethodID m = env->GetMethodID(cls, "displayName", "(Ljava/lang/String;)Ljava/lang/String;");
+		jstring arg = env->NewStringUTF(uri.c_str());
+		jstring r = m && arg ? static_cast<jstring>(env->CallObjectMethod(activity, m, arg)) : nullptr;
+		if (env->ExceptionCheck())
+			env->ExceptionDescribe(), env->ExceptionClear(), r = nullptr;
+		if (r)
+		{
+			if (const char* utf = env->GetStringUTFChars(r, nullptr))
+				name = utf, env->ReleaseStringUTFChars(r, utf);
+			env->DeleteLocalRef(r);
+		}
+		if (arg)
+			env->DeleteLocalRef(arg);
+		env->DeleteLocalRef(cls);
+		env->DeleteLocalRef(activity);
+		return name;
+	}
 }
 
 // SDL's Java side calls SDL_main (it looks the name up in libmain.so). Cemu's main.cpp defines SDL_MAIN_HANDLED, so

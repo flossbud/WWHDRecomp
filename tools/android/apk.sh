@@ -19,7 +19,21 @@ cp -r "$root/android/java/." "$w/src/"
 javac -nowarn --release 17 -classpath "$jar" -d "$w/classes" $(find "$w/src" -name '*.java') 2>&1 | grep -v '^Note:' || true
 "$bt/d8" --release --min-api 33 --lib "$jar" --output "$w/dex" $(find "$w/classes" -name '*.class')
 "$bt/aapt2" compile --dir "$root/android/res" -o "$w/res.zip"
-"$bt/aapt2" link -I "$jar" --manifest "$root/android/AndroidManifest.xml" -o "$w/base.apk" "$w/res.zip" \
+# the app's own files (t-startscreen S3: a player has no device.sh files): app/ is ours, extracted to the files dir's
+# app/ and replaced on an update (Cemu's resources and game profiles with the game's own as its default, the shader
+# list, the pause menu's assets: WWHD_CEMU_DATA and WWHD_UI_ASSETS point there); once/ is the player's once there
+# (Cemu's settings.xml, the controller profile), copied into the files dir only where missing. WindSongActivity
+# extracts them when the trees' hash (wwhd-assets.txt) differs from the last
+a=$w/assets
+mkdir -p "$a/app/cemu/wwhd" "$a/app/assets" "$a/once/portable/controllerProfiles"
+cp -r /wwhd/opt/cemu-src/bin/resources /wwhd/opt/cemu-src/bin/gameProfiles "$a/app/cemu/"
+cp "$root/tools/reference/0005000010143500.ini" "$a/app/cemu/gameProfiles/default/"
+cp "$root/config/US_v0/shader_list.txt" "$a/app/cemu/wwhd/"
+cp -r "$root/assets/pause_menu" "$a/app/assets/"
+cp "$root/tools/reference/settings.xml" "$a/once/portable/"
+cp "$root/tools/reference/controller0.xml" "$a/once/portable/controllerProfiles/"
+(cd "$a" && find app once -type f | LC_ALL=C sort | xargs -d '\n' sha256sum | sha256sum | cut -c1-16) > "$a/wwhd-assets.txt"
+"$bt/aapt2" link -I "$jar" --manifest "$root/android/AndroidManifest.xml" -o "$w/base.apk" "$w/res.zip" -A "$a" \
     --min-sdk-version 33 --target-sdk-version $api --debug-mode   # debuggable: run-as for maps, simpleperf (A3)
 llvm-objcopy --strip-debug "$lib" "$w/lib/arm64-v8a/libmain.so"
 cp "$w/base.apk" "$w/unaligned.apk"

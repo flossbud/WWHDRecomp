@@ -66,13 +66,13 @@ d8, aapt2, zipalign -P 16, apksigner with a debug key). Both are generated outpu
 - Paths (9): the activity (`org.windsong.app.WindSongActivity`, an SDLActivity) sets `WWHD_HOME` (the app's external
   files dir: `cemu/` for Cemu's resources and game profiles, `game/wwhd.wua`, portable/) and the settings
   (`WWHD_NATIVE=on`, `WWHD_RENDER=vk`), and passes `-g game/wwhd.wua`; `cemu_boot`'s and the pause menu's exe dir is
-  `WWHD_HOME`. For A3 the files are pushed with adb; the system file picker (content URIs) is S3's.
+  `WWHD_HOME`. For A3 the files were pushed with adb; since S3 they come from the APK and Setup (below).
 - X11 (4): window_system.cpp's Xlib and its VRR property are compiled out. The loader name (10) is session bottom's
   (b-android-vk).
 - Gated on x86 (the change is a no-op there): checks all MATCH, regress da06a4ee, statetest 0 differ.
 Not run on the device yet (A3): it needs the handheld on the tailnet with Wireless debugging paired. Then
-`tools/android/device.sh` (in the worker's container): `pair`/`connect`, `install`, `files` (deploy.sh's layout, the game
-once), `run` (start, then the app's logcat), `stop`, `uninstall` (restores the device).
+`tools/android/device.sh` (in the worker's container): `pair`/`connect`, `install`, `files` (the game, once; the rest
+since S3 from the APK), `run` (start, then the app's logcat), `stop`, `uninstall` (restores the device).
 
 ## A3 on the device (2026-10-13, the owner's handheld: Adreno 740, Android 13)
 - Runs: three host threads at 59-60 fps in the title (the scheduler thread 72-80% busy); fullscreen and landscape;
@@ -80,8 +80,22 @@ once), `run` (start, then the app's logcat), `stop`, `uninstall` (restores the d
 - Sound on AAudio directly (audio_aaudio.cpp): no fast track there (no MMAP; a normal mixer track), latency 122 -> 75 ms.
 - Found by testing: libc++'s atomic wait/notify lose wake-ups (the scheduler lock on a futex), arm64's thread pointer
   read once a function (the lock count through a call), SDL's orientation and system bars, the start screen's input.
-- Open: the title's boat snaps in at 60 (its 60 rules; session bottom); SDL's event wait spins on Android (a core);
-  Change Files' restart (execv of /proc/self/exe) is wrong there (S3).
+- Open: the title's boat snaps in at 60 (its 60 rules; session bottom). (SDL's event wait spinning: fixed, A4.)
+- **t-startscreen S3** (2026-10-14, on the Odin with a scratch copy): the app's own files ship in the APK (apk.sh's
+  asset trees) and the activity extracts them when their hash changes: `app/` into the files dir's app/ (Cemu's
+  resources and game profiles, the game's own as its default, the shader list, the pause menu's assets;
+  `WWHD_CEMU_DATA` and `WWHD_UI_ASSETS` point there), `once/` (settings.xml, the controller profile) only where missing.
+  app/ is the app's own folder because folders a test pushed with adb (device.sh's old `files`: cemu/, assets/) are
+  the shell user's, which the app can't write in. With no game/wwhd.wua the activity passes no -g and Setup asks:
+  Browse opens the system's picker (the menu's own browser never: an app can't list the shared storage), the
+  content:// URI is copied to game/wwhd-new.wua with the progress bar ("Copying files"; a .wua's footer and the free
+  space checked first), checked there, renamed over game/wwhd.wua once verified, registered. Change Files restarts the
+  activity (Restarter, a second process, ends this one and starts it again: no exec on Android). Display, Resolution
+  and Variable Refresh are hidden there (`"platform": { "not": "android" }`). `device.sh files` only pushes the game
+  for tests. On the device: the picker's choice copied in about 1.5 s, verified, byte-identical, and the game
+  booted from it; Change Files back on the start screen within 1 s (a new process), verified; the first start's
+  extraction 343 files in 0.5 s, none on the next. Where an older test pushed portable/'s game profile with adb, that
+  copy still wins over the APK's (the same content on the Odin).
 - GPU drivers (a4-drivers): Settings' GPU Driver and Import GPU Driver (Android only): a driver package (zip: meta.json
   and its library, as other Android emulators take) unpacked into the app's internal files and loaded by libadrenotools
   (setup.sh pins it; its hooks in the APK, extracted at install) in place of the system's; the system's when it fails.

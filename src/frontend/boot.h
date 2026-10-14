@@ -15,6 +15,14 @@ namespace wwhd
 	// Android: a GPU driver package (zip: meta.json and its library) from a path or content:// URI into the app's
 	// drivers; name: its own, id: its folder (Settings' value), why: what's wrong when it can't (gpu_drivers.cpp)
 	bool ImportGpuDriver(const std::string& source, std::string& name, std::string& id, std::string& why);
+	namespace android
+	{
+		// Android: the activity again, from a second process that ends this one (WindSongActivity.restart; Change
+		// Files' restart, t-startscreen S3); false when it couldn't be asked (android_glue.cpp)
+		bool RestartActivity();
+		// the name a content:// URI's document goes by (the system picker's choice), "" unknown (android_glue.cpp)
+		std::string DisplayName(const std::string& uri);
+	}
 	void UpdateOverlay();           // the system's keyboard and dialogs over the game (overlay.cpp, wwhd-null)
 	void UpdateFpsOverlay();        // the settings' FPS overlay (overlay.cpp)
 	// the debug menu's item at a point of the 1920x1080 TV frame: its index, -1 on the panel but no
