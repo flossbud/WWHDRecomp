@@ -78,6 +78,21 @@ namespace coreinit
 	void __OSRemoveThreadFromRunQueues(OSThread_t* thread);
 };
 
+#if defined(__ANDROID__) || defined(WWHD_RT_CTX_TABLE)
+extern thread_local constinit const uint8* g_rtStoreTable;   // src/runtime/diff.cpp (the store journal's table, per host thread)
+
+// Its address through a call, as coreinit_Scheduler.cpp's LockCount: __OSLoadThread runs after the fiber switch that may
+// have brought the thread to another host thread, and arm64 code may read the thread pointer once a function (inlined
+// into __OSThreadSwitchToNext, the address would be the first host thread's). The empty asm keeps the call from being
+// taken as pure
+__attribute__((noinline)) static void* StoreTableOfThisHostThread()
+{
+	const uint8** p = &g_rtStoreTable;
+	asm volatile("" : "+r"(p));
+	return (void*)p;
+}
+#endif
+
 namespace coreinit
 {
 	// scheduler state
@@ -1272,6 +1287,9 @@ namespace coreinit
 		hCPU->reservedMemValue = 0;
 		hCPU->spr.UPIR = coreIndex;
 		hCPU->coreInterruptMask = 1;
+#if defined(__ANDROID__) || defined(WWHD_RT_CTX_TABLE)
+		hCPU->rspTemp = StoreTableOfThisHostThread();   // wwhd: this host thread's store test table, for the generated code (ppc_ops.h)
+#endif
 		PPCInterpreter_setCurrentInstance(hCPU);
 		OSSetCurrentThread(OSGetCoreId(), thread);
 		__OSThreadLoadContext(hCPU, thread);

@@ -113,6 +113,38 @@ the 100% save, 2 minutes at 60, the profiler at 64-deep stacks: a scratch script
   device, --app, frame-pointer call graphs, reported per thread and for the scheduler thread's functions against the
   unstripped library). On the device: the plain and the PGO APKs, perf on each in the title and in play, then the
   scheduler thread's top functions against the Mac's (above): what the device spends that the Mac doesn't.
+- **On the device** (2026-10-13, the title at 60, `device.sh perf`): the scheduler thread 73-78% busy at 59.3-59.6 fps
+  (plain), 69% with PGO in the one steady sample (not conclusive). By thread: the window's thread ("wwhd") 41% of the
+  app's CPU, the game's core 25%, the null GPU's thread 21%, cores 0 and 2 5% each.
+  - **The window's thread**: SDL 3.4's Android event wait pumps on every pass, each pump takes the pending poll
+    sentinel out and queues a new one, and every event queued sends Android's lifecycle WAKE: its 50 ms waits never
+    slept (WWHD_DEBUG_EVENTS: 200 waits in 10 s, all empty, no event queued; simpleperf: SDL_UpdateJoysticks' device
+    checks and the clock). The poll sentinel off on Android: 41% -> 0.06%, the pause menu's keys at once.
+  - **The game's core**: [linker]tlsdesc_resolver_dynamic 4.8% and the kernel 7.5%. The app's library is dlopen'ed, so
+    its thread_locals are dynamic TLS: every guest store's g_rtStoreTable test was a call into bionic's resolver (three
+    in f_028E8F64 alone). Android's generated code reads it through ctx->rspTemp, the address of the host thread's
+    g_rtStoreTable set as a thread is loaded on a core (__OSLoadThread); the hot function's three calls -> none.
+    The address comes from a noinline call (with LockCount's empty asm): the first build had __OSLoadThread inlined
+    into __OSThreadSwitchToNext, which reads TPIDR_EL0 once at its top, so after the fiber switch it added the new
+    host thread's resolver offset to the old host thread's pointer, and a thread moved between host threads got a wild
+    table address (SIGSEGV in the first 2 s on the device). The Mac VM can't show this class: an executable's TLS is
+    the thread pointer plus a constant there, so a stale pointer reads another thread's (valid) variable.
+    The quantized psq stores (psq_write) take the same path. On the device (fix and rq APKs alternately, the title,
+    simpleperf 30 s each): the resolver 4.8% -> 1.7% of the game's core (what's left is mostly rt_journal_store's and
+    GX2's own thread_locals), its cycles a frame 30.4 M -> 29.8-30.0 M (1.5-2%); fps and busy share unchanged (59.2,
+    76-78%): with less work the governor lowers the core's clock, so on the device cycles a frame is the measure.
+  - **The kernel**: 9.9-10.8% of the game's core, 7-8% of it the futex wake in condition_variable::notify_all from
+    __OSAddReadyThreadToRunQueue (CounterSemaphore::increment), 1.4% the scheduler lock's own futex under
+    OSSendMessage. Bionic's pthread_cond_broadcast makes the syscall with no waiter too (glibc doesn't), but a count
+    that signals only while a core waits (tried, not kept) cut it by under 1 point: the rest are real wakes of cores 0
+    and 2, asleep in waitUntilNonZero, for every thread readied that may run on them. Fewer of them needs a scheduling
+    choice (wake one idle core, or none for a thread the readying core will run next), which changes which core runs
+    what: not done.
+  - **The first run after the device has dozed a while** ran at ~51 fps (both builds: the window's first run each
+    time), the cycles a frame higher too; the runs after it at 59.2. Measure after a warm-up run. A candidate, not
+    tried: if it's the governor ramping slowly after a deep doze (or the device's performance mode), a sustained
+    performance hint from the app (Activity.setSustainedPerformanceMode, or Android's game mode API) may hold the
+    clocks steady.
 
 ## P0: doesn't build, link or start on Android
 

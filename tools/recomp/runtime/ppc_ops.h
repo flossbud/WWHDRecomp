@@ -249,6 +249,41 @@ static inline void wr16(uint32 ea, uint16 v, uint32 pc = 0) { RT_STORE(ea, 2, pc
 static inline void wr32(uint32 ea, uint32 v, uint32 pc = 0) { RT_STORE(ea, 4, pc); v = __builtin_bswap32(v); memcpy(RT_MEM + ea, &v, 4); }
 static inline void wr64(uint32 ea, uint64 v, uint32 pc = 0) { RT_STORE(ea, 8, pc); v = __builtin_bswap64(v); memcpy(RT_MEM + ea, &v, 8); }
 static inline void zero_line(uint32 ea, uint32 pc = 0) { ea &= ~31u; RT_STORE(ea, 32, pc); memset(RT_MEM + ea, 0, 32); }   // dcbz
+// Android (m-android A4): the app's library is loaded by dlopen, so a thread_local is dynamic TLS there, every access a
+// call into bionic's resolver (tlsdesc_resolver_dynamic), and the store test's g_rtStoreTable was read that way on every
+// guest store (4.8% of the game's core on the device). The generated code reads it through its context instead: ctx->
+// rspTemp (Cemu's recompiler's scratch, which saves and restores it) holds the address of the host thread's
+// g_rtStoreTable, set as a thread is loaded onto a core (coreinit_Thread.cpp __OSLoadThread, on the host thread that
+// runs it); a context without it reads the thread_local as before. The stores' macros are at the end of this file
+// (WWHD_RT_CTX_TABLE: on by default on Android; -DWWHD_RT_CTX_TABLE elsewhere to test it, e.g. on the arm64 worker)
+#if defined(__ANDROID__) && !defined(WWHD_RT_CTX_TABLE)
+#define WWHD_RT_CTX_TABLE 1
+#endif
+#if defined(WWHD_RT_CTX_TABLE) && defined(WWHD_RT_GENERATED)
+const uint8* rt_store_table_tls();   // diff.cpp: the thread_local, out of line (inline, its address was taken on every
+                                     // store anyway, the resolver's call made before the test that needed it)
+static inline const uint8* rt_store_table(const PPCInterpreter_t* ctx)
+{
+	if (const void* p = ctx->rspTemp) [[likely]]
+		return *static_cast<const uint8* const*>(p);
+	return rt_store_table_tls();
+}
+#define RT_STORE_T(t, ea, n, pc) do { if (const uint8* rt_t = (t)) [[unlikely]] { \
+	if (rt_t[(uint32)(ea) >> 12] | rt_t[((uint32)(ea) + (n) - 1) >> 12]) \
+		rt_journal_store((ea), (n), (pc)); } } while (0)
+static inline void rt_wr8(const uint8* t, uint32 ea, uint8 v, uint32 pc = 0) { RT_STORE_T(t, ea, 1, pc); RT_MEM[ea] = v; }
+static inline void rt_wr16(const uint8* t, uint32 ea, uint16 v, uint32 pc = 0) { RT_STORE_T(t, ea, 2, pc); v = __builtin_bswap16(v); memcpy(RT_MEM + ea, &v, 2); }
+static inline void rt_wr32(const uint8* t, uint32 ea, uint32 v, uint32 pc = 0) { RT_STORE_T(t, ea, 4, pc); v = __builtin_bswap32(v); memcpy(RT_MEM + ea, &v, 4); }
+static inline void rt_wr64(const uint8* t, uint32 ea, uint64 v, uint32 pc = 0) { RT_STORE_T(t, ea, 8, pc); v = __builtin_bswap64(v); memcpy(RT_MEM + ea, &v, 8); }
+static inline void rt_zero_line(const uint8* t, uint32 ea, uint32 pc = 0) { ea &= ~31u; RT_STORE_T(t, ea, 32, pc); memset(RT_MEM + ea, 0, 32); }
+#define RT_WR8(ea, v, pc) rt_wr8(rt_store_table(ctx), (ea), (v), (pc))     // in a helper that has ctx
+#define RT_WR16(ea, v, pc) rt_wr16(rt_store_table(ctx), (ea), (v), (pc))
+#define RT_WR32(ea, v, pc) rt_wr32(rt_store_table(ctx), (ea), (v), (pc))
+#else
+#define RT_WR8(ea, v, pc) wr8((ea), (v), (pc))
+#define RT_WR16(ea, v, pc) wr16((ea), (v), (pc))
+#define RT_WR32(ea, v, pc) wr32((ea), (v), (pc))
+#endif
 // a `late` store passed over on a stepping whole tick: noted, not made (RT_LATE_TICK, above)
 static inline void late_wr8(uint32 ea, uint8 v, uint32 = 0) { if (g_rtLateNotes) rt_late_note(ea, 1, v); }
 static inline void late_wr16(uint32 ea, uint16 v, uint32 = 0) { if (g_rtLateNotes) rt_late_note(ea, 2, v); }
@@ -338,13 +373,13 @@ static inline uint32 psq_read(uint32 ea, sint32 type)
 	return d;
 }
 
-static inline void psq_write(uint32 ea, sint32 type, uint32 v, uint32 pc)
+static inline void psq_write(PPCInterpreter_t* ctx, uint32 ea, sint32 type, uint32 v, uint32 pc)
 {
 	switch (psq_size(type))
 	{
-	case 1: wr8(ea, (uint8)v, pc); break;
-	case 2: wr16(ea, (uint16)v, pc); break;
-	default: wr32(ea, v, pc); break;
+	case 1: RT_WR8(ea, (uint8)v, pc); break;
+	case 2: RT_WR16(ea, (uint16)v, pc); break;
+	default: RT_WR32(ea, v, pc); break;
 	}
 }
 
@@ -370,9 +405,9 @@ static inline void psq_write(uint32 ea, sint32 type, uint32 v, uint32 pc)
 {
 	sint32 type = ctx->spr.UGQR[gqr] & 7;
 	uint8 scale = (ctx->spr.UGQR[gqr] >> 8) & 0x3F;
-	psq_write(ea, type, quantize((float)ctx->fpr[frS].fp0, type, scale), pc);
+	psq_write(ctx, ea, type, quantize((float)ctx->fpr[frS].fp0, type, scale), pc);
 	if (!single)
-		psq_write(ea + psq_size(type), type, quantize((float)ctx->fpr[frS].fp1, type, scale), pc);
+		psq_write(ctx, ea + psq_size(type), type, quantize((float)ctx->fpr[frS].fp1, type, scale), pc);
 }
 
 static inline void psq_load(PPCInterpreter_t* ctx, int frD, uint32 ea, int gqr, bool single)
@@ -387,11 +422,20 @@ static inline void psq_store(PPCInterpreter_t* ctx, int frS, uint32 ea, int gqr,
 {
 	if (ctx->spr.UGQR[gqr] & 4) [[unlikely]]
 		return psq_store_q(ctx, frS, ea, gqr, single, pc);
-	wr32(ea, std::bit_cast<uint32>((float)ctx->fpr[frS].fp0), pc);
+	RT_WR32(ea, std::bit_cast<uint32>((float)ctx->fpr[frS].fp0), pc);
 	if (!single)
-		wr32(ea + 4, std::bit_cast<uint32>((float)ctx->fpr[frS].fp1), pc);
+		RT_WR32(ea + 4, std::bit_cast<uint32>((float)ctx->fpr[frS].fp1), pc);
 }
 
 // ---- things the runtime provides (not the generated code) --------------------------------------
 void rt_trap(PPCInterpreter_t* ctx, uint32 ea);                // tw/twi: guest assertion traps
 void rt_dcache_flush(uint32 ea);                               // dcbf/dcbst: GX2 buffer coherency
+
+// Android: the generated code's stores through its context (above, at zero_line)
+#if defined(WWHD_RT_CTX_TABLE) && defined(WWHD_RT_GENERATED)
+#define wr8(...) rt_wr8(rt_store_table(ctx), __VA_ARGS__)
+#define wr16(...) rt_wr16(rt_store_table(ctx), __VA_ARGS__)
+#define wr32(...) rt_wr32(rt_store_table(ctx), __VA_ARGS__)
+#define wr64(...) rt_wr64(rt_store_table(ctx), __VA_ARGS__)
+#define zero_line(...) rt_zero_line(rt_store_table(ctx), __VA_ARGS__)
+#endif

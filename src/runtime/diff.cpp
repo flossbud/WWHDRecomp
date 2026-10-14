@@ -53,6 +53,14 @@ thread_local const PPCInterpreter_t* g_rtJournalThread = nullptr;
 thread_local constinit bool g_rtStoreAll = false;
 thread_local constinit const uint8* g_rtStorePageBytes = nullptr;
 thread_local constinit const uint8* g_rtStoreTable = nullptr;
+// ppc_ops.h (WWHD_RT_CTX_TABLE, Android: the generated code reads it through ctx; this when a context has none). A call
+// with the empty asm, as coreinit_Scheduler.cpp's LockCount: the caller may have been switched to another host thread
+__attribute__((noinline)) const uint8* rt_store_table_tls()
+{
+	const uint8* const* p = &g_rtStoreTable;
+	asm volatile("" : "+r"(p));
+	return *p;
+}
 
 // RT_STORE's table (ppc_ops.h) from the switches: off, null; a journal that takes every store (no page table, or
 // g_rtStoreAll), a byte set for every page; the half tick's journal, its pages' bytes (g_rtStorePageBytes: non-zero
