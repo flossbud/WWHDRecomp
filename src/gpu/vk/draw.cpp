@@ -179,6 +179,12 @@ namespace wwhd::gpu
 		std::map<std::pair<VkDescriptorSetLayout, VkDescriptorSetLayout>, VkPipelineLayout> s_layouts;
 		std::unordered_map<uint64, VkPipeline> s_pipelines;        // by the registers they come from, this run
 		std::unordered_map<uint64, VkPipeline> s_recipes;          // by recipe (PipelineDesc::Serialize), prepared or built
+		// WWHD_RENDER_CHECK_PIPELINES=1 (a check, slow: a recipe built every draw): each reuse of a pipeline by its key rebuilds
+		// the draw's recipe and logs, once a key, one that isn't the recipe the key's pipeline was made from (state the key
+		// leaves out; B16 was two vertex layouts under one key)
+		const bool s_checkPipelines = getenv("WWHD_RENDER_CHECK_PIPELINES") != nullptr;
+		std::unordered_map<uint64, uint64> s_pipelineRecipe;       // with the check: the recipe (Fnv) each key's pipeline is from
+		std::set<uint64> s_pipelineMismatch;
 
 		bool CompileSpirv(const std::string& glsl, EShLanguage stage, std::vector<uint32>& spirv, std::string& log)
 		{
@@ -1012,14 +1018,17 @@ namespace wwhd::gpu
 			return vkCreateGraphicsPipelines(s.device, cache::Driver(), 1, &pi, nullptr, &pipeline);
 		}
 
-		VkPipeline GetPipeline(Shader* vs, Shader* ps, LatteFetchShader* fetch, VkPipelineLayout layout, const Targets& t,
+		VkPipeline GetPipeline(Shader* vs, Shader* ps, LatteFetchShader* fetch, uint64 fetchHash, VkPipelineLayout layout, const Targets& t,
 			Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE prim)
 		{
 			const uint32* raw = LatteGPUState.contextRegister;
 			// everything the pipeline is built from (Mix of two values alone is their XOR's: start from 0,
 			// or two modules allocated side by side collide with another pair)
 			uint64 key = Mix(Mix(0, (uint64)vs->module), (uint64)ps->module);
-			key = Mix(key, fetch->key);
+			// the fetch program's own hash: every attribute's format and offset. Not fetch->key, the parser's: it leaves out
+			// the attributes' offsets (a shader doesn't depend on them; the vertex input does), so two models whose vertices
+			// lay out the same attributes in another order shared one pipeline and one drew with the other's offsets (B16)
+			key = Mix(key, fetchHash);
 			for (auto& g : fetch->bufferGroups)
 				key = Mix(key, (raw[mmSQ_VTX_ATTRIBUTE_BLOCK_START + g.attributeBufferIndex * 7 + 2] >> 11) & 0xFFFF);
 			key = Mix(key, (uint64)prim);
@@ -1033,11 +1042,23 @@ namespace wwhd::gpu
 			key = Mix(key, t.motion ? 1 + t.motionMask : 0);
 			auto it = s_pipelines.find(key);
 			if (it != s_pipelines.end())
+			{
+				if (s_checkPipelines)
+				{
+					const std::vector<uint8> recipe = Describe(vs, ps, fetch, t, prim).Serialize();
+					const uint64 id = Fnv(recipe.data(), recipe.size()), first = s_pipelineRecipe[key];
+					if (id != first && s_pipelineMismatch.insert(key).second)
+						Log(fmt::format("pipeline check: key {:016x} reused for recipe {:016x}, its pipeline is recipe {:016x} (state the key "
+							"leaves out)", key, id, first));
+				}
 				return it->second;
+			}
 			// new to this run: prepared from the cache on disk, or built now (and added to it)
 			PipelineDesc d = Describe(vs, ps, fetch, t, prim);
 			std::vector<uint8> recipe = d.Serialize();
 			uint64 id = Fnv(recipe.data(), recipe.size());
+			if (s_checkPipelines)
+				s_pipelineRecipe[key] = id;
 			if (auto prepared = s_recipes.find(id); prepared != s_recipes.end())
 				return s_pipelines[key] = prepared->second;
 			auto start = std::chrono::steady_clock::now();
@@ -2355,7 +2376,7 @@ namespace wwhd::gpu
 		}
 		sets[1] = Descriptors(*dps, false, psImages, dynamicOffsets, vpW, vpH);
 		VkPipelineLayout layout = PipelineLayout(dvs, dps);
-		VkPipeline pipeline = GetPipeline(dvs, dps, fetch, layout, t, prim);
+		VkPipeline pipeline = GetPipeline(dvs, dps, fetch, fsHash, layout, t, prim);
 
 		BeginRendering(t);
 		// unchanged binds since the last draw in this command buffer are skipped (renderer_internal.h's Bound)
