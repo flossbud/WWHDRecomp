@@ -668,7 +668,7 @@
       "id": "g-rework",
       "lane": "bottom",
       "complexity": 9,
-      "name": "Round 15: [9] Graphics rework for low-end devices (the owner's ask, 2026-10-14): research first (docs/research/graphics-rework.md), then the plan: not tweaks but whole systems, e.g. a native renderer of the game's scenes from its own draw structures instead of translating GX2 command streams draw by draw, our own shaders in place of the decompiled ones, batching and instancing, cheaper effects passes, render paths for tile-based mobile GPUs; each step measured on the Odin and the Deck class"
+      "name": "Round 15: [9] Graphics rework (the owner's ask, 2026-10-14): the game as good as the original or better, running better on low-end and high-end devices alike: never a look traded for speed. Research first (docs/research/graphics-rework.md), then the plan: not tweaks but whole systems, e.g. a native renderer of the game's scenes from its own draw structures instead of translating GX2 command streams draw by draw, our own shaders in place of the decompiled ones, batching and instancing, the same effects at a lower cost, render paths for tile-based mobile GPUs; each step measured on the Odin and the Deck class, and compared with the original's picture"
     },
     {
       "id": "m-nocemu",
