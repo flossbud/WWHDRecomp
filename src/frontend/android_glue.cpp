@@ -134,6 +134,9 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char* a
 	// no Steam Controller over Bluetooth (Cemu's controller setup turns it on): SDL asks for the Bluetooth permission for
 	// it, which the app doesn't declare, and the request's activity took the window's focus while it went fullscreen
 	SDL_SetHintWithPriority(SDL_HINT_JOYSTICK_HIDAPI_STEAM, "0", SDL_HINT_OVERRIDE);
+	// Back (the button, the gesture) only ever as a key to the menu (SDLK_AC_BACK: Esc's), never the activity's own Back
+	// (which ends it mid-game): the start screen's first view sends that one itself (pause_menu's LeaveApp)
+	SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
 	Dl_info self{};   // where the library is loaded: crash backtraces print addresses only (symbols are local)
 	if (dladdr(reinterpret_cast<void*>(&SDL_main), &self))
 		__android_log_print(ANDROID_LOG_INFO, "wwhd", "libmain.so at %p", self.dli_fbase);

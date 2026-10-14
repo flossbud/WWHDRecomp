@@ -4477,8 +4477,30 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   the activity (Restarter.java); Display/Resolution/VRR hidden there. The app's own files (Cemu's resources and
   game profiles, the shader list, the menus' assets, the first settings.xml) ship in the APK and are extracted when
   their hash changes (WindSongActivity.extractAssets); `device.sh files` only pushes the game. On x86,
-  `WWHD_COPY_IN=DIR` takes the same path and `WWHD_SETUP_CHOOSE=FILE` picks without a browser (tests). Left: the
-  touch layout, Back and no Quit on Android, the pad's focus there.
+  `WWHD_COPY_IN=DIR` takes the same path and `WWHD_SETUP_CHOOSE=FILE` picks without a browser (tests). The touch
+  layout, Back and no Quit: s3-touch, next.
+- **s3-touch** (the start screen's Android layout: the design's README "3. Android touch versions", 3a Setup, 3b Launch):
+  on Android, elsewhere with `WWHD_TOUCH_LAYOUT=1` (its tests), the start screen is laid out in 1920x864 at its own
+  scale (min(W/1920, H/864); the assets are cached a scale each, as Settings wipes over Launch at the menu's): the logo
+  in its column at the left, the board pinned 80 from the right, one footer line at the bottom left, the box centred in
+  a taller window (the Odin: 108 down). Launch has no Quit; Game Files stacks its rows and has a back button. Setup's
+  whole tap zone opens the picker in idle and wrong file. Two models: touch (no cursor, focus or prompts, each group's
+  first button lit, a press scales its target and its release on it chooses: the window passes the left button's
+  release now) and a pad's or keys' (the desktop's cursor and prompts on the same layout; a pad attached at the start,
+  as the Odin's, begins there; a direction first only shows the cursor). Back is a key there (SDL's trap hint, SDLK_AC_BACK:
+  Esc's), and on Launch's menu or Setup before the game it sends the app to the background (SDL_SendAndroidBackButton).
+  Tests: x86 under Xvfb wants a screen bigger than the window (FitToDesktop shrinks it otherwise), shots from the root
+  cropped to the window (xwininfo's absolute corner: `import -window` and `xdotool --window` were off by the frame), and
+  `WWHD_DEBUG_CHECK_DELAY` to see the progress; Launch can't be reached on the worker's x86 (no pad: the legend
+  tablet). On the device `WWHD_NO_GAME=1` (the env extra) passes no -g, so a test home shows Setup; start it with
+  `am start -S -f 0x10008000` (a task brought back keeps its old env extra: once the game booted where Setup was
+  meant and the script's taps and a Back reached the owner's launcher) and send no tap or key unless the app (or the
+  picker) is in front. Left: the pause menu by touch (A4), the Quit dialog's "Desktop" wording on Android, the pad's
+  prompts over the board's top edge on a 20:9 screen, the cutout and gesture insets not read.
+- **m-android A4 in play (a4-play)**: tour3, sail and wfw on the Odin with simpleperf (android-plan.md "A4 in play"):
+  the dips at 60 are the game's code on the scheduler thread, not shaders; sail holds 57.4-58.1 with the system driver
+  and 59.3-59.5 with Turnip (its GPU thread ~33% lighter); the renderer's per-draw hashing and descriptors are main's.
+  route.sh takes `ENV=` for a test folder's driver.
 - **A bare launch needs the game profile** (found testing S3 on the worker): without
   `portable/gameProfiles/0005000010143500.ini` (tools/reference's, `cpuMode = 0`, which deploy.sh and the APK install)
   Cemu runs its default multi-core recompiler and wwhd-play segfaults in the first seconds (the audio callback's

@@ -3,7 +3,8 @@
 // silent, reading no input) over its own blurred last frame, and draws itself in the window's pixels as the renderer's
 // menu panel (never in captures). Its own thread animates it while it is up. The start screen (t-startscreen) comes up
 // the same way over the title's first frame at boot (Launch: Start Game, Settings, Game Files, Quit; off under a route's
-// input, WWHD_START_SCREEN=0|1). pause_menu.cpp.
+// input, WWHD_START_SCREEN=0|1); on Android in the design's touch layout (no Quit; WWHD_TOUCH_LAYOUT=1 elsewhere, its
+// tests). pause_menu.cpp.
 #pragma once
 #include "Common/precompiled.h"
 #include "../os/input.h"
@@ -25,8 +26,11 @@ namespace wwhd::pause_menu
 	// held since it closed until released
 	// (held: the buttons the game would see, keyboard and pad together; after Start Game all stay the menu's until none is)
 	uint32 Swallowed(uint32 held);
-	// the mouse in the window's pixels: button 0 a move, 1 the left button pressed, 2 the right
+	// the mouse in the window's pixels: button 0 a move, 1 the left button pressed, 2 the right, 3 the left released (the
+	// Android layout's touch chooses there; on Android a pointer is a finger)
 	void Mouse(float x, float y, int button);
+	// a pad open or none (the Android layout's start screen: the desktop's focus model with one until a touch)
+	void PadAttached(bool on);
 
 	// the start screen (t-startscreen): the game files this run reads (the frontend's, before the title is prepared)
 	void SetGame(const std::string& path);

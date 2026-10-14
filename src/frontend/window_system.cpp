@@ -170,6 +170,26 @@ static void CloseGamepad(SDL_JoystickID id)
 	}
 }
 
+// whether a pad is open, to the menu (the Android layout's start screen: the desktop's focus model with one, README 3)
+static void PublishPad()
+{
+	bool on;
+	{
+		std::lock_guard lock(s_gamepadLock);
+		on = s_gamepad != nullptr;
+	}
+	wwhd::pause_menu::PadAttached(on);
+}
+
+// a left button's release, to the menu (the Android layout's touch fires there)
+static void MenuRelease(SDL_Window* window, const SDL_Event& ev)
+{
+	if (ev.button.button != SDL_BUTTON_LEFT)
+		return;
+	const float density = SDL_GetWindowPixelDensity(window);
+	wwhd::pause_menu::Mouse(ev.button.x * density, ev.button.y * density, 3);
+}
+
 static uint32 FaceButton(SDL_GamepadButtonLabel label)
 {
 	using namespace wwhd::os::input;
@@ -563,8 +583,9 @@ static std::string SetupLoop(SDL_Window* window)
 					move ? 0 : ev.button.button == SDL_BUTTON_LEFT ? 1 : ev.button.button == SDL_BUTTON_RIGHT ? 2 : -1);
 				break;
 			}
-			case SDL_EVENT_GAMEPAD_ADDED: OpenGamepad(ev.gdevice.which); PublishInput(); break;
-			case SDL_EVENT_GAMEPAD_REMOVED: CloseGamepad(ev.gdevice.which); PublishInput(); break;
+			case SDL_EVENT_MOUSE_BUTTON_UP: MenuRelease(window, ev); break;
+			case SDL_EVENT_GAMEPAD_ADDED: OpenGamepad(ev.gdevice.which); PublishPad(); PublishInput(); break;
+			case SDL_EVENT_GAMEPAD_REMOVED: CloseGamepad(ev.gdevice.which); PublishPad(); PublishInput(); break;
 			case SDL_EVENT_GAMEPAD_BUTTON_DOWN: case SDL_EVENT_GAMEPAD_BUTTON_UP: case SDL_EVENT_GAMEPAD_AXIS_MOTION: PublishInput(); break;
 			default: DropEvent(ev); break;
 			}
@@ -721,6 +742,10 @@ static std::string SetupLoop(SDL_Window* window)
 					wwhd::os::debug_menu::Back();
 			}
 			break;
+		case SDL_EVENT_MOUSE_BUTTON_UP:
+			if (wwhd::pause_menu::Up())
+				MenuRelease(window, ev);
+			break;
 		case SDL_EVENT_TEXT_INPUT:
 			if (wwhd::os::swkbd::Current().open)
 				TypeText(ev.text.text);
@@ -731,8 +756,8 @@ static std::string SetupLoop(SDL_Window* window)
 		case SDL_EVENT_GAMEPAD_AXIS_MOTION:
 			PublishInput();
 			break;
-		case SDL_EVENT_GAMEPAD_ADDED: OpenGamepad(ev.gdevice.which); break;
-		case SDL_EVENT_GAMEPAD_REMOVED: CloseGamepad(ev.gdevice.which); PublishInput(); break;
+		case SDL_EVENT_GAMEPAD_ADDED: OpenGamepad(ev.gdevice.which); PublishPad(); break;
+		case SDL_EVENT_GAMEPAD_REMOVED: CloseGamepad(ev.gdevice.which); PublishPad(); PublishInput(); break;
 		default: DropEvent(ev); break;
 		}
 	}

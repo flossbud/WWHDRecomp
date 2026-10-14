@@ -173,9 +173,12 @@ public class WindSongActivity extends SDLActivity {
     }
 
     // the player's copy once Setup has copied it in (or adb put it there); without it the start screen's Setup asks
+    // (WWHD_NO_GAME=1, a test's env extra: none, so a test home with no copy registered shows Setup)
     @Override
     protected String[] getArguments() {
         File game = new File(files(), "game/wwhd.wua");
+        if ("1".equals(Os.getenv("WWHD_NO_GAME")))
+            return new String[0];
         return game.isFile() ? new String[] { "-g", game.getAbsolutePath() } : new String[0];
     }
 

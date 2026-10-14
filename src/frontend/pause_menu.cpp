@@ -115,28 +115,34 @@ namespace wwhd::pause_menu
 			std::string dir;
 			ui::Font reggae, rocknroll;
 			float s = 0;
-			std::unordered_map<std::string, Image> cache;   // name -> at s
+			// name -> at a scale: the menu's, and the Android layout's start screen's (its own, both in a frame as Settings
+			// wipes over it); a window's resize drops the old ones
+			std::map<float, std::unordered_map<std::string, Image>> caches;
+			std::unordered_map<std::string, Image>* cache = &caches[0];
 
 			// the asset at its design size times s, from the 1x PNG (s <= 1) or the 2x one
 			const Image& Get(const std::string& name)
 			{
-				auto it = cache.find(name);
-				if (it != cache.end())
+				auto it = cache->find(name);
+				if (it != cache->end())
 					return it->second;
 				Image base;
 				const bool big = s > 1.0f;
 				if (!ui::LoadPng(dir + (big ? "/png/4k/" + name + "-2x.png" : "/png/1080p/" + name + ".png"), base) && big)
 					ui::LoadPng(dir + "/png/1080p/" + name + ".png", base), (void)0;
 				const float k = big && base.w ? s / 2.0f : s;
-				Image& out = cache[name];
+				Image& out = (*cache)[name];
 				if (!base.Empty())
 					out = ui::Scaled(base, std::max(1, (int)std::lround(base.w * k)), std::max(1, (int)std::lround(base.h * k)));
 				return out;
 			}
 			void Rescale(float scale)
 			{
-				if (scale != s)
-					s = scale, cache.clear();
+				if (scale == s)
+					return;
+				if (caches.size() > 3 && !caches.count(scale))
+					caches.clear();
+				s = scale, cache = &caches[scale];
 			}
 		};
 
@@ -391,6 +397,7 @@ namespace wwhd::pause_menu
 		enum class Dialog { None, Quit, QuitDesktop, QuitTitle, Overwrite, Load, SaveFile, Saving, Saved };
 
 		struct Toast { std::string text; Clock::time_point at; };
+		constexpr int kNoPress = -1, kPressZone = -2, kPressBack = -3;   // a touch's targets besides a button's index
 
 		struct State
 		{
@@ -407,6 +414,13 @@ namespace wwhd::pause_menu
 			Clock::time_point dialogSince;
 			std::vector<Toast> toasts;
 			bool pad = false;                           // the last device used: the pad (else the keyboard)
+			// the touch model (the Android layout, README "Global touch rules"): no cursor, focus or prompts, each group's
+			// first button lit, a press scales its target and fires at the release; a pad or a key leaves it (the desktop's)
+			bool touch = false;
+			bool touched = false;                       // a touch was seen (a pad attached later doesn't leave the model then)
+			bool padAttached = false;                   // a pad is open (PadAttached): the desktop's model until a touch
+			int pressed = kNoPress;                     // the target held (a button's index, kPressZone, kPressBack) and since when
+			Clock::time_point pressSince;
 			B::Pad lastPad;
 			uint32 held = 0;                            // directions and buttons held (the pad's), for the repeat
 			Clock::time_point repeatAt;
@@ -561,6 +575,12 @@ namespace wwhd::pause_menu
 			const float base = cy * f.s + (font.Ascent(size) + font.Descent(size)) / 2;
 			f.c.Text(font, size, cx * f.s - w / 2, base, t, col, op);
 		}
+		// text from x, its middle at cy (design units)
+		void TextMiddle(Frame& f, ui::Font& font, float px, float x, float cy, const std::string& t, Colour col, float op = 1.0f)
+		{
+			const float size = px * f.s;
+			f.c.Text(font, size, x * f.s, cy * f.s + (font.Ascent(size) + font.Descent(size)) / 2, t, col, op);
+		}
 
 		void DrawSheet(Frame& f, float x, float y, float w, float h, float offs[4], float op)
 		{
@@ -609,8 +629,12 @@ namespace wwhd::pause_menu
 			ui::Canvas c((int)std::ceil(w * s) + 2, (int)std::ceil((h + 4) * s) + 2);
 			Frame f{ c, s };
 			Assets& a = A();
-			const Image& img = a.Get(std::string("button_") + kind + (focused ? "_focused" : "_idle"));
-			if (!focused)
+			// Android's: idle and primary (the lit one); its single wide button (Cancel) only lit
+			const bool touch = !strncmp(kind, "touch_", 6);
+			const std::string lit = std::string("button_") + kind + (touch ? "_primary" : "_focused");
+			const Image& img = focused || (touch && a.Get(std::string("button_") + kind + "_idle").Empty()) ? a.Get(lit)
+				: a.Get(std::string("button_") + kind + "_idle");
+			if (!focused || touch)                      // (Android's lit one is drawn on its own: its shadow too)
 				c.Silhouette(img, 0, 4 * s, { 58, 104, 32, 89 });
 			c.Draw(img, 0, 0);
 			TextCentred(f, a.rocknroll, labelPx, w / 2, h / 2, label, kInk);
@@ -658,8 +682,11 @@ namespace wwhd::pause_menu
 
 		// the prompts at the top right (right 44, top 34): each its glyphs (4 apart when paired) with its label under them,
 		// overlapping them by 12, centred on each other, 26 apart
-		void DrawPrompts(Frame& f, const std::vector<std::pair<std::string, std::string>>& prompts, bool pad, float op)
+		void DrawPrompts(Frame& f, const std::vector<std::pair<std::string, std::string>>& prompts, const State& st, float op)
 		{
+			if (st.touch)
+				return;                                 // the touch model: no prompts (README "Global touch rules")
+			const bool pad = st.pad;
 			Assets& a = A();
 			const float s = f.s, top = 34 * s;
 			const float gh = (float)a.Get(pad ? "prompt_pad-button_blank" : "prompt_key_blank").h;
@@ -1320,17 +1347,52 @@ namespace wwhd::pause_menu
 		const char* const kLaunchItems[4] = { "Start Game", "Settings", "Game Files", "Quit" };
 		const char* const kFilesItems[2] = { "Re-verify", "Change Files" };
 		constexpr float kBoardY = 400, kBoardW = 680, kSheetY = 416, kSheetW = 648;
+		bool TouchLayout();
+		// the start screen's scale: the menu's (1920x1080 fitted), the Android layout's its own (README: 1920x864 fitted)
+		float StartScale(float w, float h) { return TouchLayout() ? std::min(w / 1920.0f, h / 864.0f) : std::min(w / 1920.0f, h / 1080.0f); }
+		// the window in the start screen's design units
+		bool DesignExtent(float& w, float& h)
+		{
+			uint32 ww = 0, wh = 0;
+			if (!gpu::WindowExtent(ww, wh) || !ww || !wh)
+				return w = 1920, h = TouchLayout() ? 864 : 1080, false;
+			const float s = StartScale((float)ww, (float)wh);
+			return w = ww / s, h = wh / s, true;
+		}
 		// the board's left (design units): 620 at 16:9, centred on a wider window (README "Desktop at non-16:9")
 		float LaunchOX()
 		{
-			uint32 w = 0, h = 0;
-			if (!gpu::WindowExtent(w, h) || !w || !h)
-				return 0;
-			const float s = std::min(w / 1920.0f, h / 1080.0f);
-			return std::max(0.0f, (w / s - 1920) / 2);
+			float w, h;
+			DesignExtent(w, h);
+			return std::max(0.0f, (w - 1920) / 2);
 		}
-		float BoardX() { return 620 + LaunchOX(); }
-		float SheetX() { return 636 + LaunchOX(); }
+		// the Android layout (README "3. Android touch versions": 1920x864, the logo's column at the left, the board pinned to
+		// the right, no Quit): on Android; elsewhere WWHD_TOUCH_LAYOUT=1 (its tests). Its 864 tall box is centred in the window
+		// (a window taller than 20:9), its footer at the window's bottom
+		bool TouchLayout()
+		{
+#if defined(__ANDROID__)
+			return true;
+#else
+			static const bool on = getenv("WWHD_TOUCH_LAYOUT") && atoi(getenv("WWHD_TOUCH_LAYOUT"));
+			return on;
+#endif
+		}
+		float TouchTop()
+		{
+			float w, h;
+			DesignExtent(w, h);
+			return std::max(0.0f, (h - 864) / 2);
+		}
+		float TouchRight()
+		{
+			float w, h;
+			DesignExtent(w, h);
+			return w;
+		}
+		constexpr float kTouchBoardW = 800, kTouchSetupW = 980, kTouchSetupH = 768;
+		float BoardX() { return TouchLayout() ? TouchRight() - 80 - kTouchBoardW : 620 + LaunchOX(); }
+		float SheetX() { return BoardX() + 16; }
 		constexpr Colour kWarn = Colour::Hex(0x8a4b14), kKey = Colour::Hex(0x4f7a32);
 		// a TV picture's mean brightness (0..1, a pixel in 16 sampled)
 		float Luma(const std::vector<uint32>& px)
@@ -1341,14 +1403,36 @@ namespace wwhd::pause_menu
 			return n ? (float)sum / (n * 8 * 255.0f) : 0;
 		}
 
-		float LaunchSheetH(int view) { return view == 0 ? 430 : 516; }
-		// a button's top (design units): the menu's four 90 apart from the sheet's padding; Game Files' two under its rows
-		float LaunchButtonY(int view, int i) { return view == 0 ? kSheetY + 44 + i * 90 : kSheetY + 310 + i * 90; }
+		// the sheet's height (the board's less its 16 padding each side). Android's: the menu's three 116 tall buttons 26 apart
+		// in 52 padding; Game Files' title (55), divider (20 + 6), three stacked rows (105 each) and its buttons (104), 26 apart
+		float LaunchSheetH(int view) { return TouchLayout() ? (view == 0 ? 504 : 656) : view == 0 ? 430 : 516; }
+		// the board's top: Android's centred in its box
+		float BoardY(int view) { return TouchLayout() ? TouchTop() + (864 - LaunchSheetH(view) - 32) / 2 : kBoardY; }
+		float SheetY(int view) { return BoardY(view) + 16; }
+		// a button's box (design units: x, y, w, h): the menu's four 90 apart from the sheet's padding, Game Files' two under its
+		// rows; Android's menu three full width (640 x 116), Game Files' two in a row (306 x 104, 28 apart) under its rows
+		void LaunchButtonBox(int view, int i, float out[4])
+		{
+			if (TouchLayout())
+			{
+				const float x = SheetX() + 64, y = SheetY(view) + 52;
+				if (view == 0)
+					out[0] = x, out[1] = y + i * (116 + 26), out[2] = 640, out[3] = 116;
+				else
+					out[0] = x + i * (306 + 28), out[1] = y + 448, out[2] = 306, out[3] = 104;
+				return;
+			}
+			out[0] = SheetX() + (kSheetW - kButtonW) / 2, out[1] = view == 0 ? kSheetY + 44 + i * 90 : kSheetY + 310 + i * 90;
+			out[2] = kButtonW, out[3] = kButtonH;
+		}
 		void LaunchCursorFor(int view, int i, float out[4])
 		{
-			out[0] = SheetX() + (kSheetW - kButtonW) / 2 - 13, out[1] = LaunchButtonY(view, i) - 13, out[2] = kButtonW + 26, out[3] = kButtonH + 26;
+			LaunchButtonBox(view, i, out);
+			out[0] -= 13, out[1] -= 13, out[2] += 26, out[3] += 26;
 		}
-		int LaunchCount(int view) { return view == 0 ? 4 : 2; }
+		int LaunchCount(int view) { return view == 0 ? (TouchLayout() ? 3 : 4) : 2; }   // no Quit on Android (Home or Back)
+		// Android's Game Files: its back button (96, at the sheet's 30, 30), the same as Back
+		void BackButtonBox(float out[4]) { out[0] = SheetX() + 30, out[1] = SheetY(1) + 30, out[2] = 96, out[3] = 96; }
 
 		std::string RegionOf(const State& st) { return st.copy.region.empty() ? "USA" : st.copy.region; }
 		bool Checking(const State& st) { return st.job && !st.job->done.load(); }
@@ -1387,6 +1471,60 @@ namespace wwhd::pause_menu
 			return "\xE2\x80\xA6";
 		}
 
+		// Android's logo (660 wide) centred in its column (96 to 816), and its box's middle; its shadows as the desktop's
+		void TouchLogo(Frame& f)
+		{
+			ui::Canvas& c = f.c;
+			const float s = f.s;
+			const Image& logo = A().Get("logo_android_w660");
+			const float lx = std::round((96 + 360) * s - logo.w / 2.0f), ly = std::round((TouchTop() + 432) * s - logo.h / 2.0f);
+			for (int i = 0; i < 4; i++)
+				c.Silhouette(logo, lx + (i % 2 ? 3 : -3) * s, ly + (10 + i) * s, { 0, 30, 90, 255 }, 0.09f);
+			c.Silhouette(logo, lx, ly + 6 * s, Colour::Hex(0x1f5fb0));
+			c.Draw(logo, lx, ly);
+		}
+		// Android's footer: one line at the bottom left (96, 40 up), 26 px, outlined
+		void Footer(Frame& f, const std::string& text)
+		{
+			Assets& a = A();
+			const float s = f.s, px = 26 * s, base = f.c.H() - 40 * s + a.rocknroll.Descent(px);
+			f.c.Text(a.rocknroll, px, 96 * s, base, text, kWhite, 1, kPromptOutline, 2 * s);
+		}
+
+		// text cut to a width with an ellipsis at its end (Android's rows: text-overflow: ellipsis)
+		std::string FitEnd(ui::Font& font, float px, float w, const std::string& t)
+		{
+			if (font.Width(t, px) <= w)
+				return t;
+			std::string cut = t;
+			while (!cut.empty())
+			{
+				while (!cut.empty() && (cut.back() & 0xC0) == 0x80)   // the last character, its UTF-8 sequence whole
+					cut.pop_back();
+				if (!cut.empty())
+					cut.pop_back();
+				if (font.Width(cut + "\xE2\x80\xA6", px) <= w)
+					return cut + "\xE2\x80\xA6";
+			}
+			return "\xE2\x80\xA6";
+		}
+		// a path as Android's Game Files shows it (README 3a "a human path"): the app's own files (the current directory, a
+		// copy taken in) as WindSong's, the shared storage as Internal storage, its folders joined by " › "
+		std::string HumanPath(const std::string& path)
+		{
+			std::string p = path, head;
+			char cwd[4096];
+			if (getcwd(cwd, sizeof(cwd)) && p.rfind(std::string(cwd) + "/", 0) == 0)
+				head = "WindSong", p = p.substr(strlen(cwd) + 1);
+			else if (p.rfind("/storage/emulated/0/", 0) == 0)
+				head = "Internal storage", p = p.substr(20);
+			else
+				return path;
+			for (size_t at; (at = p.find('/')) != std::string::npos;)
+				head += " \xE2\x80\xBA " + p.substr(0, at), p = p.substr(at + 1);
+			return head + " \xE2\x80\xBA " + p;
+		}
+
 		// the frozen frame, the logo (its shadows: 0 6px 0 #1f5fb0, 0 12px 14px rgba(0,30,90,.35)) and the footer, drawn once
 		void LaunchBase(State& st, Frame& f)
 		{
@@ -1394,6 +1532,13 @@ namespace wwhd::pause_menu
 			ui::Canvas& c = f.c;
 			const float s = f.s;
 			c.Copy(st.backdrop);
+			const std::string left = "The Wind Waker HD \xC2\xB7 " + RegionOf(st) + (st.checked && st.copy.ok ? " \xC2\xB7 Verified" : "");
+			if (TouchLayout())
+			{
+				TouchLogo(f);
+				Footer(f, left + " \xC2\xB7 " + game_files::Version());
+				return;
+			}
 			const Image& logo = a.Get("logo_launch_desktop_h264");
 			const float lx = std::round((c.W() - logo.w) / 2.0f), ly = std::round(64 * s);
 			for (int i = 0; i < 4; i++)                      // the soft one: four offsets spread about 12 px down
@@ -1401,9 +1546,6 @@ namespace wwhd::pause_menu
 			c.Silhouette(logo, lx, ly + 6 * s, Colour::Hex(0x1f5fb0));
 			c.Draw(logo, lx, ly);
 			// the footer: the game and its check at the bottom left, the build at the bottom right (21 px, outlined)
-			Colour col;
-			const std::string status = StatusLine(st, col);
-			const std::string left = "The Wind Waker HD \xC2\xB7 " + RegionOf(st) + (st.checked && st.copy.ok ? " \xC2\xB7 Verified" : "");
 			const std::string right = game_files::Version();
 			const float px = 21 * s, base = c.H() - 34 * s + a.rocknroll.Descent(px);
 			c.Text(a.rocknroll, px, 44 * s, base, left, kWhite, 1, kPromptOutline, 2 * s);
@@ -1418,7 +1560,9 @@ namespace wwhd::pause_menu
 		Image BoardLayer(State& st, float s, int view, float extra = 0)
 		{
 			Assets& a = A();
-			const float fw = view == 2 ? kSetupBoardW : kBoardW, fh = (view == 2 ? kSetupSheetH + extra : LaunchSheetH(view)) + 32, M = kShadowM;
+			const bool touch = TouchLayout();
+			const float fw = view == 2 ? (touch ? kTouchSetupW : kSetupBoardW) : touch ? kTouchBoardW : kBoardW;
+			const float fh = view == 2 ? (touch ? kTouchSetupH : kSetupSheetH + 32) + extra : LaunchSheetH(view) + 32, M = kShadowM;
 			ui::Canvas c((int)std::ceil((fw + 2 * M) * s), (int)std::ceil((fh + 2 * M) * s));
 			{
 				Image mask;                                 // the board's shape, white on black, blurred: its red is the shadow's alpha
@@ -1449,7 +1593,30 @@ namespace wwhd::pause_menu
 			const Image& fl = a.Get("frame_corner-flourish");
 			c.Draw(fl, (x + 6) * s, (y + 6) * s), c.Draw(fl, (x + fw - 6) * s - fl.w, (y + 6) * s, 1, true);
 			c.Draw(fl, (x + 6) * s, (y + fh - 6) * s - fl.h, 1, false, true), c.Draw(fl, (x + fw - 6) * s - fl.w, (y + fh - 6) * s - fl.h, 1, true, true);
-			if (view == 1)
+			if (view == 1 && touch)
+			{
+				// Android's Game Files (README 3b): the title (50 px), the divider (180), the rows stacked (12 6 14 padding: the
+				// key 22 px, 4, the value 29 px, ellipsized; the dotted rule under each); its back button drawn over (DrawLaunch)
+				const float sw = fw - 32, cx = sx + sw / 2;
+				TextCentred(f, a.reggae, 50, cx, sy + 52 + 27.5f, "Game Files", kInk);
+				for (int i = 0; i < 15; i++)
+					c.Fill((cx - 90 + i * 12 + 4) * s, (sy + 127 + 1) * s, 4 * s, 4 * s, kDot);
+				Colour statusCol;
+				const std::string status = StatusLine(st, statusCol);
+				const std::string game = "The Wind Waker HD \xC2\xB7 " + RegionOf(st) + " \xC2\xB7 v" + std::to_string(std::max(0, st.copy.version));
+				const std::string rows[3][2] = { { "Game", game }, { "Location", HumanPath(st.copy.path) }, { "Status", status } };
+				const float rx = sx + 64, rw = 640;
+				const Image& rule = a.Get("rule_dotted_tile_20x4");
+				for (int i = 0; i < 3; i++)
+				{
+					const float ry = sy + 159 + i * 105;
+					TextMiddle(f, a.rocknroll, 22, rx + 6, ry + 12 + 16, rows[i][0], kKey);
+					TextMiddle(f, a.rocknroll, 29, rx + 6, ry + 12 + 36 + 21, FitEnd(a.rocknroll, 29 * s, (rw - 12) * s, rows[i][1]),
+						i == 2 ? statusCol : kInk);
+					c.Tile(rule, rx * s, (ry + 105 - 4) * s, rw * s, (float)rule.h);
+				}
+			}
+			else if (view == 1)
 			{
 				// Game Files: its title (42 px), the divider (160), its rows (key 120 wide at 21 px, the value at 23)
 				TextCentred(f, a.reggae, 42, sx + kSheetW / 2, sy + 44 + 23, "Game Files", kInk);
@@ -1471,6 +1638,35 @@ namespace wwhd::pause_menu
 				}
 			}
 			return c.Take();
+		}
+
+		// an image drawn at a box scaled about its middle: a touch held (README "Touch press": .96 buttons, .99 the zone, .92
+		// the back button, over 90 ms)
+		void DrawPressed(Frame& f, const Image& img, const float box[4], float to, Clock::time_point since, Clock::time_point now, float op)
+		{
+			const float k = 1 - (1 - to) * Linear(std::chrono::duration<float, std::milli>(now - since).count(), 0, 90);
+			const int w = std::max(1, (int)std::lround(img.w * k)), h = std::max(1, (int)std::lround(img.h * k));
+			const float cx = (box[0] + box[2] / 2) * f.s, cy = box[1] * f.s + img.h / 2.0f;
+			f.c.Draw(ui::Scaled(img, w, h), std::round(cx - w / 2.0f), std::round(cy - h / 2.0f), op);
+		}
+		// a start screen button (its idle and focused layers, ButtonLayer's) at its box: the touch model lights its group's
+		// first and scales the one held; the desktop's cross-fades the focus (0..1)
+		void DrawStartButton(State& st, Frame& f, const Image layers[2], const float box[4], int i, float focus, float op, Clock::time_point now)
+		{
+			const float s = f.s, px = std::round(box[0] * s), py = std::round(box[1] * s);
+			if (st.touch)
+			{
+				const Image& img = layers[i == 0 ? 1 : 0];
+				if (st.pressed == i)
+					DrawPressed(f, img, box, 0.96f, st.pressSince, now, op);
+				else
+					f.c.Draw(img, px, py, op);
+				return;
+			}
+			if (focus < 1 || !TouchLayout())
+				f.c.Draw(layers[0], px, py, op);
+			if (focus > 0)
+				f.c.Draw(layers[1], px, py, op * focus);
 		}
 
 		struct LaunchLayers
@@ -1511,12 +1707,16 @@ namespace wwhd::pause_menu
 			{
 				for (int v = 0; v < 2; v++)
 					for (int i = 0; i < LaunchCount(v); i++)
+					{
+						float box[4];
+						LaunchButtonBox(v, i, box);
+						const char* kind = !TouchLayout() ? "menu_460x72" : v == 0 ? "touch_640x116" : "touch_306x104";
 						for (int k = 0; k < 2; k++)
-							l.buttons[v][i][k] = ButtonLayer(s, "menu_460x72", kButtonW, kButtonH, 29, v == 0 ? kLaunchItems[i] : kFilesItems[i], k == 1);
+							l.buttons[v][i][k] = ButtonLayer(s, kind, box[2], box[3], TouchLayout() ? 34 : 29, v == 0 ? kLaunchItems[i] : kFilesItems[i], k == 1);
+					}
 				l.size = c.W();
 			}
-			c.Draw(l.board, std::round((BoardX() - kShadowM) * s), std::round((kBoardY - kShadowM) * s), op);
-			const float bx = SheetX() + (kSheetW - kButtonW) / 2;
+			c.Draw(l.board, std::round((BoardX() - kShadowM) * s), std::round((BoardY(view) - kShadowM) * s), op);
 			for (int i = 0; i < LaunchCount(view); i++)
 			{
 				const float fms = std::chrono::duration<float, std::milli>(now - st.startFocusSince[i]).count();
@@ -1524,10 +1724,19 @@ namespace wwhd::pause_menu
 				if (i != st.startItem)
 					focus = st.startPrev == i ? 1 - focus : 0;
 				const bool dim = view == 0 && i == 0 && st.checked && !st.copy.ok;    // Start Game, when the copy didn't verify
-				const float bop = op * (dim ? 0.5f : 1), px = std::round(bx * s), py = std::round(LaunchButtonY(view, i) * s);
-				c.Draw(l.buttons[view][i][0], px, py, bop);
-				if (focus > 0)
-					c.Draw(l.buttons[view][i][1], px, py, bop * focus);
+				float box[4];
+				LaunchButtonBox(view, i, box);
+				DrawStartButton(st, f, l.buttons[view][i], box, i, focus, op * (dim ? 0.5f : 1), now);
+			}
+			if (view == 1 && TouchLayout())                 // Android's back button (held: .92)
+			{
+				float box[4];
+				BackButtonBox(box);
+				const Image& back = A().Get("button_back_96");
+				if (st.touch && st.pressed == kPressBack)
+					DrawPressed(f, back, box, 0.92f, st.pressSince, now, op);
+				else
+					c.Draw(back, std::round(box[0] * s), std::round(box[1] * s), op);
 			}
 		}
 
@@ -1538,14 +1747,21 @@ namespace wwhd::pause_menu
 		constexpr Colour kZoneText = Colour::Hex(0x3f6a26), kSky = Colour::Hex(0x0bd8f6);
 #if defined(__ANDROID__)
 		const char* const kFormats = "A .wua: Cemu\xE2\x80\x99s archive of a Wii U dump";
-		const char* const kZoneIdle = "Browse for your game file";   // (no files dropped on an app)
+		const char* const kZoneIdle = "Choose your game file";   // (no files dropped on an app; touch: "Tap to choose game files")
 #else
 		const char* const kFormats = "WUA \xC2\xB7 WUX \xC2\xB7 WUD \xC2\xB7 or an extracted game folder";
 		const char* const kZoneIdle = "Drop game files here";
 #endif
-		float SetupX() { return 360 + LaunchOX(); }
-		float ZoneX() { return 570 + LaunchOX(); }
+		// (Android's, README 3a: the board 980 x 768 at 48 from its box's top, pinned to the right 80 in; its sheet a centred
+		// column 836 wide: the title, the divider, the body (three lines reserved), the tap zone (836 x 224), the buttons)
+		float SetupX() { return TouchLayout() ? TouchRight() - 80 - kTouchSetupW : 360 + LaunchOX(); }
+		float SetupY() { return TouchLayout() ? TouchTop() + 48 : 236; }
+		float SetupCX() { return TouchLayout() ? SetupX() + kTouchSetupW / 2 : 960 + LaunchOX(); }   // the sheet's middle
+		float ZoneX() { return TouchLayout() ? SetupX() + 72 : 570 + LaunchOX(); }
 		constexpr float kZoneY = 499, kZoneW = 780, kZoneH = 250, kSetupButtonsY = 779, kSetupButtonW = 340;
+		constexpr float kTouchZoneW = 836, kTouchZoneH = 224, kTouchLineH = 28 * 1.42f;
+		float ZoneW() { return TouchLayout() ? kTouchZoneW : kZoneW; }
+		float ZoneH() { return TouchLayout() ? kTouchZoneH : kZoneH; }
 		// the menu's own file browser's rows (in the sheet, under its title and folder)
 		constexpr int kBrowseRows = 9;
 		constexpr float kBrowseX = 440, kBrowseW = 1040, kBrowseY = 440, kBrowseRowH = 46;
@@ -1563,7 +1779,7 @@ namespace wwhd::pause_menu
 			case kChecking: return { "Cancel" };
 			case kBad: return { "Try Another File", st.help ? "Got It" : "Help" };
 			case kReady: return { "Start Game", "Change Files" };
-			default: return { "Browse Files", st.help ? "Got It" : "Help" };
+			default: return { TouchLayout() ? "Choose Files" : "Browse Files", st.help ? "Got It" : "Help" };
 			}
 		}
 
@@ -1592,6 +1808,12 @@ namespace wwhd::pause_menu
 				c.Fill(0, 0, (float)c.W(), (float)c.H(), kSky);   // no title frame yet: the design's sky fallback
 			else
 				c.Copy(st.backdrop);
+			if (TouchLayout())
+			{
+				TouchLogo(f);
+				Footer(f, game_files::Version());
+				return;
+			}
 			const Image& logo = a.Get("logo_setup_desktop_h184");
 			const float lx = std::round((c.W() - logo.w) / 2.0f), ly = std::round(34 * s);
 			for (int i = 0; i < 4; i++)
@@ -1624,7 +1846,7 @@ namespace wwhd::pause_menu
 			default:
 				title = st.dragging ? "Let go to load" : "Let\xE2\x80\x99s find your game";
 #if defined(__ANDROID__)
-				body = "This port runs on your own copy of The Wind Waker HD. Browse for its .wua file; it\xE2\x80\x99s copied into WindSong once.";
+				body = "This port runs on your own copy of The Wind Waker HD. Choose its .wua file from this device or an SD card.";
 #else
 				body = st.dragging ? "We\xE2\x80\x99ll check the files before anything is copied."
 					: "This port runs on your own copy of The Wind Waker HD. Drop your Wii U game files here, or browse for them.";
@@ -1632,8 +1854,8 @@ namespace wwhd::pause_menu
 			}
 			if (st.help && (st.sstate == kIdle || st.sstate == kBad) && !st.dragging)
 #if defined(__ANDROID__)
-				body = "Dump the game from your own Wii U with a homebrew dumping tool, make a .wua of it with Cemu, then choose it here. "
-					"Nothing is uploaded; your files stay on this device.";
+				body = "Dump the game from your own Wii U with a homebrew dumping tool, make a .wua of it with Cemu, copy it to this "
+					"device, then choose it here. Nothing is uploaded.";
 #else
 				body = "Dump the game from your own Wii U with a homebrew dumping tool, then choose the output here. Nothing is uploaded; "
 					"your files stay on this PC.";
@@ -1648,23 +1870,44 @@ namespace wwhd::pause_menu
 			const std::string text = SetupCopy(st).second, key = fmt::format("{} {}", s, text);
 			if (auto it = s_wrapped.find(key); it != s_wrapped.end())
 				return it->second;
-			std::vector<std::string> lines = WrapBalanced(A().rocknroll, 25 * s, 820 * s, text);
-			if (lines.size() > 3)
-				lines.resize(3);
+			std::vector<std::string> lines = TouchLayout() ? WrapBalanced(A().rocknroll, 28 * s, kTouchZoneW * s, text)
+				: WrapBalanced(A().rocknroll, 25 * s, 820 * s, text);
+			if (lines.size() > (TouchLayout() ? 4u : 3u))
+				lines.resize(TouchLayout() ? 4 : 3);
 			if (s_wrapped.size() > 64)
 				s_wrapped.clear();
 			return s_wrapped[key] = lines;
 		}
 		constexpr float kBodyLineH = 36.25f;
+		// the room a body's extra line takes (desktop: a third; Android: a fourth, the column staying centred)
 		float SetupExtra(const State& st)
 		{
+			if (TouchLayout())
+				return std::max(0, (int)SetupBody(st, 1).size() - 3) * kTouchLineH;
 			return st.browsing ? 0 : std::max(0, (int)SetupBody(st, 1).size() - 2) * kBodyLineH;
+		}
+		// Android's column: its top (62 the title, 14 and 6 the divider, 20, the body's 120, 20, the zone, 20, the buttons'
+		// 104: 590 tall, centred in the sheet's 664 inside its padding)
+		float TouchColTop(const State& st) { return TouchTop() + 137 - SetupExtra(st) / 2; }
+		float ZoneY(const State& st) { return TouchLayout() ? TouchColTop(st) + 242 + SetupExtra(st) : kZoneY + SetupExtra(st); }
+		float SetupButtonsY(const State& st) { return TouchLayout() ? ZoneY(st) + kTouchZoneH + 20 : kSetupButtonsY + SetupExtra(st); }
+		// a button's box (x, y, w, h); Android's equal widths in the column's, 28 apart, 104 tall
+		void SetupButtonBox(const State& st, int i, float out[4])
+		{
+			const int n = std::max(1, (int)SetupButtons(st).size());
+			if (TouchLayout())
+			{
+				const float w = (kTouchZoneW - (n - 1) * 28) / n;
+				out[0] = ZoneX() + i * (w + 28), out[1] = SetupButtonsY(st), out[2] = w, out[3] = 104;
+				return;
+			}
+			const float x0 = 960 + LaunchOX() - (n * kSetupButtonW + (n - 1) * 40) / 2;
+			out[0] = x0 + i * (kSetupButtonW + 40), out[1] = SetupButtonsY(st), out[2] = kSetupButtonW, out[3] = kButtonH;
 		}
 		void SetupCursorFor(const State& st, int i, float out[4])
 		{
-			const int n = (int)SetupButtons(st).size();
-			const float x0 = 960 + LaunchOX() - (n * kSetupButtonW + (n - 1) * 40) / 2;
-			out[0] = x0 + i * (kSetupButtonW + 40) - 13, out[1] = kSetupButtonsY + SetupExtra(st) - 13, out[2] = kSetupButtonW + 26, out[3] = kButtonH + 26;
+			SetupButtonBox(st, i, out);
+			out[0] -= 13, out[1] -= 13, out[2] += 26, out[3] += 26;
 		}
 
 		std::string FileName(const std::string& path)
@@ -1694,7 +1937,7 @@ namespace wwhd::pause_menu
 			Assets& a = A();
 			ui::Canvas c(w, h);
 			Frame f{ c, s };
-			const float cx = 960 + LaunchOX();
+			const float cx = SetupCX();
 			if (st.browsing)
 			{
 				// the browser: its title, the folder (its end kept), the rows (a game folder or file named as such)
@@ -1725,6 +1968,19 @@ namespace wwhd::pause_menu
 						fmt::format("{} of {}", st.browseRow + 1, st.entries.size()), kZoneText);
 				return c.Take();
 			}
+			if (TouchLayout())
+			{
+				// Android's: the title (56 px), the divider, the body (28 px, 1.42 apart, centred in its 120 or more)
+				const float top = TouchColTop(st), extra = SetupExtra(st);
+				TextCentred(f, a.reggae, 56, cx, top + 31, SetupCopy(st).first, kInk);
+				for (int i = 0; i < 15; i++)
+					c.Fill((cx - 90 + i * 12 + 4) * s, (top + 77) * s, 4 * s, 4 * s, kDot);
+				const std::vector<std::string> lines = SetupBody(st, s);
+				const float y0 = top + 102 + (120 + extra - lines.size() * kTouchLineH) / 2;
+				for (size_t i = 0; i < lines.size(); i++)
+					TextCentred(f, a.rocknroll, 28, cx, y0 + (i + 0.5f) * kTouchLineH, lines[i], kInk);
+				return c.Take();
+			}
 			TextCentred(f, a.reggae, 46, cx, 331, SetupCopy(st).first, kInk);
 			for (int i = 0; i < 15; i++)
 				c.Fill((cx - 90 + i * 12 + 4) * s, 373 * s, 4 * s, 4 * s, kDot);
@@ -1734,7 +1990,7 @@ namespace wwhd::pause_menu
 			// the zone (a third line of the body moves it and what's in it down): its gloss while files are over it
 			const float e = SetupExtra(st);
 			c.Draw(a.Get(st.dragging && st.sstate != kChecking && st.sstate != kReady ? "dropzone_780x250_drag" : "dropzone_780x250_idle"),
-				ZoneX() * s, (kZoneY + e) * s);
+				ZoneX() * s, ZoneY(st) * s);
 			const std::string shown = st.setupName.empty() ? FileName(st.setupFile) : st.setupName;
 			const std::string name = FitStart(a.rocknroll, 21 * s, 620 * s, shown);
 			switch (st.sstate)
@@ -1761,10 +2017,52 @@ namespace wwhd::pause_menu
 			return c.Take();
 		}
 
+		// Android's tap zone and what's in it, a layer of its own (a press scales it): by the state, centred in its 836 x 224
+		// (README 3a "Zone contents by state"; the progress drawn over it each frame)
+		Image TouchZone(State& st, float s)
+		{
+			Assets& a = A();
+			const Image& zone = a.Get("dropzone_touch_836x224");
+			ui::Canvas c(zone.w, zone.h);
+			Frame f{ c, s };
+			c.Draw(zone, 0, 0);
+			const float cx = kTouchZoneW / 2;
+			const std::string shown = st.setupName.empty() ? FileName(st.setupFile) : st.setupName;
+			// an icon at a design size (its asset scaled), its middle at cy
+			const auto icon = [&](const char* name, float size, float cy) {
+				const Image& img = a.Get(name);
+				const float k = size / (img.w / s);
+				const Image sized = ui::Scaled(img, std::max(1, (int)std::lround(img.w * k)), std::max(1, (int)std::lround(img.h * k)));
+				c.Draw(sized, std::round(cx * s - sized.w / 2.0f), std::round(cy * s - sized.h / 2.0f));
+			};
+			switch (st.sstate)
+			{
+			case kChecking:
+				TextCentred(f, a.rocknroll, 26, cx, 57, FitStart(a.rocknroll, 26 * s, 760 * s, shown), kZoneText);
+				break;
+			case kBad:
+				icon("icon_warning_76", 76, 57);
+				TextCentred(f, a.rocknroll, 34, cx, 135, "Couldn\xE2\x80\x99t recognise this file", kInk);
+				TextCentred(f, a.rocknroll, 24, cx, 190, FitStart(a.rocknroll, 24 * s, 760 * s, shown), kZoneText);
+				break;
+			case kReady:
+				icon("icon_ready-check_70", 76, 57);
+				TextCentred(f, a.rocknroll, 34, cx, 135, "The Wind Waker HD", kInk);
+				TextCentred(f, a.rocknroll, 24, cx, 190, (st.setupCopy.region.empty() ? "USA" : st.setupCopy.region) + " \xC2\xB7 Version " +
+					std::to_string(std::max(0, st.setupCopy.version)) + " \xC2\xB7 Verified", kZoneText);
+				break;
+			default:
+				icon("icon_drop-target_96", 84, 58);
+				TextCentred(f, a.rocknroll, 36, cx, 139, st.touch ? "Tap to choose game files" : kZoneIdle, kInk);
+				TextCentred(f, a.rocknroll, 24, cx, 191, kFormats, kZoneText);
+			}
+			return c.Take();
+		}
+
 		struct SetupLayers
 		{
 			std::string baseKey, boardKey, contentKey;
-			Image base, board, content;
+			Image base, board, content, zone;           // (zone: Android's tap zone, with the content)
 			std::map<std::string, std::array<Image, 2>> buttons;   // by label: idle and focused
 			int size = 0;
 		};
@@ -1779,12 +2077,30 @@ namespace wwhd::pause_menu
 		{
 			Assets& a = A();
 			ui::Canvas& c = f.c;
-			const float s = f.s, cx = 960 + LaunchOX();
+			const float s = f.s, cx = SetupCX();
 			static float shown = 0;
 			const float p = st.setupJob ? std::clamp(st.setupJob->progress.load(), 0.0f, 1.0f) : 0;
 			shown += (p - shown) * 0.3f;                    // eased towards the real progress
 			if (p < shown)
 				shown = p;
+			const char* const names[3] = { st.setupCopiesIn ? "Copying files" : "Reading files", "Verifying", "Preparing assets" };
+			const float ends[3] = { 0.35f, 0.75f, 1.0f };
+			if (TouchLayout())
+			{
+				// Android's: the bar (660 x 32) and the percentage (28 px, an 84 wide column, 20 on), then the current step's
+				// line (30 px) in place of the three steps
+				const float zy = ZoneY(st), bx = cx - (660 + 20 + 84) / 2.0f, by = zy + 109 - 16;
+				c.Draw(a.Get("progress_track_touch_660x32"), bx * s, by * s, op);
+				c.Clip(0, 0, (int)((bx + 3 + 654 * shown) * s), c.H());
+				c.Draw(a.Get("progress_fill_touch_654x26"), (bx + 3) * s, (by + 3) * s, op);
+				c.NoClip();
+				TextMiddle(f, a.rocknroll, 28, bx + 660 + 20, zy + 109, fmt::format("{}%", (int)std::lround(p * 100)), kInk, op);
+				int step = 0;
+				while (step < 2 && p >= ends[step])
+					step++;
+				TextCentred(f, a.rocknroll, 30, cx, zy + 166, std::string(names[step]) + "\xE2\x80\xA6", kInk, op);
+				return;
+			}
 			const float e = SetupExtra(st), bx = cx - (540 + 18 + 70) / 2.0f, by = 611.5f + e;
 			c.Draw(a.Get("progress_track_540x24"), bx * s, by * s, op);
 			const Image& fill = a.Get("progress_fill_534x18");
@@ -1793,8 +2109,6 @@ namespace wwhd::pause_menu
 			c.NoClip();
 			c.Text(a.rocknroll, 23 * s, (bx + 540 + 18) * s, (by + 12) * s + (a.rocknroll.Ascent(23 * s) + a.rocknroll.Descent(23 * s)) / 2,
 				fmt::format("{}%", (int)std::lround(p * 100)), kInk, op);
-			const char* const names[3] = { st.setupCopiesIn ? "Copying files" : "Reading files", "Verifying", "Preparing assets" };
-			const float ends[3] = { 0.35f, 0.75f, 1.0f };
 			float widths[3], total = 0;
 			for (int i = 0; i < 3; i++)
 				widths[i] = 30 + 8 + a.rocknroll.Width(names[i], 20 * s) / s, total += widths[i] + (i ? 30 : 0);
@@ -1824,44 +2138,70 @@ namespace wwhd::pause_menu
 				SetupBase(st, bf);
 				l.base = b.Take(), l.baseKey = baseKey;
 			}
-			const float extra = SetupExtra(st);
+			const float extra = TouchLayout() ? 0 : SetupExtra(st);   // (Android's board doesn't grow: its column stays centred)
 			const std::string boardKey = fmt::format("{} {}", baseKey, extra);
 			if (boardKey != l.boardKey)
 				l.board = BoardLayer(st, s, 2, extra), l.boardKey = boardKey;
-			const std::string contentKey = fmt::format("{}x{} {} {} {} {}|{}|{} {} {} {}", c.W(), c.H(), st.sstate, st.help ? 1 : 0, st.dragging ? 1 : 0,
-				st.setupFile, st.setupCopy.why, st.browsing ? 1 : 0, st.browseDir, st.browseRow, st.browseTop);
+			const std::string contentKey = fmt::format("{}x{} {} {} {} {}|{}|{} {} {} {} {}", c.W(), c.H(), st.sstate, st.help ? 1 : 0, st.dragging ? 1 : 0,
+				st.setupFile, st.setupCopy.why, st.browsing ? 1 : 0, st.browseDir, st.browseRow, st.browseTop, st.touch ? 1 : 0);
 			if (contentKey != l.contentKey)
+			{
 				l.content = SetupContent(st, s, c.W(), c.H()), l.contentKey = contentKey;
+				if (TouchLayout())
+					l.zone = TouchZone(st, s);
+			}
 			if (l.size != c.W())
 				l.buttons.clear(), l.size = c.W();
 			c.Copy(l.base);
 			if (op > 0)
 			{
-				c.Draw(l.board, std::round((SetupX() - kShadowM) * s), std::round((236 - kShadowM) * s), op);
+				c.Draw(l.board, std::round((SetupX() - kShadowM) * s), std::round((SetupY() - kShadowM) * s), op);
 				c.Draw(l.content, 0, 0, op);
+				if (TouchLayout())
+				{
+					const float zone[4] = { ZoneX(), ZoneY(st), kTouchZoneW, kTouchZoneH };
+					if (st.touch && st.pressed == kPressZone)
+						DrawPressed(f, l.zone, zone, 0.99f, st.pressSince, now, op);
+					else
+						c.Draw(l.zone, std::round(zone[0] * s), std::round(zone[1] * s), op);
+				}
 				if (st.sstate == kChecking)
 					DrawProgress(st, f, op);
 				const std::vector<std::string> labels = SetupButtons(st);
+				const char* kind = !TouchLayout() ? "setup_340x72" : labels.size() == 1 ? "touch_836x104" : "touch_404x104";
 				for (int i = 0; i < (int)labels.size(); i++)
 				{
-					auto it = l.buttons.find(labels[i]);
-					if (it == l.buttons.end())
-						it = l.buttons.emplace(labels[i], std::array<Image, 2>{ ButtonLayer(s, "setup_340x72", kSetupButtonW, kButtonH, 29, labels[i], false),
-							ButtonLayer(s, "setup_340x72", kSetupButtonW, kButtonH, 29, labels[i], true) }).first;
 					float box[4];
-					SetupCursorFor(st, i, box);
+					SetupButtonBox(st, i, box);
+					const std::string key = std::string(kind) + "|" + labels[i];
+					auto it = l.buttons.find(key);
+					if (it == l.buttons.end())
+					{
+						const float px = TouchLayout() ? 34 : 29;
+						it = l.buttons.emplace(key, std::array<Image, 2>{ ButtonLayer(s, kind, box[2], box[3], px, labels[i], false),
+							ButtonLayer(s, kind, box[2], box[3], px, labels[i], true) }).first;
+					}
 					const float fms = std::chrono::duration<float, std::milli>(now - st.startFocusSince[i]).count();
 					float focus = Linear(fms, 0, 140);
 					if (i != st.startItem)
 						focus = st.startPrev == i ? 1 - focus : 0;
-					const float px = std::round((box[0] + 13) * s), py = std::round((box[1] + 13) * s);
-					c.Draw(it->second[0], px, py, op);
-					if (focus > 0)
-						c.Draw(it->second[1], px, py, op * focus);
+					DrawStartButton(st, f, it->second.data(), box, i, focus, op, now);
 				}
 			}
 		}
 
+		// the cursor at its button as the layout is now: Android's window changes size as its bars go, after the start
+		// screen's first focus was set (the cursor stayed ~50 px above its button on the Odin); snapped when it moved
+		void Resnap(State& st, const float want[4])
+		{
+			for (int k = 0; k < 4; k++)
+				if (std::fabs(want[k] - st.curTo[k]) > 0.5f)
+				{
+					for (int j = 0; j < 4; j++)
+						st.curFrom[j] = st.curTo[j] = want[j];
+					return;
+				}
+		}
 		void Draw(State& st, ui::Canvas& c, Clock::time_point now)
 		{
 			Assets& a = A();
@@ -1871,6 +2211,8 @@ namespace wwhd::pause_menu
 			if (l.w != c.W() || l.h != c.H())
 				BuildLayers(l, c.W(), c.H(), s);
 			Frame f{ c, s };
+			const float ts = StartScale((float)c.W(), (float)c.H());   // the start screen's (the Android layout's own)
+			Frame tf{ c, ts };
 			const float ms = std::chrono::duration<float, std::milli>(now - st.since).count();
 			const bool closing = st.phase == Phase::Closing;
 			// the start screen: Launch over the frozen title frame, in over 400 ms (out the same at Start Game); Settings over
@@ -1879,19 +2221,23 @@ namespace wwhd::pause_menu
 			{
 				// Setup: its screen, the cursor (around the zone while files are over it), its prompts, the blackout at Start
 				const float op = st.setupPre ? Linear(ms, 0, 400) : 1.0f;
-				DrawSetup(st, f, now, op);
+				a.Rescale(ts);
+				DrawSetup(st, tf, now, op);
 				if (st.blackoutAt == Clock::time_point{})
 				{
 					float box[4];
+					if (const int n = (int)SetupButtons(st).size(); TouchLayout() && n > 0)
+						SetupCursorFor(st, std::min(st.startItem, n - 1), box), Resnap(st, box);
 					if (st.dragging && st.sstate != kChecking && st.sstate != kReady)
-						box[0] = ZoneX() - 13, box[1] = kZoneY + SetupExtra(st) - 13, box[2] = kZoneW + 26, box[3] = kZoneH + 26;
+						box[0] = ZoneX() - 13, box[1] = ZoneY(st) - 13, box[2] = ZoneW() + 26, box[3] = ZoneH() + 26;
 					else
 					{
 						const float g = Bezier(.25f, .8f, .25f, 1, Linear(std::chrono::duration<float, std::milli>(now - st.curSince).count(), 0, 170));
 						for (int k = 0; k < 4; k++)
 							box[k] = st.curFrom[k] + (st.curTo[k] - st.curFrom[k]) * g;
 					}
-					DrawCursor(f, box, ms, op);
+					if (!st.touch)                          // (the touch model: no cursor, README "Global touch rules")
+						DrawCursor(tf, box, ms, op);
 					std::vector<std::pair<std::string, std::string>> pr;
 					if (st.browsing)
 					{
@@ -1906,14 +2252,15 @@ namespace wwhd::pause_menu
 						pr = { { st.pad ? "A" : "Enter", "Browse" }, { st.pad ? "Y" : "H", "Help" } };
 					if (!st.setupPre && st.sstate != kChecking && !st.browsing)
 						pr.push_back({ st.pad ? "B" : "Esc", "Back" });     // Change Files from Launch: back to it
-					DrawPrompts(f, pr, st.pad, op);
-					DrawToast(f, st, now);
+					DrawPrompts(tf, pr, st, op);
+					DrawToast(tf, st, now);
 				}
 				else
 				{
 					const float bms = std::chrono::duration<float, std::milli>(now - st.blackoutAt).count();
 					c.Fill(0, 0, (float)c.W(), (float)c.H(), { 0, 0, 0, 255 }, Linear(bms, 0, 600));
-					TextCentred(f, A().rocknroll, 36, c.W() / s / 2, c.H() / s / 2, "Setting sail\xE2\x80\xA6", kWhite, Linear(bms, 0, 600));
+					TextCentred(tf, A().rocknroll, TouchLayout() ? 44 : 36, c.W() / ts / 2, c.H() / ts / 2, "Setting sail\xE2\x80\xA6", kWhite,
+						Linear(bms, 0, 600));
 				}
 				return;
 			}
@@ -1924,24 +2271,32 @@ namespace wwhd::pause_menu
 				const float sms0 = std::chrono::duration<float, std::milli>(now - st.screenSince).count();
 				const float uiOp = closing ? 1 - Linear(ms, 0, 400) : Linear(ms, 0, 400);
 				launchWipe = st.settings ? Bezier(.3f, .8f, .25f, 1, Linear(sms0, 0, 480)) : 1 - Bezier(.3f, .8f, .25f, 1, Linear(sms0, 0, 400));
-				DrawLaunch(st, f, now, uiOp);
+				a.Rescale(ts);
+				DrawLaunch(st, tf, now, uiOp);
 				if (launchWipe <= 0)
 				{
-					if (!closing && uiOp > 0)
+					if (TouchLayout())
+					{
+						float want[4];
+						LaunchCursorFor(st.startView, std::min(st.startItem, LaunchCount(st.startView) - 1), want);
+						Resnap(st, want);
+					}
+					if (!closing && uiOp > 0 && !st.touch)
 					{
 						const float g = Bezier(.25f, .8f, .25f, 1, Linear(std::chrono::duration<float, std::milli>(now - st.curSince).count(), 0, 170));
 						float box[4];
 						for (int k = 0; k < 4; k++)
 							box[k] = st.curFrom[k] + (st.curTo[k] - st.curFrom[k]) * g;
-						DrawCursor(f, box, ms, uiOp);
+						DrawCursor(tf, box, ms, uiOp);
 					}
 					std::vector<std::pair<std::string, std::string>> pr = { { st.pad ? "A" : "Enter", "Select" } };
 					if (st.startView == 1)
 						pr.push_back({ st.pad ? "B" : "Esc", "Back" });
-					DrawPrompts(f, pr, st.pad, uiOp);
-					DrawToast(f, st, now);
+					DrawPrompts(tf, pr, st, uiOp);
+					DrawToast(tf, st, now);
 					return;
 				}
+				a.Rescale(s);                               // Settings over it: the menu's
 			}
 			if (!closing && UnderDialog(st, c))
 			{
@@ -2092,7 +2447,7 @@ namespace wwhd::pause_menu
 			// the prompts over the game frame
 			const float pp = closing ? 1 - Linear(ms, 0, 200) : Linear(ms, 300, 260);
 			if (pp > 0 && !st.settings)
-				DrawPrompts(f, { { st.pad ? "A" : "Enter", "Select" }, { st.pad ? "B" : "Esc", "Back" } }, st.pad, pp);
+				DrawPrompts(f, { { st.pad ? "A" : "Enter", "Select" }, { st.pad ? "B" : "Esc", "Back" } }, st, pp);
 			else if (pp > 0)
 			{
 				// Settings: Change (Toggle on a toggle; none on a locked or an info row), the categories, the defaults, back
@@ -2118,7 +2473,7 @@ namespace wwhd::pause_menu
 					pr.push_back({ st.pad ? "Y" : "R", "Defaults" });
 					pr.push_back({ st.pad ? "B" : "Esc", "Back" });
 				}
-				DrawPrompts(f, pr, st.pad, pp);
+				DrawPrompts(f, pr, st, pp);
 			}
 			DrawDialog(f, st, now, ms);
 			DrawToast(f, st, now);
@@ -2533,7 +2888,7 @@ namespace wwhd::pause_menu
 			return false;                               // the system's picker (pad, touch): an app can't list the shared storage
 #else
 			static const bool gamescope = getenv("GAMESCOPE_WAYLAND_DISPLAY") || getenv("WWHD_OWN_BROWSER");
-			return st.pad || gamescope;
+			return !TouchLayout() && (st.pad || gamescope);   // (the Android layout's tests: the system's, as there)
 #endif
 		}
 		void OpenBrowser(State& st)
@@ -2623,6 +2978,16 @@ namespace wwhd::pause_menu
 			cemuLog_log(LogType::Force, "wwhd: start screen: couldn't start again ({})", strerror(errno));
 		}
 
+		// Back on the start screen's first view (Launch's menu, Setup before the game): Android's own Back (README "System
+		// Back": leave the app, to the background); nothing elsewhere
+		void LeaveApp()
+		{
+#if defined(__ANDROID__)
+			cemuLog_log(LogType::Force, "wwhd: start screen: Back: the app to the background");
+			SDL_SendAndroidBackButton();
+#endif
+		}
+
 		void ActSetup(State& st, Input in)
 		{
 			if (st.blackoutAt != Clock::time_point{})
@@ -2659,12 +3024,14 @@ namespace wwhd::pause_menu
 					st.setup = false, st.startView = 1;
 					FocusLaunch(st, 1, true);
 				}
+				else
+					LeaveApp();
 				return;
 			case Input::Confirm: break;
 			default: return;
 			}
 			const std::string& b = labels[std::clamp(st.startItem, 0, n - 1)];
-			if (b == "Browse Files" || b == "Try Another File" || b == "Change Files")
+			if (b == "Browse Files" || b == "Choose Files" || b == "Try Another File" || b == "Change Files")
 				OwnBrowser(st) ? OpenBrowser(st) : (void)(st.browseWanted = true);
 			else if (b == "Help" || b == "Got It")
 				st.help = !st.help, FocusSetup(st, st.startItem, true);
@@ -2684,6 +3051,8 @@ namespace wwhd::pause_menu
 			case Input::Back:
 				if (st.startView == 1)                      // Game Files: back to the menu, on Game Files
 					st.startView = 0, FocusLaunch(st, 2, true);
+				else
+					LeaveApp();
 				return;
 			case Input::Confirm: break;
 			default: return;
@@ -2913,14 +3282,14 @@ namespace wwhd::pause_menu
 			if (ms < 0)
 				return;
 			const float s = std::min(ww / 1920.0f, wh / 1080.0f);
-			const std::string key = fmt::format("{}x{} {}", ww, wh, st.pad ? 1 : 0);
+			const std::string key = fmt::format("{}x{} {} {}", ww, wh, st.pad ? 1 : 0, st.touch ? 1 : 0);
 			if (key != st.hintKey)
 			{
 				A().Rescale(s);
 				// at the top centre: the design's top right is where the game's own button prompts are (ZR, R, X, Y)
 				ui::Canvas c((int)std::ceil(300 * s), (int)std::ceil(130 * s));
 				Frame f{ c, s };
-				DrawPrompts(f, { { st.pad ? "\xE2\x88\x92" : "Esc", "Pause" } }, st.pad, 1);
+				DrawPrompts(f, { { st.pad ? "\xE2\x88\x92" : "Esc", "Pause" } }, st, 1);
 				const float pw = std::max(GlyphWidth(st.pad ? "\xE2\x88\x92" : "Esc", st.pad), A().rocknroll.Width("Pause", 24 * s));
 				const sint32 right = (sint32)std::lround(44 * s);    // DrawPrompts' right edge in the canvas
 				gpu::SetHintPanel((sint32)ww / 2 - (c.W() - right - (sint32)(pw / 2)), 0, (uint32)c.W(), (uint32)c.H(), std::move(c.Pixels()));
@@ -3017,6 +3386,51 @@ namespace wwhd::pause_menu
 				gpu::ShownFrames(), st.lastLuma, st.checked ? "verified before" : "being checked");
 			wwhd::state::RequestHold(true);
 			gpu::RequestTvPicture();
+		}
+
+		// the Android layout's start screen by touch: the target at a point (a button's index, kPressZone in Setup's idle or
+		// wrong file, kPressBack on Game Files, else kNoPress), in design units
+		int TouchTarget(State& st, float dx, float dy)
+		{
+			const auto in = [&](const float b[4]) { return dx >= b[0] && dy >= b[1] && dx < b[0] + b[2] && dy < b[1] + b[3]; };
+			float box[4];
+			if (st.setup)
+			{
+				for (int i = 0; i < (int)SetupButtons(st).size(); i++)
+					if (SetupButtonBox(st, i, box), in(box))
+						return i;
+				const float zone[4] = { ZoneX(), ZoneY(st), kTouchZoneW, kTouchZoneH };
+				return (st.sstate == kIdle || st.sstate == kBad) && in(zone) ? kPressZone : kNoPress;
+			}
+			for (int i = 0; i < LaunchCount(st.startView); i++)
+				if (LaunchButtonBox(st.startView, i, box), in(box))
+					return i;
+			return st.startView == 1 && (BackButtonBox(box), in(box)) ? kPressBack : kNoPress;
+		}
+		// a press holds its target (drawn scaled), its release on the same target chooses it (README "Fire the action on
+		// release"); nothing on a move (no hover); a right click goes back
+		void TouchStart(State& st, float dx, float dy, int button)
+		{
+			const int at = TouchTarget(st, dx, dy);
+			if (button == 1)
+				st.pressed = at, st.pressSince = Clock::now();
+			else if (button == 2)
+				Act(st, Input::Back);
+			if (button != 3)
+				return;
+			const int was = st.pressed;
+			st.pressed = kNoPress;
+			if (was == kNoPress || was != at)
+				return;
+			if (at == kPressBack)
+				Act(st, Input::Back);
+			else if (at == kPressZone)
+				OwnBrowser(st) ? OpenBrowser(st) : (void)(st.browseWanted = true);
+			else
+			{
+				st.setup ? FocusSetup(st, at, true) : FocusLaunch(st, at, true);
+				Act(st, Input::Confirm);
+			}
 		}
 
 		void Run()
@@ -3235,7 +3649,10 @@ namespace wwhd::pause_menu
 			if (st.started)
 				return;
 			st.started = true;
-			cemuLog_log(LogType::Force, "wwhd: pause menu: its thread starts");
+			if (TouchLayout() && !st.touched)
+				st.touch = !st.padAttached, st.pad = st.padAttached;   // the Android layout: by touch unless a pad is there
+			cemuLog_log(LogType::Force, "wwhd: pause menu: its thread starts{}", TouchLayout() ? st.touch ? " (the touch layout, by touch)"
+				: " (the touch layout, a pad: the desktop's focus)" : "");
 			st.thread = std::thread(Run);
 			st.thread.detach();
 		}
@@ -3331,7 +3748,8 @@ namespace wwhd::pause_menu
 		State& st = S();
 		std::unique_lock lock(st.lock);
 		const bool up = st.phase != Phase::Closed;
-		if (key == SDLK_F2 || (key == SDLK_ESCAPE && !up))
+		const bool back = key == SDLK_AC_BACK;           // Android's Back (its button or gesture): Esc's, the device unchanged
+		if (key == SDLK_F2 || ((key == SDLK_ESCAPE || back) && !up))
 		{
 			if (repeat)
 				return true;
@@ -3343,11 +3761,12 @@ namespace wwhd::pause_menu
 		}
 		if (!up)
 		{
-			if (!repeat)
-				st.pad = false;                         // the closed prompt's glyph: the keyboard's
+			if (!repeat && !back)
+				st.pad = false, st.touch = false;       // the closed prompt's glyph: the keyboard's
 			return false;
 		}
-		st.pad = false;
+		if (!back)
+			st.pad = false, st.touch = false, st.pressed = kNoPress;
 		Input in;
 		switch (key)
 		{
@@ -3356,7 +3775,7 @@ namespace wwhd::pause_menu
 		case SDLK_LEFT: case SDLK_A: in = Input::Left; break;
 		case SDLK_RIGHT: case SDLK_D: in = Input::Right; break;
 		case SDLK_RETURN: case SDLK_SPACE: case SDLK_KP_ENTER: in = Input::Confirm; break;
-		case SDLK_ESCAPE: case SDLK_BACKSPACE: in = Input::Back; break;
+		case SDLK_ESCAPE: case SDLK_BACKSPACE: case SDLK_AC_BACK: in = Input::Back; break;
 		case SDLK_Q: in = Input::CatPrev; break;
 		case SDLK_E: in = Input::CatNext; break;
 		case SDLK_R: in = Input::Reset; break;
@@ -3382,7 +3801,7 @@ namespace wwhd::pause_menu
 		const uint32 pressed = now & ~st.lastPad.buttons;
 		st.lastPad.buttons = now;
 		if (pressed && st.phase == Phase::Closed)
-			st.pad = true;                              // the closed prompt's glyph follows the device too
+			st.pad = true, st.touch = false;            // the closed prompt's glyph follows the device too
 		st.swallow &= now;                              // a button held at closing stays the menu's until released
 		if (pressed & B::MINUS)                         // SELECT (the owner's choice: − does nothing useful in-game without the GamePad)
 		{
@@ -3392,13 +3811,17 @@ namespace wwhd::pause_menu
 		}
 		if (st.phase == Phase::Closed)
 			return;
+		// the touch model left for the desktop's (README "Recommended: a gamepad ... the desktop focus model"): on the start
+		// screen a direction first shows the cursor on the focused button
+		const bool reveal = pressed && st.touch && (st.start || st.setup);
 		if (pressed)
-			st.pad = true;
+			st.pad = true, st.touch = false, st.pressed = kNoPress;
 		const uint32 dirs = B::UP | B::DOWN | B::LEFT | B::RIGHT;
 		if (pressed & dirs)
 		{
 			st.held = now & dirs, st.repeatAt = Clock::now() + std::chrono::milliseconds(380);
-			Act(st, (pressed & B::UP) ? Input::Up : (pressed & B::DOWN) ? Input::Down : (pressed & B::LEFT) ? Input::Left : Input::Right);
+			if (!reveal)
+				Act(st, (pressed & B::UP) ? Input::Up : (pressed & B::DOWN) ? Input::Down : (pressed & B::LEFT) ? Input::Left : Input::Right);
 		}
 		else if (!(now & dirs))
 			st.held = 0;
@@ -3417,6 +3840,17 @@ namespace wwhd::pause_menu
 		st.wake.notify_one();
 	}
 
+	void PadAttached(bool on)
+	{
+		State& st = S();
+		std::lock_guard lock(st.lock);
+		if (on == st.padAttached)
+			return;
+		st.padAttached = on;
+		if (TouchLayout() && !st.touched && st.started)
+			st.touch = !on, st.pad = on;                // (the prompts the pad's)
+	}
+
 	void Mouse(float x, float y, int button)
 	{
 		State& st = S();
@@ -3426,8 +3860,19 @@ namespace wwhd::pause_menu
 		uint32 ww = 0, wh = 0;
 		if (!gpu::WindowExtent(ww, wh) || !ww || !wh)
 			return;
-		st.pad = false;                                 // the mouse: the keyboard's prompts
 		const float s = std::min(ww / 1920.0f, wh / 1080.0f), dx = x / s, dy = y / s;
+		if (!TouchLayout())
+			st.pad = false;                             // the mouse: the keyboard's prompts
+		else
+		{
+			st.touch = st.touched = true;               // Android: a pointer is a finger (the touch model)
+			if (!st.settings && st.dialog == Dialog::None && (st.setup || st.start) && !st.browsing)
+			{
+				const float ts = StartScale((float)ww, (float)wh);   // (its own scale)
+				TouchStart(st, x / ts, y / ts, button);
+				return;
+			}
+		}
 		const auto inside = [&](const float box[4]) {   // a cursor box less its 13 on every side: the button
 			return dx >= box[0] + 13 && dy >= box[1] + 13 && dx < box[0] + box[2] - 13 && dy < box[1] + box[3] - 13;
 		};

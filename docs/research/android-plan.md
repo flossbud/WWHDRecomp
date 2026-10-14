@@ -96,6 +96,12 @@ since S3 from the APK), `run` (start, then the app's logcat), `stop`, `uninstall
   booted from it; Change Files back on the start screen within 1 s (a new process), verified; the first start's
   extraction 343 files in 0.5 s, none on the next. Where an older test pushed portable/'s game profile with adb, that
   copy still wins over the APK's (the same content on the Odin).
+- The start screen's touch layout (s3-touch, 2026-10-14; the design's README 3a/3b): 1920x864 fitted, the logo's column
+  left, the board right, no Quit, Back as the design's table (help -> Got It, checking -> Cancel, Game Files -> the
+  menu, the first view -> the app to the background), the touch model (the first button lit, a press scales and its
+  release chooses) and a pad's (the desktop's cursor and prompts: the Odin's pad is attached at the start, so it begins
+  there; a touch switches). On the Odin, in a test home: Launch over the live title, Game Files by a tap, Back to the
+  menu and to the background; Setup (`WWHD_NO_GAME=1`) by touch, its picker opened and closed with Back.
 - GPU drivers (a4-drivers): Settings' GPU Driver and Import GPU Driver (Android only): a driver package (zip: meta.json
   and its library, as other Android emulators take) unpacked into the app's internal files and loaded by libadrenotools
   (setup.sh pins it; its hooks in the APK, extracted at install) in place of the system's; the system's when it fails.
