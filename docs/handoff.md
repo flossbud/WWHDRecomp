@@ -4542,6 +4542,12 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   meant and the script's taps and a Back reached the owner's launcher) and send no tap or key unless the app (or the
   picker) is in front. Left: the pause menu by touch (A4), the Quit dialog's "Desktop" wording on Android, the pad's
   prompts over the board's top edge on a 20:9 screen, the cutout and gesture insets not read.
+- **m-windows, the survey** (2026-10-14): `docs/research/windows-plan.md`. Cemu's Windows side exists; ours doesn't
+  build there (the FiberUnix fork, the write watch, the profiler, the frontend's POSIX, setenv, Windows.h's `Yield` and
+  `far`, ELF weak references, the CRT), and four things could break MATCH (thread-locals across fiber switches, the
+  host's pow/cos, `-ffp-contract` under clang-cl, text-mode stream files). Proposed: the deps on GitHub's Windows
+  runners, the program cross-built on the worker with clang-cl and xwin's SDK, MATCH under Wine. No code yet (the
+  owner's priority); W1 (the portable fixes) can be done and gated on Linux first.
 - **m-android A4 in play (a4-play)**: tour3, sail and wfw on the Odin with simpleperf (android-plan.md "A4 in play"):
   the dips at 60 are the game's code on the scheduler thread, not shaders; sail holds 57.4-58.1 with the system driver
   and 59.3-59.5 with Turnip (its GPU thread ~33% lighter); the renderer's per-draw hashing and descriptors are main's.
