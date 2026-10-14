@@ -4431,6 +4431,16 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   frame's top changed nothing. So a first-person aim draws as it is: camera +0x848 is 1 in every one (bow, boomerang,
   hookshot, grappling hook; 0 or 2 otherwise, sailing too). The ratios are host state: in save states (statetest
   tour3 2 differ and sail 1 without; the state format's version 3 -> 4).
+  The Earth Temple's 2 at N 4, found (u6-draw, session bottom): the camera again. At M_Dai,0 with Link idle the camera
+  is still at 30 (each tick's start the last one's, to the bit), and its show steps wander from it: the eye's y 0.04,
+  0.07, 0.09 below, back on the tick's frame (at N 2 0.05 below on the half frame: even, so under hz30's bar). The step
+  trial on the camera there (WWHD_60FPS_TRIAL=476 at WWHD_STEPS 4 and 2): from one start followCamera's eye target
+  +0x61C (its R block's three stores, 0x02504BD8/C44/C98) ends 0.135 lower after quarter steps, 0.10 after half ones,
+  while its angles (+0x254) end as 30's; why, not found. CamPace keeps a rest as a ratio of 0: after a tick that
+  didn't move the camera, a show step moving it under 1 unit (0.1 degrees) draws the tick's start. hz30 at N 4 there
+  2 -> 0 (the middle third by phase 0.22/0.18/0.15/0.34 -> 0.07/0.07/0.07/0.08), at N 2 the change a swap halves;
+  Pdrgsh at N 4 0 (Doc Bandam's 5, the banner above), sea6 0. A lead: sea6 at N 4 a few blocks below the middle
+  (x 888-1008, y 720-744) change ~4x more into one phase than the others, under hz30's bar.
 - **t-pausemenu M1-M3** (the owner's design: assets/pause_menu, its README the spec; frontend/pause_menu.cpp,
   ui_draw.cpp): Esc/F2 or the pad's SELECT (−, no longer the game's) opens it; the game held at a whole tick's top
   (os/savestate RequestHold), silent, over its blurred last frame; the menu drawn in software at the window's size from

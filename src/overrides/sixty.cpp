@@ -2926,7 +2926,12 @@ namespace
 	// (camera +0x848 1: the bow's, the boomerang's, the hookshot's, the grappling hook's): Link's draw puts his sight
 	// on the screen with the drawn view (+0x5908/+0x5918, its screen place) and the camera's tick after the throw
 	// reads it (gohmarock paced there: the camera's fovy 1.3 degrees off at the throw's tick, Link 185.8 units from
-	// 30's at the end against 0.6). The ratios are in save states. WWHD_60FPS_CAMPACE=0: off.
+	// 30's at the end against 0.6). A camera at rest at 30 (its tick's start the last one's, to the bit) draws its
+	// show steps at the tick's start while they move under 1 unit (0.1 degrees): they wander where 30's doesn't (the
+	// Earth Temple's entrance, M_Dai,0, Link idle: the eye's y 0.04, 0.07, 0.09 below and back on the tick's frame, at
+	// N 2 0.05; the trial from one start: followCamera's eye target +0x61C 0.135 lower after quarter steps, 0.10 after
+	// half ones, its angles at their end as 30's). The ratios are in save states (a rest is a ratio of 0).
+	// WWHD_60FPS_CAMPACE=0: off.
 	bool CamPace()
 	{
 		static const bool on = [] { const char* e = getenv("WWHD_60FPS_CAMPACE"); return !(e && atoi(e) == 0); }();
@@ -2936,6 +2941,7 @@ namespace
 	constexpr uint32 kCamGroup[7] = { 0, 1, 1, 1, 2, 2, 2 };
 	constexpr double kCamStill[3] = { 1e-6, 0.01, 0.01 };      // a move's square below this: at rest (fovy in degrees)
 	constexpr double kCamCut[3] = { 100.0, 9e4, 9e4 };         // ... above this: a cut (10 degrees, 300 units)
+	constexpr double kCamRest[3] = { 0.01, 1.0, 1.0 };         // a show step's move held at a rest below this
 	constexpr uint32 kCamAim = 0x848;                          // 1 in a first-person aim (below)
 	struct CamPaceState
 	{
@@ -2981,7 +2987,7 @@ namespace
 						whole += t * t;
 					}
 				const bool paced = last && shown > kCamStill[g] && whole < kCamCut[g];
-				p.r[g] = paced ? (float)std::clamp(share * moved / shown, 0.5, 2.0) : 1.0f;
+				p.r[g] = last && whole == 0 ? 0.0f : paced ? (float)std::clamp(share * moved / shown, 0.5, 2.0) : 1.0f;
 			}
 		}
 		if (i + 2 == g_rtSteps)                         // the tick's last show step: for the next tick's ratios
@@ -2993,13 +2999,13 @@ namespace
 			std::copy(now, now + 7, p.show);
 		}
 		float r[3] = { p.r[0], p.r[1], p.r[2] };
-		for (uint32 g = 0; g < 3; g++)                   // a cut in this show step: drawn as it is
+		for (uint32 g = 0; g < 3; g++)                   // a cut in this show step, or a rest it moves on from: as it is
 		{
 			double shown = 0;
 			for (uint32 k = 0; k < 7; k++)
 				if (kCamGroup[k] == g)
 					shown += ((double)now[k] - start[k]) * ((double)now[k] - start[k]);
-			if (shown >= kCamCut[g])
+			if (shown >= kCamCut[g] || (r[g] == 0.0f && shown >= kCamRest[g]))
 				r[g] = 1.0f;
 		}
 		if (r[0] == 1.0f && r[1] == 1.0f && r[2] == 1.0f)
