@@ -74,6 +74,7 @@ namespace wwhd::gpu
 		bool bc = true;                                          // BC1-5 sampled (off: decoded to 8-bit formats on upload)
 		bool vertex3 = true;                                     // 3-component 8- and 16-bit vertex formats (off: 4)
 		bool dynamicRenderingKHR = false;                        // dynamic rendering by VK_KHR_dynamic_rendering (below 1.3)
+		bool renderPasses = false;                               // none at all: render passes stand in (passes.cpp)
 		VkCommandPool pool = VK_NULL_HANDLE;
 		VkCommandBuffer cmd = VK_NULL_HANDLE;
 		VkFence fence = VK_NULL_HANDLE;

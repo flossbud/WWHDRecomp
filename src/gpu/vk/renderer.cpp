@@ -141,9 +141,27 @@ namespace wwhd::gpu
 		const uint32 api = props.apiVersion;
 		const bool v13ok = VK_API_VERSION_MAJOR(api) > 1 || VK_API_VERSION_MINOR(api) >= 3, v12ok = VK_API_VERSION_MAJOR(api) > 1 ||
 			VK_API_VERSION_MINOR(api) >= 2;
+		vkEnumerateDeviceExtensionProperties(s.physical, nullptr, &n, nullptr);
+		std::vector<VkExtensionProperties> exts(n);
+		vkEnumerateDeviceExtensionProperties(s.physical, nullptr, &n, exts.data());
 		s.dynamicRenderingKHR = !v13ok || VkMasked("vk13");
+		// with no dynamic rendering at all (Mali's Vulkan 1.1 drivers) render passes stand in for it: passes.cpp
+		s.renderPasses = VkMasked("rendering") || (s.dynamicRenderingKHR && std::none_of(exts.begin(), exts.end(),
+			[](const VkExtensionProperties& e) { return !strcmp(e.extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME); }));
+		if (s.renderPasses)
+			s.dynamicRenderingKHR = false;
 		void** chain = &v11.pNext;
-		if (!s.dynamicRenderingKHR)
+		if (s.renderPasses)
+		{
+			if (v12ok)
+			{
+				features.pNext = &v12;
+				v12.pNext = &v11;
+			}
+			else
+				chain = &features.pNext;
+		}
+		else if (!s.dynamicRenderingKHR)
 		{
 			features.pNext = &v13;
 			v13.pNext = &v12;
@@ -160,21 +178,18 @@ namespace wwhd::gpu
 			else
 				chain = &rendering.pNext;
 		}
-		vkEnumerateDeviceExtensionProperties(s.physical, nullptr, &n, nullptr);
-		std::vector<VkExtensionProperties> exts(n);
-		vkEnumerateDeviceExtensionProperties(s.physical, nullptr, &n, exts.data());
 		std::vector<const char*> enable;
 		if (HasWindow())
 			enable.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 		if (s.dynamicRenderingKHR)
 		{
-			if (std::none_of(exts.begin(), exts.end(), [](const VkExtensionProperties& e) {
-					return !strcmp(e.extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME); }))
-				Fail(fmt::format("Vulkan {}.{} without VK_KHR_dynamic_rendering", VK_API_VERSION_MAJOR(api), VK_API_VERSION_MINOR(api)));
 			enable.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 			Log(fmt::format("Vulkan {}.{}{}: dynamic rendering by VK_KHR_dynamic_rendering", VK_API_VERSION_MAJOR(api),
 				VK_API_VERSION_MINOR(api), v13ok ? " (WWHD_VK_MASK=vk13)" : ""));
 		}
+		if (s.renderPasses)
+			Log(fmt::format("Vulkan {}.{} without dynamic rendering{}: render passes stand in for it", VK_API_VERSION_MAJOR(api),
+				VK_API_VERSION_MINOR(api), VkMasked("rendering") ? " (WWHD_VK_MASK=rendering)" : ""));
 		for (auto& e : exts)
 		{
 			if (!strcmp(e.extensionName, VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME))
@@ -191,7 +206,7 @@ namespace wwhd::gpu
 			}
 		}
 		vkGetPhysicalDeviceFeatures2(s.physical, &features);
-		if (!(s.dynamicRenderingKHR ? rendering.dynamicRendering : v13.dynamicRendering))
+		if (!s.renderPasses && !(s.dynamicRenderingKHR ? rendering.dynamicRendering : v13.dynamicRendering))
 			Fail("no dynamic rendering");
 		if (const char* e = getenv("WWHD_VK_MASK"); e && *e)
 			Log(fmt::format("WWHD_VK_MASK={}: the renderer as if the device lacked those", e));
@@ -275,6 +290,8 @@ namespace wwhd::gpu
 			return systemDriver(fmt::format("vkCreateDevice {}", (int)created));
 		Check(created, "vkCreateDevice");
 		LoadDevice(s.device, s.dynamicRenderingKHR);
+		if (s.renderPasses)
+			EmulateRendering(s.device);
 		vkGetDeviceQueue(s.device, s.queueFamily, 0, &s.queue);
 		VkCommandPoolCreateInfo pci{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
 		pci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;

@@ -45,4 +45,4 @@ for _ in $(seq 1 "${secs:-$((exit_frame / 40 + 60))}"); do
     [ -n "$(sh "pidof $pkg" | tr -d '\r')" ] || break
 done
 echo "route.sh: $(( $(date +%s) - start )) s"
-sh "cat $home/portable/log.txt" | grep -E "wwhd real time|Fatal|exit frame|FATAL" | cut -c1-500 || true
+sh "cat $home/portable/log.txt" | grep -E "wwhd real time|Fatal|exit frame|FATAL|render scale:|gpu timing:" | cut -c1-500 || true

@@ -49,4 +49,5 @@ namespace wwhd::vk
 	bool ImportedDriver();                         // Load took a GPU driver the player imported (Android, a4-drivers)
 	void LoadInstance(VkInstance instance);
 	void LoadDevice(VkDevice device, bool renderingKHR = false);   // renderingKHR: vkCmdBeginRenderingKHR's names (below 1.3)
+	void EmulateRendering(VkDevice device);        // no dynamic rendering: render passes in its place (passes.cpp)
 }

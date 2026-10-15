@@ -665,6 +665,12 @@
       "name": "Round 15: [6] Android speed, the generated code's quality on arm64 (byte-swapped memory, unused CR/XER, spills, the yield check): fixes in tools/recomp that help x86 too"
     },
     {
+      "id": "a4-rp4",
+      "lane": "main",
+      "complexity": 6,
+      "name": "Round 15: [6] Android on a low-end device, the owner's Retroid Pocket 4 Pro (Dimensity 1100: A78 cores at 2.6 GHz, Mali-G77 on a Vulkan 1.1 driver with no dynamic rendering): first running at all (render passes standing in), then as fast as the Odin's work allows, without trading looks for speed"
+    },
+    {
       "id": "g-rework",
       "lane": "bottom",
       "complexity": 9,
