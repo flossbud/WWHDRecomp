@@ -4618,8 +4618,16 @@ Every item's evidence is in docs/research/gpu-plan.md (a section each) and its c
   textures, not render targets), `WWHD_FXAA=1` (the scene at the HUD split; not where FSR 3 upscales). To find a pass:
   `WWHD_RENDER_TRACE=FRAME:0` lists every draw of that frame with its targets and textures, `WWHD_RENDER_SHADERS=DIR`
   writes each shader's GLSL (both stay on the worker). gpu-plan.md, "Graphics options".
-- **Next in the lane:** b-1dviews (the 1D views, a validation pass of every route), b-uncapped-plan (research and a
-  plan only).
+- **a4-gpu and g-rework (2026-10-15):** descriptor sets kept across frames (their own pool; `WWHD_SETCACHE=frame` the
+  old per-submit cache), sticky passes (a draw into fewer of the open pass's targets stays in it; `WWHD_STICKY_PASS=0`
+  off; its 62 pipeline variants in the shader list), a layered target's clears as load ops, the vertex copies' map
+  kept across frames. The research and its plan: docs/research/graphics-rework.md (attachment traffic per pass, the
+  RP4's GPU time by pass, the AO's cost, what each idea is worth). The probe behind the traffic numbers
+  (`WWHD_PASS_TRAFFIC=N`) isn't committed: its patch, against main bd7b7faa with an early opt-in sticky in it, is
+  /wwhd/tmp/bottom-traf/probe-sticky.diff on the worker; it becomes the frame graph's recorder (step 5). RP4 window
+  scripts check `adb get-state` before each run: its wireless debugging can move ports mid-window.
+- **Next in the lane:** the Odin's A/B of the above when the owner frees it; AO cheap enough to be on by default on
+  low-end devices (~1 ms on the RP4 to beat); then the frame graph (graphics-rework.md).
 
 ### Session qa (week 2, WW-15): the problems top and bottom are stuck on
 
