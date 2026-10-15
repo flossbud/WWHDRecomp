@@ -1490,9 +1490,13 @@ namespace wwhd::gpu
 		// Descriptor sets reused (docs/research/deck-plan.md item 3): a set's contents are the shader's (its layout and
 		// buffer bindings, which all point at the ring's start with a fixed range: the draw's data goes in the dynamic
 		// offsets) and the images' (sampler, view, layout), so a draw whose shader and images equal an earlier draw's
-		// since the pool was last reset binds that draw's set, without vkAllocateDescriptorSets and
-		// vkUpdateDescriptorSets. Cleared with the pool (OnSubmitted) and whenever an image view is destroyed
-		// (ForgetSets: a later view may get its handle). WWHD_SETCACHE=0: off.
+		// binds that draw's set, without vkAllocateDescriptorSets and vkUpdateDescriptorSets. A set is never written
+		// again, so the frames in flight can bind the same one. The cached sets come from a pool of their own, kept
+		// across submits (sail at 60 makes ~510 sets a frame, nearly all of them made in an earlier frame too): the
+		// cache is cleared whenever an image view is destroyed (ForgetSets: a later view may get its handle), its sets
+		// left in the pool until it fills, and then the pool is reset with the GPU idle (Reserve).
+		// WWHD_SETCACHE=frame: the sets from the slot's pool, the cache cleared with it at every submit (before);
+		// WWHD_SETCACHE=0: off.
 		struct CachedSet
 		{
 			const Shader* sh;
@@ -1501,6 +1505,27 @@ namespace wwhd::gpu
 		};
 		std::unordered_map<uint64, CachedSet> s_setCache;
 		uint64 s_setHits = 0, s_setMisses = 0;                 // WWHD_RENDER_STATS's line
+
+		enum class SetCache { Off, Frame, Kept };
+		SetCache SetCacheMode()
+		{
+			static const SetCache mode = [] {
+				const char* e = getenv("WWHD_SETCACHE");
+				if (!e)
+					return SetCache::Kept;
+				if (!strcmp(e, "frame"))
+					return SetCache::Frame;
+				return atoi(e) == 0 ? SetCache::Off : SetCache::Kept;
+			}();
+			return mode;
+		}
+
+		// the kept pool's room: sets, and 8 image and 4 buffer descriptors a set (WWHD_SETCACHE_SETS=N, a test: a small
+		// pool, reset often)
+		uint32 s_keptRoom = 1 << 14;
+		VkDescriptorPool s_keptPool = VK_NULL_HANDLE;           // the cached sets' (SetCache::Kept)
+		uint32 s_keptSets = 0, s_keptImages = 0, s_keptBuffers = 0;
+		uint64 s_keptResets = 0;
 
 		uint64 SetKey(const Shader& sh, const std::vector<VkDescriptorImageInfo>& images)
 		{
@@ -1543,7 +1568,7 @@ namespace wwhd::gpu
 				if (vertex)
 					s_vsData.push_back(s_lastBlock);
 			}
-			static const bool cache = [] { const char* e = getenv("WWHD_SETCACHE"); return !(e && atoi(e) == 0); }();
+			const bool cache = SetCacheMode() != SetCache::Off, kept = SetCacheMode() == SetCache::Kept;
 			uint64 key = 0;
 			if (cache)
 			{
@@ -1557,14 +1582,15 @@ namespace wwhd::gpu
 				s_setMisses++;
 			}
 			VkDescriptorSetAllocateInfo ai{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
-			ai.descriptorPool = s.descriptors;
+			ai.descriptorPool = kept ? s_keptPool : s.descriptors;
 			ai.descriptorSetCount = 1;
 			ai.pSetLayouts = &sh.layout;
 			VkDescriptorSet set;
 			Check(vkAllocateDescriptorSets(s.device, &ai, &set), "vkAllocateDescriptorSets");  // Reserve() made room
-			s_sets++;
-			s_imageDescriptors += (uint32)images.size();
-			s_bufferDescriptors += (uint32)sh.uniformBuffers.size() + 1;
+			const uint32 buffers = ((uint32)sh.uniformBuffers.size() + 1) * (sh.isMotion && vertex ? 2 : 1);
+			(kept ? s_keptSets : s_sets)++;
+			(kept ? s_keptImages : s_imageDescriptors) += (uint32)images.size();
+			(kept ? s_keptBuffers : s_bufferDescriptors) += buffers;
 			static std::vector<VkWriteDescriptorSet> writes;    // the render thread's alone: kept, not allocated per draw
 			writes.clear();
 			for (sint32 i = 0; i < sh.mapping.getTextureCount(); i++)
@@ -1609,7 +1635,6 @@ namespace wwhd::gpu
 						w.dstBinding += motion::kPrevBinding;
 						writes.push_back(w);
 					}
-				s_bufferDescriptors += (uint32)sh.uniformBuffers.size() + 1;
 			}
 			vkUpdateDescriptorSets(s.device, (uint32)writes.size(), writes.data(), 0, nullptr);
 			if (cache)
@@ -1630,9 +1655,18 @@ namespace wwhd::gpu
 		// room for one draw's per-draw data (a submit in the middle of a draw would free what it already allocated)
 		void Reserve()
 		{
-			if (s.ring.used + (64ull << 20) > s.ringEnd || s_sets + 2 > (1u << 16) || s_imageDescriptors + 64 > (1u << 18) ||
+			const bool keptFull = SetCacheMode() == SetCache::Kept &&
+				(s_keptSets + 2 > s_keptRoom || s_keptImages + 64 > s_keptRoom * 8 || s_keptBuffers + 64 > s_keptRoom * 4);
+			if (keptFull || s.ring.used + (64ull << 20) > s.ringEnd || s_sets + 2 > (1u << 16) || s_imageDescriptors + 64 > (1u << 18) ||
 				s_bufferDescriptors + 64 > (1u << 17))
 				SubmitAndWait();
+			if (keptFull)                                           // the GPU idle: no frame in flight binds its sets
+			{
+				vkResetDescriptorPool(s.device, s_keptPool, 0);
+				s_keptSets = s_keptImages = s_keptBuffers = 0;
+				s_setCache.clear();
+				s_keptResets++;
+			}
 		}
 	}
 
@@ -1842,6 +1876,18 @@ namespace wwhd::gpu
 		cache::Open();
 		if (const char* e = getenv("WWHD_RENDER_STATS"))
 			s_statsEvery = (uint32)atoi(e);
+		if (SetCacheMode() == SetCache::Kept)
+		{
+			if (const char* e = getenv("WWHD_SETCACHE_SETS"))
+				s_keptRoom = std::max(atoi(e), 64);
+			VkDescriptorPoolSize sizes[] = { { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, s_keptRoom * 8 },
+				{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, s_keptRoom * 4 } };
+			VkDescriptorPoolCreateInfo dpi{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+			dpi.maxSets = s_keptRoom;
+			dpi.poolSizeCount = 2;
+			dpi.pPoolSizes = sizes;
+			Check(vkCreateDescriptorPool(s.device, &dpi, nullptr, &s_keptPool), "vkCreateDescriptorPool");
+		}
 	}
 
 	void EndRendering(std::source_location where)
@@ -1862,7 +1908,8 @@ namespace wwhd::gpu
 		if (motion::On())
 			motion::OnSubmitted();
 		s_sets = s_imageDescriptors = s_bufferDescriptors = 0;
-		s_setCache.clear();
+		if (SetCacheMode() != SetCache::Kept)                       // its sets came from the slot's pool, just reset
+			s_setCache.clear();
 	}
 
 	void ForgetSets()
@@ -1897,8 +1944,9 @@ namespace wwhd::gpu
 		}
 		if (s_statsEvery && frame % s_statsEvery == 0)
 			Log(fmt::format("frame {}: {} draws, {} skipped; {} shaders, {} pipelines; decoded indices {} reused, {} decoded; "
-				"descriptor sets {} reused, {} written",
-				frame, s_draws, s_skipped, s_shaders.size(), s_pipelines.size(), s_indexHits, s_indexMisses, s_setHits, s_setMisses));
+				"descriptor sets {} reused, {} written (the kept pool: {} sets, {} resets)",
+				frame, s_draws, s_skipped, s_shaders.size(), s_pipelines.size(), s_indexHits, s_indexMisses, s_setHits, s_setMisses,
+				s_keptSets, s_keptResets));
 	}
 
 	// The first start without hitches (D20): everything the shader list (shader_list.cpp) has that the
