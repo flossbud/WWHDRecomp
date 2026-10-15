@@ -8,6 +8,8 @@
 #include "PPCInterpreterHelper.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
 #include <zstd.h>
+#include <atomic>
+#include <iterator>
 
 std::unordered_set<std::string> s_unsupportedHLECalls;
 
@@ -256,8 +258,33 @@ void PPCInterpreter_virtualHLE(PPCInterpreter_t* hCPU, unsigned int opcode)
 	uint32 hleFuncId = opcode & 0xFFFF;
 	if (hleFuncId == 0xFFD0) [[unlikely]]
 	{
+		// wwhd: the game calls some imports Cemu has no entry for at every material (GX2SetAlphaToMask(FALSE, 0):
+		// ~300 a frame in sail, ~350 with GX2ExpandDepthBuffer, AXSetVoicePriority and the others). A trampoline
+		// reported once returns 0 at once, without formatting its name and looking it up under the lock (0.3% of
+		// core 1's cycles and 1.7% of core 2's on the Odin). The same result, the same one log line, no guest time.
+		static std::atomic<uint32> s_reported[64];
+		static std::atomic<uint32> s_reportedCount;
+		auto reported = [](uint32 trampoline, uint32 count) {
+			for (uint32 i = 0; i < count; i++)
+				if (s_reported[i].load(std::memory_order_relaxed) == trampoline)
+					return true;
+			return false;
+		};
+		const uint32 trampoline = hCPU->instructionPointer;
+		if (reported(trampoline, s_reportedCount.load(std::memory_order_acquire)))
+		{
+			hCPU->gpr[3] = 0;
+			PPCInterpreter_nextInstruction(hCPU);
+			return;
+		}
 		s_hleLogMutex.lock();
 		PPCInterpreter_handleUnsupportedHLECall(hCPU);
+		const uint32 count = s_reportedCount.load(std::memory_order_relaxed);
+		if (count < std::size(s_reported) && !reported(trampoline, count))
+		{
+			s_reported[count].store(trampoline, std::memory_order_relaxed);
+			s_reportedCount.store(count + 1, std::memory_order_release);
+		}
 		s_hleLogMutex.unlock();
 	}
 	else

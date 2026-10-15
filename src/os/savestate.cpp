@@ -108,7 +108,23 @@ namespace wwhd::state
 		}
 		uint32 s_loadedAt = 0;                          // this process's swap when it loaded (the log)
 		uint32 s_loadTries = 0;                         // save points a load has waited at for this process to come as far
-		std::unordered_map<OSThread_t*, bool> s_exact;  // each thread's last switch-out: exact (NoteSwitchOut; scheduler lock)
+		// each thread's last switch-out: exact (NoteSwitchOut; scheduler lock). A list: the threads are few, and a map's
+		// insertion at each switch was 0.1% of the game thread on the Odin (a4-cpu5)
+		std::vector<std::pair<OSThread_t*, bool>> s_exact;
+		bool& Exact(OSThread_t* t)
+		{
+			for (auto& [thread, exact] : s_exact)
+				if (thread == t)
+					return exact;
+			return s_exact.emplace_back(t, false).second;
+		}
+		bool IsExact(OSThread_t* t)
+		{
+			for (const auto& [thread, exact] : s_exact)
+				if (thread == t)
+					return exact;
+			return false;
+		}
 		std::mutex s_rerunLock;
 		std::set<MPTR> s_rerun;                         // threads a load built anew that wait in an OS call (FiberStart)
 
@@ -220,7 +236,7 @@ namespace wwhd::state
 				return HleIndex(srr0) >= 0 ? nullptr : "waiting outside an OS call";
 			if (!InText(srr0))
 				return SystemThread(t, parked) ? "a system thread not waiting" : "ready in an OS call";
-			if (auto it = s_exact.find(t); it == s_exact.end() || !it->second)
+			if (!IsExact(t))
 				return "stopped in host code (its IP is stale)";
 			PPCInterpreter_t* cpu = coreinit::__OSHostThreadInstance(t);
 			if (cpu && wwhd::rt::InCallback(cpu))
@@ -654,7 +670,7 @@ namespace wwhd::state
 					if (e.kind == 1)
 						continue;
 					coreinit::__OSReplaceHostThread(MEMPTR<OSThread_t>(e.thread).GetPtr());
-					s_exact[MEMPTR<OSThread_t>(e.thread).GetPtr()] = true;   // its saved IP is where it goes on
+					Exact(MEMPTR<OSThread_t>(e.thread).GetPtr()) = true;   // its saved IP is where it goes on
 					if (e.state == (uint32)OSThread_t::THREAD_STATE::STATE_WAITING)
 						s_rerun.insert(e.thread);
 				}
@@ -978,7 +994,7 @@ namespace wwhd::state
 	void NoteSwitchOut(OSThread_t* thread, bool exact)
 	{
 		if (thread)
-			s_exact[thread] = exact;
+			Exact(thread) = exact;
 	}
 
 	bool Pending()

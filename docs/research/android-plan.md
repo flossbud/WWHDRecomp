@@ -276,6 +276,14 @@ simpleperf_report_lib):
   unsupported imports' handler 0.33% (GX2SetAlphaToMask with each material's state, GX2InitDepthBufferHiZEnable,
   GX2ExpandDepthBuffer, AXRmt*, WPADDisconnect: no one implements them; each formatted and hashed its name on every
   call), GX2SetFetchShader's export wrapper 0.4%, savestate's NoteSwitchOut (a map insertion each thread switch) 0.1%.
+- **a4-cpu5, the unsupported imports and the switch note** (2026-10-15, with session bottom): ~350 calls a frame in sail
+  reach imports no one implements (session bottom's count on the worker: GX2SetAlphaToMask ~300 a frame, always
+  (FALSE, 0) from the game's two call sites, so nothing to draw; AXSetVoicePriority, AXSetVoiceRmtIIRCoefs,
+  GX2InitDepthBufferHiZEnable, AXGetSwapProfile, GX2ExpandDepthBuffer, AXRmtGetSamplesLeft, WPADDisconnect). Each took
+  the log's lock, formatted its name and looked it up: 0.34% of core 1, 0.17% of core 0 and 1.74% of core 2 on the
+  Odin (session bottom, on the a4-cpu2 profile). A trampoline already reported now returns 0 at once (a lock-free
+  table of 64; the first call per trampoline as before: the same log line and result). savestate's NoteSwitchOut keeps
+  each thread's flag in a short list, not a map.
 
 ## A4 codegen (2026-10-14, session qa: a4-codegen)
 
