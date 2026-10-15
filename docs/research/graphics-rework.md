@@ -163,10 +163,33 @@ targets that never leave the tile (the 960x544 depth). Measure first on the devi
 the Odin (WWHD_GPU_TIMING; it costs ~10 fps on Mali, so fps come from runs without it), and the render-scale sweep
 that splits the fixed 11-12 ms from the scaled part.
 
+**The Odin's GPU thread** (2026-10-15, sail at 60 held at 60 in every run, so the measure is the NullGPU thread's
+cycles in 20 s, simpleperf; main fbd4b114's code, two rounds each):
+
+| | round 1 | round 2 | against the default |
+|---|---|---|---|
+| the default (sticky passes, kept descriptor sets, layered clears) | 32.64 G | 32.16 G | |
+| render passes in place of dynamic rendering (`WWHD_VK_MASK=rendering`) | 27.44 G | 27.33 G | -15.5% |
+| sticky passes off | 33.43 G | 33.19 G | the default -2.7% |
+| sets cached per submit, as before (`WWHD_SETCACHE=frame`) | 34.62 G | 35.05 G | the default -7.0% |
+
+Qualcomm's driver costs more for a vkCmdBeginRendering than for the render pass passes.cpp stands in with: the
+render-pass path, made for the RP4, is the cheaper one on Adreno too (its GPU time and Turnip still to check).
+
+**The exact multiply's emulation on Adreno.** Every shader's `mul_nonIEEE` (`a == 0 || b == 0 ? 0 : a*b`, the
+decompiler's model of Latte's multiply, where 0 times anything is 0) made a plain multiply (`WWHD_TEST_FASTMUL=1`, a
+probe, inexact where an operand is 0 and the other inf or NaN): the Odin's GPU 8.84 -> 7.55 ms a frame (-14.6%; sail,
+AO on, timing on), the scene's two-target 1080p pass 2.20 -> 1.63 ms, the AO chain 0.89 -> 0.53 ms. The worker's iGPU
+(bandwidth-bound) showed +0.5% for an exact branch-free form; Adreno is ALU-bound here. The patch is
+/wwhd/tmp/bottom-odin/fastmul-probe.diff on the worker.
+
 **Our own shaders.** The decompiler's GLSL emulates the register file (every value a bit-cast integer and float,
 exact-multiply emulation): the earlier test (gpu-plan.md item 5) found SPIRV-Tools' optimiser +1.9% and an exact
-branch-free multiply +0.5% on the iGPU, which is bandwidth-bound; phones may be ALU-bound and are where to measure
-again. A translator of our own (also what m-nocemu needs in place of Cemu's decompiler) that types values, folds
+branch-free multiply +0.5% on the iGPU, which is bandwidth-bound; on the Odin the emulation is ~15% of the GPU's
+time (above). A plain multiply gives the same result wherever neither operand can be 0 against inf or NaN, and the
+sign of a zero product only matters where it reaches a division or a sign test: a translation that proves that per
+multiply (uniforms the game keeps finite, texture values, the results of clamps) keeps the pictures exact and takes
+most of that 15%; where it can't, the exact form stays. A translator of our own (also what m-nocemu needs in place of Cemu's decompiler) that types values, folds
 constants and drops dead code would give mobile compilers cleaner SPIR-V, and is what input attachments and any
 per-pass replacement need. Checked by the captures (byte-identical where exact).
 
@@ -197,17 +220,24 @@ afford it.
 
 1. **Measure on the devices**: the RP4's sail is above; the Odin (Adreno: tiled or direct by pass) and tour3/en-tn
    next, fps without timing; the Deck class on the worker's iGPU.
-2. **Sticky passes**: done (on by default, its pipeline variants in the shipped shader list). The Odin's A/B when the
-   owner frees it (BeginRendering is 13.6% of its GPU thread).
+2. **Sticky passes**: done (on by default, its pipeline variants in the shipped shader list); the Odin's GPU thread
+   -2.7%, the kept descriptor sets -7.0%. **Render passes on Qualcomm's driver** (-15.5% of the Odin's GPU thread):
+   by default there once its GPU time and Turnip are checked.
 3. **Layered clears as load ops**: done (the shadow map's per-layer clears by the next pass into each layer; exact).
    On the RP4 neutral: the separate clears 0.43 -> 0.15 ms a frame, the shadow pass 0.67 -> 0.95, the GPU 18.64 ->
    18.72 ms (Mali's clear cost moved into the pass). Adreno, where a clear outside a pass is a write of its own to
    memory, is the device to judge it on.
-4. **AO cheap enough to be on by default** on low-end devices (the original's look back), then the mip chains.
-5. **The frame graph**: the probe as a recorder, then the planner (superset begins, dead stores, hoisted copies, the
+4. **AO cheap enough to be on by default** on low-end devices (the original's look back), then the mip chains. The
+   exact multiply's emulation is most of AO's cost on Adreno (0.89 -> 0.53 ms without it): the AO shader translated
+   exactly without it is the first try.
+5. **The exact multiply without its emulation** (~15% of the Odin's GPU time): per multiply, a plain one where the
+   operands provably can't be 0 against inf or NaN and a zero's sign can't matter, the exact form (branch-free) where
+   not; the captures at PSNR inf on every route. Measured on the Odin and the RP4; it may be what brings AO back by
+   default on phones.
+6. **The frame graph**: the probe as a recorder, then the planner (superset begins, dead stores, hoisted copies, the
    loud-clear check), measured on the RP4 and the Odin.
-6. **Our own shader translator** (with m-nocemu), then input attachments and transient attachments on the tile path.
-7. A native scene renderer reconsidered with 5 and 6 in hand.
+7. **Our own shader translator** (with m-nocemu), then input attachments and transient attachments on the tile path.
+8. A native scene renderer reconsidered with 6 and 7 in hand.
 
 Every step: the checks' captures identical (or compared by PSNR where a replacement is meant to differ), measured on
 the RP4, the Odin and the worker, the look kept or bettered.

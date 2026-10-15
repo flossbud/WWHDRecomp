@@ -4624,10 +4624,14 @@ Every item's evidence is in docs/research/gpu-plan.md (a section each) and its c
   kept across frames. The research and its plan: docs/research/graphics-rework.md (attachment traffic per pass, the
   RP4's GPU time by pass, the AO's cost, what each idea is worth). The probe behind the traffic numbers
   (`WWHD_PASS_TRAFFIC=N`) isn't committed: its patch, against main bd7b7faa with an early opt-in sticky in it, is
-  /wwhd/tmp/bottom-traf/probe-sticky.diff on the worker; it becomes the frame graph's recorder (step 5). RP4 window
+  /wwhd/tmp/bottom-traf/probe-sticky.diff on the worker; it becomes the frame graph's recorder (step 6). RP4 window
   scripts check `adb get-state` before each run: its wireless debugging can move ports mid-window.
-- **Next in the lane:** the Odin's A/B of the above when the owner frees it; AO cheap enough to be on by default on
-  low-end devices (~1 ms on the RP4 to beat); then the frame graph (graphics-rework.md).
+- **The Odin (10-15):** the kept sets -7.0% of its GPU thread, sticky -2.7%, and render passes in place of dynamic
+  rendering -15.5% more (Qualcomm's vkCmdBeginRendering is dear); the exact multiply's emulation ~15% of its GPU time
+  (graphics-rework.md). Render passes by default on Qualcomm's driver are approved once its GPU time, Turnip and
+  b16rec are measured (/wwhd/tmp/bottom-odin/odinpass.sh, queued for an Odin window).
+- **Next in the lane:** that window and the default; AO cheap enough to be on by default on low-end devices (~1 ms on
+  the RP4 to beat); the exact multiply without its emulation; then the frame graph (graphics-rework.md).
 
 ### Session qa (week 2, WW-15): the problems top and bottom are stuck on
 
