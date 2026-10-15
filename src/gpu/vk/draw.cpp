@@ -2367,19 +2367,15 @@ namespace wwhd::gpu
 			// A guard against a scratch area the CPU fills anew between two draws (particles, effects): the buffer's first
 			// 64 bytes must still be what was copied, or it's copied again
 			static const bool dedupe = [] { const char* e = getenv("WWHD_VTX_DEDUPE"); return !(e && atoi(e) == 0); }();
-			struct VtxCopy { VkDeviceSize off; uint8 head[64]; };
+			// The copies are kept from frame to frame, each valid in its ring epoch alone (not cleared at each new one: the
+			// map's nodes allocated anew every frame were 0.71% of the Odin's GPU thread, top's a4-cpu4 profile)
+			struct VtxCopy { uint64 epoch; VkDeviceSize off; uint8 head[64]; };
 			static std::unordered_map<uint64, VtxCopy> s_vtxCopies;
-			static uint64 s_vtxEpoch = ~0ull;
 			const uint32 headBytes = std::min(bytes, 64u);
 			if (dedupe && b[0])
 			{
-				if (s_vtxEpoch != s.ring.epoch)
-				{
-					s_vtxCopies.clear();
-					s_vtxEpoch = s.ring.epoch;
-				}
-				if (auto hit = s_vtxCopies.find(((uint64)b[0] << 32) | bytes);
-					hit != s_vtxCopies.end() && memcmp(hit->second.head, memory_getPointerFromPhysicalOffset(b[0]), headBytes) == 0)
+				if (auto hit = s_vtxCopies.find(((uint64)b[0] << 32) | bytes); hit != s_vtxCopies.end() &&
+					hit->second.epoch == s.ring.epoch && memcmp(hit->second.head, memory_getPointerFromPhysicalOffset(b[0]), headBytes) == 0)
 				{
 					vbufs.push_back({ g.attributeBufferIndex, hit->second.off });
 					continue;
@@ -2388,7 +2384,10 @@ namespace wwhd::gpu
 			VkDeviceSize off = RingAlloc(std::max(bytes, 128u), 16);
 			if (dedupe && b[0])
 			{
+				if (s_vtxCopies.size() >= 65536)                     // buffers long gone
+					s_vtxCopies.clear();
 				VtxCopy& c = s_vtxCopies[((uint64)b[0] << 32) | bytes];
+				c.epoch = s.ring.epoch;
 				c.off = off;
 				memcpy(c.head, memory_getPointerFromPhysicalOffset(b[0]), headBytes);
 			}
