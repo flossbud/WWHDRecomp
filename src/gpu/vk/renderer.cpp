@@ -145,9 +145,25 @@ namespace wwhd::gpu
 		std::vector<VkExtensionProperties> exts(n);
 		vkEnumerateDeviceExtensionProperties(s.physical, nullptr, &n, exts.data());
 		s.dynamicRenderingKHR = !v13ok || VkMasked("vk13");
-		// with no dynamic rendering at all (Mali's Vulkan 1.1 drivers) render passes stand in for it: passes.cpp
-		s.renderPasses = VkMasked("rendering") || (s.dynamicRenderingKHR && std::none_of(exts.begin(), exts.end(),
-			[](const VkExtensionProperties& e) { return !strcmp(e.extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME); }));
+		// the driver (Vulkan 1.2's VkPhysicalDeviceDriverProperties, or VK_KHR_driver_properties below it)
+		VkPhysicalDeviceDriverProperties driver{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES };
+		if (v12ok || std::any_of(exts.begin(), exts.end(), [](const VkExtensionProperties& e) {
+			return !strcmp(e.extensionName, VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME); }))
+		{
+			VkPhysicalDeviceProperties2 props2{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
+			props2.pNext = &driver;
+			vkGetPhysicalDeviceProperties2(s.physical, &props2);
+			Log(fmt::format("driver: {} {} (id {})", driver.driverName, driver.driverInfo, (int)driver.driverID));
+		}
+		// with no dynamic rendering at all (Mali's Vulkan 1.1 drivers) render passes stand in for it: passes.cpp. And on
+		// Qualcomm's own driver by choice: its vkCmdBeginRendering costs more than the render pass standing in for it (the
+		// Odin, sail at 60: the GPU thread's cycles -15.5% with render passes; graphics-rework.md). WWHD_RENDER_PASSES=
+		// auto (the default: that driver alone), on, off
+		static const std::string passesChoice = [] { const char* e = getenv("WWHD_RENDER_PASSES"); return std::string(e && *e ? e : "auto"); }();
+		const bool noDynamicRendering = s.dynamicRenderingKHR && std::none_of(exts.begin(), exts.end(),
+			[](const VkExtensionProperties& e) { return !strcmp(e.extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME); });
+		const bool byChoice = passesChoice == "on" || (passesChoice == "auto" && driver.driverID == VK_DRIVER_ID_QUALCOMM_PROPRIETARY);
+		s.renderPasses = VkMasked("rendering") || noDynamicRendering || byChoice;
 		if (s.renderPasses)
 			s.dynamicRenderingKHR = false;
 		void** chain = &v11.pNext;
@@ -188,8 +204,9 @@ namespace wwhd::gpu
 				VK_API_VERSION_MINOR(api), v13ok ? " (WWHD_VK_MASK=vk13)" : ""));
 		}
 		if (s.renderPasses)
-			Log(fmt::format("Vulkan {}.{} without dynamic rendering{}: render passes stand in for it", VK_API_VERSION_MAJOR(api),
-				VK_API_VERSION_MINOR(api), VkMasked("rendering") ? " (WWHD_VK_MASK=rendering)" : ""));
+			Log(fmt::format("Vulkan {}.{}: render passes stand in for dynamic rendering ({})", VK_API_VERSION_MAJOR(api), VK_API_VERSION_MINOR(api),
+				VkMasked("rendering") ? "WWHD_VK_MASK=rendering" : noDynamicRendering ? "the device has no dynamic rendering" :
+				passesChoice == "on" ? "WWHD_RENDER_PASSES=on" : "Qualcomm's driver, where they cost its thread less; WWHD_RENDER_PASSES=off: dynamic rendering"));
 		for (auto& e : exts)
 		{
 			if (!strcmp(e.extensionName, VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME))
