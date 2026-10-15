@@ -570,14 +570,47 @@ namespace wwhd::gpu
 		Targets s_current;
 		bool s_rendering = false;
 
-		void BeginRendering(const Targets& t)
+		// Sticky passes (docs/research/graphics-rework.md): a draw into fewer of the open pass's targets (the same images and
+		// layers in the same slots, the same area; mostly depth left out because the draw neither tests nor writes it, which
+		// LatteMRT::GetActiveDepthBufferMask detaches) draws in that pass, its pipeline made for the pass's targets with the
+		// others' writes masked off, instead of ending it: a tiler doesn't store the pass's attachments and load them again
+		// for the next, and the driver begins one pass fewer. Drawn the same either way: anything that samples or copies an
+		// attached image ends the pass first (its layout isn't a shader-read one). Sail at 60: 48 -> 43 passes a frame, the
+		// attachments loaded 232 -> 171 MB and stored 266 -> 204 MB; on the RP4 (Mali-G77) +4.6% fps. WWHD_STICKY_PASS=0: off
+		uint32 AreaW(const Targets& t, uint32& h)
+		{
+			uint32 w = UINT32_MAX;
+			h = UINT32_MAX;
+			for (Image* c : t.color)
+				if (c)
+					w = std::min(w, c->width), h = std::min(h, c->height);
+			if (t.depth)
+				w = std::min(w, t.depth->width), h = std::min(h, t.depth->height);
+			return w;
+		}
+
+		bool KeepPass(const Targets& t)
+		{
+			static const bool on = [] { const char* e = getenv("WWHD_STICKY_PASS"); return !(e && atoi(e) == 0); }();
+			if (!on || !s_rendering || t == s_current || t.motion || s_current.motion)
+				return false;
+			for (uint32 i = 0; i < 8; i++)
+				if (t.color[i] && (t.color[i] != s_current.color[i] || t.colorLayer[i] != s_current.colorLayer[i]))
+					return false;
+			if (t.depth && (t.depth != s_current.depth || t.depthLayer != s_current.depthLayer))
+				return false;
+			uint32 h1, h2;
+			return AreaW(t, h1) == AreaW(s_current, h2) && h1 == h2;
+		}
+
+		void BeginRendering(const Targets& t, bool keep = false)
 		{
 			for (Image* c : t.color)
 				if (c)
 					c->written = ++s.writes;
 			if (t.depth && LatteGPUState.contextNew.DB_DEPTH_CONTROL.get_Z_WRITE_ENABLE())
 				t.depth->written = ++s.writes;
-			if (s_rendering && t == s_current)
+			if (s_rendering && (t == s_current || keep))
 				return;
 			EndRendering();
 			uint32 w = UINT32_MAX, h = UINT32_MAX;
@@ -793,7 +826,7 @@ namespace wwhd::gpu
 
 		// the recipe for a draw, from the registers
 		PipelineDesc Describe(Shader* vs, Shader* ps, LatteFetchShader* fetch, const Targets& t,
-			Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE prim)
+			Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE prim, uint8 own = 0xFF)
 		{
 			const auto& r = LatteGPUState.contextNew;
 			const uint32* raw = LatteGPUState.contextRegister;
@@ -857,6 +890,8 @@ namespace wwhd::gpu
 				const auto& bc = r.CB_BLENDN_CONTROL[i];
 				b.blendEnable = (blendMask & (1 << i)) && !IsIntegerFormat(d.colorFormats[i]);
 				b.colorWriteMask = (targetMask >> (i * 4)) & 0xF;
+				if (!(own & (1 << i)))                              // a target of the pass the draw doesn't draw into (KeepPass)
+					b.blendEnable = VK_FALSE, b.colorWriteMask = 0;
 				b.colorBlendOp = BlendOp((uint32)bc.get_COLOR_COMB_FCN());
 				b.srcColorBlendFactor = BlendFactor((uint32)bc.get_COLOR_SRCBLEND());
 				b.dstColorBlendFactor = BlendFactor((uint32)bc.get_COLOR_DSTBLEND());
@@ -1023,7 +1058,7 @@ namespace wwhd::gpu
 		}
 
 		VkPipeline GetPipeline(Shader* vs, Shader* ps, LatteFetchShader* fetch, uint64 fetchHash, VkPipelineLayout layout, const Targets& t,
-			Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE prim)
+			Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE prim, uint8 own = 0xFF)
 		{
 			const uint32* raw = LatteGPUState.contextRegister;
 			// everything the pipeline is built from (Mix of two values alone is their XOR's: start from 0,
@@ -1044,12 +1079,14 @@ namespace wwhd::gpu
 				key = Mix(Mix(key, raw[Latte::REGADDR::CB_BLEND0_CONTROL + i]), t.color[i] ? (uint64)t.color[i]->format : 0);
 			key = Mix(key, t.depth ? (uint64)t.depth->format + 1 : 0);
 			key = Mix(key, t.motion ? 1 + t.motionMask : 0);
+			if (own != 0xFF)
+				key = Mix(key, 0x100 + own);
 			auto it = s_pipelines.find(key);
 			if (it != s_pipelines.end())
 			{
 				if (s_checkPipelines)
 				{
-					const std::vector<uint8> recipe = Describe(vs, ps, fetch, t, prim).Serialize();
+					const std::vector<uint8> recipe = Describe(vs, ps, fetch, t, prim, own).Serialize();
 					const uint64 id = Fnv(recipe.data(), recipe.size()), first = s_pipelineRecipe[key];
 					if (id != first && s_pipelineMismatch.insert(key).second)
 						Log(fmt::format("pipeline check: key {:016x} reused for recipe {:016x}, its pipeline is recipe {:016x} (state the key "
@@ -1058,7 +1095,7 @@ namespace wwhd::gpu
 				return it->second;
 			}
 			// new to this run: prepared from the cache on disk, or built now (and added to it)
-			PipelineDesc d = Describe(vs, ps, fetch, t, prim);
+			PipelineDesc d = Describe(vs, ps, fetch, t, prim, own);
 			std::vector<uint8> recipe = d.Serialize();
 			uint64 id = Fnv(recipe.data(), recipe.size());
 			if (s_checkPipelines)
@@ -2428,9 +2465,25 @@ namespace wwhd::gpu
 		}
 		sets[1] = Descriptors(*dps, false, psImages, dynamicOffsets, vpW, vpH);
 		VkPipelineLayout layout = PipelineLayout(dvs, dps);
-		VkPipeline pipeline = GetPipeline(dvs, dps, fetch, fsHash, layout, t, prim);
+		const bool keep = KeepPass(t);
+		uint8 own = 0xFF;                                        // the pass's colour targets this draw draws into (KeepPass)
+		if (keep)
+		{
+			uint8 all = 0;
+			own = 0;
+			for (uint32 i = 0; i < 8; i++)
+			{
+				if (t.color[i])
+					own |= 1 << i;
+				if (s_current.color[i])
+					all |= 1 << i;
+			}
+			if (own == all)                                      // only depth left out: the pass's own recipe, depth untouched
+				own = 0xFF;
+		}
+		VkPipeline pipeline = GetPipeline(dvs, dps, fetch, fsHash, layout, keep ? s_current : t, prim, own);
 
-		BeginRendering(t);
+		BeginRendering(t, keep);
 		// unchanged binds since the last draw in this command buffer are skipped (renderer_internal.h's Bound)
 		static const bool bindCache = [] { const char* e = getenv("WWHD_BINDCACHE"); return !(e && atoi(e) == 0); }();
 		auto& b = s.bound;
