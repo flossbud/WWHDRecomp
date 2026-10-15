@@ -320,6 +320,22 @@ game thread 41.91/42.17 -> 39.18/39.18 G cycles (-6.8%; 15.81/15.86 -> 15.26/15.
   (the counts and their ending calls are in the stats line now), passes that share their targets merged, and load
   and store ops the tiler needs no reload for; then the descriptor sets (10.5%) and BeginSlot's resets (8.6%).
 
+## a4-rp4: the RP4's red scene (2026-10-15, session qa: B87)
+- **What it was**: in play the owner's Retroid Pocket 4 Pro (Mali-G77, driver r32p1) showed a solid red scene. The HUD's
+  layout shader (b6a47245ef5c6c50) draws some panes with w = 0 at every vertex (z 0 under its perspective projection).
+  Such a primitive is outside the clip volume and the console draws nothing; Mali drew a 40x46 heart icon over the
+  screen. Its inputs were the worker's, value for value (WWHD_RENDER_TRACE_VS); WWHD_RENDER_SKIP_VS on it showed the
+  scene.
+- **Why only there**: the RP4 has depthClamp but not VK_EXT_depth_clip_enable, and a clamped pipeline without the
+  depth-clip struct isn't depth-clipped at all, so no draw was. Unclipped, Mali passes w <= 0 primitives on to the
+  rasterizer; lavapipe still rejects them on the x/y planes, so a lavapipe run with the RP4's mask (depthClip) can't
+  reproduce it (its captures differed only slightly: worst PSNR 40.87 dB). Making w slightly negative didn't help on
+  Mali. The quick test on a device: WWHD_VK_MASK=depthClamp (the clamp off, so depth clipped).
+- **Kept** (draw.cpp): on a device without the extension, a draw that clips depth goes without the clamp, so it's
+  clipped as with the extension; a draw that doesn't keeps the clamp. Devices with the extension are unchanged.
+  On the RP4: sail and the menus route right, the whole HUD. Known to lack the extension: the RP4's r32p1; the
+  Odin's Qualcomm driver not checked.
+
 ## P0: doesn't build, link or start on Android
 
 1. **Fibers** (`src/runtime/fiber/FiberUnix.cpp`): the switch is x86-64 asm; the fallback is `ucontext`, which bionic

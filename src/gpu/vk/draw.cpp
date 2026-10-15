@@ -929,7 +929,11 @@ namespace wwhd::gpu
 			VkPipelineRasterizationStateCreateInfo rs{ VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
 			rs.rasterizerDiscardEnable = d.rasterizerDiscard;
 			rs.polygonMode = VK_POLYGON_MODE_FILL;
-			rs.depthClampEnable = s.depthClamp;
+			// without VK_EXT_depth_clip_enable a clamped pipeline isn't depth-clipped at all (the clamp turns the clip off),
+			// so a draw the game has clip depth goes without the clamp, clipped as with the extension. B87: the owner's RP4
+			// (Mali-G77: the clamp, not the extension) drew the HUD's panes with w = 0, outside the clip volume, over the
+			// whole screen while unclipped.
+			rs.depthClampEnable = s.depthClamp && (s.depthClip || !d.depthClip);
 			rs.lineWidth = 1.0f;
 			rs.depthBiasEnable = d.depthBias;
 			rs.cullMode = d.cull;

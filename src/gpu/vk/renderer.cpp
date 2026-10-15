@@ -265,7 +265,7 @@ namespace wwhd::gpu
 		if (!s.vertex3)
 			Log("the device has no 3-component 8- and 16-bit vertex formats: read as 4 components");
 		if (!s.depthClip)
-			Log("the device has no depth-clip control (VK_EXT_depth_clip_enable): depth always clipped");
+			Log("the device has no depth-clip control (VK_EXT_depth_clip_enable): a draw that clips depth goes without the clamp");
 		if (!s.customBorder)
 			Log("the device has no custom border colors: the nearest standard border color");
 		if (!s.anisotropy)
