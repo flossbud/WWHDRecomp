@@ -114,9 +114,10 @@ namespace coreinit
 	// three host threads, cores 0 and 2 wait here for work and core 1 queues most of theirs (a message readies a thread:
 	// ~190 a frame in sail at 60 on the Odin, cores 0 and 2 sleeping and woken ~6,700 and ~4,900 times a second): each
 	// wake cost core 1 a futex call, ~4.5 us, 6% of its cycles. The queuer now wakes only a waiter that sleeps, and on
-	// arm64 a waiter first waits 100 us for an event (wfe: the core clock-gated) before it sleeps: two thirds of the
-	// sleeps go, core 1's cycles a frame -3% (sail at 60 on the Odin: 36.6 -> 35.5 M), cores 0 and 2 ~1.2 G cycles more in
-	// 20 s each (a pause loop: ~6.5 G; android-plan.md "a4-cpu"). x86 waits no time by default (a pause loop costs a
+	// arm64 a waiter first waits 500 us for an event (wfe: the core clock-gated) before it sleeps. At 100 us two thirds
+	// of the sleeps went, core 1's cycles a frame -3% (sail at 60 on the Odin: 36.6 -> 35.5 M), cores 0 and 2 ~1.2 G
+	// cycles more in 20 s each (a pause loop: ~6.5 G); 500 us took core 1 another -3% and the battery's draw -4% (1,466
+	// -> 1,406 mA: fewer sleeps and wakes; android-plan.md "a4-cpu"). x86 waits no time by default (a pause loop costs a
 	// handheld's power; AMD's MWAITX would do as wfe). The single host thread (deterministic, the virtual clock) never
 	// waits here.
 	class RunQueueCount
@@ -172,12 +173,12 @@ namespace coreinit
 		}
 
 	private:
-		// how long a waiter spins before it sleeps: WWHD_RUNQ_SPIN_US (default 100 us on arm64, where it waits with wfe;
+		// how long a waiter spins before it sleeps: WWHD_RUNQ_SPIN_US (default 500 us on arm64, where it waits with wfe;
 		// 0 elsewhere: it sleeps at once, as before)
 		static std::chrono::microseconds SpinTime()
 		{
 #if defined(__aarch64__)
-			constexpr int kDefault = 100;
+			constexpr int kDefault = 500;
 #else
 			constexpr int kDefault = 0;
 #endif

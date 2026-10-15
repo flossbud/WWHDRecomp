@@ -250,8 +250,18 @@ simpleperf_report_lib):
   9.4%, the kernel 3.9% (8.0% before a4-cpu: now 2.2% futex wakes from wakeupSingleThreadWaitQueue, the waits that
   outlast wfe's 100 us), the TLS resolver 1.7% (no caller over 0.2%), libc 1.1%. The runtime's leaves: rt_journal_store
   (60 fps's journal) ~1.1% in all, the actor maps' insertions (f_025DE58C, f_025D475C: s_knownActors and the stepping
-  maps, sixty.cpp) 0.7%, GX2SetFetchShader's export wrapper 0.4%, the scheduler's switch 0.3%. A longer wfe wait
-  (WWHD_RUNQ_SPIN_US, no rebuild) is the cheapest next try on the kernel's 2.2%.
+  maps, sixty.cpp) 0.7%, GX2SetFetchShader's export wrapper 0.4%, the scheduler's switch 0.3%.
+- **The wfe wait's length** (2026-10-15, on 9a523948 by env only: WWHD_RUNQ_SPIN_US; sail at 60, 20 s each, the
+  battery discharging so its current_now was valid and steady):
+
+  | wait | core 1 cycles | cores 0/2 cycles | core 1 busy | core 0 sleeps | battery |
+  |---|---|---|---|---|---|
+  | 100 us | 38.75 / 39.03 G | 12.8-12.9 / 8.4 G | 75-77% | 47k | 1,466 / 1,464 mA |
+  | 250 us | 37.68 G | 13.1 / 8.3 G | 74-75% | 36k | 1,449 mA |
+  | 500 us | 37.73 G | 13.6 / 8.6 G | 73-75% | 33k | 1,406 mA |
+
+  A longer wait buys core 1's cycles (-3%) without power: the draw falls (fewer sleeps and wakes, the waiting cores
+  clock-gated). 500 us is the default on arm64 now.
 
 ## A4 codegen (2026-10-14, session qa: a4-codegen)
 
