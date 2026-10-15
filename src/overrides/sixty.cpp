@@ -139,10 +139,11 @@ namespace
 		const char* e = getenv("WWHD_60FPS_CONVERT");
 		return e ? e : kConvertedByDefault;
 	}
+	// a bit a type (each actor's execute asks: a search of the list was 0.13% of the game thread on the Odin, a4-cpu4)
 	bool Converted(uint16 name)
 	{
-		static const std::vector<uint16> names = [] {
-			std::vector<uint16> v;
+		static const std::array<uint64, 1024> names = [] {
+			std::array<uint64, 1024> v{};
 			if (const char* e = ConvertList())
 				for (const char* p = e; *p;)
 				{
@@ -150,19 +151,103 @@ namespace
 					const unsigned long n = strtoul(p, &end, 10);
 					if (end == p)
 						break;
-					v.push_back((uint16)n);
+					v[(uint16)n >> 6] |= 1ull << (n & 63);
 					for (p = end; *p == ','; p++)
 						;
 				}
 			return v;
 		}();
-		return !names.empty() && std::find(names.begin(), names.end(), name) != names.end();
+		return (names[name >> 6] >> (name & 63)) & 1;
 	}
 	// WWHD_60FPS_CONVERT=all[,-n,-m...] (a test mode): every actor (a process seen in fopAc_Execute)
 	// but those named is converted, to find with a 30-against-60 track which types need no rules of
 	// their own (tools/sixty/actor_types.py, D21); -168 keeps Link to whole ticks, as at 30, so that
 	// actors reading him see the 30-tick run's Link
-	std::unordered_map<uint32, bool> s_knownActors;
+	//
+	// The processes seen, with their flags: an actor seen in fopAc_Execute (ConvertAll's list; InEvent's test), and
+	// the 60 fps step's per tick (Stepping, below). Each actor's execute looks its process up several times; as four
+	// std::unordered_maps (a division by the bucket count and a node to chase a lookup, a node made for each new one)
+	// that was 0.7% of the game thread on the Odin (sail at 60, a4-cpu4). Open addressing, a slot a process, never
+	// removed (as the maps' were not); a process not in it has no flags.
+	class ProcFlags
+	{
+	public:
+		enum : uint8 { kKnown = 1, kStepping = 2, kEventAtWhole = 4, kStepInEventAtWhole = 8 };
+		bool Has(uint32 proc, uint8 f) const
+		{
+			if (!proc) [[unlikely]]
+				return m_zero & f;
+			for (uint32 i = Hash(proc);; i = (i + 1) & m_mask)
+				if (m_slots[i].proc == proc)
+					return m_slots[i].flags & f;
+				else if (!m_slots[i].proc)
+					return false;
+		}
+		void Set(uint32 proc, uint8 f, bool on)
+		{
+			uint8& v = Get(proc);
+			v = on ? v | f : v & ~f;
+		}
+		// the processes with flag f, and on loading a state those only (as the map it was: sixty's state, below)
+		void Record(wwhd::state::Archive& ar, uint8 f)
+		{
+			std::unordered_map<uint32, bool> m;
+			if (m_zero & f)
+				m.emplace(0, true);
+			for (const Slot& s : m_slots)
+				if (s.proc && (s.flags & f))
+					m.emplace(s.proc, true);
+			ar.Map(m);
+			if (!ar.Loading() || !ar.Ok())
+				return;
+			m_zero &= ~f;
+			for (Slot& s : m_slots)
+				s.flags &= ~f;
+			for (const auto& [proc, v] : m)
+				Set(proc, f, true);
+		}
+	private:
+		struct Slot { uint32 proc; uint8 flags; };    // proc 0: empty (process 0's flags: m_zero)
+		std::vector<Slot> m_slots = std::vector<Slot>(1024);
+		uint32 m_mask = 1023, m_used = 0, m_shift = 22;
+		uint8 m_zero = 0;
+		uint32 Hash(uint32 proc) const { return (proc * 0x9E3779B1u) >> m_shift; }
+		uint8& Get(uint32 proc)
+		{
+			if (!proc) [[unlikely]]
+				return m_zero;
+			for (uint32 i = Hash(proc);; i = (i + 1) & m_mask)
+				if (m_slots[i].proc == proc)
+					return m_slots[i].flags;
+				else if (!m_slots[i].proc)
+				{
+					if (2 * (m_used + 1) > m_slots.size())
+					{
+						Grow();
+						return Get(proc);
+					}
+					m_used++;
+					m_slots[i].proc = proc;
+					return m_slots[i].flags;
+				}
+		}
+		void Grow()
+		{
+			std::vector<Slot> old(m_slots.size() * 2);
+			old.swap(m_slots);
+			m_mask = (uint32)m_slots.size() - 1;
+			m_shift--;
+			for (const Slot& s : old)
+				if (s.proc)
+					for (uint32 i = Hash(s.proc);; i = (i + 1) & m_mask)
+						if (!m_slots[i].proc)
+						{
+							m_slots[i] = s;
+							break;
+						}
+		}
+	};
+	ProcFlags s_procs;
 	bool ConvertAll()
 	{
 		static const bool all = [] { const char* e = getenv("WWHD_60FPS_CONVERT"); return e && strncmp(e, "all", 3) == 0; }();
@@ -244,9 +329,9 @@ namespace
 	{
 		return EventEndRules() && (rd16(0x1046F0B0u + 0x52B8u) & 8) != 0;
 	}
-	std::unordered_map<uint32, bool> s_stepping;    // process -> stepping at 60 this tick
-	std::unordered_map<uint32, bool> s_eventAtWhole;   // process -> an event ran at its whole step
-	std::unordered_map<uint32, bool> s_stepInEventAtWhole;   // process -> Link's action stepped in events at it
+	// a process's flags at 60 (s_procs, above): stepping at 60 this tick (kStepping); an event ran at its whole step
+	// (kEventAtWhole); Link's action stepped in events at it (kStepInEventAtWhole)
+	bool Stepping(uint32 proc) { return s_procs.Has(proc, ProcFlags::kStepping); }
 
 	// The `late` stores a stepping process's whole step passed over (they wait for its half step, the
 	// tick's end; rt_late_note, ppc_ops.h), noted with their values, by process, in order, wherever
@@ -485,7 +570,7 @@ namespace
 	bool InEvent(uint32 proc)
 	{
 		const uint16 name = rd16(proc + 0x08);
-		if (name == 168 || name == 476 || !s_knownActors.count(proc))
+		if (name == 168 || name == 476 || !s_procs.Has(proc, ProcFlags::kKnown))
 			return true;
 		if (rd16(proc + 0xF8) != 0 || (rd32(proc + 0x2E0) & 0x8000u) != 0)
 			return true;
@@ -2709,7 +2794,7 @@ void f_025F172C(PPCInterpreter_t* __restrict ctx)
 		// a converted process's draws are part of its frame, at 60 as its execute is: they stand (while
 		// it steps at 60: in an event it runs on whole ticks, and its draws are put back as all others')
 		if (wwhd::rt::SixtyFrom() != ~0u)
-			std::erase_if(s_ranges, [](const ActorRange& r) { auto it = s_stepping.find(r.low); return Converted(r.name) && it != s_stepping.end() && it->second; });
+			std::erase_if(s_ranges, [](const ActorRange& r) { return Converted(r.name) && Stepping(r.low); });
 		std::sort(s_ranges.begin(), s_ranges.end(), [](const ActorRange& a, const ActorRange& b) { return a.low < b.low; });
 	}
 }
@@ -3155,8 +3240,7 @@ namespace
 			c.halved = c.second = false;
 			if (!LiveActor(c) || !Converted(c.name))
 				continue;
-			const auto it = s_stepping.find(c.actor);   // (the half tick that just ended)
-			if (it == s_stepping.end() || !it->second)
+			if (!Stepping(c.actor))                     // (the half tick that just ended)
 				continue;
 			for (int i = 0; i < 3; i++)
 			{
@@ -3189,8 +3273,7 @@ namespace
 				continue;
 			if (!LiveActor(c) || !Converted(c.name))
 				continue;
-			const auto it = s_stepping.find(c.actor);
-			if (it == s_stepping.end() || !it->second)
+			if (!Stepping(c.actor))
 				continue;
 			for (int i = 0; i < 3; i++)
 			{
@@ -3210,8 +3293,7 @@ namespace
 			{
 				if (c.second && LiveActor(c))
 				{
-					const auto it = s_stepping.find(c.actor);
-					if (it == s_stepping.end() || !it->second)
+					if (!Stepping(c.actor))
 						for (int i = 0; i < 3; i++)
 							wr32(c.actor + 0x314 + 4 * i, std::bit_cast<uint32>(std::bit_cast<float>(rd32(c.actor + 0x314 + 4 * i)) +
 								std::bit_cast<float>(c.move[i]) * PushShare()));
@@ -3226,8 +3308,7 @@ namespace
 		{
 			if (!c.halved || !LiveActor(c))
 				continue;
-			const auto it = s_stepping.find(c.actor);
-			const bool stepped = it != s_stepping.end() && it->second;
+			const bool stepped = Stepping(c.actor);
 			for (int i = 0; i < 3; i++)
 				wr32(c.stts + 4 * i, std::bit_cast<uint32>(std::bit_cast<float>(c.move[i]) * (stepped ? 0.5f : 1.0f)));
 		}
@@ -3968,6 +4049,14 @@ namespace
 			}
 			return m;
 		}();
+		static const std::array<uint64, 1024> any = [] {    // a bit a type with fields: most have none, and the
+			std::array<uint64, 1024> v{};                   // map's lookup was 0.08% of the game thread on the Odin
+			for (const auto& [n, f] : types)                // (a4-cpu4)
+				v[n >> 6] |= 1ull << (n & 63);
+			return v;
+		}();
+		if (!((any[name >> 6] >> (name & 63)) & 1))
+			return nullptr;
 		const auto it = types.find(name);
 		return it == types.end() ? nullptr : &it->second;
 	}
@@ -4342,7 +4431,7 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 		return;
 	}
 	bool converted = from != ~0u && wwhd::os::SwapCount() >= from &&
-		(Converted(rd16(proc + 0x08)) || (ConvertAll() && s_knownActors.count(proc) && !ExcludedFromAll(rd16(proc + 0x08))));
+		(Converted(rd16(proc + 0x08)) || (ConvertAll() && s_procs.Has(proc, ProcFlags::kKnown) && !ExcludedFromAll(rd16(proc + 0x08))));
 	if (converted && g_rtHalfTick && s_cam.restored && proc == s_cam.proc)
 	{
 		// the camera's half step: a whole 30 fps tick from the tick's start (the camera's tick, above)
@@ -4364,11 +4453,12 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	{
 		if (!g_rtHalfTick)
 		{
-			s_eventAtWhole[proc] = EventRunning();
-			s_stepInEventAtWhole[proc] = StepInEvents();
-			s_stepping[proc] = s_stepInEventAtWhole[proc] || !s_eventAtWhole[proc];
+			const bool event = EventRunning(), stepInEvents = StepInEvents();
+			s_procs.Set(proc, ProcFlags::kEventAtWhole, event);
+			s_procs.Set(proc, ProcFlags::kStepInEventAtWhole, stepInEvents);
+			s_procs.Set(proc, ProcFlags::kStepping, stepInEvents || !event);
 		}
-		else if (s_stepping[proc])
+		else if (Stepping(proc))
 		{
 			static bool once = [] { atexit(StepStats); at_quick_exit(StepStats); return true; }();
 			(void)once;
@@ -4377,7 +4467,8 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 			// turn took half a step there, lost the other, and the event ended a tick late, the camera then
 			// taking the view saved at the song's start); an event that began, is ordered or ends still stops it
 			// (Link at an order runs without his action call: OrderHold, above)
-			const bool running = EventRunning() && !(s_eventAtWhole[proc] && s_stepInEventAtWhole[proc]);
+			const bool running = EventRunning() && !(s_procs.Has(proc, ProcFlags::kEventAtWhole) &&
+				s_procs.Has(proc, ProcFlags::kStepInEventAtWhole));
 			const bool ordered = !running && EventOrdered();
 			const bool ending = !running && !ordered && EventEnding();
 			const bool edge = running || ordered || ending;
@@ -4410,7 +4501,7 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 				s_eventStops += running;
 				s_orderStops += ordered;
 				s_endStops += ending;
-				s_stepping[proc] = false;
+				s_procs.Set(proc, ProcFlags::kStepping, false);
 				if (CamTick() && CamLateDrop() && proc == s_cam.proc)
 					s_lateNoted.erase(proc);            // the camera's show steps' (CamLateDrop, above)
 				else
@@ -4425,7 +4516,7 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 					s_lateNoted.erase(proc);            // its half step makes them (the tick's last)
 			}
 		}
-		converted = s_stepping[proc];
+		converted = Stepping(proc);
 	}
 	if ((Probe() || Flight()) && Tracked(rd16(proc + 0x08)) && (!g_rtHalfTick || converted))
 		s_tracked.push_back(proc);
@@ -4994,12 +5085,8 @@ namespace
 					}
 		if (std::none_of(std::begin(kChainArrays), std::end(kChainArrays), [&](const ChainArray& a) { return a.name == name; }))
 			return;
-		if (g_rtHalfTick)
-		{
-			const auto it = s_stepping.find(proc);
-			if (it == s_stepping.end() || !it->second)
-				return;
-		}
+		if (g_rtHalfTick && !Stepping(proc))
+			return;
 		for (const ChainArray& a : kChainArrays)
 			if (a.name == name)
 				(a.angles ? ChainDrawAngles : ChainDraw)(proc + a.offset, a.count, saved);
@@ -5020,8 +5107,7 @@ namespace
 			return false;
 		if (!g_rtHalfTick || DrawSmoothed(rd16(proc + 0x08)))
 			return true;
-		const auto it = s_stepping.find(proc);
-		return it != s_stepping.end() && it->second;
+		return Stepping(proc);
 	}
 }
 
@@ -5086,7 +5172,7 @@ void f_025D475C(PPCInterpreter_t* __restrict ctx)
 {
 	if ((Probe() || wwhd::rt::SixtyFrom() != ~0u) && !g_rtHalfTick && s_trialPhase != 1)
 		s_actors.push_back(GPR(3));
-	s_knownActors[GPR(3)] = true;                     // actors (ConvertAll's list; InEvent's test)
+	s_procs.Set(GPR(3), ProcFlags::kKnown, true);     // actors (ConvertAll's list; InEvent's test)
 	[[clang::musttail]] return orig_f_025D475C(ctx);
 }
 
@@ -5368,7 +5454,7 @@ void f_027F1174(PPCInterpreter_t* __restrict ctx)
 // steps' random draws, Link's reset flags, the fades, the camera's pace); the rest is rebuilt at each whole tick's start
 static void StateRecordSixty(wwhd::state::Archive& ar)
 {
-	ar.Map(s_knownActors);
+	s_procs.Record(ar, ProcFlags::kKnown);           // (the map of actors it was: the same bytes)
 	ar.Pod(s_link);
 	ar.Pod(s_grabbed);
 	ar.Pod(s_grabbedId);

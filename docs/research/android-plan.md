@@ -262,6 +262,20 @@ simpleperf_report_lib):
 
   A longer wait buys core 1's cycles (-3%) without power: the draw falls (fewer sleeps and wakes, the waiting cores
   clock-gated). 500 us is the default on arm64 now.
+- **a4-cpu4, the 60 fps step's process flags** (2026-10-15): sixty.cpp kept four `std::unordered_map<uint32, bool>`
+  by process (the actors seen, stepping this tick, an event at the whole step, Link's action stepping in it), looked
+  up several times in each actor's execute, and searched a list of 402 type names (Converted) for each. Now one open
+  addressing table of a byte of flags a process (Fibonacci hash, grown at half full, never removed, as the maps' were
+  not) and a bitset of the types; sixty's state saves each flag as the map it was, so states are the same bytes. On
+  the Odin (2a78fbb8 with and without it, two APKs, sail at 60, A B A B A B, 20 s of simpleperf stat each): core 1
+  37.64 / 37.20 / 37.95 G cycles without, 37.16 / 37.43 / 37.23 G with (-0.9%); its task clock 14.88 / 14.79 /
+  14.90 s against 14.74 / 14.76 / 14.78 s (every run with it below every run without: -0.7%); fps 59.3-60.0 in all.
+  Its profile: the maps' insertions (0.69%) are gone, the table's Set is 0.06%, Converted is inlined (0.13% before).
+  Core 1 is now guest code 85.2%, our runtime 8.5%, the kernel 2.5%, the TLS resolver 1.7%, libc 1.1%.
+- **Left in the runtime** (core 1, 2a78fbb8): rt_journal_store and HalfTickStore (60 fps's journal) ~1.6%, the
+  unsupported imports' handler 0.33% (GX2SetAlphaToMask with each material's state, GX2InitDepthBufferHiZEnable,
+  GX2ExpandDepthBuffer, AXRmt*, WPADDisconnect: no one implements them; each formatted and hashed its name on every
+  call), GX2SetFetchShader's export wrapper 0.4%, savestate's NoteSwitchOut (a map insertion each thread switch) 0.1%.
 
 ## A4 codegen (2026-10-14, session qa: a4-codegen)
 
