@@ -37,8 +37,8 @@ namespace wwhd::gpu
 		uint32 fitH = 0;                                         // WWHD_SURFACE_FIT: the height it was fitted to (or would be)
 		uint32 readSince = 0;                                    // the frame readH last grew (fitted only once it's stable)
 		bool noFit = false;                                      // read past fitH, or past its own height: never fitted
-		bool clearPending = false;                               // a whole-image clear not recorded yet (clears as load ops:
-		VkClearValue clearValue{};                               //   (DeferClear), done by the next pass's load op or FlushClear
+		uint32 clearLayers = 0;                                  // the layers with a clear not recorded yet (clears as load ops:
+		VkClearValue clearValue{};                               //   DeferClear), each done by the next pass's load op into it or FlushClear
 	};
 
 	// host-visible memory that per-frame data (uniforms, vertices, indices) is written into; reset
@@ -127,7 +127,7 @@ namespace wwhd::gpu
 	// Clears as load ops (gpu-plan item 2's rest; the default, WWHD_CLEAR_LOADOP=0 turns it off): a clear of a whole
 	// single-layer image (the game's clears, the overwritten surfaces' resets) is kept on the image and done by the load
 	// op of the next pass into it when that pass covers the whole image; any other use records it first
-	bool DeferClear(Image& img, const VkClearValue& value);       // false: not deferred, the caller clears
+	bool DeferClear(Image& img, const VkClearValue& value, uint32 first = 0, uint32 count = UINT32_MAX);   // layers; false: the caller clears
 	void FlushClear(Image& img);
 	Image CreateImage(VkFormat format, VkImageAspectFlags aspect, uint32 w, uint32 h, VkImageUsageFlags usage, uint32 layers = 1);
 	VkImageView LayerView(Image& img, uint32 layer);             // a 2D view of one layer (img.view for layer 0)

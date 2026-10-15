@@ -546,7 +546,10 @@ namespace wwhd::gpu
 	}
 
 	// narrow by default (above); WWHD_BARRIERS=all: every transition waits for everything before it
-	bool DeferClear(Image& img, const VkClearValue& value)
+	// a clear of layers [first, first + count) (all: count UINT32_MAX) left for the next pass into each layer to do as its load
+	// op (a layered target, the shadow map's, is cleared and drawn a layer at a time); a clear to another value while some
+	// are pending records those first
+	bool DeferClear(Image& img, const VkClearValue& value, uint32 first, uint32 count)
 	{
 		static const bool on = [] {
 			const char* e = getenv("WWHD_CLEAR_LOADOP");
@@ -555,24 +558,45 @@ namespace wwhd::gpu
 				Log("clears recorded where the game makes them (WWHD_CLEAR_LOADOP=0)");
 			return v;
 		}();
-		if (!on || img.layers != 1 || !(img.aspect & (VK_IMAGE_ASPECT_COLOR_BIT | VK_IMAGE_ASPECT_DEPTH_BIT)))
+		count = std::min(count, img.layers - std::min(first, img.layers));
+		if (!on || img.layers > 32 || !count || !(img.aspect & (VK_IMAGE_ASPECT_COLOR_BIT | VK_IMAGE_ASPECT_DEPTH_BIT)))
 			return false;
-		img.clearPending = true;
+		if (img.clearLayers && memcmp(&img.clearValue, &value, sizeof(value)) != 0)
+			FlushClear(img);
+		img.clearLayers |= (count == 32 ? ~0u : (1u << count) - 1) << first;
 		img.clearValue = value;
 		return true;
 	}
 
+	uint32 AllLayers(const Image& img)
+	{
+		return img.layers >= 32 ? ~0u : (1u << img.layers) - 1;
+	}
+
 	void FlushClear(Image& img)
 	{
-		if (!img.clearPending)
+		const uint32 layers = img.clearLayers;
+		if (!layers)
 			return;
-		img.clearPending = false;
+		img.clearLayers = 0;
 		Transition(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		VkImageSubresourceRange all{ img.aspect, 0, 1, 0, 1 };
-		if (img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT)
-			vkCmdClearDepthStencilImage(s.cmd, img.image, img.layout, &img.clearValue.depthStencil, 1, &all);
-		else
-			vkCmdClearColorImage(s.cmd, img.image, img.layout, &img.clearValue.color, 1, &all);
+		for (uint32 first = 0; first < 32;)                       // each run of pending layers in one clear
+		{
+			if (!(layers >> first & 1))
+			{
+				first++;
+				continue;
+			}
+			uint32 n = 1;
+			while (first + n < 32 && (layers >> (first + n) & 1))
+				n++;
+			VkImageSubresourceRange range{ img.aspect, 0, 1, first, n };
+			if (img.aspect & VK_IMAGE_ASPECT_DEPTH_BIT)
+				vkCmdClearDepthStencilImage(s.cmd, img.image, img.layout, &img.clearValue.depthStencil, 1, &range);
+			else
+				vkCmdClearColorImage(s.cmd, img.image, img.layout, &img.clearValue.color, 1, &range);
+			first += n;
+		}
 	}
 
 	void Transition(Image& img, VkImageLayout layout)
@@ -1181,10 +1205,10 @@ namespace wwhd::gpu
 				Transition(next, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 				VkImageSubresourceRange all{ img.aspect, 0, 1, 0, VK_REMAINING_ARRAY_LAYERS };
 				const bool linear = !depth && CanBlit(img.format, true);
-				if (img.clearPending)                                  // cleared anyway: the clear moves over
+				if (img.clearLayers && img.clearLayers == AllLayers(img))   // cleared anyway: the clear moves over
 				{
-					next.clearPending = true, next.clearValue = img.clearValue;
-					img.clearPending = false;
+					next.clearLayers = img.clearLayers, next.clearValue = img.clearValue;
+					img.clearLayers = 0;
 				}
 				else if (linear || (depth && CanBlit(img.format, false)))
 				{
@@ -1855,7 +1879,7 @@ namespace wwhd::gpu
 			c.float32[1] = (float)(uint32)p[18] / 255.0f;
 			c.float32[2] = (float)(uint32)p[19] / 255.0f;
 			c.float32[3] = (float)(uint32)p[20] / 255.0f;
-			if (first != 0 || count != 1 || !DeferClear(img, cv))
+			if (!DeferClear(img, cv, first, count))
 			{
 				Transition(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 				VkImageSubresourceRange range{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, first, count };
@@ -1875,7 +1899,7 @@ namespace wwhd::gpu
 				((mask & 4) && (img.aspect & VK_IMAGE_ASPECT_STENCIL_BIT) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
 			VkClearValue dv{};
 			dv.depthStencil = v;
-			if (aspect == img.aspect && first == 0 && count == 1 && DeferClear(img, dv))
+			if (aspect == img.aspect && DeferClear(img, dv, first, count))
 				aspect = 0;                                        // the next pass's load op
 			else
 				Transition(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -1895,7 +1919,7 @@ namespace wwhd::gpu
 					c.written = ++s.writes;
 					VkClearValue value{};
 					value.color = { { v.depth, v.depth, v.depth, v.depth } };
-					if (first == 0 && DeferClear(c, value))
+					if (DeferClear(c, value, first, count))
 						continue;
 					Transition(c, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 					VkImageSubresourceRange range{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, first, std::min(count, c.layers - first) };

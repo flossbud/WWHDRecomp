@@ -622,9 +622,9 @@ namespace wwhd::gpu
 			// a pending whole-image clear (WWHD_CLEAR_LOADOP) becomes this pass's load op when the pass covers the image;
 			// otherwise Transition records it first
 			auto loadOp = [&](Image& img, uint32 layer, VkRenderingAttachmentInfo& a) {
-				if (img.clearPending && layer == 0 && img.width == w && img.height == h)
+				if (layer < 32 && (img.clearLayers >> layer & 1) && img.width == w && img.height == h)
 				{
-					img.clearPending = false;
+					img.clearLayers &= ~(1u << layer);
 					a.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 					a.clearValue = img.clearValue;
 				}

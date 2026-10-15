@@ -1177,7 +1177,7 @@ namespace wwhd::gpu
 			// (cemu-patches/0014; G3 status in docs/recompiler-design.md)
 			if (feedback || d.width != surface->gw || d.height != surface->gh || format != surface->format)
 				img = &CopyOf(*surface, d.width, d.height, format, feedback);
-			else if (surface->layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL || surface->clearPending)
+			else if (surface->layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL || surface->clearLayers)
 			{
 				EndRendering();
 				Transition(*surface, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
