@@ -64,7 +64,7 @@ __attribute__((noinline)) const uint8* rt_store_table_tls()
 
 // RT_STORE's table (ppc_ops.h) from the switches: off, null; a journal that takes every store (no page table, or
 // g_rtStoreAll), a byte set for every page; the half tick's journal, its pages' bytes (g_rtStorePageBytes: non-zero
-// exactly where g_rtStorePages is)
+// where g_rtStorePages is and on the page before each such page, as RT_STORE tests a store's first byte's page only)
 void rt_store_table_update()
 {
 	static const std::vector<uint8> all(1u << 20, 1);

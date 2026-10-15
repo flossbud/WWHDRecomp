@@ -45,8 +45,13 @@ extern uint8* const rt_memBase __asm__("wwhd_rt_membase");
 extern thread_local constinit bool g_rtJournalOn;          // per host thread (docs/research/threads.md)
 extern thread_local constinit const uint8* g_rtStoreTable;
 void rt_journal_store(uint32 ea, uint32 size, uint32 pc);
+// One lookup, the page of the store's first byte: the table also marks the page before each page it takes (diff.cpp,
+// sixty.cpp's JournalPages), so a store that ends in a page it takes is caught by its first byte's page too, and
+// rt_journal_store tests both of a store's pages against its own table (a store into the page before only is passed
+// over there). The store check's code a store went 14 -> 10 instructions on arm64, and a half tick's every store
+// (when the journal is on, at 60 fps) makes one load, not two (a4-codegen, session qa).
 #define RT_STORE(ea, n, pc) do { if (const uint8* rt_t = g_rtStoreTable) [[unlikely]] { \
-	if (rt_t[(uint32)(ea) >> 12] | rt_t[((uint32)(ea) + (n) - 1) >> 12]) \
+	if (rt_t[(uint32)(ea) >> 12]) \
 		rt_journal_store((ea), (n), (pc)); } } while (0)
 
 // 60 fps (D21): instructions listed in config/US_v0/tick_rules.txt run only on the game's whole
@@ -318,8 +323,8 @@ RT_INLINE const uint8* rt_store_table(const PPCInterpreter_t* ctx)
 	return rt_store_table_tls();
 }
 #define RT_STORE_T(t, ea, n, pc) do { if (const uint8* rt_t = (t)) [[unlikely]] { \
-	if (rt_t[(uint32)(ea) >> 12] | rt_t[((uint32)(ea) + (n) - 1) >> 12]) \
-		rt_journal_store((ea), (n), (pc)); } } while (0)
+	if (rt_t[(uint32)(ea) >> 12]) \
+		rt_journal_store((ea), (n), (pc)); } } while (0)                  // one lookup, as RT_STORE's
 RT_INLINE void rt_wr8(const uint8* t, uint32 ea, uint8 v, uint32 pc = 0) { RT_STORE_T(t, ea, 1, pc); RT_MEM[ea] = v; }
 RT_INLINE void rt_wr16(const uint8* t, uint32 ea, uint16 v, uint32 pc = 0) { RT_STORE_T(t, ea, 2, pc); v = __builtin_bswap16(v); memcpy(RT_MEM + ea, &v, 2); }
 RT_INLINE void rt_wr32(const uint8* t, uint32 ea, uint32 v, uint32 pc = 0) { RT_STORE_T(t, ea, 4, pc); v = __builtin_bswap32(v); memcpy(RT_MEM + ea, &v, 4); }

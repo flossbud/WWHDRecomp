@@ -316,6 +316,13 @@ game thread 41.91/42.17 -> 39.18/39.18 G cycles (-6.8%; 15.81/15.86 -> 15.26/15.
 2.57 GHz), the scheduler thread 79-80% -> 76-77% busy, sail's late windows 58.5/58.8 and 59.1/58.4 -> 59.5/58.7 and
 59.4/59.4 fps, the GPU thread 37.2/36.9 -> 36.4/36.0 G.
 
+Step 2, kept as a size cut (2026-10-15, E): the store check tests one table byte, the page of the store's first byte
+(the half tick's table also marks the page before each journaled page; rt_journal_store still tests both pages).
+.text arm64 108.08 -> 102.52 MB (-5.1%), x86 -2.6%, the APK -5.5 MB. No measurable speed change: the Mac's game
+thread 6.368 -> 6.351 ms a frame (4 interleaved rounds), the RP4's core 1 40.40/40.17 -> 40.13/40.33 G cycles in
+20 s of sail, fps the same. Dropping the store check entirely (not possible: the journal needs it) was -23% .text
+and ~-1.5% on the Mac.
+
 ## A4 the GPU thread (2026-10-14, session bottom: a4-gpu)
 - **Where the NullGPU thread's cycles go on the Odin** (top's 18:29 profile, 40 s, 70.4 G cycles; each sample put on
   the innermost function of ours on its stack, then split by where the leaf is: ours 36%, the driver 33%, libc 26%,

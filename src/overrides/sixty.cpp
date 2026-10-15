@@ -911,7 +911,8 @@ namespace
 	// whole) are harmless, as RollbackRestore puts them back last to first.
 	constexpr uint32 kPartPage = 0x80000000u;
 	std::vector<uint32> s_page;                     // per page of the 32-bit space: 0, or its bits' index + 1, | kPartPage
-	std::vector<uint8> s_pageByte;                  // the same, a byte per page: 1 where s_page isn't 0 (RT_STORE's test)
+	std::vector<uint8> s_pageByte;                  // the same, a byte per page: 1 where s_page isn't 0 and on the page
+	                                                // before each (RT_STORE tests a store's first byte's page only)
 	std::vector<uint32> s_pagesSet;                 // the pages set this frame
 	std::vector<std::array<uint64, 64>> s_savedBits;   // per journaled page: the bytes saved this frame
 	uint64 s_storesSeen = 0, s_storesSaved = 0;     // the frame log's counts (src/overrides/pacing.cpp)
@@ -934,6 +935,8 @@ namespace
 					e = (uint32)s_savedBits.size() | kPartPage;
 					s_pagesSet.push_back(p);
 					s_pageByte[p] = 1;
+					if (p)
+						s_pageByte[p - 1] = 1;         // a store from it into this page (RT_STORE's one lookup)
 				}
 				if (low <= p << 12 && high - (p << 12) >= 0x1000)
 					e &= ~kPartPage;
@@ -966,7 +969,11 @@ namespace
 	void JournalPagesClear()
 	{
 		for (uint32 p : s_pagesSet)
+		{
 			s_page[p] = 0, s_pageByte[p] = 0;
+			if (p)
+				s_pageByte[p - 1] = 0;
+		}
 		s_pagesSet.clear();
 		s_savedBits.clear();
 	}

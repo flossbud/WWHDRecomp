@@ -61,7 +61,8 @@ namespace wwhd::rt
 extern thread_local bool g_rtJournalOn;
 extern thread_local void (*g_rtStoreCensus)(uint32 ea, uint32 size, uint32 pc);
 // With it, a table of the 4 KB pages it wants (an entry per page: 0 for none; g_rtStorePages) and the same as a byte
-// per page (g_rtStorePageBytes, non-zero exactly where g_rtStorePages is: RT_STORE's test, ppc_ops.h): stores into
+// per page (g_rtStorePageBytes, non-zero where g_rtStorePages is and on the page before each: RT_STORE's one-lookup
+// test, ppc_ops.h): stores into
 // other pages don't reach it (unless a fast path's watch runs); after changing a switch, rt_store_table_update()
 // sets RT_STORE's table from them (diff.cpp). g_rtStoresPassed counts
 // those that called rt_journal_store directly (per host thread: the frame thread's, read by its frame log)
