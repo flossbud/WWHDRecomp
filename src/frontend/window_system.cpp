@@ -115,8 +115,28 @@ static void FitToDesktop(int& width, int& height)
 	width = (int)(width * k), height = (int)(height * k);
 }
 
+// the window's safe area (SDL's, in its coordinates) as insets in its pixels, for the start screen's Android layout;
+// WWHD_TEST_INSETS=L,T,R,B (pixels) in their place (the layout's tests: a cutout and a gesture bar on x86)
+static void StoreSafeArea(SDL_Window* window)
+{
+	if (const char* e = getenv("WWHD_TEST_INSETS"))
+	{
+		int v[4] = {};
+		sscanf(e, "%d,%d,%d,%d", &v[0], &v[1], &v[2], &v[3]);
+		return wwhd::pause_menu::SafeInsets(v[0], v[1], v[2], v[3]);
+	}
+	int w = 0, h = 0;
+	SDL_Rect safe{};
+	if (!SDL_GetWindowSize(window, &w, &h) || !SDL_GetWindowSafeArea(window, &safe) || safe.w <= 0 || safe.h <= 0)
+		return wwhd::pause_menu::SafeInsets(0, 0, 0, 0);
+	const float d = SDL_GetWindowPixelDensity(window) > 0 ? SDL_GetWindowPixelDensity(window) : 1.0f;
+	const int l = safe.x, t = safe.y, r = w - (safe.x + safe.w), b = h - (safe.y + safe.h);
+	wwhd::pause_menu::SafeInsets((int)(std::max(l, 0) * d), (int)(std::max(t, 0) * d), (int)(std::max(r, 0) * d), (int)(std::max(b, 0) * d));
+}
+
 static void StorePixelSize(SDL_Window* window)
 {
+	StoreSafeArea(window);
 	int w = 0, h = 0;
 	SDL_GetWindowSizeInPixels(window, &w, &h);
 	s_pixelWidth = (uint32)w;
@@ -503,6 +523,8 @@ static void PrepareShaders(SDL_Window* window)
 				_exit(0);
 			else if (ev.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)
 				StorePixelSize(window);
+			else if (ev.type == SDL_EVENT_WINDOW_SAFE_AREA_CHANGED)
+				StoreSafeArea(window);
 			else if (ev.type == SDL_EVENT_WINDOW_FOCUS_GAINED || ev.type == SDL_EVENT_WINDOW_FOCUS_LOST)
 				g_windowInfo.app_active = ev.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
 		if (!shown && std::chrono::steady_clock::now() - start < std::chrono::milliseconds(300))
@@ -566,6 +588,7 @@ static std::string SetupLoop(SDL_Window* window)
 			{
 			case SDL_EVENT_QUIT: case SDL_EVENT_WINDOW_CLOSE_REQUESTED: _exit(0);
 			case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: case SDL_EVENT_WINDOW_DISPLAY_CHANGED: StorePixelSize(window); break;
+			case SDL_EVENT_WINDOW_SAFE_AREA_CHANGED: StoreSafeArea(window); break;
 			case SDL_EVENT_WINDOW_FOCUS_GAINED: case SDL_EVENT_WINDOW_FOCUS_LOST:
 				g_windowInfo.app_active = ev.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
 				break;
@@ -658,6 +681,7 @@ static std::string SetupLoop(SDL_Window* window)
 			wwhd::gpu::SaveShaderCache();
 			_exit(0);   // like Cemu's own exit path mid-game: skip global destructors
 		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: case SDL_EVENT_WINDOW_DISPLAY_CHANGED: StorePixelSize(window); break;
+		case SDL_EVENT_WINDOW_SAFE_AREA_CHANGED: StoreSafeArea(window); break;
 		case SDL_EVENT_WINDOW_FOCUS_GAINED: g_windowInfo.app_active = true; cemuLog_log(LogType::Force, "wwhd: window focused"); break;
 		case SDL_EVENT_WINDOW_FOCUS_LOST: g_windowInfo.app_active = false; cemuLog_log(LogType::Force, "wwhd: window lost the focus"); PublishInput(); break;
 		case SDL_EVENT_KEY_DOWN:

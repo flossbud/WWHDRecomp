@@ -31,6 +31,9 @@ namespace wwhd::pause_menu
 	void Mouse(float x, float y, int button);
 	// a pad open or none (the Android layout's start screen: the desktop's focus model with one until a touch)
 	void PadAttached(bool on);
+	// the window's safe area as insets from its edges, in its pixels (SDL's: on Android the display's cutout, the system
+	// bars and gesture areas; 0 elsewhere): the Android layout keeps its margins at least these
+	void SafeInsets(int left, int top, int right, int bottom);
 
 	// the start screen (t-startscreen): the game files this run reads (the frontend's, before the title is prepared)
 	void SetGame(const std::string& path);

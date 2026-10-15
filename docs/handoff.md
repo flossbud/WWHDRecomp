@@ -4554,8 +4554,13 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   tablet). On the device `WWHD_NO_GAME=1` (the env extra) passes no -g, so a test home shows Setup; start it with
   `am start -S -f 0x10008000` (a task brought back keeps its old env extra: once the game booted where Setup was
   meant and the script's taps and a Back reached the owner's launcher) and send no tap or key unless the app (or the
-  picker) is in front. Left: the pause menu by touch (A4), the Quit dialog's "Desktop" wording on Android, the pad's
-  prompts over the board's top edge on a 20:9 screen, the cutout and gesture insets not read.
+  picker) is in front. Since (s3-touch leftovers, 2026-10-15): a pad's or keys' prompts end at the logo's column's right
+  edge, short of the board (they were over its top on 20:9); the window's safe area (SDL's: the cutout, bars and gesture
+  areas; `WWHD_TEST_INSETS=L,T,R,B` px on x86) widens the layout's margins (left 96, right 80, bottom 40) where it's
+  larger, and keeps the in-game prompts off a right-hand cutout. The pause menu's Quit dialog on Android (the touch
+  layout) is "Title Screen · Quit · Cancel" (the owner: "Quit is fine"), its unsaved prompt "Quit the game?". Left: the
+  pause menu by touch (it works as the mouse does: a press chooses; the start screen's touch rules, a release choosing
+  and no cursor, not applied there) and all of this on a device.
 - **m-windows, the survey** (2026-10-14): `docs/research/windows-plan.md`. Cemu's Windows side exists; ours doesn't
   build there (the FiberUnix fork, the write watch, the profiler, the frontend's POSIX, setenv, Windows.h's `Yield` and
   `far`, ELF weak references, the CRT), and four things could break MATCH (thread-locals across fiber switches, the

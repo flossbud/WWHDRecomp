@@ -680,9 +680,22 @@ namespace wwhd::pause_menu
 			TextCentred(f, a.rocknroll, pad ? 21.0f : 17.0f, (x + gw / 2) / s, (top + g.h / 2.0f) / s, t, kPromptText, op);
 		}
 
+		// the window's safe area (SafeInsets: left, top, right, bottom in its pixels; on Android the cutout, the bars and the
+		// gesture areas)
+		std::atomic<int> s_safeInset[4];
+		// the insets as part of a cached layer's key (the start screen's base and boards are laid out by them)
+		std::string InsetKey()
+		{
+			return fmt::format("{},{},{},{}", s_safeInset[0].load(std::memory_order_relaxed), s_safeInset[1].load(std::memory_order_relaxed),
+				s_safeInset[2].load(std::memory_order_relaxed), s_safeInset[3].load(std::memory_order_relaxed));
+		}
+
 		// the prompts at the top right (right 44, top 34): each its glyphs (4 apart when paired) with its label under them,
-		// overlapping them by 12, centred on each other, 26 apart
-		void DrawPrompts(Frame& f, const std::vector<std::pair<std::string, std::string>>& prompts, const State& st, float op)
+		// overlapping them by 12, centred on each other, 26 apart. On the start screen's Android layout (a pad's or keys'
+		// model there) the board is pinned to the right, its top 48 down on a 20:9 screen, under where they'd be: they end
+		// at `right` instead (design units: the logo's column's right edge, short of the board; 0: the window's top right)
+		void DrawPrompts(Frame& f, const std::vector<std::pair<std::string, std::string>>& prompts, const State& st, float op,
+			float columnRight = 0)
 		{
 			if (st.touch)
 				return;                                 // the touch model: no prompts (README "Global touch rules")
@@ -690,7 +703,7 @@ namespace wwhd::pause_menu
 			Assets& a = A();
 			const float s = f.s, top = 34 * s;
 			const float gh = (float)a.Get(pad ? "prompt_pad-button_blank" : "prompt_key_blank").h;
-			float right = f.c.W() - 44 * s;
+			float right = columnRight > 0 ? columnRight * s : f.c.W() - std::max(44 * s, (float)s_safeInset[2].load(std::memory_order_relaxed));
 			for (auto it = prompts.rbegin(); it != prompts.rend(); ++it)
 			{
 				std::vector<std::string> glyphs;
@@ -761,6 +774,11 @@ namespace wwhd::pause_menu
 			return f.empty() ? "" : Ago(f);
 		}
 
+		bool TouchLayout();
+		// Quit's other way out: the desktop's "Desktop"; Android's "Quit" (no desktop there; the owner, 2026-10-15), the
+		// app closed, the unsaved-progress prompt kept
+		const char* QuitOut() { return TouchLayout() ? "Quit" : "Desktop"; }
+
 		DialogSpec Spec(Dialog d, int slot)
 		{
 			const std::string ago = Ago(File1());
@@ -769,12 +787,12 @@ namespace wwhd::pause_menu
 			{
 			case Dialog::Quit:
 				return { "Quit to\xE2\x80\xA6", JustSaved() ? "All progress is saved." : "Your progress since the last save " + since,
-					{ "Title Screen", "Desktop", "Cancel" }, { wwhd::sixty::TitleAvailable(), true, true } };
+					{ "Title Screen", QuitOut(), "Cancel" }, { wwhd::sixty::TitleAvailable(), true, true } };
 			case Dialog::QuitTitle:
 				return { "Return to the title screen?", "Progress since your last save" + (ago.empty() ? std::string() : " (" + ago + ")") + " will be lost.",
 					{ "Save & Quit", "Don\xE2\x80\x99t Save", "Cancel" }, { true, true, true } };
 			case Dialog::QuitDesktop:
-				return { "Quit to desktop?", "Progress since your last save" + (ago.empty() ? std::string() : " (" + ago + ")") + " will be lost.",
+				return { TouchLayout() ? "Quit the game?" : "Quit to desktop?", "Progress since your last save" + (ago.empty() ? std::string() : " (" + ago + ")") + " will be lost.",
 					{ "Save & Quit", "Don\xE2\x80\x99t Save", "Cancel" }, { true, true, true } };
 			case Dialog::SaveFile:
 				return { "Save your progress?", "This overwrites File 1." + (ago.empty() ? std::string() : " Last saved " + ago + "."), { "Save", "Cancel" }, { true, true } };
@@ -1390,8 +1408,23 @@ namespace wwhd::pause_menu
 			DesignExtent(w, h);
 			return w;
 		}
+		// the window's safe area (s_safeInset), an edge's in design units
+		float SafeInset(int edge)
+		{
+			uint32 ww = 0, wh = 0;
+			const int px = s_safeInset[edge].load(std::memory_order_relaxed);
+			if (px <= 0 || !gpu::WindowExtent(ww, wh) || !ww || !wh)
+				return 0;
+			return px / StartScale((float)ww, (float)wh);
+		}
+		// the Android layout's margins (README "Android safe areas"): the logo's column 96 from the left (room for a
+		// punch-hole there), the board 80 from the right, the footer 40 up; more where the system's inset is larger (the
+		// cutout on the other side, the gesture bar)
+		float TouchLeft() { return std::max(96.0f, SafeInset(0)); }
+		float TouchRightMargin() { return std::max(80.0f, SafeInset(2)); }
+		float TouchBottomMargin() { return std::max(40.0f, SafeInset(3)); }
 		constexpr float kTouchBoardW = 800, kTouchSetupW = 980, kTouchSetupH = 768;
-		float BoardX() { return TouchLayout() ? TouchRight() - 80 - kTouchBoardW : 620 + LaunchOX(); }
+		float BoardX() { return TouchLayout() ? TouchRight() - TouchRightMargin() - kTouchBoardW : 620 + LaunchOX(); }
 		float SheetX() { return BoardX() + 16; }
 		constexpr Colour kWarn = Colour::Hex(0x8a4b14), kKey = Colour::Hex(0x4f7a32);
 		// a TV picture's mean brightness (0..1, a pixel in 16 sampled)
@@ -1471,24 +1504,24 @@ namespace wwhd::pause_menu
 			return "\xE2\x80\xA6";
 		}
 
-		// Android's logo (660 wide) centred in its column (96 to 816), and its box's middle; its shadows as the desktop's
+		// Android's logo (660 wide) centred in its column (96 to 816, TouchLeft), and its box's middle; its shadows as the desktop's
 		void TouchLogo(Frame& f)
 		{
 			ui::Canvas& c = f.c;
 			const float s = f.s;
 			const Image& logo = A().Get("logo_android_w660");
-			const float lx = std::round((96 + 360) * s - logo.w / 2.0f), ly = std::round((TouchTop() + 432) * s - logo.h / 2.0f);
+			const float lx = std::round((TouchLeft() + 360) * s - logo.w / 2.0f), ly = std::round((TouchTop() + 432) * s - logo.h / 2.0f);
 			for (int i = 0; i < 4; i++)
 				c.Silhouette(logo, lx + (i % 2 ? 3 : -3) * s, ly + (10 + i) * s, { 0, 30, 90, 255 }, 0.09f);
 			c.Silhouette(logo, lx, ly + 6 * s, Colour::Hex(0x1f5fb0));
 			c.Draw(logo, lx, ly);
 		}
-		// Android's footer: one line at the bottom left (96, 40 up), 26 px, outlined
+		// Android's footer: one line at the bottom left (96, 40 up: TouchLeft, TouchBottomMargin), 26 px, outlined
 		void Footer(Frame& f, const std::string& text)
 		{
 			Assets& a = A();
-			const float s = f.s, px = 26 * s, base = f.c.H() - 40 * s + a.rocknroll.Descent(px);
-			f.c.Text(a.rocknroll, px, 96 * s, base, text, kWhite, 1, kPromptOutline, 2 * s);
+			const float s = f.s, px = 26 * s, base = f.c.H() - TouchBottomMargin() * s + a.rocknroll.Descent(px);
+			f.c.Text(a.rocknroll, px, TouchLeft() * s, base, text, kWhite, 1, kPromptOutline, 2 * s);
 		}
 
 		// text cut to a width with an ellipsis at its end (Android's rows: text-overflow: ellipsis)
@@ -1686,7 +1719,7 @@ namespace wwhd::pause_menu
 		{
 			ui::Canvas& c = f.c;
 			const float s = f.s;
-			const std::string baseKey = fmt::format("{}x{} {} {}", c.W(), c.H(), RegionOf(st), st.checked && st.copy.ok ? 1 : 0);
+			const std::string baseKey = fmt::format("{}x{} {} {} {}", c.W(), c.H(), RegionOf(st), st.checked && st.copy.ok ? 1 : 0, InsetKey());
 			if (baseKey != st.launchKey || st.launchBase.w != c.W() || st.launchBase.h != c.H())
 			{
 				ui::Canvas b(c.W(), c.H());
@@ -1754,7 +1787,7 @@ namespace wwhd::pause_menu
 #endif
 		// (Android's, README 3a: the board 980 x 768 at 48 from its box's top, pinned to the right 80 in; its sheet a centred
 		// column 836 wide: the title, the divider, the body (three lines reserved), the tap zone (836 x 224), the buttons)
-		float SetupX() { return TouchLayout() ? TouchRight() - 80 - kTouchSetupW : 360 + LaunchOX(); }
+		float SetupX() { return TouchLayout() ? TouchRight() - TouchRightMargin() - kTouchSetupW : 360 + LaunchOX(); }
 		float SetupY() { return TouchLayout() ? TouchTop() + 48 : 236; }
 		float SetupCX() { return TouchLayout() ? SetupX() + kTouchSetupW / 2 : 960 + LaunchOX(); }   // the sheet's middle
 		float ZoneX() { return TouchLayout() ? SetupX() + 72 : 570 + LaunchOX(); }
@@ -2130,7 +2163,7 @@ namespace wwhd::pause_menu
 			ui::Canvas& c = f.c;
 			const float s = f.s;
 			SetupLayers& l = SL();
-			const std::string baseKey = fmt::format("{}x{} {}", c.W(), c.H(), st.setupPre ? 1 : 0);
+			const std::string baseKey = fmt::format("{}x{} {} {}", c.W(), c.H(), st.setupPre ? 1 : 0, InsetKey());
 			if (baseKey != l.baseKey)
 			{
 				ui::Canvas b(c.W(), c.H());
@@ -2252,7 +2285,7 @@ namespace wwhd::pause_menu
 						pr = { { st.pad ? "A" : "Enter", "Browse" }, { st.pad ? "Y" : "H", "Help" } };
 					if (!st.setupPre && st.sstate != kChecking && !st.browsing)
 						pr.push_back({ st.pad ? "B" : "Esc", "Back" });     // Change Files from Launch: back to it
-					DrawPrompts(tf, pr, st, op);
+					DrawPrompts(tf, pr, st, op, TouchLayout() ? std::min(TouchLeft() + 720, SetupX() - 24) : 0);
 					DrawToast(tf, st, now);
 				}
 				else
@@ -2292,7 +2325,7 @@ namespace wwhd::pause_menu
 					std::vector<std::pair<std::string, std::string>> pr = { { st.pad ? "A" : "Enter", "Select" } };
 					if (st.startView == 1)
 						pr.push_back({ st.pad ? "B" : "Esc", "Back" });
-					DrawPrompts(tf, pr, st, uiOp);
+					DrawPrompts(tf, pr, st, uiOp, TouchLayout() ? std::min(TouchLeft() + 720, BoardX() - 24) : 0);
 					DrawToast(tf, st, now);
 					return;
 				}
@@ -3180,7 +3213,7 @@ namespace wwhd::pause_menu
 					const std::string& b = d.buttons[st.dialogItem];
 					if (b == "Cancel")
 						st.dialog = Dialog::None;
-					else if (b == "Desktop")
+					else if (b == QuitOut())
 					{
 						if (JustSaved())
 							QuitToDesktop();                    // nothing unsaved: straight away
@@ -3838,6 +3871,16 @@ namespace wwhd::pause_menu
 		else if (pressed & B::X)
 			Act(st, Input::Alt);
 		st.wake.notify_one();
+	}
+
+	void SafeInsets(int left, int top, int right, int bottom)
+	{
+		const int v[4] = { left, top, right, bottom };
+		bool changed = false;
+		for (int i = 0; i < 4; i++)
+			changed |= s_safeInset[i].exchange(std::max(v[i], 0), std::memory_order_relaxed) != std::max(v[i], 0);
+		if (changed)
+			cemuLog_log(LogType::Force, "wwhd: the window's safe area: insets left {}, top {}, right {}, bottom {} px", left, top, right, bottom);
 	}
 
 	void PadAttached(bool on)
