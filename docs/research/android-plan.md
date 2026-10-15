@@ -284,6 +284,39 @@ simpleperf_report_lib):
   Odin (session bottom, on the a4-cpu2 profile). A trampoline already reported now returns 0 at once (a lock-free
   table of 64; the first call per trampoline as before: the same log line and result). savestate's NoteSwitchOut keeps
   each thread's flag in a short list, not a map.
+- **Where core 1's host time is after a4-cpu4** (2026-10-15, the a4-cpu4 profile: sail at 60, 40 s at 4000 Hz; by the
+  host function the guest code called, scratch a4entry.py): 14.8% outside guest code. The imports 5.2% (OSSendMessage
+  1.5%, most of it the futex wake of another core's host thread asleep past wfe's 500 us; the unsupported imports'
+  handler 0.6%, a4-cpu5; GX2SetFetchShader 0.46%, its time one load: a cache miss on the game's fetch shader struct;
+  the other GX2 setters 0.1-0.2% each), rt_journal_store 2.2% (60 fps's journal, session qa's variant E), rt_yield
+  1.2% (the thread switches), the TLS resolver 1.2% (the generated code's step values, and two a GX2 call:
+  GX2ReserveCmdSpace's core id and the write gather's, ~1% of core 2), the idle loop's work ~1.5% (AXOut_update's clock
+  reads and sends, the alarms: core 1's idle time, so power rather than frame time). Nothing left is one cut over
+  ~0.5%: parked on the Odin's side.
+- **a4-cpu5 on the Odin** (2026-10-15; 2a78fbb8 + a4-cpu4 without and with it, two APKs, sail at 60, A B A B A B, 20 s
+  of simpleperf stat each): core 1 36.71 / 37.02 / 36.87 G cycles without, 36.63 / 36.30 / 36.24 G with (-1.3%); core 2
+  8.62 / 8.63 / 8.59 against 8.40 / 8.29 / 8.35 G (-3.1%); core 0 -1.0%; every run with it below every run without; the
+  GPU thread the same; fps 59.4-60.2 in all.
+- **The wfe wait at 1000 us** (the same window, on a4-cpu5's APK by env, 500 / 1000 / 500 / 1000; the battery charging,
+  so no current): the frames steadier (the worst a 10 s 21.2-21.5 ms in all six, against 26-30 ms at 500; fps
+  60.0-60.2), core 1's task clock -4% (busy 70-72% against 73-74%), but its cycles +1.5%: it ran at 2.65 GHz against
+  2.52, the cluster clocked up by cores 0 and 2 waiting in wfe longer (their time on a CPU +25%, their cycles +8-9%; the
+  GPU thread's cycles +5%). Smoother partly through the clocks, so likely at a power cost.
+- **Where the late frames come from** (2026-10-16, main 9a523948 as installed, 500 / 1000 / 500 / 1000 by env, the
+  battery discharging; WWHD_FRAME_LOG, a line a frame, pulled from beside the test home; scratch a4late.py): the
+  battery 1,364 / 1,398 mA at 500, 1,433 / 1,408 at 1000 (+2.8%). Two kinds of late frame, neither a parked core's
+  wake: (1) in the first ~6 s after the switch to 60 and every ~121 swaps up to ~1545, a game frame waits 17-22 ms in
+  GX2DrawDone, the GPU thread 19-28 ms of CPU on it with a 9-10 ms fence wait (first sights at the switch: the same at
+  1000); (2) in the steady part (swap 1700 on) the route's "worst 27-29 ms" at 500 isn't the game's: no work interval
+  over 22 ms but one, the GPU thread's CPU time a frame at most 15.8 ms (99th 13.9), no fence waits. The real-time
+  line times swaps on the GPU thread by the wall clock (null_gpu.cpp), so those gaps are the GPU thread blocked
+  (acquire, present, the driver) or running slower, not more work; 1000 us hides most of them (worst 21-25 ms) through
+  the cluster's clock. 500 kept; the next probe is the GPU thread's acquire and present waits.
+- **The guest code on core 1 is flat** (the same profile, by guest function, scratch a4hot.py with functions.csv's
+  names): the top 10 functions are 13.9% of core 1 by self time, the top 50 33%, the top 200 56%, of 2,937 seen. The
+  hottest: 02759564 (684 bytes, under RenderDisplay_draw) 3.7%, 028766CC 1.7%, 028E8F64 (84 bytes, many callers) 1.4%,
+  daSea_packet_c::execute 1.3%, sqrtf 0.9%, JPABaseEmitter::calcParticle and its particles' calcVelocity/incFrame ~2%.
+  So native overrides of a few functions can't take a large share; the A78's (the RP4's) ranking is next.
 
 ## A4 codegen (2026-10-14, session qa: a4-codegen)
 
