@@ -265,6 +265,11 @@ unordered; every CR field write (compares, Rc=1, mtcrf) one word; mfcr eight byt
 worker, the same run): the work a frame 4.39/4.27/4.42 -> 3.87/3.87/3.75 ms, the game thread 4.44/4.27/4.45 ->
 3.90/3.88/3.75 (~-12%).
 
+On the Odin (main 9a523948 against c93c45d1, route.sh sail at 60, A/B/A/B, simpleperf stat 20 s in the 60 part): the
+game thread 41.91/42.17 -> 39.18/39.18 G cycles (-6.8%; 15.81/15.86 -> 15.26/15.25 s of CPU, the core clocked 2.65 ->
+2.57 GHz), the scheduler thread 79-80% -> 76-77% busy, sail's late windows 58.5/58.8 and 59.1/58.4 -> 59.5/58.7 and
+59.4/59.4 fps, the GPU thread 37.2/36.9 -> 36.4/36.0 G.
+
 ## P0: doesn't build, link or start on Android
 
 1. **Fibers** (`src/runtime/fiber/FiberUnix.cpp`): the switch is x86-64 asm; the fallback is `ucontext`, which bionic

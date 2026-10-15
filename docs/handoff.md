@@ -4552,8 +4552,9 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   and float conversions are always inlined (clang had been calling shard-local copies in large functions: ~12,500 wr32
   calls in 50 shards), lfs/stfs written from the ISA (the host's widening for normal numbers and zeros), fcmpu one
   host compare, a CR field one word store, mfcr eight bytes at a time: .text -7.4% (arm64) / -9.1% (x86), the work a
-  frame ~-12% on x86 (the desktop worker) and ~-1.5% on the Mac, every result as before. The instruction-level profile
-  (each sample's leaf PC against objdump) and what's left: android-plan.md "A4 codegen".
+  frame ~-12% on x86 (the desktop worker) and ~-1.5% on the Mac, the Odin's game thread -6.8% of its cycles in sail
+  (59.3 fps against 58.7), every result as before. The instruction-level profile (each sample's leaf PC against
+  objdump) and what's left: android-plan.md "A4 codegen".
 - **m-android A4 in play (a4-play)**: tour3, sail and wfw on the Odin with simpleperf (android-plan.md "A4 in play"):
   the dips at 60 are the game's code on the scheduler thread, not shaders; sail holds 57.4-58.1 with the system driver
   and 59.3-59.5 with Turnip (its GPU thread ~33% lighter); the renderer's per-draw hashing and descriptors are main's.
