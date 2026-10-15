@@ -2440,6 +2440,47 @@ void f_021412BC(PPCInterpreter_t* __restrict ctx)
 	[[clang::musttail]] return orig_f_021412BC(ctx);
 }
 
+// B86 (the owner: "when you pick up a bomb flower in dragon roost, a new one spawns in the spot immediately"): a process
+// requested in a tick (fpcM_Create) joins the process lists at the next tick's start, where every process looks next at
+// 30. A converted process's half step comes in between, and an existence test (fpcEx_IsExist, f_025DE564: the lists)
+// said no: the bomb flower (BFLOWER 296, d_a_bflower.cpp) keeps the bomb it hands Link and revives on that answer (the
+// bud's scale from 0, the regrow sound, f_020775F8's call at 02077880), so its half step in the pull's tick regrew it at
+// once; at 30 its next look is the next tick's, the bomb there until it explodes (~110 ticks). So the IDs requested this
+// tick (noted here, cleared as each whole tick's frame begins) exist for a half step's existence test, as at the next
+// tick. Only the yes/no test: a search by ID (a pointer) still finds none, as the process isn't made yet.
+// WWHD_60FPS_REQUESTED=0: off.
+namespace
+{
+	std::vector<uint32> s_requested;                // the process IDs requested this tick (at 60)
+	bool Requested()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_REQUESTED"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+}
+
+void f_025DE564(PPCInterpreter_t* __restrict ctx)
+{
+	const uint32 id = GPR(3);
+	if (!g_rtHalfTick || !Requested())
+		[[clang::musttail]] return orig_f_025DE564(ctx);
+	orig_f_025DE564(ctx);
+	if (GPR(3) == 0 && std::find(s_requested.begin(), s_requested.end(), id) != s_requested.end())
+		GPR(3) = 1;
+}
+
+// The sub-creation request (f_025DE884, reached from fopAcM_create's f_025D5928 by f_025DFAB8; the bomb flower makes
+// its bomb so): the process is allocated now, its ID set, and joins the lists when its request completes at the next
+// tick's start. Returns the process (0 if it failed): at 60 its ID (+4) is noted for B86's test, as fpcM_Create's.
+void f_025DE884(PPCInterpreter_t* __restrict ctx)
+{
+	if (!g_rtSixty)
+		[[clang::musttail]] return orig_f_025DE884(ctx);
+	orig_f_025DE884(ctx);
+	if (const uint32 proc = GPR(3))
+		s_requested.push_back(rd32(proc + 4));
+}
+
 // fpcM_Create(layer, process name, create function, ?, append) -> process ID. In the boss rush, Kalle Demos's death
 // makes no Makar (NPC_CB1, 334: d_a_bmd.cpp's death scene creates him, then his rescue event thanks Link; the
 // owner's N21): no request, the ID -1, which the boss doesn't keep. The append (0x40 bytes, made by fopAcM_create
@@ -2464,7 +2505,11 @@ void f_025E14A8(PPCInterpreter_t* __restrict ctx)
 			return;
 		}
 	}
-	[[clang::musttail]] return orig_f_025E14A8(ctx);
+	if (!g_rtSixty)
+		[[clang::musttail]] return orig_f_025E14A8(ctx);
+	orig_f_025E14A8(ctx);
+	if (GPR(3) != 0xFFFFFFFFu)
+		s_requested.push_back(GPR(3));              // B86, above
 }
 
 // mDoAud_setSceneName(name, room, layer) (session qa's find, symbols.csv): the sound's next scene, which picks its
@@ -3673,6 +3718,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 		s_uiAnims.clear();                           // the HD UI's animations that play this tick (above)
 		s_uiScreens.clear();
 		s_cam = CamSave{};                           // the camera's whole step (above) keeps its bytes anew
+		s_requested.clear();                         // the last tick's requests are made by now (B86, f_025DE564)
 	}
 	else if (CamTick() && !g_rtEarlyStep)
 	{
