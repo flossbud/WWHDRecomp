@@ -238,6 +238,20 @@ simpleperf_report_lib):
   A pause loop would cost a handheld's power (the Deck); AMD's MWAITX could do what wfe does.
 - Left on the game thread: the runtime's 9.4% (psq_store, rt_journal_store's 60 fps journal, the HLE imports' wrappers,
   a `std::unordered_map<uint32, ...>` insertion in two game functions), the TLS resolver's 1.4%.
+- **a4-cpu2, tried and not kept** (2026-10-15): the step rules' thread_locals through the context, as the store table
+  is (ctx->rspTemp pointing at a per-host-thread struct of their addresses; RT_V_* in the emitted code and ppc_ops.h's
+  helpers). Statically it took the generated program's resolver call sites from ~1,450 to ~130 (g_rtStep 1,146 -> 62,
+  g_rtLateNotes 281 -> 0; what's left is the hand-written overrides'). On the Odin (sail at 60, on top of a4-codegen,
+  A B B A, 20 s of simpleperf stat each) core 1 took 38.84 / 38.82 G cycles with it off and 39.87 / 39.79 G with it
+  on: +2.6%. The resolver is called about once a function and its address kept, while each value through the context
+  is three dependent loads (ctx->rspTemp, the struct, the value) taken again after every guest store, which may alias
+  them: the static count of call sites overstated the resolver's cost. The code is on branch a4cpu2-parked.
+- **After a4-cpu and a4-codegen** (9a523948, sail at 60, 40 s at 4000 Hz): core 1 is guest code 83.0%, our runtime
+  9.4%, the kernel 3.9% (8.0% before a4-cpu: now 2.2% futex wakes from wakeupSingleThreadWaitQueue, the waits that
+  outlast wfe's 100 us), the TLS resolver 1.7% (no caller over 0.2%), libc 1.1%. The runtime's leaves: rt_journal_store
+  (60 fps's journal) ~1.1% in all, the actor maps' insertions (f_025DE58C, f_025D475C: s_knownActors and the stepping
+  maps, sixty.cpp) 0.7%, GX2SetFetchShader's export wrapper 0.4%, the scheduler's switch 0.3%. A longer wfe wait
+  (WWHD_RUNQ_SPIN_US, no rebuild) is the cheapest next try on the kernel's 2.2%.
 
 ## A4 codegen (2026-10-14, session qa: a4-codegen)
 
