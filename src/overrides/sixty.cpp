@@ -3353,8 +3353,10 @@ namespace
 		static FILE* f = [] { const char* e = getenv("WWHD_DEBUG_RESOLVE"); return e ? fopen(e, "w") : nullptr; }();
 		return f;
 	}
+	void LatePushesTake();
 	void ResolvePending(PPCInterpreter_t* ctx, const char* where)
 	{
+		LatePushesTake();                              // (below: if no half tick took them)
 		const uint32 ccs = s_resolveCcs;
 		s_resolveCcs = 0;
 		if (FILE* f = ResolveLog())
@@ -3378,6 +3380,65 @@ namespace
 		g_rtHalfTick = half;
 		regs.Restore(ctx);
 		s_resolvesLate++;
+	}
+
+	// Pushes made after the resolution's place (B89, the owner: Link walked through Outset's small trees). The
+	// resolution (cCcS::Move) clears each Co collider's push (its Stts's m_cc_move, +0) and sets it from the tick's
+	// overlaps; what the rest of the scene's draw adds to it after that (the grass, small trees and bushes' hit checks,
+	// dCcMassS_Mng::Chk f_025170D8, push what walks into them so) moves the actor in the next tick, at 30. With the
+	// resolution after the half step (above) the whole frame's rest came before it, and it cleared all that: nothing
+	// pushed back. Now, when a whole frame's resolution waits, its Co colliders' pushes are noted there, what was added
+	// to them by the half tick's start (or the resolution, if no half tick comes) is taken, and it's added again after
+	// the resolution, before the push split takes a step's share. A half step's own additions aren't kept: at 30 those
+	// come before the tick's resolution, which clears them. WWHD_60FPS_LATEPUSH=0: off.
+	bool LatePushOn()
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_LATEPUSH"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	struct LatePush { uint32 stts; float v[3]; };
+	std::vector<LatePush> s_latePushesAt;           // the Co colliders' pushes where the resolution would have run
+	std::vector<LatePush> s_latePushes;             // what was added to them after it, for after the resolution
+	void LatePushesNote(uint32 ccs)
+	{
+		s_latePushesAt.clear();
+		if (!LatePushOn())
+			return;
+		const uint32 count = std::min(rd32(ccs + 0x2808), 0x100u);
+		for (uint32 i = 0; i < count; i++)
+		{
+			const uint32 obj = rd32(ccs + 0x1000 + 4 * i), stts = obj ? rd32(obj + 0x44) : 0;
+			if (!stts || std::any_of(s_latePushesAt.begin(), s_latePushesAt.end(), [&](const LatePush& m) { return m.stts == stts; }))
+				continue;
+			s_latePushesAt.push_back({ stts, { std::bit_cast<float>(rd32(stts)), std::bit_cast<float>(rd32(stts + 4)),
+				std::bit_cast<float>(rd32(stts + 8)) } });
+		}
+	}
+	void LatePushesTake()
+	{
+		for (const LatePush& b : s_latePushesAt)
+		{
+			LatePush add{ b.stts, {} };
+			bool any = false;
+			for (int i = 0; i < 3; i++)
+				any |= (add.v[i] = std::bit_cast<float>(rd32(b.stts + 4 * i)) - b.v[i]) != 0.0f;
+			if (any)
+				s_latePushes.push_back(add);
+		}
+		s_latePushesAt.clear();
+	}
+	// after the waiting resolution (cCcS::Move: the Co pushes cleared and set): those added again
+	void LatePushesResolved()
+	{
+		for (const LatePush& m : s_latePushes)
+		{
+			const uint32 actor = rd32(m.stts + 0xC);
+			if (actor < 0x10000000u || actor >= 0x50000000u)
+				continue;
+			for (int i = 0; i < 3; i++)
+				wr32(m.stts + 4 * i, std::bit_cast<uint32>(std::bit_cast<float>(rd32(m.stts + 4 * i)) + m.v[i]));
+		}
+		s_latePushes.clear();
 	}
 }
 
@@ -3418,6 +3479,7 @@ void f_02518798(PPCInterpreter_t* __restrict ctx)
 	if (s_resolveCcs)
 		ResolvePending(ctx, "again");                  // the last tick's, still waiting
 	s_resolveCcs = GPR(3);
+	LatePushesNote(GPR(3));                          // its Co colliders' pushes, to see what's added after (B89, above)
 	if (FILE* f = ResolveLog())
 	{
 		fprintf(f, "%u %d wait %08x at %u tg %u co %u all %u\n", wwhd::os::SwapCount(), g_rtHalfTick ? 1 : 0, GPR(3),
@@ -3461,7 +3523,13 @@ void f_0200E558(PPCInterpreter_t* __restrict ctx)
 	// process name, Stts, the push)
 	static FILE* dbg = [] { const char* e = getenv("WWHD_DEBUG_PUSHLOG"); return e ? fopen(e, "w") : nullptr; }();
 	if (!dbg && (!g_rtSixty || g_rtHalfTick || !PushSplit() || !AnyConverted()))
-		[[clang::musttail]] return orig_f_0200E558(ctx);
+	{
+		if (s_latePushes.empty())
+			[[clang::musttail]] return orig_f_0200E558(ctx);
+		orig_f_0200E558(ctx);
+		LatePushesResolved();                       // the pushes added after its place (B89, above)
+		return;
+	}
 	const uint32 ccs = GPR(3);
 	s_coPushes.clear();                              // (noted for the log at 30 too; the half tick needs 60)
 	s_coPushesSwap = wwhd::os::SwapCount();
@@ -3482,6 +3550,8 @@ void f_0200E558(PPCInterpreter_t* __restrict ctx)
 			s_coPushes.push_back({ stts, actor, rd32(actor + 4), rd16(actor + 8), {}, false, false });
 	}
 	orig_f_0200E558(ctx);
+	if (g_rtSixty && ResolveLate())
+		LatePushesResolved();                       // the pushes added after its place (B89, above), cleared by it, added again
 	if (g_rtSixty && PushSplit() && ResolveLate() && AnyConverted())
 		PushesResolved();                           // (it runs after the half step now: above)
 	if (dbg)
@@ -3878,6 +3948,7 @@ void f_0274C264(PPCInterpreter_t* __restrict ctx)
 			}
 		}
 	}
+	LatePushesTake();                                // what the whole frame added after the resolution's place (B89)
 	if (PushSplit())
 		PushesHalfTickBegin();                       // a stepping process's push, half of it this half tick
 	orig_f_0274C264(ctx);

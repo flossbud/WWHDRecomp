@@ -30,6 +30,8 @@ route_info() {
         walk)  route=walk-100.txt      frames=3000  save=/wwhd/data/saves/wwhd_100 trace= ;;
         items) route=items-100.txt     frames=1720  save=/wwhd/data/saves/wwhd_100 trace= ;;
         slash) route=slash-100.txt     frames=1600  save=/wwhd/data/saves/wwhd_100 trace= ;;
+        treewalk) route=treewalk-100.txt frames=1200 save=/wwhd/data/saves/wwhd_100 trace= ;;   # B89: into a small tree
+        bushwalk) route=bushwalk-100.txt frames=1200 save=/wwhd/data/saves/wwhd_100 trace= ;;   # B89: into a bush
         leaf)  route=leaf-100.txt      frames=1200  save=/wwhd/data/saves/wwhd_100 trace= ;;
         carry) route=carry-100.txt     frames=1120  save=/wwhd/data/saves/wwhd_100 trace= ;;
         crawl) route=crawl-100.txt     frames=1200  save=/wwhd/data/saves/wwhd_100 trace= ;;
@@ -94,4 +96,4 @@ route_info() {
         *) return 1 ;;
     esac
 }
-route_names="save route b16rec bandam gohmatail gohmarock tour tour2 land2 tour3 land3 potthrow ladspawn auction sidle2 sail menus picto menus2 telescope warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo tgstatue medliharp gtgrapple fwswitch moveramp moveangle movecircle moveturn movejump crate slope warppot climb drchaze"
+route_names="save route b16rec treewalk bushwalk bandam gohmatail gohmarock tour tour2 land2 tour3 land3 potthrow ladspawn auction sidle2 sail menus picto menus2 telescope warp shield ladder swing land drc pot bow sidle door bk plants gtower kazeb walk items slash leaf crawl carry back door2 hook spin talk wfw mob cuts cuta salvage swim house hyoi medli medliglide dback stolen heavy boomerang bombs grapple steal boots hammer armor mirror arrows drcjar fwbud tgbeam wtspring gtrock en-bk en-mo en-tn en-tn2 en-wz en-rd en-fm en-am en-ph en-bb en-st en-pw en-pz en-bl en-mt en-bo tgstatue medliharp gtgrapple fwswitch moveramp moveangle movecircle moveturn movejump crate slope warppot climb drchaze"

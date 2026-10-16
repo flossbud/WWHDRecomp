@@ -15,7 +15,8 @@
 # items2: boomerang, bombs, grapple, boots, hammer, armor, mirror; heavy, the Power Bracelets' lift, session
 # main's route), and the dungeons' (session top's dungeons2: drcjar, fwbud, tgbeam, wtspring, gtrock, tgstatue,
 # medliharp, gtgrapple, fwswitch; medli, session main's), and Gohma's room (session bottom's N20 routes: gohmatail, the
-# grappling hook's catch and swing on Valoo's tail, B83; gohmarock, its release and the ceiling rock, B84); back, talk and house start from their stage warps, the items' and dungeons' routes warp, spawn and poke
+# grappling hook's catch and swing on Valoo's tail, B83; gohmarock, its release and the ceiling rock, B84), and session top's B89 routes (treewalk, bushwalk: Link walks into a small tree and a
+# bush spawned on the Outset dock, which push him back); back, talk and house start from their stage warps, the items' and dungeons' routes warp, spawn and poke
 # what they need (their "#env" lines, tools/sixty/run.sh). On 2026-10-05 (ww-4 14a98dd) all
 # passed but warp (262,106 units: B28; 17 with its fix, 29b66d9); the largest others were land 99, swing 70,
 # sail 65, sidle 53, plants 46 (WARN: known small drifts), the rest under 33. On 2026-10-06 (items2, on ww-4
@@ -37,7 +38,7 @@
 set -e
 source "$(dirname "$0")/common.sh"
 named=$#                                       # routes named: those only (predeploy-rt below only for the default set)
-routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land3 sidle2 pot plants slash sail menus tour3 boomerang bombs grapple boots hammer armor mirror heavy drcjar fwbud tgbeam wtspring medli gtrock en-rd en-ph en-pz en-bo tgstatue medliharp gtgrapple fwswitch crate slope warppot climb gohmatail gohmarock)
+routes=("$@"); [ ${#routes[@]} -eq 0 ] && routes=(warp back door house talk items cuts leaf hook ladder crawl carry spin bow shield swing land3 sidle2 pot plants slash sail menus tour3 boomerang bombs grapple boots hammer armor mirror heavy drcjar fwbud tgbeam wtspring medli gtrock en-rd en-ph en-pz en-bo tgstatue medliharp gtgrapple fwswitch crate slope warppot climb gohmatail gohmarock treewalk bushwalk)
 P=$OUT/predeploy; mkdir -p "$P"
 jobs=${PREDEPLOY_JOBS:-4}
 run_one() {

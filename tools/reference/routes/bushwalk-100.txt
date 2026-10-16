@@ -1,0 +1,12 @@
+# Route: B89's bushes (the owner: Link walked through the small trees, and maybe the bushes), after continue-100.txt's
+# start on the Outset dock: a bush (Obj_Wood 266, params 0) spawned 80 units ahead of Link, then forward from f1000
+# for 120 frames. At 30 the bush pushes him back as the trees do (its unit's hit check, dCcMassS_Mng::Chk): he slides along
+# it and off the dock's side; at 60 he walked straight through it until the pushes made after the collision
+# resolution's place were kept for after it (overrides/sixty.cpp, B89).
+#env WWHD_DEBUG_SPAWN=950:266,00000000,-201607,168,312165
+# FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start; gameplay from ~f870
+1000 LUP 120   # forward, into the bush
