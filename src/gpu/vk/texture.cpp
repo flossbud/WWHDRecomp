@@ -1154,7 +1154,7 @@ namespace wwhd::gpu
 					d.phys, surface->layers); });
 				Volume& v = VolumeOf(*surface, format);
 				VkImageView view = View(v.image, v.format, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_3D, 0, 1, 0, 1, comp, v.views);
-				return { view, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1.0f, 1.0f, true };
+				return { view, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1.0f, 1.0f, true, v.format };
 			}
 			if (viewType != VK_IMAGE_VIEW_TYPE_2D && viewType != VK_IMAGE_VIEW_TYPE_2D_ARRAY)
 			{
@@ -1178,7 +1178,7 @@ namespace wwhd::gpu
 				firstMip = std::min(firstMip, c->mips - 1);
 				uint32 mips = std::min(lastMip, c->mips - 1) + 1 - firstMip;
 				VkImageView v = View(c->img.image, c->img.format, c->img.aspect, viewType, firstMip, mips, 0, 1, comp, c->views);
-				return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c->img.scale * c->img.kx, c->img.scale * c->img.ky, true };
+				return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c->img.scale * c->img.kx, c->img.scale * c->img.ky, true, c->img.format };
 			}
 			// a draw that samples its own target reads it as it was before the draw (a copy): what Vulkan defines,
 			// and what the console's separate colour and texture caches give; the reference does the same
@@ -1194,7 +1194,7 @@ namespace wwhd::gpu
 			uint32 baseLayer = std::min(firstSlice, img->layers - 1);
 			uint32 layers = viewType == VK_IMAGE_VIEW_TYPE_2D_ARRAY ? std::clamp(numSlices, 1u, img->layers - baseLayer) : 1;
 			VkImageView v = View(img->image, img->format, img->aspect, viewType, 0, 1, baseLayer, layers, comp, s_surfaceViewCache[img->image]);
-			return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, img->scale * img->kx, img->scale * img->ky, true };   // nominal (draw.cpp)
+			return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, img->scale * img->kx, img->scale * img->ky, true, img->format };   // nominal (draw.cpp)
 		}
 
 		// from guest memory
@@ -1228,7 +1228,7 @@ namespace wwhd::gpu
 		VkImageView v = View(t->img.image, t->img.format, t->img.aspect, viewType, firstMip, mips, firstSlice, numSlices, comp, t->views);
 		if (s_af > 1.0f && mips > 1)
 			sampler = Sampler(dec, vertex, unit, compare, true);
-		return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+		return { v, sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1.0f, 1.0f, false, t->img.format };
 	}
 
 	// IT_HLE_COPY_SURFACE_NEW (GX2CopySurface; LatteCP_itHLECopySurfaceNew): rect x, y, w, h, then

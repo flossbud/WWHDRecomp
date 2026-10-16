@@ -247,7 +247,8 @@ namespace wwhd::gpu
 	// texture.cpp
 	// scale: the image's size over the guest's (a surface's under WWHD_RENDER_SCALE), for the shader's uf_texNScale
 	// surface: from a render target (not guest memory): what tells the game's post passes from its HUD (HudBegins)
-	struct Sampled { VkImageView view; VkSampler sampler; VkImageLayout layout; float scaleX = 1.0f, scaleY = 1.0f; bool surface = false; };
+	struct Sampled { VkImageView view; VkSampler sampler; VkImageLayout layout; float scaleX = 1.0f, scaleY = 1.0f; bool surface = false;
+		VkFormat format = VK_FORMAT_UNDEFINED; };                // the image's (UNDEFINED: not said, for draw.cpp's FastMul unknown)
 	void TextureInit();
 	// texture unit `unit` of a stage as the draw samples it; outside rendering (it may upload or
 	// transition). A surface among the draw's attachments is never sampled (a placeholder is).

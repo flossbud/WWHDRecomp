@@ -246,7 +246,9 @@ afford it.
 4. **AO cheap enough to be on by default** on low-end devices (the original's look back), then the mip chains. The
    exact multiply's emulation is most of AO's cost on Adreno (0.89 -> 0.53 ms without it): the AO shader translated
    exactly without it is the first try.
-5. **The exact multiply without its emulation** (~15% of the Odin's GPU time; no exact form keeping the zero tests
+5. **The exact multiply without its emulation** (done for AO's pass and the scene's two-target pass, section 5:
+   the Odin's GPU -6.2%, the RP4's -3.2%; more shaders, and interpolants as a rule, are what's left). The plan as it
+   was: (~15% of the Odin's GPU time; no exact form keeping the zero tests
    saves it): per multiply, a plain one where it's proved the same: an operand that is a finite nonzero literal, or a
    value the shader makes finite (a UNORM/SNORM texture sample, a clamp or saturate, an interpolated colour), and a
    zero's sign reaching nothing sign-sensitive (a division, sign(), atan) before it's treated as equal; today's exact
@@ -260,6 +262,107 @@ afford it.
 
 Every step: the checks' captures identical (or compared by PSNR where a replacement is meant to differ), measured on
 the RP4, the Odin and the worker, the look kept or bettered.
+
+## 5. The exact multiply's proof (plan step 5)
+
+`tools/shaders/fastmul.py` reads a shader's GLSL as the decompiler writes it (`WWHD_RENDER_SHADERS`), takes main()
+apart into one value per register component (an if/else's registers merged as phis; the isinf guards and the
+discards kept), and decides each `mul_nonIEEE(a, b)` call: plain where both rules below hold, exact otherwise. Its
+decisions go to `src/gpu/vk/fastmul_table.inc` (`fastmul.py --cpp`: keys, call indices, register components and a
+hash of the GLSL, no game content). The renderer (draw.cpp, FastMul) makes that shader's variant with the decided
+calls written `mul_plain(a, b)`, only from the GLSL whose hash the entry has. `mul_plain` is `a*b` kept `precise`
+(SPIR-V's NoContraction): a plain product the driver may fuse with the add after it into one fma, which rounds once
+and so gives another result (sail's frame 2400 on RADV: one pixel off by 1 without it), where the exact form's select
+keeps the two apart. The variant is a shader of its own in the
+cache, so its pipelines are prepared at start beside the exact one's (no hitch). A draw binds it only when the facts
+the proofs rest on hold for that draw (below), and the shader as translated otherwise. `WWHD_FASTMUL=0`: never.
+
+The exact form is `a == 0 || b == 0 ? 0 : a*b`. A plain `a*b` differs from it in two ways only: where one operand is
+0 and the other inf or NaN (the exact form 0, the plain one NaN), and in a zero's sign (the exact form's 0 is +0; the
+plain product of a 0 and a negative is -0).
+
+**Rule 1, the operands.** The plain form gives the exact one's value, up to a zero's sign, when
+(a) both operands are finite: no inf or NaN, so a 0 makes ±0 either way; or
+(b) one operand is finite and nonzero (|x| >= FLT_MIN): if the other is 0 both give ±0, inf both give inf, a NaN
+both give the NaN (the exact form's zero test fails on a NaN).
+Finite comes from an interval each value is proved to lie in:
+- a literal: its value;
+- a uniform component (`uf_remapped[i].c`): finite and within ±2^32, checked on the draw (and at least FLT_MIN in
+  magnitude where (b) uses it as the nonzero operand, or an addend that absorbs a zero's sign leans on it);
+- a sample from a texture unit whose image has a normalized format (UNORM, SNORM, sRGB, BC, D16/D24), checked on the
+  draw: [-1, 1];
+- +, -, * and / of such intervals (a divisor's excluding 0), widened for rounding, and kept only while below FLT_MAX
+  in magnitude (nothing overflows to inf);
+- `clamp(x, lo, hi)` with literal bounds: [lo, hi], but only when x is never a NaN. FClamp (like FMin and FMax) of a
+  NaN is undefined in SPIR-V, and a driver may return the NaN. Never a NaN: a finite interval; -x, an exact multiply,
+  clamp, min, max or a phi of such values; x + y or x - y with one of them finite (finite + inf is inf; inf - inf is
+  the NaN);
+- min and max, exp2 (an exponent up to 126), log2 (an argument above 0), sqrt (at least 0), floor, fract, sin and
+  cos: from their arguments' intervals; log2(max(0, x)) behind the decompiler's isinf guard: [-FLT_MAX, log2(hi)];
+- a phi: the union of its values'.
+Nothing else has an interval (interpolants, float textures, integer registers, bit casts).
+
+**Rule 2, a zero's sign.** Where rule 1 holds, the two forms can still differ in a zero's sign. -0 and +0 compare
+equal and add the same to anything nonzero, so a difference only survives through an op that tells them apart.
+Every use of the multiply's result is followed until each use absorbs the sign:
+- absorbs it: an addition whose other addend is proved nonzero (the same sum for ±0); an exact multiply (its zero
+  test gives +0 for either); exp2, log2 (-inf for either), isinf, isnan; comparisons; texture coordinates
+  (-0 and +0 address the same texel in every addressing mode); an export to a colour target whose format has no sign
+  (UNORM, sRGB, unsigned float: -0 is stored as 0), checked on the draw;
+- passes it on (followed further): negation, a phi, a plain multiply, the dividend of a division, clamp, min, max,
+  floor, fract (-0 - floor(-0) is +0, but a driver's fract needn't compute it so), sqrt, sin, the vector
+  constructors, the isinf guard;
+- fails (the multiply stays exact): a divisor (1/-0 is -inf), a bit cast (floatBitsToInt sees the sign bit), a call
+  it doesn't know, gl_FragDepth, gl_Position, and an export when the targets aren't checked.
+A multiply whose sign reaches a failing use stays exact; that can make another multiply's use fail (a plain
+multiply passes the sign on, an exact one absorbs it), so the step repeats until nothing changes.
+
+**On each draw** (draw.cpp, FastMulHolds): the uniform components the entry lists are finite and within 2^32 (those
+listed nonzero also at least FLT_MIN); the texture units it lists sample images in normalized formats (a
+placeholder or an unknown format fails); for an entry whose exports absorb a zero's sign, every colour target bound
+has a format with no sign. Any of these failing: the shader as translated, for that draw.
+
+**What it proves.** Over sail's 688 shaders (WWHD_RENDER_SHADERS, the desktop): 168 pixel shaders have plain
+multiplies (1,783 of their 4,963), 127 vertex shaders (1,048 of 2,107). First enabled for AO's pass and the scene's
+two-target 1080p pass (the shaders behind most of that pass's time):
+
+| shader | what it is | plain |
+|---|---|---|
+| 16ea6f47e7ef5b41 | AO (its depth inputs R32F, so marked float) | 39 of 80 |
+| afef0e97857d1d07 | the two-target pass, quads | 11 of 19 |
+| d3ff0b15fefcf55d | the two-target pass, quads | 14 of 33 |
+| b698c42cd4ba246d | the two-target pass, quads | 21 of 36 |
+| add2eb92c9980beb | the two-target pass, models | 26 of 47 |
+
+The NaN rule for clamps is most of what stays exact. AO's depth is R32F and inf on the sky, where inf - inf is a NaN
+in the shader as translated too, so its clamps prove nothing (without the rule AO would be 71 of 80, unsoundly). In
+the two-target pass the clamps' arguments are interpolants (passParameterSem2 and 4), which have no interval yet.
+Proving those means the vertex shader's outputs (a draw's vertex shader checked as the one proved, its attributes'
+formats checked) and interpolation keeping finite values finite: the next rule to add if the measurements say the
+remaining multiplies matter.
+
+**Checked on the desktop worker** (sail, the virtual clock, captures at frames 600 to 2900, FastMul against
+`WWHD_FASTMUL=0`): on RADV the five captures byte-identical, and a second exact run identical to the first (the runs
+are deterministic); the variant on every one of the five shaders' 729,849 draws (the facts held on all of them). The
+first form, a plain `a*b` without `precise`, differed in one pixel by 1 at frame 2400 on RADV (the fma), identical on
+lavapipe. A run from the first one's shader cache: the variants loaded with their shaders, their pipelines prepared
+at start (505 recipes, 512 pipelines), the captures identical.
+
+**Measured on the Odin** (sail at 60, AO on, Qualcomm's driver, A B A B): the GPU 8.33 and 8.31 ms a frame with
+FastMul against 8.87 and 8.87 without (-6.2%); the two-target 1080p pass 1.94 against 2.36 and 2.28 ms (-16%), AO's
+pass 0.76 against 0.89 ms (-15%). The per-draw checks on the GPU thread (no timing, simpleperf, 20 s in the 60
+part): NullGPU 29.66 and 29.70 G cycles against 29.49 and 29.25 G (+1.0%; the two exact runs alone differ by 0.8%).
+For comparison, every multiply plain (the probe, inexact) took the GPU to 7.54 ms: the five shaders proved here hold
+about 40% of what the plain multiply could give.
+
+**Measured on the RP4** (Mali-G77, sail, AO on, the automatic render scale, A B A B): the GPU 15.08 and 15.11 ms a
+frame with FastMul against 15.59 and 15.61 (-3.2%); without timing about 55 fps either way, the RP4 being CPU-bound
+there (the scheduler thread 86% busy). AO's pass costs 3.05 ms a frame on Mali (0.76 on the Odin).
+
+**AO on phones stays off by default** (the Performance preset, which Auto picks on a device with a battery): the
+rule was on only where it holds 60. The Odin holds 60 on sail with AO on (every run above), but the RP4 doesn't hold
+60 even with it off, and AO's 3.05 ms there is a fifth of its GPU's frame. Turning it on for the Odin's class alone
+would need a GPU-based preset (Settings runs before the GPU is known): left for later, with these numbers.
 
 ## Mali's driver and BC4/BC5 decoded to 8 bits (B88)
 

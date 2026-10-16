@@ -175,6 +175,10 @@ namespace wwhd::gpu
 			bool aoOffTried = false;
 			Shader* test = nullptr;                                  // WWHD_TEST_PSOUT's (TestOutVariant)
 			bool testTried = false;
+			// FastMul: the variant with the multiplies proved plain written plainly (fastOf: the variant's own shader)
+			Shader* fastMul = nullptr;
+			const Shader* fastOf = nullptr;
+			bool fastMulTried = false;
 		};
 		std::unordered_map<uint64, Shader*> s_shaders;
 		std::unordered_map<uint64, LatteFetchShader*> s_fetchShaders;
@@ -359,9 +363,192 @@ namespace wwhd::gpu
 			return key | 1;
 		}
 
+		// ---- the exact multiply without its emulation (docs/research/graphics-rework.md, plan step 5) --------------------
+		// Latte's multiply gives 0 when either operand is 0, even against inf or NaN; the translation writes it
+		// mul_nonIEEE(a, b), and its zero tests are ~15% of an Adreno's GPU time. tools/shaders/fastmul.py proves, per
+		// call, where a plain a*b gives the same result: the operands can't be 0 against inf or NaN (both finite, or one
+		// finite and nonzero), and a zero's sign (-0 where the exact form gives +0) can't reach anything that tells them
+		// apart. Its proofs lean on facts a draw must have, checked here before the plain variant is bound: the uniforms
+		// they use finite and within 2^32 (and some at least FLT_MIN), the texture units they use normalized formats,
+		// and for some the colour targets formats with no sign (a zero's sign stored as 0 either way). A draw without
+		// them uses the shader as translated. WWHD_FASTMUL=0: never.
+		struct FastMulEntry
+		{
+			uint64 key;
+			bool vertex;
+			uint64 glsl;                                             // FNV-1a 64 of the GLSL the proofs were made on
+			std::vector<uint16> plain, finite, nonzero;
+			uint32 units;
+			bool exports;
+		};
+		const FastMulEntry kFastMul[] = {
+#include "fastmul_table.inc"
+		};
+
+		const FastMulEntry* FastMulFor(uint64 key, bool vertex)
+		{
+			static const bool on = [] { const char* e = getenv("WWHD_FASTMUL"); return !(e && atoi(e) == 0); }();
+			if (!on)
+				return nullptr;
+			for (const FastMulEntry& e : kFastMul)
+				if (e.key == key && e.vertex == vertex)
+					return &e;
+			return nullptr;
+		}
+
+		// the variant's key: its shader's and the table's entry, its GLSL's hash and calls (an entry changed in any way:
+		// another shader in the cache, so an older variant is never bound)
+		uint64 FastMulKey(const FastMulEntry& e, uint64 key)
+		{
+			uint64 h = Mix(0x666D756C00000000ull, e.glsl);
+			for (uint16 i : e.plain)
+				h = Mix(h, i);
+			return key ^ h;
+		}
+
+		// the variant from its SPIR-V: a shader of its own in the cache, so its pipelines are prepared with the others
+		Shader* MakeFastMul(Shader& base, bool vertex, const FastMulEntry& e, const std::vector<uint32>& spirv)
+		{
+			Shader* m = new Shader;
+			m->key = FastMulKey(e, base.key);
+			m->dec = base.dec;
+			m->uniforms = base.uniforms;
+			m->mapping = base.mapping;
+			m->fastOf = &base;
+			VkShaderModuleCreateInfo mi{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+			mi.codeSize = spirv.size() * 4;
+			mi.pCode = spirv.data();
+			Check(vkCreateShaderModule(s.device, &mi, nullptr, &m->module), "vkCreateShaderModule");
+			m->layout = CreateLayout(*m, vertex ? VK_SHADER_STAGE_VERTEX_BIT : VK_SHADER_STAGE_FRAGMENT_BIT);
+			cache::AddShader(SerializeShader(*m, vertex, spirv));
+			s_shaders.try_emplace(m->key, m);
+			base.fastMul = m;
+			base.fastMulTried = true;
+			return m;
+		}
+
+		// the listed mul_nonIEEE(A, B) calls of main() as mul_plain(A, B): a*b, precise (SPIR-V's NoContraction), so a
+		// driver fuses it with no add the exact form's select keeps apart (an fma rounds once: another result). The calls
+		// are counted in textual order as fastmul.py counts them; renamed from the last, so the earlier ones' places hold
+		bool FastMulVariant(const char* src, const FastMulEntry& e, std::string& out)
+		{
+			out = src;
+			if (Fnv((const uint8*)out.data(), out.size()) != e.glsl)
+				return false;                                        // another translation than the one proved
+			const size_t body = out.find("void main()");
+			if (body == std::string::npos)
+				return false;
+			static const std::string call = "mul_nonIEEE(";
+			std::vector<size_t> at;
+			for (size_t p = out.find(call, body); p != std::string::npos; p = out.find(call, p + call.size()))
+				at.push_back(p);
+			for (size_t k = e.plain.size(); k-- > 0;)
+			{
+				if (e.plain[k] >= at.size())
+					return false;                                    // not the shader the table was made from
+				out.replace(at[e.plain[k]], call.size(), "mul_plain(");
+			}
+			out.insert(body, "float mul_plain(float a, float b){ precise float r = a*b; return r; }\n");
+			return true;
+		}
+
+		bool NormalizedFormat(VkFormat f)                          // every value sampled in [-1, 1]
+		{
+			switch (f)
+			{
+			case VK_FORMAT_R8_UNORM: case VK_FORMAT_R8_SNORM: case VK_FORMAT_R8G8_UNORM: case VK_FORMAT_R8G8_SNORM:
+			case VK_FORMAT_R8G8B8A8_UNORM: case VK_FORMAT_R8G8B8A8_SNORM: case VK_FORMAT_R8G8B8A8_SRGB:
+			case VK_FORMAT_B8G8R8A8_UNORM: case VK_FORMAT_B8G8R8A8_SRGB: case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+			case VK_FORMAT_A2R10G10B10_UNORM_PACK32: case VK_FORMAT_R16_UNORM: case VK_FORMAT_R16_SNORM:
+			case VK_FORMAT_R16G16_UNORM: case VK_FORMAT_R16G16_SNORM: case VK_FORMAT_R16G16B16A16_UNORM:
+			case VK_FORMAT_R16G16B16A16_SNORM: case VK_FORMAT_R5G6B5_UNORM_PACK16: case VK_FORMAT_B5G6R5_UNORM_PACK16:
+			case VK_FORMAT_R4G4B4A4_UNORM_PACK16: case VK_FORMAT_B4G4R4A4_UNORM_PACK16: case VK_FORMAT_R5G5B5A1_UNORM_PACK16:
+			case VK_FORMAT_B5G5R5A1_UNORM_PACK16: case VK_FORMAT_A1R5G5B5_UNORM_PACK16:
+			case VK_FORMAT_BC1_RGB_UNORM_BLOCK: case VK_FORMAT_BC1_RGBA_UNORM_BLOCK: case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+			case VK_FORMAT_BC2_UNORM_BLOCK: case VK_FORMAT_BC2_SRGB_BLOCK: case VK_FORMAT_BC3_UNORM_BLOCK: case VK_FORMAT_BC3_SRGB_BLOCK:
+			case VK_FORMAT_BC4_UNORM_BLOCK: case VK_FORMAT_BC4_SNORM_BLOCK: case VK_FORMAT_BC5_UNORM_BLOCK: case VK_FORMAT_BC5_SNORM_BLOCK:
+			case VK_FORMAT_D16_UNORM: case VK_FORMAT_X8_D24_UNORM_PACK32: case VK_FORMAT_D24_UNORM_S8_UINT:
+				return true;
+			default:
+				return false;
+			}
+		}
+
+		bool SignlessTarget(VkFormat f)                            // a written -0 stored as +0
+		{
+			return NormalizedFormat(f) || f == VK_FORMAT_B10G11R11_UFLOAT_PACK32 || f == VK_FORMAT_E5B9G9R9_UFLOAT_PACK32;
+		}
+
+		VkFormat s_unitFormat[2][LATTE_NUM_MAX_TEX_UNITS]{};       // this draw's, by stage and unit (Textures)
+		uint64 s_fastDraws = 0, s_fastExact = 0;                    // draws of FastMul's shaders: with the variant, without
+
+		// the 16 bytes uf_remapped[index] gets this draw (as UniformVars copies them)
+		bool RemappedUniform(const Shader& sh, bool vertex, uint32 index, uint8 out[16])
+		{
+			const auto& r = LatteGPUState.contextNew;
+			uint32* regs = LatteGPUState.contextRegister;
+			if (r.SQ_CONFIG.get_DX9_CONSTS())
+			{
+				uint32* base = regs + mmSQ_ALU_CONSTANT0_0 + (vertex ? 0x400 : 0);
+				for (auto& e : sh.dec->list_remappedUniformEntries_register)
+					if (e.mappedIndexOffset == index * 16)
+						return memcpy(out, (uint8*)(base + e.indexOffset / 4), 16), true;
+				return false;
+			}
+			const uint32 blockRegs = vertex ? mmSQ_VTX_UNIFORM_BLOCK_START : mmSQ_PS_UNIFORM_BLOCK_START;
+			for (auto& g : sh.dec->list_remappedUniformEntries_bufferGroups)
+				for (auto& e : g.entries)
+					if (e.mappedIndexOffset == index * 16)
+					{
+						const MPTR phys = regs[blockRegs + g.kcacheBankIdOffset / 4];
+						if (phys)
+							memcpy(out, memory_base + phys + e.indexOffset, 16);
+						else
+							memset(out, 0, 16);
+						return true;
+					}
+			return false;
+		}
+
+		// the facts a FastMul entry's proofs need, for this draw
+		bool FastMulHolds(const FastMulEntry& e, const Shader& sh, bool vertex, const Image* const* colors, uint32 nColors)
+		{
+			uint8 v[16];
+			uint32 at = UINT32_MAX;                                    // the register in v (the lists are sorted)
+			bool have = false;
+			auto value = [&](uint16 comp, float& f) {
+				if (comp / 4u != at)
+					at = comp / 4u, have = RemappedUniform(sh, vertex, at, v);
+				if (have)
+					memcpy(&f, v + (comp % 4) * 4, 4);
+				return have;
+			};
+			for (uint16 c : e.finite)
+			{
+				float f;
+				if (!value(c, f) || !std::isfinite(f) || std::fabs(f) > 4294967296.0f)
+					return false;
+			}
+			for (uint16 c : e.nonzero)
+			{
+				float f;
+				if (!value(c, f) || !std::isfinite(f) || std::fabs(f) < FLT_MIN || std::fabs(f) > 4294967296.0f)
+					return false;
+			}
+			for (uint32 u = 0; u < LATTE_NUM_MAX_TEX_UNITS; u++)
+				if ((e.units >> u & 1) && !NormalizedFormat(s_unitFormat[vertex][u]))
+					return false;
+			if (e.exports)
+				for (uint32 i = 0; i < nColors; i++)
+					if (colors[i] && !SignlessTarget(colors[i]->format))
+						return false;
+			return true;
+		}
+
 		// Cemu's decompiler on the register file (and the PS input table), then glslang: sh gets the
 		// decompiler's output and spirv the module's code. False, and a line in the log once, if either fails.
-		bool Translate(bool vertex, uint64 key, const uint8* code, uint32 size, LatteFetchShader* fetch, Shader& sh, std::vector<uint32>& spirv)
+		bool Translate(bool vertex, uint64 key, const uint8* code, uint32 size, LatteFetchShader* fetch, Shader& sh, std::vector<uint32>& spirv,
+			std::vector<uint32>* fastSpirv = nullptr)
 		{
 			LatteDecompilerOptions opt;
 			opt.usesGeometryShader = false;
@@ -400,11 +587,22 @@ namespace wwhd::gpu
 					vertex ? "vertex" : "pixel", key, log.substr(0, 200)); });
 				return false;
 			}
+			if (const FastMulEntry* e = fastSpirv ? FastMulFor(key, vertex) : nullptr)
+			{
+				std::string fast;
+				log.clear();
+				if (!FastMulVariant(glsl.c_str(), *e, fast) || !CompileSpirv(fast, vertex ? EShLangVertex : EShLangFragment, *fastSpirv, log))
+				{
+					fastSpirv->clear();
+					LogOnce(fmt::format("fastmul{:x}", key), [&] { return fmt::format("fastmul: no variant of {} shader {:016x}{}",
+						vertex ? "vertex" : "pixel", key, log.empty() ? "" : " (" + log.substr(0, 200) + ")"); });
+				}
+			}
 			return true;
 		}
 
 		// a translated shader becomes one to draw with, and a record in the cache on disk
-		void Finish(Shader& sh, bool vertex, const std::vector<uint32>& spirv)
+		void Finish(Shader& sh, bool vertex, const std::vector<uint32>& spirv, const std::vector<uint32>* fastSpirv = nullptr)
 		{
 			VkShaderModuleCreateInfo mi{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
 			mi.codeSize = spirv.size() * 4;
@@ -412,6 +610,8 @@ namespace wwhd::gpu
 			Check(vkCreateShaderModule(s.device, &mi, nullptr, &sh.module), "vkCreateShaderModule");
 			sh.layout = CreateLayout(sh, vertex ? VK_SHADER_STAGE_VERTEX_BIT : VK_SHADER_STAGE_FRAGMENT_BIT);
 			cache::AddShader(SerializeShader(sh, vertex, spirv));
+			if (fastSpirv && !fastSpirv->empty())
+				MakeFastMul(sh, vertex, *FastMulFor(sh.key, vertex), *fastSpirv);
 		}
 
 		// WWHD_SHADER_SOURCES (shader_list.cpp): the lines for a shader just translated, once the
@@ -457,10 +657,10 @@ namespace wwhd::gpu
 			auto start = std::chrono::steady_clock::now();
 			Shader* sh = new Shader;
 			s_shaders[key] = sh;
-			std::vector<uint32> spirv;
-			if (!Translate(vertex, key, code, size, fetch, *sh, spirv))
+			std::vector<uint32> spirv, fast;
+			if (!Translate(vertex, key, code, size, fetch, *sh, spirv, &fast))
 				return sh;
-			Finish(*sh, vertex, spirv);
+			Finish(*sh, vertex, spirv, &fast);
 			if (shaderlist::Capturing())
 				CaptureShader(vertex, *sh, spirv, code, size, fetch, fetchHash);
 			s_sights.shaders++;
@@ -529,14 +729,16 @@ namespace wwhd::gpu
 		}
 
 		// a variant of a shader, from its GLSL: the motion vectors' (motion.cpp), the reactive mask's, AO off's
-		// (AoOffVariant), or WWHD_TEST_PSOUT's (TestOutVariant)
-		enum class Variant { Motion, Reactive, AoOff, Test };
+		// (AoOffVariant), FastMul's (FastMulVariant), or WWHD_TEST_PSOUT's (TestOutVariant)
+		enum class Variant { Motion, Reactive, AoOff, FastMul, Test };
 
 		Shader* VariantShader(Shader* sh, bool vertex, const uint8* code, uint32 size, LatteFetchShader* fetch, Variant kind)
 		{
-			const bool reactive = kind == Variant::Reactive, aoOff = kind == Variant::AoOff, test = kind == Variant::Test;
-			Shader*& made = test ? sh->test : aoOff ? sh->aoOff : reactive ? sh->reactive : sh->motion;
-			bool& tried = test ? sh->testTried : aoOff ? sh->aoOffTried : reactive ? sh->reactiveTried : sh->motionTried;
+			const bool reactive = kind == Variant::Reactive, aoOff = kind == Variant::AoOff, fastMul = kind == Variant::FastMul,
+				test = kind == Variant::Test;
+			Shader*& made = test ? sh->test : fastMul ? sh->fastMul : aoOff ? sh->aoOff : reactive ? sh->reactive : sh->motion;
+			bool& tried = test ? sh->testTried : fastMul ? sh->fastMulTried : aoOff ? sh->aoOffTried : reactive ? sh->reactiveTried
+				: sh->motionTried;
 			if (tried)
 				return made;
 			tried = true;
@@ -554,6 +756,7 @@ namespace wwhd::gpu
 			std::vector<uint32> spirv;
 			const bool ok = out.shader && !out.shader->hasError && out.shader->strBuf_shaderSource &&
 				(test ? TestOutVariant(out.shader->strBuf_shaderSource->c_str(), glsl) :
+				fastMul ? FastMulFor(sh->key, vertex) && FastMulVariant(out.shader->strBuf_shaderSource->c_str(), *FastMulFor(sh->key, vertex), glsl) :
 				aoOff ? AoOffVariant(out.shader->strBuf_shaderSource->c_str(), glsl) :
 					vertex ? motion::VertexVariant(out.shader->strBuf_shaderSource->c_str(), glsl) : reactive ?
 					motion::ReactiveVariant(out.shader->strBuf_shaderSource->c_str(), glsl) : motion::PixelVariant(out.shader->strBuf_shaderSource->c_str(), glsl)) &&
@@ -561,9 +764,11 @@ namespace wwhd::gpu
 			if (!ok)
 			{
 				LogOnce(fmt::format("variant{}-{:x}", (int)kind, sh->key), [&] { return fmt::format("{}: no variant of {} shader {:016x}{}",
-					test ? "test" : aoOff ? "ao" : "motion", vertex ? "vertex" : "pixel", sh->key, log.empty() ? "" : " (" + log.substr(0, 200) + ")"); });
+					test ? "test" : fastMul ? "fastmul" : aoOff ? "ao" : "motion", vertex ? "vertex" : "pixel", sh->key, log.empty() ? "" : " (" + log.substr(0, 200) + ")"); });
 				return nullptr;
 			}
+			if (fastMul)                                             // its shader from a cache made before its entry
+				return MakeFastMul(*sh, vertex, *FastMulFor(sh->key, vertex), spirv);
 			Shader* m = new Shader;
 			m->key = sh->key ^ (test ? 0x7465737400000000ull : aoOff ? 0x616F6F6666000000ull : reactive ? 0x7265616374000000ull : 0x6D6F74696F6E0000ull);
 			m->dec = out.shader;
@@ -1137,10 +1342,17 @@ namespace wwhd::gpu
 			auto start = std::chrono::steady_clock::now();
 			VkPipeline pipeline;
 			Check(BuildPipeline(d, vs, ps, layout, pipeline), "vkCreateGraphicsPipelines");
+			std::vector<uint8> kept = recipe;                       // a FastMul variant's as its shader's (PrepareShaders makes both)
+			if (ps->fastOf)
+			{
+				PipelineDesc k = d;
+				k.psKey = ps->fastOf->key;
+				kept = k.Serialize();
+			}
 			if (!t.motion)                                          // the motion variants are no shader the cache knows
-				cache::AddPipeline(recipe);
+				cache::AddPipeline(kept);
 			if (shaderlist::Capturing() && !t.motion)
-				shaderlist::Capture("pipeline " + shaderlist::Hex(recipe));
+				shaderlist::Capture("pipeline " + shaderlist::Hex(kept));
 			s_sights.pipelines++;
 			s_sights.pipelineMs += MsSince(start);
 			s_recipes[id] = pipeline;
@@ -1543,6 +1755,7 @@ namespace wwhd::gpu
 			images.resize(sh.mapping.getTextureCount());
 			for (auto& unit : s_texScale[vertex])
 				unit[0] = unit[1] = 1.0f;
+			std::fill(std::begin(s_unitFormat[vertex]), std::end(s_unitFormat[vertex]), VK_FORMAT_UNDEFINED);
 			for (sint32 i = 0; i < sh.mapping.getTextureCount(); i++)
 			{
 				const sint32 unit = sh.mapping.getRelativeTextureUnitFromRelativeBindingPoint(i);
@@ -1550,7 +1763,10 @@ namespace wwhd::gpu
 				images[i] = { t.sampler, t.view, t.layout };
 				s_samplesSurface |= t.surface;
 				if (unit >= 0 && unit < LATTE_NUM_MAX_TEX_UNITS)
+				{
 					s_texScale[vertex][unit][0] = t.scaleX, s_texScale[vertex][unit][1] = t.scaleY;
+					s_unitFormat[vertex][unit] = t.format;
+				}
 			}
 		}
 
@@ -2013,9 +2229,9 @@ namespace wwhd::gpu
 		}
 		if (s_statsEvery && frame % s_statsEvery == 0)
 			Log(fmt::format("frame {}: {} draws, {} skipped; {} shaders, {} pipelines; decoded indices {} reused, {} decoded; "
-				"descriptor sets {} reused, {} written (the kept pool: {} sets, {} resets)",
+				"descriptor sets {} reused, {} written (the kept pool: {} sets, {} resets); FastMul {} draws, {} exact",
 				frame, s_draws, s_skipped, s_shaders.size(), s_pipelines.size(), s_indexHits, s_indexMisses, s_setHits, s_setMisses,
-				s_keptSets, s_keptResets));
+				s_keptSets, s_keptResets, s_fastDraws, s_fastExact));
 	}
 
 	// The first start without hitches (D20): everything the shader list (shader_list.cpp) has that the
@@ -2090,14 +2306,14 @@ namespace wwhd::gpu
 					continue;
 				}
 				Shader* sh = new Shader;
-				std::vector<uint32> spirv;
-				if (!Translate(l.vertex, l.key, c.data(), (uint32)c.size(), l.vertex ? fetch->second : nullptr, *sh, spirv))
+				std::vector<uint32> spirv, fast;
+				if (!Translate(l.vertex, l.key, c.data(), (uint32)c.size(), l.vertex ? fetch->second : nullptr, *sh, spirv, &fast))
 				{
 					delete sh;
 					failed++;
 					continue;
 				}
-				Finish(*sh, l.vertex, spirv);
+				Finish(*sh, l.vertex, spirv, &fast);
 				s_shaders[l.key] = sh;
 				translated++;
 			}
@@ -2128,6 +2344,16 @@ namespace wwhd::gpu
 				s_shaders.try_emplace(sh->key, sh);
 			else
 				damaged++;
+		for (const FastMulEntry& e : kFastMul)                       // the FastMul variants back with their shaders
+		{
+			auto base = s_shaders.find(e.key), fast = s_shaders.find(FastMulKey(e, e.key));
+			if (FastMulFor(e.key, e.vertex) && base != s_shaders.end() && fast != s_shaders.end())
+			{
+				base->second->fastMul = fast->second;
+				base->second->fastMulTried = true;
+				fast->second->fastOf = base->second;
+			}
+		}
 		// the shader list: what playthroughs saw and this cache doesn't have yet, from the game's files
 		std::vector<std::vector<uint8>> recipes = cache::Pipelines();
 		uint32 steps = 0;
@@ -2157,6 +2383,16 @@ namespace wwhd::gpu
 			j.vs = vs->second;
 			j.ps = ps->second;
 			j.layout = PipelineLayout(j.vs, j.ps);
+			if (Shader* fast = j.ps->fastMul; fast && fast->module)   // its FastMul variant's too: a draw uses either
+			{
+				Job f = j;
+				f.d.psKey = fast->key;
+				const std::vector<uint8> r = f.d.Serialize();
+				f.id = Fnv(r.data(), r.size());
+				f.ps = fast;
+				f.layout = PipelineLayout(f.vs, f.ps);
+				jobs.push_back(std::move(f));
+			}
 			jobs.push_back(std::move(j));
 		}
 		std::atomic<uint32> next{ 0 }, done{ 0 }, failed{ 0 };
@@ -2358,11 +2594,22 @@ namespace wwhd::gpu
 		Shader* dvs = vs, *dps = ps;
 		bool scene = false;
 		if (ps->key == TestOutWanted().key)
+		{
 			if (Shader* v = VariantShader(ps, false, psCode, psSize, nullptr, Variant::Test))
 				dps = v;
-		if (AoOff() && std::find(std::begin(kAoShaders), std::end(kAoShaders), ps->key) != std::end(kAoShaders))
+		}
+		else if (AoOff() && std::find(std::begin(kAoShaders), std::end(kAoShaders), ps->key) != std::end(kAoShaders))
+		{
 			if (Shader* a = VariantShader(ps, false, psCode, psSize, nullptr, Variant::AoOff))
 				dps = a;
+		}
+		else if (const FastMulEntry* fm = FastMulFor(ps->key, false))
+		{
+			Shader* f = FastMulHolds(*fm, *ps, false, t.color, 8) ? VariantShader(ps, false, psCode, psSize, nullptr, Variant::FastMul) : nullptr;
+			if (f)
+				dps = f;
+			(f ? s_fastDraws : s_fastExact)++;
+		}
 		if (motion::On() && t.depth && t.depth->gw >= 1280 && t.depth->gh >= 720 && t.depth->layers == 1 && !t.color[motion::kSlot] &&
 			!HudActive())
 		{
