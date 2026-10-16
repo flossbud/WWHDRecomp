@@ -356,6 +356,15 @@ thread 6.368 -> 6.351 ms a frame (4 interleaved rounds), the RP4's core 1 40.40/
 20 s of sail, fps the same. Dropping the store check entirely (not possible: the journal needs it) was -23% .text
 and ~-1.5% on the Mac.
 
+Closed (2026-10-16): steps 1-3 landed: the helpers inlined, lfs/stfs from the ISA, one-word CR writes and mfcr
+(9a523948: the Odin's game thread -6.8% of its cycles in sail, x86 -12% of the work a frame), the store check's one
+lookup (bc21600a: a size cut), and their measurements on the Odin, the Mac and the RP4 above. Step 4, the code's
+layout (the hot functions together, from a profile), is Top's a4-pgo. Left in the profile, not started: the guest
+registers live in ctx, and its loads and stores were over half the samples in the hottest functions (clang can't
+keep a register in a host one across a guest store or an outlined call, since either may write ctx as far as it
+knows); keeping them in host registers through a function is a recompiler change (emit.py), gated by the fuzzer on
+both hosts and the checks. A function's entry costs its call, not its cycle count (WWHD_RT_NOCOUNT was no faster).
+
 ## A4 the GPU thread (2026-10-14, session bottom: a4-gpu)
 - **Where the NullGPU thread's cycles go on the Odin** (top's 18:29 profile, 40 s, 70.4 G cycles; each sample put on
   the innermost function of ours on its stack, then split by where the leaf is: ours 36%, the driver 33%, libc 26%,
