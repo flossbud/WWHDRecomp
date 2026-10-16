@@ -4,6 +4,13 @@ The owner's ask (plan.json `m-nocemu`, round 15): "remove all of cemu, being com
 nothing that has the cemu name attached to it". This file is the survey (2026-10-14, main 55410119; Cemu at the pinned
 c717fcab with the 17 patches) and a proposed order of work. Nothing is changed yet.
 
+**Status 2026-10-16 (main 31a413ae), the research step closed.** The inventory below still holds. Since it was taken,
+the only edits that touch Cemu-derived code are inside files already counted as forks: `PPCInterpreterHLE.cpp` (the
+unsupported imports' lock-free fast path, a4-cpu5) and `coreinit_Thread.cpp` / `coreinit_Scheduler.cpp` (the run
+queues' waits, a4-cpu and a4-cpu3). No new Cemu-derived file was added: `gpu/vk/passes.cpp` (render passes for
+devices without dynamic rendering) and the round's other new files are our own. The phases (section 3, N0-N8) are next.
+None has started.
+
 ## The decision on the licence (made)
 
 **The owner, 2026-10-14: the MPL must not apply at all.** Every piece of Cemu-derived code is replaced by our own
