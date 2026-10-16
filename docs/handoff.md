@@ -4637,8 +4637,18 @@ Every item's evidence is in docs/research/gpu-plan.md (a section each) and its c
   (graphics-rework.md). Render passes are the default on Qualcomm's own driver (`WWHD_RENDER_PASSES=auto|on|off`): its
   GPU time unchanged, Turnip keeps dynamic rendering (passes cost its thread 3.3% more). B16 confirmed fixed on the
   Odin (b16rec at Windfall's tree, 10-15). No exact form of the multiply that keeps its zero tests is cheaper on Adreno.
-- **Next in the lane:** AO cheap enough to be on by default on low-end devices (~1 ms on the RP4 to beat); the exact
-  multiply without its emulation, proved per multiply; then the frame graph (graphics-rework.md).
+- **The final round (10-16):** B92 (the RP4's sky: a surface's key carries its use's size class), B94 (no sage or
+  rescued Makar in a refight or the boss rush; refights off the game's own, byte-identical to before; test aids
+  `WWHD_DEBUG_BOSS_OFF`, a list in `WWHD_DEBUG_RUSHBEATEN`, the route refight-100.txt), B88 (BC4/BC5 decoded to RGBA8
+  on Arm's driver, `WWHD_BC_WIDE`; the probe `WWHD_TEST_PSOUT=KEY:EXPR` makes one pixel shader export one of its own
+  values, to see a draw's inputs on a device), and plan step 5 (FastMul: tools/shaders/fastmul.py proves a
+  multiply plain, src/gpu/vk/fastmul_table.inc holds its decisions, draw.cpp binds the variant per draw when the
+  proof's facts hold; AO's pass and the scene's two-target pass, the Odin's GPU -6.2%, the RP4's -3.2%; to add a
+  shader: dump its GLSL with `WWHD_RENDER_SHADERS`, run `fastmul.py --cpp` on it, append the entry, and check fast
+  against `WWHD_FASTMUL=0` captures byte for byte). AO stays off on phones (the RP4 doesn't hold 60; its pass 3.05 ms
+  on Mali). B96 (Helmaroc's tower top, the HUD's colours) is open and unassigned.
+- **Next in the lane:** FastMul for more shaders, and interpolants as a proven input (the vertex shader's outputs: the
+  rule section 5 of graphics-rework.md names); AO cheap enough for phones; then the frame graph (graphics-rework.md).
 
 ### Session qa (week 2, WW-15): the problems top and bottom are stuck on
 
