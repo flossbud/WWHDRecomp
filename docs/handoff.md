@@ -847,7 +847,8 @@ Pipelines come from shader variants, not state, so nothing was changed.
   (2.2 s on the desktop, 2.7 s on the worker's CPU) and builds the pipelines; on the desktop the
   title route then met 1 shader (5 ms), the save route none.
 - To grow it: capture runs with `WWHD_SHADER_SOURCES` (tools/shaders/README.md), merge with
-  `tools/shaders/shader_list.py`, commit. Check with `tools/reference/shader_list_check.sh`.
+  `tools/shaders/shader_list.py`, commit. Check with `tools/reference/shader_list_check.sh`. Since s-shadercover
+  the list is `config/US_v0/shader_list.txt.gz` (below).
 - With the sail, menus and warp captures merged, a first start of the warp route and of the
   new-game route (lavapipe, empty cache) prepares everything in 6.4-6.8 s and meets nothing during
   play. Not yet measured on the desktop (it was asleep).
@@ -4911,6 +4912,20 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
     tools/android/build.sh already did ("no Wiimotes"): no Wiimote provider, so one SDL user at start. The game's pads
     are ours (src/os/input.cpp from the frontend's SDL3 gamepad); SDL3 is vcpkg's build with its own HIDAPI drivers
     (PS4/PS5, Switch, Steam Deck, Xbox and more) and the evdev joystick driver, which the flags don't touch.
+- **s-shadercover, every shader prepared before play (the shader list's coverage).** recompiler-design.md D20
+  "Coverage" has the numbers: the list went from 1,266 to 10,469 of the game's 30,011 programs (15,162 shaders,
+  13,821 pipelines), committed gzipped (`config/US_v0/shader_list.txt.gz`; the game reads a .gz before a plain list).
+  - *How to capture more*: `tools/shaders/cover_runs.sh OUT JOBS ITEM...` plays routes or survey chunks rendered
+    from empty caches with `WWHD_SHADER_SOURCES` (`LIST=path`: the check instead, OUT/ITEM.check = first sights);
+    `tools/shaders/survey_route.py` writes the stage survey's chunks from `tools/stage_actors.py STAGE --spawns`
+    output (`--list-rooms` for the rooms that have an archive); `tools/shaders/shader_list.py OUT.gz SOURCES...
+    --list config/US_v0/shader_list.txt.gz` merges. The desktop worker's GPU did the survey's 379 rooms in ~5 min a
+    chunk of 47, eight at once; llvmpipe is ~1 frame a second, the worker's iGPU ~9.
+  - *Android* still ships B90's plain list (apk.sh copies `config/US_v0/shader_list.txt`) until main's first-start
+    check of the full one on the Odin and the RP4 (prep time, memory); then apk.sh copies the .gz and the plain list
+    goes.
+  - *Uncovered*: other times of day and weather (the survey ran on the 100% save's clock), events and actors no route
+    meets, agl's unused technique permutations. B99 (open): I_SubAN's rooms and Fairy05 crash on a debug warp.
 
 ## Waiting on the owner
 

@@ -28,6 +28,8 @@ a=$w/assets
 mkdir -p "$a/app/cemu/wwhd" "$a/app/assets" "$a/once/portable/controllerProfiles"
 cp -r /wwhd/opt/cemu-src/bin/resources /wwhd/opt/cemu-src/bin/gameProfiles "$a/app/cemu/"
 cp "$root/tools/reference/0005000010143500.ini" "$a/app/cemu/gameProfiles/default/"
+# the shader list: B90's (config/US_v0/shader_list.txt, 1683 shaders) until the full one (shader_list.txt.gz, s-shadercover:
+# 15162 shaders, 13821 pipelines) has had a first start measured on the Odin and the RP4 (prep time, memory)
 cp "$root/config/US_v0/shader_list.txt" "$a/app/cemu/wwhd/"
 cp -r "$root/assets/pause_menu" "$a/app/assets/"
 cp "$root/tools/reference/settings.xml" "$a/once/portable/"

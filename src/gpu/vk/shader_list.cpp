@@ -1,7 +1,7 @@
 // The shader list (docs/recompiler-design.md D20, "a first start without hitches"): what the player's
 // machine needs to translate, before the game starts, every shader that playthroughs have seen, and
 // to know every pipeline they built. It holds hashes, register values and pipeline recipes, no game
-// content, so it ships with the port (config/US_v0/shader_list.txt); each shader's program comes
+// content, so it ships with the port (config/US_v0/shader_list.txt.gz); each shader's program comes
 // from the player's own game files.
 //
 // Lines (text, one record each; '#' starts a comment):
@@ -23,6 +23,7 @@
 #include "config/ActiveSettings.h"
 #include <fstream>
 #include <sstream>
+#include <zlib.h>
 
 namespace wwhd::gpu::shaderlist
 {
@@ -303,12 +304,22 @@ namespace wwhd::gpu::shaderlist
 
 	bool Read(List& list)
 	{
-		fs::path path = ActiveSettings::GetDataPath("wwhd/shader_list.txt");
+		// the list ships gzipped (config/US_v0/shader_list.txt.gz: 35 MB of text since s-shadercover), tried first; a
+		// plain one is read as well (gzread passes an uncompressed file through)
+		fs::path path = ActiveSettings::GetDataPath("wwhd/shader_list.txt.gz");
+		if (std::error_code ec; !fs::exists(path, ec))
+			path = ActiveSettings::GetDataPath("wwhd/shader_list.txt");
 		if (const char* e = getenv("WWHD_SHADER_LIST"))
 			path = e;
-		std::ifstream in(path);
-		if (!in)
+		gzFile gz = gzopen(path.string().c_str(), "rb");
+		if (!gz)
 			return false;
+		std::string text;
+		char buffer[1 << 16];
+		for (int got; (got = gzread(gz, buffer, sizeof(buffer))) > 0;)
+			text.append(buffer, got);
+		gzclose(gz);
+		std::istringstream in(std::move(text));
 		std::string line;
 		uint32 bad = 0, n = 0;
 		while (std::getline(in, line))

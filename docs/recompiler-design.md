@@ -1144,6 +1144,26 @@ first starts of the warp route and the new-game route (lavapipe, virtual clock, 
 extractor reads only the 49 listed files (258 MB) through the game's file system, and the list holds
 no machine-specific data.
 
+**Coverage (s-shadercover, 2026-10-16; the owner's ask after B90's pop-in on the Odin).** *The inventory*: G1's
+corpus has 30,011 distinct programs in the game's files (18,246 pixel, 11,765 vertex), all but 44 in SHARCFB
+archives that hold every permutation a material could pick: agl's technique archives (post effects, lights,
+shadows) alone are 6,801. The list had 1,266 (4.2%). *The captures* (`tools/shaders/cover_runs.sh`, the virtual
+clock at 30 on the desktop worker's GPU, eight at once, from empty caches with `WWHD_SHADER_SOURCES`): a stage
+survey (`tools/shaders/survey_route.py`: a `WWHD_DEBUG_STAGE` warp into every room that has a player spawn point
+and an archive, 362 of 379 rooms, the camera turned round each; I_SubAN's 16 rooms and Fairy05 crash on a warp:
+B99), and 98 of the existing routes (cutscenes, menus, items, enemies, bosses, the new game). Merged:
+10,469 programs (34.9% of the game's; stage rooms 55%, objects 34%, packs 45%, agl's techniques 0.9%) in 299
+content files, 125 fetch shaders, 15,162 shaders, 13,821 pipelines: 35 MB of text, committed gzipped
+(`config/US_v0/shader_list.txt.gz`, 2.2 MB; the game reads a .gz before a plain list, `shader_list.py` writes it
+reproducibly). A first start on the desktop prepares it all in 24 s on 23 threads. *The check*: every captured item
+played again from an empty cache with the list (114 runs: 16 survey chunks, 98 routes) prepares all 15,162 shaders and 13,821 pipelines before the game starts and ends with exactly those in its cache: no first sight in any. *Not covered*: what no route or room shows: the
+rest of each room's and object's permutations (a material's variants for states the survey didn't meet: other
+times of day, weather, events), actors not met, and agl's unused techniques. Preparing those from a sibling's
+registers isn't safe to ship: a shader's key comes from the registers its translation reads, so a guessed set gives
+a key the game never asks for (work for nothing), and a pipeline's recipe (blend, depth, formats, vertex layout)
+can't be guessed at all. *Android* keeps B90's list (`config/US_v0/shader_list.txt`, 1683 shaders) until a first
+start of the full one has been measured on the Odin and the RP4 (its time, and memory with every pipeline built).
+
 **Dynamic state doesn't pay** (measured 2026-10-01, `tools/shaders/recipes.py` on the recipes of
 both routes played in real time, 629 pipelines): nearly every pipeline is its own pair of shaders.
 Making stencil reference and masks dynamic (core 1.0) saves none, extended dynamic state 1 and 2

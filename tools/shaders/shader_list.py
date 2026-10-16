@@ -6,7 +6,7 @@ Usage (on the worker):
 
 SOURCES are files a run wrote with WWHD_SHADER_SOURCES=path (src/gpu/vk/shader_list.cpp has the
 format): every shader, fetch shader and pipeline the run met for the first time, with the registers
-its translation read. LIST is an existing list to add to (usually config/US_v0/shader_list.txt). OUT
+its translation read. LIST is an existing list to add to (usually config/US_v0/shader_list.txt.gz). OUT
 gets the merged list, sorted, with each program's content file: the G1 corpus (tools/shaders/corpus.py
 index.csv, default /wwhd/data/g1/index.csv) says where a program was first found, and the longest
 part of that path that is a file in the title's content folder (--content) is where the player's
@@ -15,10 +15,13 @@ translated when it is first met).
 
 The list holds program hashes and sizes, content file names, fetch shaders (GX2 builds them at
 runtime from the vertex layout: state, not game files), register values and pipeline recipes. No
-game content, so it can be committed; check that a change to it keeps it so.
+game content, so it can be committed; check that a change to it keeps it so. A LIST or OUT ending in .gz is
+gzipped (the committed list is: 35 MB of text); OUT's bytes depend only on its text (no time in the gzip header).
 """
 import argparse
 import csv
+import gzip
+import io
 import os
 import sys
 
@@ -29,9 +32,21 @@ HEADER = """# WWHD shader list (docs/recompiler-design.md D20; src/gpu/vk/shader
 """
 
 
+def open_text(path):
+    """A plain or a gzipped (.gz) text file, for reading."""
+    return io.TextIOWrapper(gzip.open(path, "rb")) if path.endswith(".gz") else open(path)
+
+
+def save_text(path, text):
+    """Write text, gzipped (no name or time in the header: the same text gives the same bytes) if path ends in .gz."""
+    data = text.encode()
+    with open(path, "wb") as f:
+        f.write(gzip.compress(data, compresslevel=9, mtime=0) if path.endswith(".gz") else data)
+
+
 def read(path, into, conflicts):
     programs, fetches, shaders, pipelines = into
-    with open(path) as f:
+    with open_text(path) as f:
         for n, line in enumerate(f, 1):
             line = line.rstrip("\n")
             if not line or line.startswith("#"):
@@ -100,7 +115,7 @@ def main():
     used = {line.split(" ")[2] for line in kept.values()}
     fetches_used = {line.split(" ")[3] for line in kept.values() if line.startswith("vs ")}
 
-    with open(args.out, "w") as f:
+    with io.StringIO() as f:
         f.write(HEADER)
         for h in sorted(used):
             f.write(f"program {h} {programs[h][0]} {programs[h][1]}\n")
@@ -110,6 +125,7 @@ def main():
             f.write(kept[key] + "\n")
         for recipe in sorted(pipelines):
             f.write(f"pipeline {recipe}\n")
+        save_text(args.out, f.getvalue())
     files = {programs[h][1] for h in used}
     print(f"{len(kept)} shaders ({len(shaders) - len(kept)} left out: their program isn't in the game's files), {len(used)} programs "
           f"in {len(files)} content files, {len(fetches_used)} fetch shaders, {len(pipelines)} pipelines -> {args.out}")

@@ -22,8 +22,8 @@ r put portable/settings.xml < "$ref/settings.xml"
 r put portable/gameProfiles/0005000010143500.ini < "$ref/0005000010143500.ini"
 r put portable/controllerProfiles/controller0.xml < "$ref/controller0.xml"
 tar -c -C "$ref/routes" . | r routes
-list=$here/../../config/US_v0/shader_list.txt
-[ -f "$list" ] && r put cemu/wwhd/shader_list.txt < "$list"
+list=$here/../../config/US_v0/shader_list.txt.gz
+[ -f "$list" ] && r put cemu/wwhd/shader_list.txt.gz < "$list"
 # the pause menu's assets (t-pausemenu: the design's fonts, images and copy), file by file next to the program
 ( cd "$here/../.." && find assets/pause_menu -type f ) | while read -r f; do r put "$f" < "$here/../../$f"; done
 r put play.sh < "$here/play.sh"
