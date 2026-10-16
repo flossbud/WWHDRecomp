@@ -1602,9 +1602,36 @@ void f_024F9A48(PPCInterpreter_t* __restrict ctx)
 // through each one). A strip's newest particles are its end at the boat; at a tick's cadence that
 // end lagged the boat by half a tick on half ticks and the wake flickered. They emit every frame at
 // a frame's count (twice the particles: the same strip through twice the points; their draws spread
-// the texture over however many there are, and the wake's room, 150 segments, holds the 80 that 40
-// ticks of life make). At N steps a tick (WWHD_STEPS) they emit on at most 3 of a tick's steps,
-// spread over it: 40 ticks x 4 overran the wake's room and its draw (N=4 crashed in f_025AA12C).
+// the texture over however many there are). At N steps a tick (WWHD_STEPS) they emit on at most 3
+// of a tick's steps, spread over it: 40 ticks x 4 overran the wake's room and its draw (N=4 crashed
+// in f_025AA12C). Each draw has a fixed room, counted in particles: the wake's 300 vertex buffers
+// (at its emitter's +0x310, two a segment, the current set's index right after them) make 150
+// segments of 3 particles, and a 151st read that index as its buffer and zeroed guest address 0
+// (B90, the owner's crash in the Helmaroc King's cutscene on Outset: a wake of 120 ticks of life,
+// 240 segments at a frame's emission; the boat's, 40 ticks, makes 80); the bow waves' strip
+// buffers hold 750 vertices, at most 2 a particle. So a strip emits every frame only when its
+// particles' life (the emitter's mLifeTime, +0x60: a particle lives at most that) times its
+// emissions a tick times an emission's particles fits its room; otherwise on the tick's cadence as
+// every other emitter, which is 30 fps's strip, and 30's always fits. A strip is either 60's
+// smooth one or 30's, never a cut one. An emission's size is the most one of that emitter has
+// made, at least its divisions (+0x66). Under that, as a backstop, no emission passes the room.
+// WWHD_60FPS_STRIP_ROOM=0: neither (as before B90). A test aid: WWHD_DEBUG_STRIP=path logs each change of a strip
+// emitter's way (game frame, half tick, the emitter, its callback's vtable, life, divisions, an emission's size, its
+// particles before the emission, F every frame, T the tick's cadence, B the backstop).
+namespace
+{
+	// per strip emitter (its address): which one it is, and the most particles one of its emissions made; another
+	// emitter in its place (another vtable, life or divisions) starts over. Not in save states (their format stays):
+	// after a load an emitter's size starts from its divisions again, and one that had made a bigger emission may
+	// emit every frame again until it makes one, its strip kept within the room by the backstop
+	struct StripSeen
+	{
+		uint32 vtable, most;
+		sint16 life;
+		uint16 div;
+	};
+	std::unordered_map<uint32, StripSeen> s_strips;
+}
 void f_0281F878(PPCInterpreter_t* __restrict ctx)
 {
 	if (!Stepped())
@@ -1613,9 +1640,44 @@ void f_0281F878(PPCInterpreter_t* __restrict ctx)
 	const uint32 vtable = cb ? rd32(cb) : 0;
 	if (vtable != 0x10052268u && vtable != 0x100521A8u)
 		[[clang::musttail]] return orig_f_0281F878(ctx);
-	if (g_rtSteps > 3)
+	constexpr uint32 kEmits = 3;                          // the most emissions a tick at N steps
+	static const bool roomed = [] { const char* e = getenv("WWHD_60FPS_STRIP_ROOM"); return !(e && atoi(e) == 0); }();
+	static FILE* log = [] { const char* e = getenv("WWHD_DEBUG_STRIP"); return e ? fopen(e, "w") : nullptr; }();
+	const uint32 emitter = GPR(3), before = rd32(emitter + 0x1B4);
+	const sint16 life = (sint16)rd16(emitter + 0x60);
+	const uint16 div = rd16(emitter + 0x66);
+	StripSeen& seen = s_strips[emitter];
+	if (seen.vtable != vtable || seen.life != life || seen.div != div)
+		seen = { vtable, 0, life, div };
+	const uint32 size = std::max<uint32>(seen.most, std::max<uint32>(div, 1u));
+	const uint32 room = vtable == 0x10052268u ? 150u * 3u : 750u / 2u;
+	const uint32 lived = (uint32)std::max<int>(life, 0);
+	const char way = !roomed ? 'F' : before + size > room ? 'B' : lived * std::min<uint32>(g_rtSteps, kEmits) * size > room ? 'T' : 'F';
+	if (log)
 	{
-		constexpr uint32 kEmits = 3;
+		static std::unordered_map<uint32, char> s_way;
+		if (char& was = s_way[emitter]; was != way)
+		{
+			was = way;
+			fprintf(log, "%u %d %x %x %d %u %u %u %c\n", wwhd::rt::GameFrame(wwhd::os::SwapCount()), g_rtHalfTick ? 1 : 0,
+				emitter, vtable, life, div, size, before, way);
+			fflush(log);
+		}
+	}
+	const auto note = [&] {
+		if (const uint32 after = rd32(emitter + 0x1B4); after > before)
+			seen.most = std::max(seen.most, after - before);
+	};
+	if (way == 'B')
+		return;                                           // the backstop
+	if (way == 'T')
+	{
+		orig_f_0281F878(ctx);                             // the tick's cadence, as every other emitter
+		note();
+		return;
+	}
+	if (g_rtSteps > kEmits)
+	{
 		const uint32 k = g_rtHalfTick ? g_rtSubStep : 0;
 		if ((k + 1) * kEmits / g_rtSteps == k * kEmits / g_rtSteps)
 			return;
@@ -1624,6 +1686,7 @@ void f_0281F878(PPCInterpreter_t* __restrict ctx)
 	g_rtStep = 1.0f;
 	orig_f_0281F878(ctx);
 	g_rtStep = step;
+	note();
 }
 
 

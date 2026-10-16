@@ -10,6 +10,7 @@ route_info() {
         land2) route=land2-100.txt frames=2080 save=/wwhd/data/saves/wwhd_100 trace= ;;
         tour3) route=tour3-100.txt frames=2190 save=/wwhd/data/saves/wwhd_100 trace= ;;
         b16rec) route=b16rec.txt frames=7200 save=${B16REC_SAVE:-/wwhd/data/saves/wwhd_100} trace= ;;   # B16 as the owner played it (their save: B16REC_SAVE)
+        b90rec) route=b90rec.txt frames=1900 save=${B90REC_SAVE:-/wwhd/data/saves/wwhd_100} trace= ;;   # B90 as the owner played it (their save: B90REC_SAVE)
         land3) route=land3-100.txt frames=2080 save=/wwhd/data/saves/wwhd_100 trace= ;;
         potthrow) route=potthrow-100.txt frames=1200 save=/wwhd/data/saves/wwhd_100 trace= ;;
         ladspawn) route=ladspawn-100.txt frames=1220 save=/wwhd/data/saves/wwhd_100 trace= ;;

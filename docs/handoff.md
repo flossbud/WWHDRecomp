@@ -4868,6 +4868,31 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
   gated build. The owner's binary in real time: gohmatail, gohmarock and grapple 0.0 units from wwhd-null; gtgrapple's
   two outcomes (12.9 apart) come from both builds (real time's noise). gohmatail and gohmarock are in predeploy's default
   routes since (52; and rt_routes.sh's): a deploy's predeploy didn't cover B83 or B84 before.
+- **B90, the crash in the Helmaroc King's cutscene on Outset at 60 (fixed).** The owner's save (Aryll's telescope, then
+  the Helmaroc King carrying Tetra off) crashed at 60 every time, never at 30 (the unfixed build: tick 1800 of 1899,
+  signal 11 in f_025AA12C; the Odin's dump named only the last yield point). The wake strips (dPa_trackEcallBack,
+  callback vtable 0x10052268) emit every frame at 60 (sixty_step.cpp's f_0281F878: at a tick's cadence the boat's wake
+  flickered), so they hold twice 30's particles. This cutscene's wake lives 120 ticks (the boat's 40): 447 particles
+  at 60 against 222 at 30, 151 segments of 3, and its draw has room for 150 (300 vertex buffers at the emitter's
+  +0x310, two a segment, the current set's index right after them). The 151st read that index as its buffer and the
+  dcbz at 025AA37C zeroed guest address 0.
+  - *The fix*: a strip emits every frame only when its life (mLifeTime, +0x60) times its emissions a tick (min(N, 3))
+    times an emission's particles (the most one of its emissions made, at least its divisions, +0x66) fits its draw's
+    room (the wake 150 x 3 particles, the bow waves 750 / 2); otherwise at the tick's cadence, 30's strip. A backstop:
+    no emission passes the room. Not carried in save states (their format stays 4): after a load an emitter's size
+    starts from its divisions again. `WWHD_60FPS_STRIP_ROOM=0` turns both off; `WWHD_DEBUG_STRIP=FILE` logs each strip
+    emitter's way (F every frame, T the tick's cadence, B the backstop).
+  - *Checked*: route b90rec (the owner's inputs, played from their save: `B90REC_SAVE`; the save stays on the worker,
+    never in git) at 60 runs its 1899 ticks; the cutscene's wake is on the tick's cadence from its first emission (363
+    particles at tick 3700, 30's count). Sail's strips all stay every frame (the bow waves 35 x 2 x 5 = 350 of 375, the
+    boat's wake 40 x 2 x 3 = 240 of 450): the same path as before.
+  - *The pop-in* the owner saw on the Odin (first sights: 223 shaders in 598 ms, 128 pipelines in 381 ms): b90rec's
+    capture merged into the shader list (1028 -> 1266 programs, 1062 -> 1278 pipelines: the Helmaroc King, Tetra, the
+    cutscene's objects). From an empty cache the list prepares 1683 shaders and 1278 pipelines (14.6 s on lavapipe)
+    and the cache holds exactly those after the whole route: no first sight in the cutscene.
+  - *Left (B98, open, unassigned)*: most tick-cadence emitters (dyn 0x404) emit on a half tick's phase at 60, their newest
+    particle 0.5 ticks old at whole ticks, so counts differ from 30's by about one (b90rec: 494 of 1342 whole ticks,
+    -42 to +29 in all); no crash risk.
 
 ## Waiting on the owner
 
