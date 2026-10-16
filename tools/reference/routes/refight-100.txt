@@ -1,0 +1,58 @@
+# Route: a boss room's refight as the player meets it (B94's audit: what the room holds before the boss is beaten),
+# from the 100% save (REF_SAVE=/wwhd/data/saves/wwhd_100) with WWHD_DEBUG_STAGE=920:STAGE,point,room,layer and
+# WWHD_DEBUG_BOSS=1: continue-100.txt's inputs, then forward for 2 s into the room (Molgera's sand arena starts past
+# its corridor), then A every 30 game frames (through the boss's entrance scene) and no other input.
+# FRAME BUTTONS [FRAMES_HELD]; game frames.
+420 A 5        # title screen
+540 A 5        # Controller Selection
+660 A 5        # File Selection
+780 A 5        # Start; gameplay from ~f870 (the warp at f920)
+1000 LUP 120   # into the room
+1150 A 3
+1180 A 3
+1210 A 3
+1240 A 3
+1270 A 3
+1300 A 3
+1330 A 3
+1360 A 3
+1390 A 3
+1420 A 3
+1450 A 3
+1480 A 3
+1510 A 3
+1540 A 3
+1570 A 3
+1600 A 3
+1630 A 3
+1660 A 3
+1690 A 3
+1720 A 3
+1750 A 3
+1780 A 3
+1810 A 3
+1840 A 3
+1870 A 3
+1900 A 3
+1930 A 3
+1960 A 3
+1990 A 3
+2020 A 3
+2050 A 3
+2080 A 3
+2110 A 3
+2140 A 3
+2170 A 3
+2200 A 3
+2230 A 3
+2260 A 3
+2290 A 3
+2320 A 3
+2350 A 3
+2380 A 3
+2410 A 3
+2440 A 3
+2470 A 3
+2500 A 3
+2530 A 3
+2560 A 3

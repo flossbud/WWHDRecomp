@@ -1798,10 +1798,25 @@ namespace
 					RedirectStage(w);
 				}
 			}
-			// WWHD_DEBUG_RUSHBEATEN=tick (a test aid): the boss rush's boss beaten at that game frame
-			static const int beaten = [] { const char* e = getenv("WWHD_DEBUG_RUSHBEATEN"); return e ? atoi(e) : -1; }();
-			if (beaten >= 0 && (int)wwhd::rt::GameFrame(wwhd::os::SwapCount()) == beaten)
+			// WWHD_DEBUG_RUSHBEATEN=tick[,tick...] (a test aid): the boss rush's boss beaten at those game frames
+			static const std::vector<int> beaten = [] {
+				std::vector<int> v;
+				if (const char* e = getenv("WWHD_DEBUG_RUSHBEATEN"))
+					for (const char* p = e; p && *p; p = strchr(p, ',') ? strchr(p, ',') + 1 : nullptr)
+						v.push_back(atoi(p));
+				return v;
+			}();
+			const int frame = (int)wwhd::rt::GameFrame(wwhd::os::SwapCount());
+			if (std::find(beaten.begin(), beaten.end(), frame) != beaten.end())
 				wwhd::debug::RushBossBeaten();
+			// WWHD_DEBUG_BOSS_OFF=tick (a test aid, B94): the refights turned off at that game frame, as the debug menu
+			// does (a room entered after it is the save's again)
+			static const int bossOff = [] { const char* e = getenv("WWHD_DEBUG_BOSS_OFF"); return e ? atoi(e) : -1; }();
+			if (frame == bossOff)
+			{
+				wwhd::debug::SetBossRefight(false);
+				cemuLog_log(LogType::Force, "wwhd debug: refights off (WWHD_DEBUG_BOSS_OFF)");
+			}
 		}
 		static const std::vector<StageWarp> warps = [] {
 			std::vector<StageWarp> v;
@@ -2417,18 +2432,48 @@ void f_025B9100(PPCInterpreter_t* __restrict ctx)
 	orig_f_025B9100(ctx);
 }
 
+// B94: two boss rooms hold a sage once the save has that sage's sword power (Medli with her harp in Jalhalla's
+// M_DaiB, Makar with his violin in Molgera's kazeB: d_a_npc_md.cpp's and d_a_npc_cb1.cpp's create), so a refight on
+// a finished save had them there through the fight. In a refight, until its boss is beaten, their checks below
+// answer "not yet" in those rooms, and the room is the fight's; in the boss rush always (it moves on after each
+// win, so no sage at all). Refights off: the save's answers, as the game. Nothing is written to the save.
+namespace
+{
+	bool InStage(const char* name)
+	{
+		char stage[9] = {};
+		for (int i = 0; i < 8; i++)
+			stage[i] = (char)rd8(0x1046F0B0u + 0x5134u + i);   // the current stage's name
+		return strcmp(stage, name) == 0;
+	}
+	bool RefightBefore(const char* stage, const char* who)
+	{
+		const bool rush = wwhd::debug::RushRunning();
+		if (!InStage(stage) || (!rush && (!wwhd::debug::BossRefight() || wwhd::debug::BossBeatenHere())))
+			return false;
+		static uint32 s_logged = 0;                     // once a stage entry: not again while it keeps asking
+		const uint32 now = (uint32)wwhd::rt::GameFrame(wwhd::os::SwapCount());
+		if (s_logged == 0 || now - s_logged > 600)
+			cemuLog_log(LogType::Force, "wwhd debug: refight in {}: {}'s sword power answered \"not yet\" (B94)", stage, who);
+		s_logged = now;
+		return true;
+	}
+}
+
 // dSv_player_collect_c::isCollect(collect, field, bit): field 0's bits are the Master Sword's powers (1 the
 // Earth Temple's, 2... as d_menu_collect.cpp reads them). Medli (NPC_MD 367) is created only in her boss
 // room once bit 2 is set, so a finished save never has her with Link. A test aid: WWHD_DEBUG_COMPANION=1
 // answers "no" for field 0 to her code alone (the caller's address in her functions, 02280508-02295870),
 // so she is created as the Earth Temple's companion (M_Dai); Link's sword and the menus still read the
-// save. Nothing is written to the save.
+// save. Nothing is written to the save. The refights (B94) answer "no" to her the same in M_DaiB until the boss
+// is beaten there: without the power she is never created in M_DaiB (her create's last case), so no harp in the
+// fight; once it's beaten, the save's answer again.
 void orig_f_025B7A2C(PPCInterpreter_t* __restrict ctx);
 void f_025B7A2C(PPCInterpreter_t* __restrict ctx)
 {
 	static const bool companion = [] { const char* e = getenv("WWHD_DEBUG_COMPANION"); return e && *e == '1'; }();
 	const uint32 lr = ctx->spr.LR;
-	if (companion && ctx->gpr[4] == 0 && lr >= 0x02280508u && lr < 0x02295870u)
+	if (ctx->gpr[4] == 0 && lr >= 0x02280508u && lr < 0x02295870u && (companion || RefightBefore("M_DaiB", "Medli")))
 	{
 		ctx->gpr[3] = 0;
 		return;
@@ -2438,7 +2483,9 @@ void f_025B7A2C(PPCInterpreter_t* __restrict ctx)
 
 // dComIfGs_checkGetItem(item r3): Makar (NPC_CB1 334) is created only in Molgera's room once the Master Sword
 // has its full power (0x3E). WWHD_DEBUG_COMPANION=1 answers "no" for that item to his code alone (the caller in
-// his functions, 0221CD78-022273A8), so a finished save creates him as the Wind Temple's companion (kaze).
+// his functions, 0221CD78-022273A8), so a finished save creates him as the Wind Temple's companion (kaze). The
+// refights (B94) answer "no" to him the same in kazeB until the boss is beaten there: then no case of his create
+// makes the kind placed in kazeB, so no violin in the sand during the fight.
 void orig_f_02520C0C(PPCInterpreter_t* __restrict ctx);
 void f_02520C0C(PPCInterpreter_t* __restrict ctx)
 {
@@ -2450,7 +2497,7 @@ void f_02520C0C(PPCInterpreter_t* __restrict ctx)
 			return;
 		}
 	const uint32 lr = ctx->spr.LR;
-	if (companion && ctx->gpr[3] == 0x3E && lr >= 0x0221CD78u && lr < 0x022273A8u)
+	if (ctx->gpr[3] == 0x3E && lr >= 0x0221CD78u && lr < 0x022273A8u && (companion || RefightBefore("kazeB", "Makar")))
 	{
 		ctx->gpr[3] = 0;
 		return;
@@ -2576,26 +2623,22 @@ void f_025DE884(PPCInterpreter_t* __restrict ctx)
 // fpcM_Create(layer, process name, create function, ?, append) -> process ID. In the boss rush, Kalle Demos's death
 // makes no Makar (NPC_CB1, 334: d_a_bmd.cpp's death scene creates him, then his rescue event thanks Link; the
 // owner's N21): no request, the ID -1, which the boss doesn't keep. The append (0x40 bytes, made by fopAcM_create
-// before this call) isn't freed: once a rush.
+// before this call) isn't freed: once a rush. The refights (B94: no NPC in a refight) the same in his room, kinBOSS:
+// he comes only from that death scene there (a finished save has Farore's Pearl, so the boss's create makes no
+// waiting Makar), and the refights off, the game's.
 void f_025E14A8(PPCInterpreter_t* __restrict ctx)
 {
-	if (GPR(4) == 334 && wwhd::debug::RushBoss() == 1)
+	if (GPR(4) == 334 && (wwhd::debug::RushBoss() == 1 || (wwhd::debug::BossRefight() && InStage("kinBOSS"))))
 	{
-		cemuLog_log(LogType::Force, "wwhd debug: boss rush: no Makar after Kalle Demos");
+		cemuLog_log(LogType::Force, "wwhd debug: {}: no Makar after Kalle Demos", wwhd::debug::RushRunning() ? "boss rush" : "refight");
 		GPR(3) = 0xFFFFFFFFu;
 		return;
 	}
 	// the test arena (N28, above): no warp flower (WARPFLOWER 104) in Gohma's room
-	if ((GPR(4) & 0xFFFF) == 104 && wwhd::debug::Arena())
+	if ((GPR(4) & 0xFFFF) == 104 && wwhd::debug::Arena() && InStage("M_DragB"))
 	{
-		char stage[9] = {};
-		for (int i = 0; i < 8; i++)
-			stage[i] = (char)rd8(0x1046F0B0u + 0x5134u + i);   // the current stage's name
-		if (strcmp(stage, "M_DragB") == 0)
-		{
-			GPR(3) = 0xFFFFFFFFu;
-			return;
-		}
+		GPR(3) = 0xFFFFFFFFu;
+		return;
 	}
 	if (!g_rtSixty)
 		[[clang::musttail]] return orig_f_025E14A8(ctx);
