@@ -264,6 +264,16 @@ namespace wwhd::gpu
 			VkFormatProperties fp;
 			vkGetPhysicalDeviceFormatProperties(s.physical, VK_FORMAT_BC1_RGBA_UNORM_BLOCK, &fp);
 			s.bc = core.textureCompressionBC && (fp.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
+			// B88: on Mali's driver (the RP4's, r32p1) BC4 and BC5 decoded to R8 and R8G8 sampled through the game's
+			// mappings came out wrong: the sail's trail behind the wind arrow (BC5 viewed (R,R,R,G), its colour
+			// mix(u3, u2, sample)) and the square under the arrow (BC4 viewed (R,R,R,R)) went pink, the trail's sample a
+			// colour where the mapping makes a grey. Decoded to RGBA8 (the missing channels 0, alpha 1) the picture is
+			// right there, and byte for byte the same elsewhere (graphics-rework.md, B88). WWHD_BC_WIDE=auto (that
+			// driver), on, off
+			static const std::string wide = [] { const char* e = getenv("WWHD_BC_WIDE"); return std::string(e && *e ? e : "auto"); }();
+			s.bcWide = !s.bc && (wide == "on" || wide == "1" || (wide == "auto" && driver.driverID == VK_DRIVER_ID_ARM_PROPRIETARY));
+			if (s.bcWide)
+				Log("BC4 and BC5 decoded to RGBA8 (WWHD_BC_WIDE)");
 			s.vertex3 = !VkMasked("vertex3");
 			for (VkFormat f : { VK_FORMAT_R8G8B8_UINT, VK_FORMAT_R16G16B16_UINT })
 			{

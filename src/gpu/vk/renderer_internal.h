@@ -72,6 +72,7 @@ namespace wwhd::gpu
 		bool dualSrc = true;                                     // dual-source blending (SRC1 factors read source 0)
 		bool depthClamp = true;                                  // depth clamp (off: depth clipped instead)
 		bool bc = true;                                          // BC1-5 sampled (off: decoded to 8-bit formats on upload)
+		bool bcWide = false;                                     // decoded BC4 and BC5 four channels wide (Mali's driver, B88)
 		bool vertex3 = true;                                     // 3-component 8- and 16-bit vertex formats (off: 4)
 		bool dynamicRenderingKHR = false;                        // dynamic rendering by VK_KHR_dynamic_rendering (below 1.3)
 		bool renderPasses = false;                               // none at all: render passes stand in (passes.cpp)

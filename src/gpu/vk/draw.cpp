@@ -173,6 +173,8 @@ namespace wwhd::gpu
 			// WWHD_AO=0 (b-gfxopts): the ambient occlusion pass's variant that finds nothing occluded
 			Shader* aoOff = nullptr;
 			bool aoOffTried = false;
+			Shader* test = nullptr;                                  // WWHD_TEST_PSOUT's (TestOutVariant)
+			bool testTried = false;
 		};
 		std::unordered_map<uint64, Shader*> s_shaders;
 		std::unordered_map<uint64, LatteFetchShader*> s_fetchShaders;
@@ -498,14 +500,43 @@ namespace wwhd::gpu
 			return true;
 		}
 
-		// a variant of a shader, from its GLSL: the motion vectors' (motion.cpp), the reactive mask's, or AO off's (AoOffVariant)
-		enum class Variant { Motion, Reactive, AoOff };
+		// WWHD_TEST_PSOUT=KEY:EXPR (a test aid, B88): pixel shader KEY exports EXPR (GLSL of its registers as they are
+		// at the export, e.g. vec4(R4f.xyz,1.0)) as its first colour, to see one input of a draw on a device
+		struct TestOut { uint64 key = 0; std::string expr; };
+		const TestOut& TestOutWanted()
+		{
+			static const TestOut t = [] {
+				TestOut t;
+				if (const char* e = getenv("WWHD_TEST_PSOUT"); e && strchr(e, ':'))
+				{
+					t.key = strtoull(e, nullptr, 16);
+					t.expr = strchr(e, ':') + 1;
+				}
+				return t;
+			}();
+			return t;
+		}
+
+		bool TestOutVariant(const char* src, std::string& out)
+		{
+			out = src;
+			const size_t at = out.find("passPixelColor0 = ");
+			if (at == std::string::npos)
+				return false;
+			const size_t end = out.find(';', at);
+			out.replace(at, end - at, "passPixelColor0 = " + TestOutWanted().expr);
+			return true;
+		}
+
+		// a variant of a shader, from its GLSL: the motion vectors' (motion.cpp), the reactive mask's, AO off's
+		// (AoOffVariant), or WWHD_TEST_PSOUT's (TestOutVariant)
+		enum class Variant { Motion, Reactive, AoOff, Test };
 
 		Shader* VariantShader(Shader* sh, bool vertex, const uint8* code, uint32 size, LatteFetchShader* fetch, Variant kind)
 		{
-			const bool reactive = kind == Variant::Reactive, aoOff = kind == Variant::AoOff;
-			Shader*& made = aoOff ? sh->aoOff : reactive ? sh->reactive : sh->motion;
-			bool& tried = aoOff ? sh->aoOffTried : reactive ? sh->reactiveTried : sh->motionTried;
+			const bool reactive = kind == Variant::Reactive, aoOff = kind == Variant::AoOff, test = kind == Variant::Test;
+			Shader*& made = test ? sh->test : aoOff ? sh->aoOff : reactive ? sh->reactive : sh->motion;
+			bool& tried = test ? sh->testTried : aoOff ? sh->aoOffTried : reactive ? sh->reactiveTried : sh->motionTried;
 			if (tried)
 				return made;
 			tried = true;
@@ -522,18 +553,19 @@ namespace wwhd::gpu
 			std::string glsl, log;
 			std::vector<uint32> spirv;
 			const bool ok = out.shader && !out.shader->hasError && out.shader->strBuf_shaderSource &&
-				(aoOff ? AoOffVariant(out.shader->strBuf_shaderSource->c_str(), glsl) :
+				(test ? TestOutVariant(out.shader->strBuf_shaderSource->c_str(), glsl) :
+				aoOff ? AoOffVariant(out.shader->strBuf_shaderSource->c_str(), glsl) :
 					vertex ? motion::VertexVariant(out.shader->strBuf_shaderSource->c_str(), glsl) : reactive ?
 					motion::ReactiveVariant(out.shader->strBuf_shaderSource->c_str(), glsl) : motion::PixelVariant(out.shader->strBuf_shaderSource->c_str(), glsl)) &&
 				CompileSpirv(glsl, vertex ? EShLangVertex : EShLangFragment, spirv, log);
 			if (!ok)
 			{
 				LogOnce(fmt::format("variant{}-{:x}", (int)kind, sh->key), [&] { return fmt::format("{}: no variant of {} shader {:016x}{}",
-					aoOff ? "ao" : "motion", vertex ? "vertex" : "pixel", sh->key, log.empty() ? "" : " (" + log.substr(0, 200) + ")"); });
+					test ? "test" : aoOff ? "ao" : "motion", vertex ? "vertex" : "pixel", sh->key, log.empty() ? "" : " (" + log.substr(0, 200) + ")"); });
 				return nullptr;
 			}
 			Shader* m = new Shader;
-			m->key = sh->key ^ (aoOff ? 0x616F6F6666000000ull : reactive ? 0x7265616374000000ull : 0x6D6F74696F6E0000ull);
+			m->key = sh->key ^ (test ? 0x7465737400000000ull : aoOff ? 0x616F6F6666000000ull : reactive ? 0x7265616374000000ull : 0x6D6F74696F6E0000ull);
 			m->dec = out.shader;
 			m->uniforms = out.uniformOffsetsVK;
 			m->mapping = out.resourceMappingVK;
@@ -2325,6 +2357,9 @@ namespace wwhd::gpu
 		// one that writes depth writes motion with its shaders' variants
 		Shader* dvs = vs, *dps = ps;
 		bool scene = false;
+		if (ps->key == TestOutWanted().key)
+			if (Shader* v = VariantShader(ps, false, psCode, psSize, nullptr, Variant::Test))
+				dps = v;
 		if (AoOff() && std::find(std::begin(kAoShaders), std::end(kAoShaders), ps->key) != std::end(kAoShaders))
 			if (Shader* a = VariantShader(ps, false, psCode, psSize, nullptr, Variant::AoOff))
 				dps = a;

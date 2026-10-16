@@ -41,11 +41,13 @@ namespace wwhd::gpu
 		// Cemu's block decoders (LatteTextureLoader), written as 8-bit texels: BC1-3 RGBA8, BC4 R8, BC5 RG8 (Cemu's own
 		// uncompressing decoders write 32-bit floats: 32 times a BC1 texture's memory, and RGBA32F isn't filterable on
 		// every device)
+		// Wide (s.bcWide, renderer.cpp: Mali's driver, B88): BC4 and BC5 as four channels too, the missing ones 0, alpha 1
 		enum class Bc { Rgba1, Rgba2, Rgba3, R4, R4s, Rg5, Rg5s };
-		template<Bc K>
-		class TextureDecoder_BC_To8 : public TextureDecoder, public SingletonClass<TextureDecoder_BC_To8<K>>
+		template<Bc K, bool Wide = false>
+		class TextureDecoder_BC_To8 : public TextureDecoder, public SingletonClass<TextureDecoder_BC_To8<K, Wide>>
 		{
-			static constexpr int kChannels = K == Bc::R4 || K == Bc::R4s ? 1 : K == Bc::Rg5 || K == Bc::Rg5s ? 2 : 4;
+			static constexpr int kDecoded = K == Bc::R4 || K == Bc::R4s ? 1 : K == Bc::Rg5 || K == Bc::Rg5s ? 2 : 4;
+			static constexpr int kChannels = Wide ? 4 : kDecoded;
 			static constexpr bool kSigned = K == Bc::R4s || K == Bc::Rg5s;
 
 		public:
@@ -85,12 +87,14 @@ namespace wwhd::gpu
 							for (sint32 px = 0; px < bw; px++)
 							{
 								uint8* o = out + ((x + px) + (y + py) * ctx->width) * kChannels;
-								for (int c = 0; c < kChannels; c++)
+								for (int c = 0; c < kDecoded; c++)
 								{
-									const float f = v[(px + py * 4) * kChannels + c];
+									const float f = v[(px + py * 4) * kDecoded + c];
 									o[c] = kSigned ? (uint8)(sint8)std::lround(std::clamp(f, -1.0f, 1.0f) * 127.0f)
 										: (uint8)std::lround(std::clamp(f, 0.0f, 1.0f) * 255.0f);
 								}
+								for (int c = kDecoded; c < kChannels; c++)
+									o[c] = c < 3 ? 0 : kSigned ? 127 : 255;
 							}
 					}
 			}
@@ -151,10 +155,14 @@ namespace wwhd::gpu
 				case F::BC2_UNORM: set(VK_FORMAT_R8G8B8A8_UNORM, TextureDecoder_BC_To8<Bc::Rgba2>::getInstance()); return f;
 				case F::BC3_SRGB: set(VK_FORMAT_R8G8B8A8_SRGB, TextureDecoder_BC_To8<Bc::Rgba3>::getInstance()); return f;
 				case F::BC3_UNORM: set(VK_FORMAT_R8G8B8A8_UNORM, TextureDecoder_BC_To8<Bc::Rgba3>::getInstance()); return f;
-				case F::BC4_UNORM: set(VK_FORMAT_R8_UNORM, TextureDecoder_BC_To8<Bc::R4>::getInstance()); return f;
-				case F::BC4_SNORM: set(VK_FORMAT_R8_SNORM, TextureDecoder_BC_To8<Bc::R4s>::getInstance()); return f;
-				case F::BC5_UNORM: set(VK_FORMAT_R8G8_UNORM, TextureDecoder_BC_To8<Bc::Rg5>::getInstance()); return f;
-				case F::BC5_SNORM: set(VK_FORMAT_R8G8_SNORM, TextureDecoder_BC_To8<Bc::Rg5s>::getInstance()); return f;
+				case F::BC4_UNORM: if (s.bcWide) set(VK_FORMAT_R8G8B8A8_UNORM, TextureDecoder_BC_To8<Bc::R4, true>::getInstance());
+					else set(VK_FORMAT_R8_UNORM, TextureDecoder_BC_To8<Bc::R4>::getInstance()); return f;
+				case F::BC4_SNORM: if (s.bcWide) set(VK_FORMAT_R8G8B8A8_SNORM, TextureDecoder_BC_To8<Bc::R4s, true>::getInstance());
+					else set(VK_FORMAT_R8_SNORM, TextureDecoder_BC_To8<Bc::R4s>::getInstance()); return f;
+				case F::BC5_UNORM: if (s.bcWide) set(VK_FORMAT_R8G8B8A8_UNORM, TextureDecoder_BC_To8<Bc::Rg5, true>::getInstance());
+					else set(VK_FORMAT_R8G8_UNORM, TextureDecoder_BC_To8<Bc::Rg5>::getInstance()); return f;
+				case F::BC5_SNORM: if (s.bcWide) set(VK_FORMAT_R8G8B8A8_SNORM, TextureDecoder_BC_To8<Bc::Rg5s, true>::getInstance());
+					else set(VK_FORMAT_R8G8_SNORM, TextureDecoder_BC_To8<Bc::Rg5s>::getInstance()); return f;
 				default: break;
 				}
 			}

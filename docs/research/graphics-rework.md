@@ -260,3 +260,19 @@ afford it.
 
 Every step: the checks' captures identical (or compared by PSNR where a replacement is meant to differ), measured on
 the RP4, the Odin and the worker, the look kept or bettered.
+
+## Mali's driver and BC4/BC5 decoded to 8 bits (B88)
+
+The RP4 (Mali-G77, driver r32p1) has no BC formats, so BC4 and BC5 are decoded on upload, to R8 and R8G8 before
+B88. On sail the trail behind the boat and the square under the wind arrow came out pink where other devices show
+them pale blue. The probe `WWHD_TEST_PSOUT=KEY:EXPR` (draw.cpp: pixel shader KEY exports EXPR, GLSL of its
+registers at the export, as its first colour) on the trail's shader b698c42cd4ba246d showed its unit-2 sample (a
+BC5 texture viewed (R,R,R,G), so a grey) as a colour on the RP4, a grey on x86; the colour is mix(u3, u2,
+sample.rgb), so a sample of (R,G,0) moves it toward u3. The square is another shader's (6fdbf4e59de97d5d), whose
+BC4 texture is viewed (R,R,R,R). With BC4 and BC5 decoded to RGBA8 instead (the missing channels 0, alpha 1:
+`WWHD_BC_WIDE`), the RP4's sail had no pink in any frame that showed the trail; on x86 (RADV, BC decoding forced by
+`WWHD_VK_MASK=bc`) RGBA8 against R8/R8G8 is byte-identical at sail's 2400 and 3100. So `WWHD_BC_WIDE=auto` turns it
+on for Arm's proprietary driver (logged at Init; on, off). Mali's exact fault wasn't modelled on x86: dropping the
+mapping of every R8/R8G8 view, of the decoded ones only, or of those whose mapping fills alpha from a colour
+channel, each breaks the whole scene there, where the RP4's picture was right but for these two effects; the
+memory cost (BC4 four times, BC5 twice its R8/R8G8 size) is on that driver alone.
