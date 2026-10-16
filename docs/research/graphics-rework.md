@@ -174,14 +174,30 @@ cycles in 20 s, simpleperf; main fbd4b114's code, two rounds each):
 | sets cached per submit, as before (`WWHD_SETCACHE=frame`) | 34.62 G | 35.05 G | the default -7.0% |
 
 Qualcomm's driver costs more for a vkCmdBeginRendering than for the render pass passes.cpp stands in with: the
-render-pass path, made for the RP4, is the cheaper one on Adreno too (its GPU time and Turnip still to check).
+render-pass path, made for the RP4, is the cheaper one on Adreno too, and costs its GPU nothing (8.54 ms a frame with
+dynamic rendering, 8.55 with render passes). At Windfall's tree (b16rec, the owner's play) the frames after the tree
+ran 57.6 fps against 58.9. Turnip goes the other way (its thread +3.3%: 21.73 against 22.45 G; the GPU 5.75 against
+5.71 ms), so render passes are the default on Qualcomm's own driver alone (`WWHD_RENDER_PASSES=auto|on|off`, the
+driver from VkPhysicalDeviceDriverProperties). Turnip's GPU time is two thirds of the system driver's here.
 
 **The exact multiply's emulation on Adreno.** Every shader's `mul_nonIEEE` (`a == 0 || b == 0 ? 0 : a*b`, the
 decompiler's model of Latte's multiply, where 0 times anything is 0) made a plain multiply (`WWHD_TEST_FASTMUL=1`, a
 probe, inexact where an operand is 0 and the other inf or NaN): the Odin's GPU 8.84 -> 7.55 ms a frame (-14.6%; sail,
 AO on, timing on), the scene's two-target 1080p pass 2.20 -> 1.63 ms, the AO chain 0.89 -> 0.53 ms. The worker's iGPU
-(bandwidth-bound) showed +0.5% for an exact branch-free form; Adreno is ALU-bound here. The patch is
-/wwhd/tmp/bottom-odin/fastmul-probe.diff on the worker.
+(bandwidth-bound) showed +0.5% for an exact branch-free form; Adreno is ALU-bound here. The forms against each
+other (the Odin, sail, AO on, render passes, `WWHD_TEST_FASTMUL=select|min|plain`, its patch
+/wwhd/tmp/bottom-odin/fastmul-probe2.diff on the worker):
+
+| `mul_nonIEEE(a, b)` as | the GPU, a frame | |
+|---|---|---|
+| `if (a == 0.0 \|\| b == 0.0) return 0.0; return a*b;` (today's, exact) | 8.86 ms | |
+| `(a == 0.0 \|\| b == 0.0) ? 0.0 : a*b` (exact) | 8.85 ms | the same: the driver makes a select of the branch |
+| `min(a*b, min(abs(a), abs(b)) * FLT_MAX)` (exact only where min ignores a NaN) | 8.57 ms | -3.3% |
+| `a*b` (inexact) | 7.54 ms | -14.9% |
+
+The zero tests themselves are the cost: no exact form that keeps them recovers it. The checks' 15 captures with the
+plain multiply are byte-identical to the references (the case never arises in them), but that is evidence, not
+proof: the plain multiply goes only where a multiply is proved the same (below).
 
 **Our own shaders.** The decompiler's GLSL emulates the register file (every value a bit-cast integer and float,
 exact-multiply emulation): the earlier test (gpu-plan.md item 5) found SPIRV-Tools' optimiser +1.9% and an exact
@@ -221,8 +237,8 @@ afford it.
 1. **Measure on the devices**: the RP4's sail is above; the Odin (Adreno: tiled or direct by pass) and tour3/en-tn
    next, fps without timing; the Deck class on the worker's iGPU.
 2. **Sticky passes**: done (on by default, its pipeline variants in the shipped shader list); the Odin's GPU thread
-   -2.7%, the kept descriptor sets -7.0%. **Render passes on Qualcomm's driver** (-15.5% of the Odin's GPU thread):
-   by default there once its GPU time and Turnip are checked.
+   -2.7%, the kept descriptor sets -7.0%. **Render passes on Qualcomm's driver**: done (-15.5% of the Odin's GPU
+   thread, the GPU's time the same; Turnip and the rest keep dynamic rendering).
 3. **Layered clears as load ops**: done (the shadow map's per-layer clears by the next pass into each layer; exact).
    On the RP4 neutral: the separate clears 0.43 -> 0.15 ms a frame, the shadow pass 0.67 -> 0.95, the GPU 18.64 ->
    18.72 ms (Mali's clear cost moved into the pass). Adreno, where a clear outside a pass is a write of its own to
@@ -230,10 +246,13 @@ afford it.
 4. **AO cheap enough to be on by default** on low-end devices (the original's look back), then the mip chains. The
    exact multiply's emulation is most of AO's cost on Adreno (0.89 -> 0.53 ms without it): the AO shader translated
    exactly without it is the first try.
-5. **The exact multiply without its emulation** (~15% of the Odin's GPU time): per multiply, a plain one where the
-   operands provably can't be 0 against inf or NaN and a zero's sign can't matter, the exact form (branch-free) where
-   not; the captures at PSNR inf on every route. Measured on the Odin and the RP4; it may be what brings AO back by
-   default on phones.
+5. **The exact multiply without its emulation** (~15% of the Odin's GPU time; no exact form keeping the zero tests
+   saves it): per multiply, a plain one where it's proved the same: an operand that is a finite nonzero literal, or a
+   value the shader makes finite (a UNORM/SNORM texture sample, a clamp or saturate, an interpolated colour), and a
+   zero's sign reaching nothing sign-sensitive (a division, sign(), atan) before it's treated as equal; today's exact
+   form everywhere else. A recording variant (which multiplies would differ, per shader, over every route) ranks the
+   shaders worth proving; it is not the proof. Gates: the captures at PSNR inf, the check variant. Measured on the
+   Odin and the RP4; it may be what brings AO back by default on phones.
 6. **The frame graph**: the probe as a recorder, then the planner (superset begins, dead stores, hoisted copies, the
    loud-clear check), measured on the RP4 and the Odin.
 7. **Our own shader translator** (with m-nocemu), then input attachments and transient attachments on the tile path.

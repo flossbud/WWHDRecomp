@@ -4633,10 +4633,11 @@ Every item's evidence is in docs/research/gpu-plan.md (a section each) and its c
   scripts check `adb get-state` before each run: its wireless debugging can move ports mid-window.
 - **The Odin (10-15):** the kept sets -7.0% of its GPU thread, sticky -2.7%, and render passes in place of dynamic
   rendering -15.5% more (Qualcomm's vkCmdBeginRendering is dear); the exact multiply's emulation ~15% of its GPU time
-  (graphics-rework.md). Render passes by default on Qualcomm's driver are approved once its GPU time, Turnip and
-  b16rec are measured (/wwhd/tmp/bottom-odin/odinpass.sh, queued for an Odin window).
-- **Next in the lane:** that window and the default; AO cheap enough to be on by default on low-end devices (~1 ms on
-  the RP4 to beat); the exact multiply without its emulation; then the frame graph (graphics-rework.md).
+  (graphics-rework.md). Render passes are the default on Qualcomm's own driver (`WWHD_RENDER_PASSES=auto|on|off`): its
+  GPU time unchanged, Turnip keeps dynamic rendering (passes cost its thread 3.3% more). B16 confirmed fixed on the
+  Odin (b16rec at Windfall's tree, 10-15). No exact form of the multiply that keeps its zero tests is cheaper on Adreno.
+- **Next in the lane:** AO cheap enough to be on by default on low-end devices (~1 ms on the RP4 to beat); the exact
+  multiply without its emulation, proved per multiply; then the frame graph (graphics-rework.md).
 
 ### Session qa (week 2, WW-15): the problems top and bottom are stuck on
 
