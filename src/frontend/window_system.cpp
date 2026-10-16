@@ -352,7 +352,8 @@ namespace snd_core { void AXOut_UseCemuDevices(bool use); }   // os/snd_core/ax_
 
 // Cemu's input goes unused: the game's input calls are ours (src/os/input.cpp). Its input manager
 // still ran an update thread waking every millisecond and controller providers with threads of
-// their own (Wiimote, SDL), about 5% of a core and 2,700 wakeups a second for nothing; the SDL one
+// their own (SDL, DSU, the GameCube adapter's; Cemu's Wiimote support isn't built: CMakeLists.txt, B97),
+// about 5% of a core and 2,700 wakeups a second for nothing; the SDL one
 // would also take our window's keys and events and pump them off the main thread, which SDL doesn't
 // allow. Shutting it down stops them all (the game profile names no controllers, so launching the
 // title doesn't bring any back).

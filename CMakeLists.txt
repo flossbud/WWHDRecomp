@@ -49,7 +49,15 @@ add_compile_options(-ffp-contract=off -fsigned-char)
 # Cemu as its own build configures it, without its wxWidgets GUI: our frontend implements its
 # WindowSystem interface. Only what wwhd-null links is built.
 # Its find_package() targets are global, so src/ can link what Cemu's targets link.
+# Nor its Wiimote support (HIDAPI, BlueZ), as tools/arm64/build.sh and tools/android/build.sh already leave it out: our
+# frontend reads controllers through SDL itself. Cemu's Wiimote provider's connection thread (HidapiWiimote::get_devices,
+# SDL_hid_init) and its SDL provider's thread (SDL_InitSubSystem(SDL_INIT_GAMEPAD)) both start in CemuCommonInit and both
+# set up SDL's udev, whose SDL_UDEV_Init has no lock: it publishes its state before loading libudev's functions, so the
+# second thread could get them still null. Under load wwhd-play died at start, a call of udev_new through null in
+# SDL_hid_device_change_count (B97, about 1 start in 20).
 set(ENABLE_WXWIDGETS OFF CACHE BOOL "" FORCE)
+set(ENABLE_HIDAPI OFF CACHE BOOL "" FORCE)
+set(ENABLE_BLUEZ OFF CACHE BOOL "" FORCE)
 set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)
 add_subdirectory("${CEMU_SRC}" cemu EXCLUDE_FROM_ALL)
 

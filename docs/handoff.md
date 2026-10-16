@@ -4893,6 +4893,24 @@ Worktree `.worktrees/ww-2-4`, branch `ww-2-4`, worker directory `/wwhd/WWHDRecom
   - *Left (B98, open, unassigned)*: most tick-cadence emitters (dyn 0x404) emit on a half tick's phase at 60, their newest
     particle 0.5 ticks old at whole ticks, so counts differ from 30's by about one (b90rec: 494 of 1342 whole ticks,
     -42 to +29 in all); no crash risk.
+- **B97, x86 wwhd-play sometimes died at start (fixed).** Signal 11, a call through null, the crash handler's trace
+  only `[(nil)]`: session top saw 2 of 19 starts die on the worker under load. Reproduced with fresh-folder windowed
+  starts in a loop beside other jobs: 13 of 300. Caught with an LD_PRELOAD (scratch, on the worker) that wraps
+  sigaction to sit in front of Cemu's handler: on a near-null PC it prints the thread, the registers and the stack's
+  words through dladdr, and has every other thread print its own stack; a dlsym/dlopen trace showed who sets up SDL's
+  udev and when.
+  - *The cause*: two of Cemu's input threads, both started by InputManager in CemuCommonInit, set up SDL3's udev at
+    once: the Wiimote provider's connection thread (HidapiWiimote::get_devices, SDL_hid_init) and the SDL provider's
+    thread (SDL_InitSubSystem(SDL_INIT_GAMEPAD), its HIDAPI discovery). SDL_UDEV_Init has no lock and publishes its
+    state before it loads libudev's functions, so the other thread called udev_new through null: 9 times in
+    SDL_hid_device_change_count on SDL_events, 4 in PLATFORM_hid_enumerate on Wiimote-connect. Neither thread is ours
+    to use (QuietCemuInput shuts Cemu's input down once CemuCommonInit returns). The log's last line ("the real-time
+    build", before "Init Cemu") misled: Cemu's log is written by a thread, and the crash handler's _Exit loses its
+    tail (the crash handler's own lines weren't in log.txt either); the main thread was at CemuCommonInit's end.
+  - *The fix*: CMakeLists.txt sets Cemu's ENABLE_HIDAPI and ENABLE_BLUEZ off, as tools/arm64/build.sh and
+    tools/android/build.sh already did ("no Wiimotes"): no Wiimote provider, so one SDL user at start. The game's pads
+    are ours (src/os/input.cpp from the frontend's SDL3 gamepad); SDL3 is vcpkg's build with its own HIDAPI drivers
+    (PS4/PS5, Switch, Steam Deck, Xbox and more) and the evdev joystick driver, which the flags don't touch.
 
 ## Waiting on the owner
 
