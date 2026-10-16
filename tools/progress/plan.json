@@ -1,6 +1,6 @@
 {
   "title": "WWHD Recomp",
-  "ticket": "Week 2: speed for the Deck, then the rival's lessons",
+  "ticket": "Week 2: Android speed and looks (the Odin, the RP4), the graphics rework, the owner's bugs first",
   "roadmap": [
     {
       "id": "foundation",
@@ -24,25 +24,25 @@
       "id": "rival",
       "name": "The rival's lessons: graphics options, widescreen, polish",
       "weight": 8,
-      "progress": 0.25
+      "progress": 0.8
     },
     {
       "id": "platforms",
       "name": "Linux arm64, Windows, Android, CI",
       "weight": 12,
-      "progress": 0
+      "progress": 0.45
     },
     {
       "id": "uncapped",
       "name": "Uncapped frame rate",
       "weight": 8,
-      "progress": 0
+      "progress": 0.6
     },
     {
       "id": "release",
       "name": "The owner's testing, repair and a release",
       "weight": 5,
-      "progress": 0.1
+      "progress": 0.2
     }
   ],
   "milestones": [
@@ -109,6 +109,18 @@
     {
       "name": "Gameplay timing at 60: contacts, pushes, hits, once-a-tick timer tests, collisions after the half step",
       "done": true
+    },
+    {
+      "name": "Android: the Odin 2 Portal at 60 in play (A1-A4: three host threads, drivers, touch, the start screen)",
+      "done": true
+    },
+    {
+      "name": "Android on a low-end device: the Retroid Pocket 4 Pro (Mali, Vulkan 1.1) in play, render passes standing in (B87, B92 fixed)",
+      "done": true
+    },
+    {
+      "name": "Every shader prepared before play: no compile stall anywhere (s-shadercover)",
+      "done": false
     },
     {
       "name": "Uncapped frame rate",
@@ -374,7 +386,7 @@
     "460": "ice block",
     "64": "table"
   },
-  "queue_note": "Round 14 (week 2, from 2026-10-09): performance for the Steam Deck and Android (B75), then the rival's lessons. Goal: full speed at 60 on the worker (power-capped, the Deck's stand-in); it reaches ~54 fps there with 3 CPU threads, GPU-bound. Two lanes, each worked from its top down: top (CPU side and turning the speed flags on by default) and bottom (GPU side, upscalers (FSR 1, then FSR 3.1/4, XeSS, DLSS: the owner's ask) and graphics options); main routes, deploys and keeps the docs; qa takes only problems the others are stuck on. Complexity 1-10 in brackets. On the owner's PC: ww-4 9385d6d.",
+  "queue_note": "Round 15 (from 2026-10-14): Android speed and looks on the Odin and the owner's Retroid Pocket 4 Pro, the graphics rework (never a look traded for speed), and the owner's bugs first whenever they come in. Lanes: top (the CPU side: a4-cpu done, PGO laid out from on-device profiles next), bottom (the GPU side: render passes, sticky passes, kept descriptor sets; the exact multiply made cheaper next), qa (the owner's bugs, the generated code, every shader prepared before play), main (routing, batched deploys to the PC, the Deck and the Android devices, the RP4). Complexity 1-10 in brackets. Round 14 (from 2026-10-09): performance for the Steam Deck and Android (B75), then the rival's lessons. On the owner's PC: deploy 15 (main 9a523948 era); deploy 16 next.",
   "queue": [
     {
       "id": "t-cores3",
@@ -653,6 +665,12 @@
       "name": "Round 15: [5] Android speed, the game thread's host cost on the Odin (the owner's focus, 2026-10-14): kernel (the run queues' wakes, the scheduler lock), runtime, TLS; measured in play with tools/android/route.sh"
     },
     {
+      "id": "a4-pgo",
+      "lane": "top",
+      "complexity": 5,
+      "name": "Round 15: [5] Android, the game code laid out by an on-device profile (PGO): the RP4's game thread waits on instruction fetch a third of its cycles (hot code over more 4 KB pages than its TLB holds); a profile from the Odin and the RP4, merged, then an A/B on a route left out of training"
+    },
+    {
       "id": "a4-gpu",
       "lane": "bottom",
       "complexity": 5,
@@ -663,6 +681,12 @@
       "lane": "qa",
       "complexity": 6,
       "name": "Round 15: [6] Android speed, the generated code's quality on arm64 (byte-swapped memory, unused CR/XER, spills, the yield check): fixes in tools/recomp that help x86 too"
+    },
+    {
+      "id": "s-shadercover",
+      "lane": "qa",
+      "complexity": 6,
+      "name": "Round 15: [6] Every shader prepared before play (the owner's ask, 2026-10-16, after B90's pop-in): count the game's shader programs against the shipped list, play every stage, room, cutscene, menu, item, weather and time of day to capture what's met, and prepare the rest where it's safe, so no first start stalls on a compile"
     },
     {
       "id": "a4-rp4",
