@@ -671,6 +671,12 @@
       "name": "Round 15: [5] Android, the game code laid out by an on-device profile (PGO): the RP4's game thread waits on instruction fetch a third of its cycles (hot code over more 4 KB pages than its TLB holds); a profile from the Odin and the RP4, merged, then an A/B on a route left out of training"
     },
     {
+      "id": "t-debugmenu",
+      "lane": "top",
+      "complexity": 5,
+      "name": "Round 15: [5] The debug menu in the pause menu (the owner's Claude Design package, Pause Menu v10, 2026-10-16; on the worker at /wwhd/data/design/design_handoff_debug_menu): Settings → Advanced → Enable Debug Menu, a Debug Menu item after Settings, its blue-themed screen (Islands, Dungeons, Bosses, Combat; boss rows locked until refights are on), and spawning as a queued list that spawns ahead of Link on unpause"
+    },
+    {
       "id": "a4-gpu",
       "lane": "bottom",
       "complexity": 5,
