@@ -953,7 +953,7 @@ namespace wwhd::gpu
 				if (img.gw != s.scan[0].gw || img.readH != s.scan[0].gh)
 					continue;                                       // only the screen's size (the copies that cost)
 				img.fitH = img.readH;
-				Log(fmt::format("surface fit: {:08x} fmt {:x} {}x{} {} to {} rows{}", key.first, key.second & 0x7FFFFFFF, img.width,
+				Log(fmt::format("surface fit: {:08x} fmt {:x} {}x{} {} to {} rows{}", key.first, key.second & 0x3FFFFFFF, img.width,
 					img.height, mode == 1 ? "fitted" : "would be fitted", img.readH, mode == 1 ? "" : " (proof)"));
 				if (mode != 1)
 					continue;
@@ -1266,6 +1266,31 @@ namespace wwhd::gpu
 		// back down, and the next try waits twice as long (up to 32 s; back to 2 s once a step up held 10 s)
 		void ChooseScale()
 		{
+			// WWHD_RENDER_SCALE_TEST=FRAME:SCALE,... (a test): the scale changed at those frames whatever the timing says,
+			// so the virtual clock (every check) can go through a change
+			static const std::vector<std::pair<uint32, float>> s_test = [] {
+				std::vector<std::pair<uint32, float>> v;
+				if (const char* e = getenv("WWHD_RENDER_SCALE_TEST"))
+					for (const char* p = e; *p;)
+					{
+						unsigned f = 0;
+						float sc = 0;
+						int n = 0;
+						if (sscanf(p, "%u:%f%n", &f, &sc, &n) != 2)
+							break;
+						v.push_back({ f, std::clamp(sc, 0.5f, 2.0f) });
+						p += n;
+						if (*p == ',')
+							p++;
+					}
+				return v;
+			}();
+			for (const auto& [f, sc] : s_test)
+				if (s.frame == f && sc != RenderScale())
+				{
+					Log(fmt::format("render scale: {:.3f} -> {:.3f} at frame {} (WWHD_RENDER_SCALE_TEST)", RenderScale(), sc, s.frame));
+					RescaleSurfaces(sc);
+				}
 			if (!DynamicScale())
 				return;
 			constexpr uint32 kWindow = 30;                        // half a second at 60
@@ -1331,7 +1356,7 @@ namespace wwhd::gpu
 				for (auto& [key, other] : s.surfaces)
 					if (&other == &img)
 						Log(fmt::format("surface fit: read past: {:08x} fmt {:x}: {} rows read, fitted to {} (frame {}){}", key.first,
-							key.second & 0x7FFFFFFF, rows, img.fitH, s.frame + 1, SurfaceFitMode() == 1 ? "; back to its full height" : " (proof)"));
+							key.second & 0x3FFFFFFF, rows, img.fitH, s.frame + 1, SurfaceFitMode() == 1 ? "; back to its full height" : " (proof)"));
 			img.fitH = 0;                                          // Surface grows it back at its next use
 			img.noFit = true;
 		}
@@ -1348,7 +1373,7 @@ namespace wwhd::gpu
 	{
 		if (addr == SurfaceWatch() && addr)
 		{
-			auto it = s.surfaces.find({ addr, gx2 | (depth ? 0x80000000u : 0) });
+			auto it = s.surfaces.find({ addr, gx2 | (depth ? 0x80000000u : 0) | (ScaledSurface(w, h) ? kScreenSized : 0) });
 			if (it == s.surfaces.end() || !it->second.image || it->second.gw < w || it->second.gh < h)
 			{
 				const uint8* m = memory_getPointerFromPhysicalOffset(addr);
@@ -1360,7 +1385,21 @@ namespace wwhd::gpu
 					addr, gx2, depth ? " depth" : "", w, h, s.frame, nonzero, n, n ? (double)sum / n : 0.0));
 			}
 		}
-		Image& img = s.surfaces[{ addr, gx2 | (depth ? 0x80000000u : 0) }];
+		// B92: the game reuses an address for a screen-sized target in one place and a half-size one in another (the sky
+		// pass's second target, 1024x544, is a 1920x1088 one indoors): grown into one image, the half-size use got the
+		// scaled image, and with the display's scale and the render scale below 0.72 together (the RP4 at 0.694 x 0.5)
+		// the scaled image was the smallest attachment, so the pass's render area cut the sky to 0.694 of the screen.
+		// The use's size class is part of the key (kScreenSized): each class keeps an image of its own
+		// WWHD_SURFACE_CLASS=0: one image an address and format, as before. WWHD_TEST_SURFACE_REUSE=ADDR (a test): the first
+		// use of a colour surface at ADDR is preceded by one at 1920x1088, as the game's reuse indoors does (sail's sky pass
+		// at f4a44000 shows B92 with the classes off, at a display and render scale under 0.72)
+		static const bool classes = [] { const char* e = getenv("WWHD_SURFACE_CLASS"); return !(e && atoi(e) == 0); }();
+		static const uint32 reuse = [] { const char* e = getenv("WWHD_TEST_SURFACE_REUSE"); return e ? (uint32)strtoul(e, nullptr, 16) : 0u; }();
+		static std::set<uint32> s_reused;
+		if (reuse && addr == reuse && !depth && !ScaledSurface(w, h) && s_reused.insert(gx2).second)
+			Surface(addr, gx2, depth, 1920, 1088, layers);
+		const uint32 cls = classes && ScaledSurface(w, h) ? kScreenSized : 0;
+		Image& img = s.surfaces[{ addr, gx2 | (depth ? 0x80000000u : 0) | cls }];
 		img.bytes = std::max(img.bytes, w * h * layers * Latte::GetFormatBits((Latte::E_GX2SURFFMT)gx2) / 8);
 		if (img.fitH && SurfaceFitMode() == 1)
 			h = std::min(h, img.fitH);
@@ -1373,7 +1412,7 @@ namespace wwhd::gpu
 			(depth ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
 		const uint32 gw = std::max(w, img.gw), gh = std::max(h, img.gh);
 		Image grown;
-		grown.scaled = ScaledSurface(gw, gh), grown.scale = grown.scaled ? RenderScale() * s_display : 1.0f;
+		grown.scaled = classes ? cls != 0 : ScaledSurface(gw, gh), grown.scale = grown.scaled ? RenderScale() * s_display : 1.0f;
 		grown.wide = ScreenShaped(gw, gh) && std::max(layers, img.layers) <= 1;
 		if (grown.wide)
 			Widening(grown.kx, grown.ky);
@@ -1425,7 +1464,7 @@ namespace wwhd::gpu
 			for (auto it = s.surfaces.lower_bound({ addr, 0 }); it != s.surfaces.end() && it->first.first == addr; ++it)
 			{
 				const uint32 other = it->first.second;
-				if (&it->second == &img || !it->second.image || (other & 0x80000000u) || (other & 0x3F) != (gx2 & 0x3F) ||
+				if (&it->second == &img || !it->second.image || (other & 0x80000000u) || (other & 0x3F) != (gx2 & 0x3F) || (other & kScreenSized) != cls ||
 					it->second.layers != 1 || !SameScale(it->second, grown))
 					continue;
 				if (!twin || it->second.written > twin->written)
@@ -1816,10 +1855,14 @@ namespace wwhd::gpu
 		std::vector<uint8> px;
 		for (const Readback& r : s_readbacks)
 		{
-			auto it = s.surfaces.find({ r.addr, r.gx2 });
-			if (it == s.surfaces.end() || !it->second.image || !ReadSurface(it->second, r.gx2, px))
+			Image* found = nullptr;                                 // either size class's, the newer
+			for (uint32 cls : { 0u, kScreenSized })
+				if (auto it = s.surfaces.find({ r.addr, r.gx2 | cls }); it != s.surfaces.end() && it->second.image &&
+					(!found || it->second.written > found->written))
+					found = &it->second;
+			if (!found || !ReadSurface(*found, r.gx2, px))
 				continue;
-			const Image& img = it->second;
+			const Image& img = *found;
 			static std::set<uint32> s_logged;
 			if (s_logged.insert(r.addr).second)
 				Log(fmt::format("readback: linear colour buffer {:08x} {}x{} (pitch {}) to guest memory", r.addr, img.gw, img.gh, r.pitch));
@@ -1845,7 +1888,7 @@ namespace wwhd::gpu
 			if (!it->second.image || (f & 0x80000000u) || (f & 0x3F) != (gx2 & 0x3F))
 				continue;
 			if (!best || it->second.written > best->written)
-				best = &it->second, bestFmt = f;
+				best = &it->second, bestFmt = f & ~kScreenSized;
 		}
 		std::vector<uint8> px;
 		if (!best || !ReadSurface(*best, bestFmt, px))

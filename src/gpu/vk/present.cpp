@@ -797,6 +797,15 @@ void main()
 
 	bool WindowExtent(uint32& width, uint32& height)
 	{
+		// WWHD_FAKE_DISPLAY=WxH (a test): a run with no window sized as if its window were that big, so the display's scale
+		// (the RP4's 1334x750: 0.694) can be tried under the virtual clock with captures (B92)
+		if (static const std::pair<uint32, uint32> fake = [] {
+				unsigned w = 0, h = 0;
+				if (const char* e = getenv("WWHD_FAKE_DISPLAY"))
+					sscanf(e, "%ux%u", &w, &h);
+				return std::pair<uint32, uint32>{ w, h };
+			}(); fake.first && !s_hasWindow)
+			return width = fake.first, height = fake.second, true;
 		if (!s_hasWindow)
 			return false;
 		s_window.size(width, height);

@@ -102,7 +102,7 @@ namespace wwhd::gpu
 		bool pending[2]{};                                       // submitted, its fence not yet waited for
 		uint32 slot = 0;
 		VkDeviceSize ringBase = 0, ringEnd = 0;
-		std::map<std::pair<uint32, uint32>, Image> surfaces;     // (physical address, GX2 format | depth flag)
+		std::map<std::pair<uint32, uint32>, Image> surfaces;     // (physical address, GX2 format | depth flag | kScreenSized)
 		uint64 writes = 0;                                       // surface writes so far (Image::written)
 		Image scan[2];                                           // TV, DRC
 		uint32 frame = 0;
@@ -157,6 +157,10 @@ namespace wwhd::gpu
 	Format ColorFormat(uint32 gx2);
 	Format DepthFormat(uint32 gx2);
 	// the surface at (addr, gx2 format), at least w x h with `layers` array slices (a fitted one: h at most its fitH)
+	// a surface's key carries its use's size class: one used at the screen's size (ScaledSurface: the render scale's) and
+	// one used smaller at the same address are two images, so a pass never mixes a scaled target with an unscaled one
+	// (B92: the RP4's sky clipped to 0.694 of the screen). SurfaceAt (texture.cpp) reads the newer of them
+	constexpr uint32 kScreenSized = 0x40000000u;
 	Image& Surface(uint32 addr, uint32 gx2, bool depth, uint32 w, uint32 h, uint32 layers = 1);
 	// a read of a surface's first `rows` rows (sampled, copied, scanned out): WWHD_SURFACE_FIT's evidence
 	void SurfaceRead(Image& img, uint32 rows);
