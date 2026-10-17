@@ -3,8 +3,7 @@
 **Where it stands (2026-10-17, the end of week 2's final round; main session, the router).** The owner ended the
 round on 2026-10-16: every open item got an owner, each session finished its list and stopped, and anything found
 after that went on the page as open and unassigned. A critical, game-breaking bug still went to qa at once (the
-owner's one exception: B97). Top, bottom and qa are stopped and their lines retired; main retires after the RP4's
-install.
+owner's one exception: B97). All four sessions are stopped and their lines retired.
 - **Merged in the round** (main 48e53810):
   - the owner's bugs: B86 bomb flowers, B87 RP4 red scene, B88 RP4 pink trail, B89 trees and bushes, B90 Helmaroc
     crash and pop-in, B92 RP4 black sky, B93 ladder top, B94 refight sages, B97 x86 start crash;
@@ -27,8 +26,8 @@ install.
     (the owner's choice after the numbers): a first start prepares it in 45 s on the Odin and 125 s on the RP4
     behind the progress bar; a second start loads the cache in 1.2 s (the Odin); in play ~0.7 GB more memory (PSS
     2.05 GB on the Odin, 2.68 GB on the RP4), no low-memory kill; the cache ~214 MB. The Odin: sail 60.0-60.2 fps.
-    /wwhd/tmp/main-apk holds 8504b894 (its README). The RP4 had 48e53810 and gets 8504b894 when it's charged
-    (`/wwhd/tmp/deploy16/inst16.sh`: the owner check, the install, the sha).
+    /wwhd/tmp/main-apk holds 8504b894 (its README). Both phones have it (sha 2e9a37f6, checked on each); the RP4
+    got it on 2026-10-17 after a dead battery (it had 48e53810).
 - **Open, unassigned** (the page has each one's notes):
   - B95: pre-rotation on Android;
   - B96: the Helmaroc tower top's HUD colours;
@@ -46,7 +45,9 @@ install.
   - the router doesn't fix bugs unless the owner says to take load;
   - the owner files bugs on the page: read it, don't ask for a list;
   - deploys go to the Deck too;
-  - the RP4 is on the tailnet at a fixed adb port until it reboots.
+  - the RP4: `adb tcpip 5555` gives a fixed port over the tailnet until it reboots; after a reboot the owner turns
+    on Wireless debugging and sends the screen's IP & port (the pairing is kept: no new code), reached from the
+    worker on the home network.
 
 **Week 2 (from 2026-10-09; main session WW-12 on ww-2-1, the router).** Sessions: `top` (ww-2-2, WW-13), `bottom`
 (ww-2-3, WW-14), `qa` (ww-2-4, WW-15: only problems the others are stuck on, routed by main), `web` (ww-10: the
