@@ -5,6 +5,23 @@ handheld (Snapdragon 8 Gen 2, Adreno 740) over adb on the tailnet. Milestones in
 byte-exact, A2 the app, A3 on the device, A4 polish. This file is the survey of the code (2026-10-12) and the
 order of work; `docs/cloud-handoff.md` item 2 is the older note on arm64 Linux.
 
+**Status 2026-10-17 (the end of the final round, session main).** A1-A3 are done and A4 is far along:
+- **The Odin 2 Portal** (Adreno 740) holds 60 in play on the system driver and on Turnip. This round:
+  - the game thread's host cost cut (a4-cpu, a4-cpu3-5, a4-codegen; PGO a further -5% of core 1's cycles, a4-pgo);
+  - the GPU thread's cut (a4-gpu: ring reuse, kept descriptor sets, sticky passes, render passes in place of
+    dynamic rendering on Qualcomm's driver, together about -25% of that thread);
+  - FastMul (-6.2% GPU).
+- **The RP4** (Mali-G77, Vulkan 1.1) plays correctly at 52-58 fps in sail, short of 60 on its game thread (the
+  a4-rp4 section).
+- **Fixed for the owner on the devices this round**: B87, B88, B90, B92 (and B86, B89, B93, B94 everywhere).
+- **Still open**:
+  - the renderer doesn't check format features (the RP4's table shows gaps);
+  - pre-rotation (B95);
+  - the full shader list on the phones (pending main's device check);
+  - the guest code's front-end on low-end cores.
+- **APKs**: the deploys carry them, built with the on-device PGO profile when it's fresh (pgo.sh counts the
+  functions out of date).
+
 ## How it's checked
 
 An arm64 **Linux** build runs the checks and the fuzzer: the same fixtures, MATCH byte for byte, as on x86. Only then
@@ -406,6 +423,45 @@ both hosts and the checks. A function's entry costs its call, not its cycle coun
   clipped as with the extension; a draw that doesn't keeps the clamp. Devices with the extension are unchanged.
   On the RP4: sail and the menus route right, the whole HUD. Known to lack the extension: the RP4's r32p1; the
   Odin's Qualcomm driver not checked.
+
+## a4-rp4: where the RP4 stands (2026-10-17, session main, the final round)
+The owner's Retroid Pocket 4 Pro: Dimensity 1100 (4x A78 at 2.6 GHz, 4x A55), Mali-G77 MC9 on driver r32p1 (Vulkan 1.1,
+no dynamic rendering), a 1334x750 display on a portrait panel (the compositor turns the picture). Its system setting
+`performance_mode` 1 (the owner's) already holds the big cores at 2.6 GHz; 2 changed nothing.
+- **Runs** through `gpu/vk/passes.cpp` (bd7b7faa): each dynamic rendering becomes a one-subpass render pass, each
+  pipeline gets the render pass of its formats. Lavapipe with WWHD_VK_MASK=rendering is byte-identical; the
+  Khronos layer finds no error with or without the RP4's whole mask. On Qualcomm's own driver the same path is now
+  the default (52cc48c1: the Odin's GPU thread -15.5%).
+- **Fixed on it**: B87 the red scene (depth clipping without VK_EXT_depth_clip_enable, above); B92 the sky black past
+  0.694 of the screen after a room change (966b5a28: a surface's half-size and screen-sized uses get their own
+  images, so a pass never mixes scales; it needs display x render scale < 0.5, so never on the Odin); B88 the
+  wind arrow's trail pinkish (c153af2b: Mali drops a 1-2 channel view's component mapping, so BC4/BC5 textures are
+  decoded to RGBA8 on Arm's driver; exact, and the RP4's shots are the evidence: the fault itself couldn't be
+  modelled on x86).
+- **What its driver supports** (QA's probe of optimal-tiling features, 2026-10-16; S sampled, L linear filter,
+  C colour attachment, B blend): R4G4B4A4, B4G4R4A4, R5G5B5A1, B5G5R5A1: S L C, no blend; A1R5G5B5, R5G6B5,
+  B5G6R5: all four; R16G16 and R16G16B16A16 UNORM/SNORM: no linear filter; R32, R32G32, R32G32B32A32 SFLOAT: no
+  blend; R32 UINT formats: no blend, no filter; A2B10G10R10_SNORM: nothing; 8-bit, 10-10-10-2 UNORM, 11-11-10 float,
+  R16(G16)_SFLOAT, RGBA16F and the four depth formats: everything. Fallbacks it takes: no logic ops, no dual-source
+  blending, no BC (decoded on upload), no depth-clip control. The renderer doesn't check these features yet: an
+  open item for a device that lacks one we use.
+- **Speed in sail at 60** (plain route.sh, no profiler): 52-55 fps with the scheduler's thread 84-86% busy; the auto
+  render scale wanders 0.5-0.875 (budget 15.33 ms). The GPU takes ~15 ms a frame at scale 0.5 and ~19 ms at 1; about
+  11 of the 14.4 ms at 0.5 don't scale with resolution (the passes at the game's own sizes, mips, copies,
+  clears). Measured gains: sticky passes +4.6% fps at scale 1; PGO from on-device profiles core 1 -3.9% cycles and
+  56.2 -> 58.2 fps (a4-pgo); FastMul -3.2% GPU time. AO costs ~0.9 ms a frame there (its pass 3.05 ms on Mali
+  against 0.76 on the Odin): off by default on phones. Caveats: WWHD_GPU_TIMING=1 itself costs ~10 fps on Mali;
+  simpleperf a little.
+- **What's left for 60 in sail**: the game thread. Core 1 is front-end bound (a third of its cycles stall on
+  instruction fetch; the hot code spans more 4 KB pages than the A78's TLB holds). PGO's layout helped; more is a
+  wider profile and hot/cold splitting. On the GPU side, the passes that end because of mid-render copies and mips
+  (graphics-rework.md).
+- **Open, not started** (final round): B95 pre-rotation (the compositor turns our buffer every frame); the full shader
+  list on the phones (main's first-start check in deploy 16: preparation time and memory with 13.8k pipelines).
+- **Reaching it**: adb over the tailnet on a fixed port (`/wwhd/opt/android/serial-rp4` = its tailnet address :5555,
+  set with `adb tcpip 5555`) until it reboots; after a reboot it needs one Wireless debugging pairing and connect
+  from the owner's screen, then `adb tcpip 5555` again. Test homes only, the owner check before each run, main's APK
+  restored and the screen asleep after.
 
 ## P0: doesn't build, link or start on Android
 
