@@ -28,9 +28,11 @@ a=$w/assets
 mkdir -p "$a/app/cemu/wwhd" "$a/app/assets" "$a/once/portable/controllerProfiles"
 cp -r /wwhd/opt/cemu-src/bin/resources /wwhd/opt/cemu-src/bin/gameProfiles "$a/app/cemu/"
 cp "$root/tools/reference/0005000010143500.ini" "$a/app/cemu/gameProfiles/default/"
-# the shader list: B90's (config/US_v0/shader_list.txt, 1683 shaders) until the full one (shader_list.txt.gz, s-shadercover:
-# 15162 shaders, 13821 pipelines) has had a first start measured on the Odin and the RP4 (prep time, memory)
-cp "$root/config/US_v0/shader_list.txt" "$a/app/cemu/wwhd/"
+# the shader list: the full one (shader_list.txt.gz, s-shadercover: 15162 shaders, 13821 pipelines). Measured on the
+# phones (deploy 16, 2026-10-17): a first start prepares it in 45 s on the Odin and 125 s on the RP4, behind the
+# progress bar; a second start loads it from the cache in 1.2 s (the Odin); ~0.7 GB more memory in play (PSS 2.05 GB on
+# the Odin, 2.68 GB on the RP4, no low-memory kill), the cache ~214 MB. The owner's choice: ship it
+cp "$root/config/US_v0/shader_list.txt.gz" "$a/app/cemu/wwhd/"
 cp -r "$root/assets/pause_menu" "$a/app/assets/"
 cp "$root/tools/reference/settings.xml" "$a/once/portable/"
 cp "$root/tools/reference/controller0.xml" "$a/once/portable/controllerProfiles/"
