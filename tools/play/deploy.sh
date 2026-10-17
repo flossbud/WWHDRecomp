@@ -17,7 +17,12 @@ on "mkdir -p $dir/game $dir/saves $dir/routes $dir/cemu $dir/portable/gameProfil
 # older one), after predeploy-rt passes on it (opt-in while PGO is new: t-codegen 1b)
 # Time on the worker: pgo.sh ~6.5 min (~20 the first time in a build directory), predeploy-rt ~26; it stands in for
 # predeploy's own predeploy-rt, so run that predeploy with PREDEPLOY_RT=0: the deploy then costs ~6.5 min more
-if [ "${WWHD_PGO:-}" = 1 ]; then
+# WWHD_DEPLOY_SRC=PATH (on the worker): deploy a binary already built and gated, e.g. the PGO wwhd-play a first
+# deploy made (build/wwhd-pgo/wwhd-play), so a second machine (the Deck) gets the same bytes without a second build
+if [ -n "${WWHD_DEPLOY_SRC:-}" ]; then
+    "$w" test -x "$WWHD_DEPLOY_SRC" || { echo "deploy: no $WWHD_DEPLOY_SRC on the worker" >&2; exit 1; }
+    src=$WWHD_DEPLOY_SRC; echo "deploying $src (already built)"
+elif [ "${WWHD_PGO:-}" = 1 ]; then
     echo "WWHD_PGO=1: the profile-guided wwhd-play (tools/recomp/pgo.sh), then predeploy-rt on it"
     "$w" tools/recomp/pgo.sh && "$w" env PLAY_BIN=build/wwhd-pgo/wwhd-play tools/sixty/tests/predeploy-rt.sh \
         || { echo "deploy: the PGO build or its predeploy-rt failed: nothing deployed" >&2; exit 1; }
