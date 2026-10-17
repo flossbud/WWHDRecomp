@@ -334,6 +334,29 @@ simpleperf_report_lib):
   hottest: 02759564 (684 bytes, under RenderDisplay_draw) 3.7%, 028766CC 1.7%, 028E8F64 (84 bytes, many callers) 1.4%,
   daSea_packet_c::execute 1.3%, sqrtf 0.9%, JPABaseEmitter::calcParticle and its particles' calcVelocity/incFrame ~2%.
   So native overrides of a few functions can't take a large share; the A78's (the RP4's) ranking is next.
+- **a4-pgo: PGO profiled on the devices** (2026-10-16, session top). A workers' profile fits the Android library
+  badly: pgo.sh's from the Mac VM left 27,430 of 40,298 functions' control flow different (19 of the RP4's 20 hottest:
+  ppc_ops.h's WWHD_RT_CTX_TABLE stores there, and clang 18 against 19). So `tools/android/pgo.sh generate` builds the
+  library instrumented (the generated code only, the profile runtime at the link: build.sh's `LINK_OPT`), and each run
+  writes its profile at exit to `WWHD_PROFILE_FILE` (build_kind.cpp); `tools/android/pgo.sh DIR` merges a directory
+  of them. Profiles from route.sh's test home, in real time: the Odin save, tour3, sail, wtspring; the RP4 save, sail,
+  wtspring, drcjar (a route that stalled at its start on each device left out: an intermittent real-time start, the
+  plain APK the same). The plain and PGO APKs from one tree (0 hash mismatches), .text 0x5b3bd54 against 0x5f8787c
+  (+4.6 MB). A/B, P G P G, sail (trained) then auction (held out), 40 s each, simpleperf stat on core 1:
+
+  | | sail cycles | sail busy | sail fps | auction cycles | auction busy | auction fps |
+  |---|---|---|---|---|---|---|
+  | Odin plain | 26.69 / 26.90 G | 75.0 / 75.2% | 60.1 | 16.94 / 16.88 G | 60.0 / 58.8% | 60.1 |
+  | Odin PGO | 25.26 / 25.42 G (-5.5%) | 73.0 / 72.8% | 60.1 | 15.95 / 16.10 G (-5.2%) | 56.8 / 56.8% | 60.1 |
+  | RP4 plain | - / 27.53 G | 85.8 / 85.5% | 56.0 / 56.3 | 16.99 / 17.10 G | 68.2 / 68.8% | 59.7 / 59.6 |
+  | RP4 PGO | 26.68 / 26.24 G (-3.9%) | 83.2 / 83.8% | 58.0 / 58.3 | 16.74 / 17.35 G (0) | 66.5 / 66.5% | 59.4 / 59.8 |
+
+  Busy is the scheduler thread's (the game's core 1). Every PGO run's core 1 is 2-3 points less busy than every
+  plain run's, on both devices and on the held-out route. On the Odin the front-end stalls drop 12% and the L1i TLB
+  refills 25%; on the RP4 sail gets 2 fps more where it falls short of 60. The profile goes stale as the generated
+  code changes: functions whose control flow changed are left unoptimised (pgo.sh reports how many), so a release
+  build needs a fresh profile. The profiles stay out of git: the worker's /wwhd/tmp/top-pgo/raw-all (the eight
+  .profraw files: `tools/android/pgo.sh /wwhd/tmp/top-pgo/raw-all`) and the APK pair /wwhd/tmp/top-pgo/windsong-{plain,pgo}.apk.
 
 ## A4 codegen (2026-10-14, session qa: a4-codegen)
 

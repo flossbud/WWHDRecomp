@@ -39,7 +39,9 @@ args=(-DCEMU_SRC="$cemu" -DWWHD_SDL3= -DWWHD_VCPKG_MANIFEST="$out/manifest" -DWW
       -DENABLE_OPENGL=OFF -DENABLE_WAYLAND=OFF -DENABLE_BLUEZ=OFF -DENABLE_HIDAPI=OFF -DENABLE_FERAL_GAMEMODE=OFF
       -DENABLE_DISCORD_RPC=OFF -DENABLE_LIBUSB=OFF
       -DWWHD_RECOMP_DIR="${RECOMP_DIR-$root/build/recomp}" -DWWHD_PLAY_BUILD=ON
-      -DWWHD_PLAY_OPT="${PLAY_OPT:-}")                    # PLAY_OPT: the generated code's extra options (tools/android/pgo.sh)
+      -DWWHD_PLAY_OPT="${PLAY_OPT:-}"                     # PLAY_OPT: the generated code's extra options (tools/android/pgo.sh)
+      ${LINK_OPT:+-DCMAKE_SHARED_LINKER_FLAGS=$LINK_OPT})  # LINK_OPT: the library's link options (pgo.sh generate: the
+                                                          # profile runtime; the NDK's toolchain file doesn't read LDFLAGS)
 [ -f "$out/CMakeCache.txt" ] || args+=(-G Ninja -DCMAKE_BUILD_TYPE=Release
       -DVCPKG_TARGET_TRIPLET=arm64-android-wwhd -DVCPKG_OVERLAY_TRIPLETS="$root/tools/android/triplets"
       -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"
