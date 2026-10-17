@@ -1,5 +1,53 @@
 # Handoff: WWHD recomp, state as of 2026-10-08 (WW-4: true 60 done for every actor; next: performance)
 
+**Where it stands (2026-10-17, the end of week 2's final round; main session, the router).** The owner ended the
+round on 2026-10-16: every open item got an owner, each session finished its list and stopped, and anything found
+after that went on the page as open and unassigned. A critical, game-breaking bug still went to qa at once (the
+owner's one exception: B97). Top, bottom and qa are stopped and their lines retired; main retires after the RP4's
+install.
+- **Merged in the round** (main 48e53810):
+  - the owner's bugs: B86 bomb flowers, B87 RP4 red scene, B88 RP4 pink trail, B89 trees and bushes, B90 Helmaroc
+    crash and pop-in, B92 RP4 black sky, B93 ladder top, B94 refight sages, B97 x86 start crash;
+  - Android speed: a4-cpu, a4-codegen, a4-gpu, the render passes default on Qualcomm, sticky passes, FastMul, a4-pgo;
+  - s-shadercover: 10,469 shader programs prepared before play;
+  - t-debugmenu: Debug Menu v10 in the pause menu.
+  - Each one's details are in the sessions' sections below, docs/research/android-plan.md (with the RP4's status)
+    and graphics-rework.md.
+- **Deploy 16** (main 48e53810, then 8504b894 for the APK) carries all of it.
+  - Gates (the desktop worker): checks all MATCH (15 captures PSNR inf), regress 7c16fcef, predeploy 54 ok,
+    predeploy-rt ok on the PGO wwhd-play (the soak 60.1 fps, 0.1% late frames).
+  - The PC: that PGO build (`WWHD_PGO=1 tools/play/deploy.sh`).
+  - The Deck: the PC's bytes (`WWHD_DEPLOY_SRC=build/wwhd-pgo/wwhd-play`, sha b8879b2a), into the SD folder; the
+    old binary, play.sh and portable's settings, game and controller profiles kept as `.before16` /
+    `portable.before16`; play-60.sh, wwhd.ini and the saves untouched. Checked headless in a separate folder (its own
+    portable, the 100% test save, sail at 60, then deleted): a first start prepared the full shader list in 65 s
+    (15,167 shaders, 13,829 pipelines), then 54-60 fps, exit 0.
+  - The Odin and the RP4: windsong-8504b894.apk, built with the on-device profile (`tools/android/pgo.sh
+    /wwhd/tmp/top-pgo/raw-all` counted 3 functions out of date: under main's ~10% rule), with the full shader list
+    (the owner's choice after the numbers): a first start prepares it in 45 s on the Odin and 125 s on the RP4
+    behind the progress bar; a second start loads the cache in 1.2 s (the Odin); in play ~0.7 GB more memory (PSS
+    2.05 GB on the Odin, 2.68 GB on the RP4), no low-memory kill; the cache ~214 MB. The Odin: sail 60.0-60.2 fps.
+    /wwhd/tmp/main-apk holds 8504b894 (its README). The RP4 had 48e53810 and gets 8504b894 when it's charged
+    (`/wwhd/tmp/deploy16/inst16.sh`: the owner check, the install, the sha).
+- **Open, unassigned** (the page has each one's notes):
+  - B95: pre-rotation on Android;
+  - B96: the Helmaroc tower top's HUD colours;
+  - B98: particle emitters on a half-tick phase;
+  - B99: two debug-warp crashes;
+  - B91: the Odin's green border, needs a phone photo;
+  - parked by the owner as older bugs: B8, B10, B75;
+  - m-nocemu's phases N0-N8, after its research (docs/research/no-cemu-plan.md).
+- **To clean once the owner verifies**:
+  - the owner's save copies on the workers: B90's and B93's (/wwhd/tmp/qa-b90/save) and B92's
+    (/wwhd/tmp/bottom-b92/ownersave, both workers);
+  - the sessions' scratch named in their final summaries (top's on both workers, qa's /wwhd/tmp/qa-a4 on the Mac VM).
+- **Not merged**: top's swap probe, the GPU thread's acquire and present waits (top's section).
+- **Rules learned this round** (main's memory has them too):
+  - the router doesn't fix bugs unless the owner says to take load;
+  - the owner files bugs on the page: read it, don't ask for a list;
+  - deploys go to the Deck too;
+  - the RP4 is on the tailnet at a fixed adb port until it reboots.
+
 **Week 2 (from 2026-10-09; main session WW-12 on ww-2-1, the router).** Sessions: `top` (ww-2-2, WW-13), `bottom`
 (ww-2-3, WW-14), `qa` (ww-2-4, WW-15: only problems the others are stuck on, routed by main), `web` (ww-10: the
 progress page). Main routes, grants the merge slot (ask before any push to `main`), runs the batched deploys and keeps
