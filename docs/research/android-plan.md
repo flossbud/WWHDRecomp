@@ -357,6 +357,8 @@ simpleperf_report_lib):
   code changes: functions whose control flow changed are left unoptimised (pgo.sh reports how many), so a release
   build needs a fresh profile. The profiles stay out of git: the worker's /wwhd/tmp/top-pgo/raw-all (the eight
   .profraw files: `tools/android/pgo.sh /wwhd/tmp/top-pgo/raw-all`) and the APK pair /wwhd/tmp/top-pgo/windsong-{plain,pgo}.apk.
+  Main's call (2026-10-16): the default build stays plain; the deploys' Android APKs build with the merged profile
+  while pgo.sh counts few functions out of date (under ~10%), plain otherwise, the count in the deploy's note.
 
 ## A4 codegen (2026-10-14, session qa: a4-codegen)
 

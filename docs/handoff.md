@@ -4590,6 +4590,38 @@ Worktree `.worktrees/ww-2-2`, branch `ww-2-2`, worker directory `/wwhd/WWHDRecom
   relies on Cemu's JIT being off (cpuMode 0, the APK's default game profile). apk.sh packs libadrenotools' hooks.
   Leads (android-plan.md, not tried): the scheduling choice, and a sustained-performance hint for the slow first run
   after a doze.
+- **The final round (2026-10-16, the owner's list for top: B93, a4-pgo, t-debugmenu; then retired).** Earlier the
+  same week: a4-cpu4 and a4-cpu5 (the game thread's host cost, android-plan.md "a4-cpu"), s3-touch's leftovers, and
+  B89 (the plants' pushes kept past the late collision resolution: `WWHD_60FPS_LATEPUSH`, routes treewalk and
+  bushwalk).
+  - **B93** (Link drawn ~210 units above a ladder's top for a frame at 60): a held half step (the GroundHold here)
+    left his action call out but kept execute's clear of the root mode (+0x68DE), so the climb's whole root lift was
+    posed over an unmoved position. The hold rules now call `rt_hold_skipped()` (generate.py), which puts the mode
+    back (`WWHD_60FPS_ROOTHOLD=0`: off). Its repro needs the owner's save (worker only, never in git): no route.
+  - **a4-pgo**: PGO from profiles taken on the devices (`tools/android/pgo.sh generate`, `WWHD_PROFILE_FILE`,
+    `tools/android/pgo.sh DIR`), 2-3 points off the game thread's busy time on the Odin and the RP4, the held-out route
+    included (android-plan.md "a4-pgo"). The default build is unchanged; main's call: the deploys' Android APKs use the
+    merged profile while under ~10% of functions are out of date (pgo.sh's count, in the deploy note). The profiles:
+    the worker's /wwhd/tmp/top-pgo/raw-all (kept).
+  - **t-debugmenu** (the owner's Pause Menu v10: Settings > Advanced > Enable Debug Menu, `WWHD_DEBUG_MENU`, off by
+    default, shipped in release builds): the old overlay menu is gone (overlay.cpp keeps the keyboard, the error
+    dialogs and the HOME sign); Debug Menu sits after Settings in the pause menu, and both sticks or F1 open the pause
+    menu straight onto it. pause_menu.cpp draws it from `assets/pause_menu/debug-menu.json` (the design's own data;
+    rows map to os/debug_menu.cpp's tables by id prefix and order) in the blue theme; os/debug_menu.cpp keeps the warps,
+    the rush, the arena and the spawn placement. Main's calls: Boss Refights and the spawn list don't persist; a warp,
+    the rush, a fight, a state's load or quitting discards the list silently. The list spawns at any unpause, at most
+    `kSpawnCap` (32), once Link has executed 60 game frames without a gap. sixty.cpp's PlanSpawns places it on rings
+    ahead of him (the rest of the circle when nothing fits ahead), clear of him and of each other by each foe's
+    spacing radius, where the ground (cBgS::GroundCross f_02008974 with a copy of Link's Acch ground check) is within
+    120 of his height under the whole footing: never the sea or out of bounds. Four are created a game frame; the blue
+    toast (always blue: main's call) shows over play in the Pause prompt's place once they're made, with how many
+    didn't fit. Test: the save route in real time with a window (`tools/sixty/run.sh save` with `SIXTY_REALTIME=1
+    WWHD_WINDOW=1`, pausehold.sh's way into play on the worker; a bare windowed launch stays on the legend tablet there),
+    keys by xdotool, root crops; its portable folder keeps the last run's wwhd.ini (clear `WWHD_DEBUG_MENU` first).
+  - **B97, found here, open and unassigned**: x86 wwhd-play sometimes dies at start (2 of 19 fresh-folder starts on
+    a busy worker, a null call before `Init Cemu`; nothing of the debug menu runs that early).
+  - The swap probe (the GPU thread's acquire and present waits, the next step android-plan.md names for the late
+    frames) was a local WIP, not merged.
 
 ### Session bottom (week 2, WW-14): the GPU side
 
