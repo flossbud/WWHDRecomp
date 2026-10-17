@@ -7,7 +7,6 @@
 #include "../gpu/vk/renderer.h"
 #include "../os/swkbd.h"
 #include "../os/erreula.h"
-#include "../os/debug_menu.h"
 #include <SDL3/SDL.h>
 #include <chrono>
 
@@ -149,77 +148,6 @@ namespace
 		Show((1920 - w) / 2, (1080 - h) / 2, c, w, h);
 	}
 
-	// the debug menu's panel in the 1920x1080 TV frame: laid out by MenuLayout (wide enough for its longest line, up
-	// to 1840 pixels; glyphs at 3 times 8 pixels, 2 when that doesn't fit, a line still too long cut with "..."; at
-	// most the rows that fit the frame, scrolled to keep the cursor in view), drawn by DrawDebugMenu, hit by the mouse
-	// (wwhd::DebugMenuItemAt)
-	struct MenuLayout
-	{
-		int scale, w, h, top, row, first, rows;
-		size_t chars;                                   // an item's characters that fit, its "> " included
-		bool cut;                                       // the cursor's line was cut: shown whole in a hint line
-	};
-
-	int s_menuFirst = 0;                                // the first row shown, as last drawn (the event loop's thread)
-
-	MenuLayout LayOutMenu(const wwhd::os::debug_menu::View& v)
-	{
-		constexpr int kMaxW = 1840, kMaxH = 1040, kPad = 48;
-		MenuLayout l{};
-		size_t longest = v.title.size();
-		for (const std::string& i : v.items)
-			longest = std::max(longest, i.size() + 2);
-		l.scale = kPad * 2 + (int)longest * 24 <= kMaxW ? 3 : 2;
-		const int glyph = 8 * l.scale;
-		l.w = std::clamp(kPad * 2 + (int)longest * glyph, 900, kMaxW);
-		l.w = std::max(l.w, kPad * 2 + 16 * (int)v.hint.size());
-		l.w = std::min(l.w, kMaxW);
-		l.chars = (size_t)(l.w - kPad * 2) / glyph;
-		l.row = l.scale == 3 ? 40 : 30;
-		l.top = l.scale == 3 ? 100 : 90;
-		l.cut = v.cursor >= 0 && v.cursor < (int)v.items.size() && v.items[v.cursor].size() + 2 > l.chars;
-		const int bottom = 60 + (l.cut ? 36 : 0);
-		const int n = (int)v.items.size();
-		l.rows = std::min(n, std::max(1, (kMaxH - l.top - bottom) / l.row));
-		// scrolled only as far as the cursor needs (a list moving under the mouse would change what it hovers)
-		l.first = std::clamp(std::clamp(s_menuFirst, v.cursor - l.rows + 1, v.cursor), 0, std::max(0, n - l.rows));
-		l.h = l.top + l.rows * l.row + bottom;
-		return l;
-	}
-
-	std::string Cut(const std::string& s, size_t chars)
-	{
-		return s.size() <= chars ? s : s.substr(0, chars > 3 ? chars - 3 : 0) + "...";
-	}
-
-	void DrawDebugMenu(const wwhd::os::debug_menu::View& v)
-	{
-		const MenuLayout l = LayOutMenu(v);
-		s_menuFirst = l.first;
-		const int w = l.w, h = l.h;
-		Canvas c(w, h);
-		std::string title = v.title;
-		if (l.rows < (int)v.items.size())               // scrolled: which rows are shown
-			title += fmt::format("  ({}-{} of {})", l.first + 1, l.first + l.rows, v.items.size());
-		c.Text(40, l.top - 66, 3, Cut(title, (size_t)(w - 80) / 24), kText);
-		int y = l.top;
-		for (int i = l.first; i < l.first + l.rows; i++)
-		{
-			if (i == v.cursor)
-			{
-				c.Fill(30, y - 8, w - 60, l.row - 2, kFrame);
-				c.Text(48, y, l.scale, Cut("> " + v.items[i], l.chars), kText);
-			}
-			else
-				c.Text(48, y, l.scale, Cut("  " + v.items[i], l.chars), kHint);
-			y += l.row;
-		}
-		if (l.cut)
-			c.Text(40, h - 86, 2, Cut(v.items[v.cursor], (size_t)(w - 80) / 16), kText);
-		c.Text(40, h - 50, 2, Cut(v.hint, (size_t)(w - 80) / 16), kHint);
-		Show((1920 - w) / 2, (1080 - h) / 2, c, w, h);
-	}
-
 	void DrawHomeSign()
 	{
 		constexpr int w = 620, h = 60;
@@ -246,21 +174,6 @@ namespace wwhd
 	void ShowPreparing(uint32 done, uint32 total)
 	{
 		DrawPreparing(done, total);
-	}
-
-	int DebugMenuItemAt(float tvx, float tvy)
-	{
-		const os::debug_menu::View v = os::debug_menu::Current();
-		if (!v.open)
-			return -1;
-		const MenuLayout l = LayOutMenu(v);
-		const float px = tvx - (1920 - l.w) / 2, py = tvy - (1080 - l.h) / 2;
-		if (px < 0 || py < 0 || px >= l.w || py >= l.h)
-			return -2;                                  // outside the panel
-		if (px < 30 || px >= l.w - 30 || py < l.top - 8)
-			return -1;                                  // on the panel, not on an item
-		const int i = (int)((py - (l.top - 8)) / l.row);
-		return i < l.rows ? l.first + i : -1;
 	}
 
 	// The FPS overlay (the setting WWHD_FPS_OVERLAY: 1 FPS, 2 FPS + frame time; applied at once): the frames shown in
@@ -302,27 +215,23 @@ namespace wwhd
 
 	void UpdateOverlay()
 	{
-		static uint32 s_keyboard = ~0u, s_error = ~0u, s_menu = ~0u;
+		static uint32 s_keyboard = ~0u, s_error = ~0u;
 		static bool s_home = false, s_shown = false;
 		os::swkbd::View kb = os::swkbd::Current();
 		os::erreula::View err = os::erreula::Current();
-		os::debug_menu::View menu = os::debug_menu::Current();
-		if (kb.version == s_keyboard && err.version == s_error && err.homeNixSign == s_home && menu.version == s_menu)
+		if (kb.version == s_keyboard && err.version == s_error && err.homeNixSign == s_home)
 			return;
 		s_keyboard = kb.version;
 		s_error = err.version;
 		s_home = err.homeNixSign;
-		s_menu = menu.version;
 		if (err.dialog)
 			DrawError(err);
 		else if (kb.open)
 			DrawKeyboard(kb);
-		else if (menu.open)
-			DrawDebugMenu(menu);
 		else if (err.homeNixSign)
 			DrawHomeSign();
 		else if (s_shown)
 			gpu::SetOverlay(0, 0, 0, 0, {});
-		s_shown = err.dialog || kb.open || menu.open || err.homeNixSign;
+		s_shown = err.dialog || kb.open || err.homeNixSign;
 	}
 }

@@ -81,6 +81,8 @@ namespace
 		{ "WWHD_FPS_OVERLAY", "FPS overlay", { { "0", "off" }, { "1", "FPS" }, { "2", "FPS + frame time" } }, true, nullptr },
 		{ "WWHD_CORES", "CPU threads", { { "3", "3" }, { "1", "1" } }, false, "3" },
 		{ "WWHD_LAZY_DRAWDONE", "Lazy DrawDone", { { "1", "on" }, { "0", "off" } }, false, "1" },
+		// the pause menu's Debug Menu (Pause Menu v10: Settings > Advanced > Enable Debug Menu; off by default, at once)
+		{ "WWHD_DEBUG_MENU", "Debug Menu", { { "0", "off" }, { "1", "on" } }, true, nullptr },
 		// diagnostics (the pause menu's Diagnostics tab): the renderer's and the runtime's own speed-ups, each on by default,
 		// off only to rule one out when something looks wrong
 		{ "WWHD_WRITE_WATCH", "Texture write-watch", { { "1", "on" }, { "0", "off" } }, false, nullptr },

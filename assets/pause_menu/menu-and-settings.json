@@ -528,6 +528,14 @@
             "Quality": true
           },
           "description": "A speed option for slower GPUs."
+        },
+        {
+          "id": "debugMenu",
+          "label": "Enable Debug Menu",
+          "type": "toggle",
+          "default": false,
+          "applies": "immediately",
+          "description": "Adds Debug Menu to the pause menu, under Settings. For testing only."
         }
       ]
     },

@@ -63,7 +63,6 @@ namespace wwhd::gpu
 		std::atomic<float> s_hintOpacity{ 0 };
 		std::atomic<float> s_menuOpacity{ 1 };
 		uint32 s_menuShown = 0;                 // the menu panel's version last presented while held
-		std::atomic<double> s_frameX{ 0 }, s_frameY{ 0 }, s_frameScale{ 0 };   // where the 1920x1080 frame was last drawn
 
 		std::atomic<uint64> s_shown{ 0 };       // frames presented (ShownFrames)
 		std::atomic<uint64> s_longestNs{ 0 };   // the longest interval between two since TakeLongestShownInterval
@@ -480,18 +479,9 @@ namespace wwhd::gpu
 		vkCmdBlitImage(s.cmd, img.image, img.layout, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b, filter);
 	}
 
-	bool OverlayFrame(double& x, double& y, double& scale)
-	{
-		if (s_frameScale <= 0)
-			return false;
-		x = s_frameX, y = s_frameY, scale = s_frameScale;
-		return true;
-	}
-
 	// the overlay in the 1920x1080 frame at (tvX, tvY) and that scale in the swapchain image
 	static void DrawOverlay(VkImage target, sint32 tvX, sint32 tvY, double scale)
 	{
-		s_frameX = tvX, s_frameY = tvY, s_frameScale = scale;
 		DrawPanel(s_overlay, target, VK_FILTER_LINEAR, [&](const Panel& p, sint32& x0, sint32& y0, sint32& x1, sint32& y1) {
 			x0 = tvX + (sint32)(p.x * scale), y0 = tvY + (sint32)(p.y * scale);
 			x1 = tvX + (sint32)((p.x + (sint32)p.w) * scale), y1 = tvY + (sint32)((p.y + (sint32)p.h) * scale);

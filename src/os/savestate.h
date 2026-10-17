@@ -38,7 +38,7 @@ namespace wwhd::state
 	// a save, load or census is waiting for the game to come to rest (task_loop.cpp skips its idle waits meanwhile)
 	bool Pending();
 
-	// The debug menu's slots (debug_menu.cpp; the owner's choice: four, in the game folder's portable/states, never in
+	// The pause menu's Save slots (frontend/pause_menu.cpp; the owner's choice: four, in the game folder's portable/states, never in
 	// git: a state is game memory). SetDir at start (cemu_boot.cpp); a request is taken at the next whole tick's top
 	// (the game goes on meanwhile), its outcome in Status
 	constexpr int kSlots = 4;

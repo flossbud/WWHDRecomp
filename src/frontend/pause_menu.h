@@ -18,6 +18,11 @@ namespace wwhd::pause_menu
 	// opens it; before play the game is held until it's back
 	void Background(bool on);
 	void Toggle();
+	// the pause menu straight onto its Debug Menu (Pause Menu v10; clicking both sticks, F1), while Settings > Advanced >
+	// Enable Debug Menu is on: opened as Toggle opens it, or moved there if it's up
+	void OpenDebugMenu();
+	// the mouse wheel while the menu is up (1 down, -1 up): the Debug Menu's focus a row, at most one step each 90 ms
+	void Wheel(int dir);
 	// a key press from the window (SDL keycode, true when repeated by the system): true when the menu took it
 	bool Key(uint32 key, bool repeat);
 	// the pad as the frontend reads it, every time it publishes input: the menu's own while it is up

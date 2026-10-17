@@ -30,9 +30,6 @@ namespace wwhd::gpu
 	// The FPS overlay (frontend/overlay.cpp; the setting WWHD_FPS_OVERLAY): a panel of its own, RGBA8 w x h, drawn at
 	// the picture's bottom left in the window's pixels, scaled by a whole number that follows the picture's height;
 	// never in captures. No pixels: nothing.
-	// where the overlay's 1920x1080 frame was last drawn in the window: its top left in pixels and its scale (false
-	// before the first): the frontend's mouse finds the debug menu's items with it
-	bool OverlayFrame(double& x, double& y, double& scale);
 	void SetFpsPanel(uint32 w, uint32 h, std::vector<uint32> rgba);
 	uint64 ShownFrames();                                          // frames presented to the window, frame generation's included
 	double TakeLongestShownInterval();                             // the longest time between two since the last call, in ms

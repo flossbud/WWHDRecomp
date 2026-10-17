@@ -2,7 +2,7 @@
 // (WWHD_60FPS, WWHD_VSYNC...), kept in portable/wwhd.ini as KEY=VALUE lines of the switches' own names. Load applies
 // them to the environment before anything reads a switch, unless the environment sets one already (a launcher's or a
 // test's own wins), and only in real time with a window: the virtual clock (every check) never reads the file.
-// WWHD_SETTINGS=0: the file is ignored. The settings page (debug_menu.cpp, F2) shows and changes them. Presets
+// WWHD_SETTINGS=0: the file is ignored. The pause menu's Settings (frontend/pause_menu.cpp) shows and changes them. Presets
 // (WWHD_PRESET=auto|performance|quality) set the speed options at once; Auto picks Performance on a low-powered
 // device (settings.cpp).
 #pragma once
@@ -30,7 +30,7 @@ namespace wwhd::os::settings
 	struct OptionView
 	{
 		std::string key, label;
-		std::vector<std::string> values, shown;     // the switch's values, and as the debug menu shows them
+		std::vector<std::string> values, shown;     // the switch's values, and as the menus show them
 		int current = 0;                            // the value set (in use, or at the next start)
 		int atStart = 0;                            // the value the program started with
 		std::string atStartValue;                   // the same as the switch's text (the preset: as resolved)

@@ -1,8 +1,8 @@
-// The debug menu (the owner's idea: the test aids from a controller): a panel over the game that
-// warps to islands, dungeons and boss rooms (the bosses' refights on), runs a boss rush, spawns
-// enemies ahead of Link and warps to a test arena (Gohma's room with no warp in the middle). Clicking both sticks at once, or F1, opens and closes it; while it is open the D-pad (or the left
-// stick) moves, A chooses, B goes back, and the game sees no input. debug_menu.cpp; the overlay
-// (src/frontend/overlay.cpp) draws it.
+// The debug menu's game side (the owner's idea: the test aids from a controller): warps to islands, dungeons and boss
+// rooms (the bosses' refights on), a boss rush, a test arena (Gohma's room with no warp in the middle) and enemies spawned
+// ahead of Link. The menu itself is the pause menu's Debug Menu (Pause Menu v10, src/frontend/pause_menu.cpp), shown
+// while Settings > Advanced > Enable Debug Menu is on; clicking both sticks at once, or F1, opens the pause menu straight
+// onto it. debug_menu.cpp.
 #pragma once
 #include "input.h"
 #include <string>
@@ -10,30 +10,26 @@
 
 namespace wwhd::os::debug_menu
 {
-	// The pad the game reads, after the menu has taken what it needs (KPADReadEx, input.cpp).
+	// The pad the game reads (KPADReadEx, input.cpp): both sticks clicked at once open the Debug Menu (SetOpener)
 	input::Pad Filter(const input::Pad& pad);
-	// F1 on the keyboard (the owner's ask): opens or closes the menu as both sticks do; Escape closes
-	// it (window_system.cpp). On the keyboard the arrows move, X (A) or Enter (+) chooses, Z (B) goes back.
-	void Toggle();
-	void ToggleSettings();                      // F2: the settings page (src/os/settings.h) on its own
-	bool IsOpen();
-	// The mouse while the menu is open (window_system.cpp; the overlay finds the item under it):
-	// hovering an item selects it, a left click chooses it, a right click goes back, the wheel moves.
-	void Hover(int item);
-	void Click(int item);
-	void Back();
-	void Scroll(int steps);
+	// what opens it (the pause menu, on the Debug Menu), set by the frontend
+	void SetOpener(void (*open)());
+	// Settings > Advanced > Enable Debug Menu (WWHD_DEBUG_MENU; off by default, applied at once)
+	bool Enabled();
 
-	struct View
-	{
-		bool open = false;
-		uint32 version = 0;                     // changes whenever what is shown changes
-		std::string title;
-		std::vector<std::string> items;
-		int cursor = 0;
-		std::string hint;
-	};
-	View Current();
+	// the Debug Menu's choices (its tabs' rows in the design's order: islands 5, dungeons 8, bosses 12, foes 7)
+	enum class Group { Islands, Dungeons, Bosses };
+	int Count(Group g);
+	// a warp at the next game frame (a boss room turns the refights on); it ends a rush and the test arena
+	void Warp(Group g, int index);
+	void StartRush();                           // the first eight bosses in order, refights on, no heart containers
+	void StartArena();                          // Gohma's room, the boss beaten, no warp in the middle
+	int FoeCount();
+	// the spawn list: counts per foe (the design's order), spawned ahead of Link over the next game frames (placed by
+	// sixty.cpp, wwhd::debug::TakeSpawnReport): the number asked for (at most kSpawnCap, the rest left out)
+	constexpr int kSpawnCap = 32;
+	int SpawnFoes(const std::vector<int>& counts);
+	void CancelSpawns();                        // those not spawned yet (a warp, a rush, a fight, a state load)
 }
 
 namespace wwhd::debug
@@ -41,8 +37,13 @@ namespace wwhd::debug
 	// The test aids' runtime side (src/overrides/sixty.cpp): a stage change on the next game frame, as
 	// WWHD_DEBUG_STAGE makes one, and the bosses' refights (WWHD_DEBUG_BOSS) on or off.
 	void RequestStage(const char* name, int point, int room, int layer);
-	// an actor of that process (parameters, its angle's x for some) 150 units ahead of Link, facing him
-	void RequestSpawn(int process, uint32 param, uint32 anglex);
+	// enemies to spawn ahead of Link, facing him, once he's settled in play (four a game frame), placed clear of him and
+	// of each other by their spacing radius, on the ground (anglex: more parameters for some: a Darknut's 0x80, a
+	// shield and a cape); the report once the last is made: how many were placed and how many found no place
+	struct SpawnAsk { int process; uint32 param, anglex; float radius; };
+	void RequestSpawns(const std::vector<SpawnAsk>& asks);
+	void CancelSpawns();
+	bool TakeSpawnReport(int& placed, int& dropped);
 	void SetBossRefight(bool on);
 	bool BossRefight();
 	// the test arena (N28): Gohma's room with no warp in the middle (WWHD_DEBUG_ARENA=1, or the menu)

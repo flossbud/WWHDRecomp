@@ -389,6 +389,7 @@ namespace
 	// whole ticks as before; so does the half tick after an event starts, is ordered or is asked to end.
 	// WWHD_60FPS_EVENTS=0: no stepping in events at all; WWHD_60FPS_EVENTS=1: not for N8's actions.
 	uint32 s_link = 0;                              // Link (168) as he last executed
+	uint32 s_linkSeen = 0, s_linkSince = 0;         // the game frame he last executed, and since when he has without a gap
 	// Cutscenes at 60 (below, "cutscenes at 60"; WWHD_60FPS_DEMOS=0 turns it off): Link's cutscene action
 	// (0xA9, dProcTool f_0241FD7C: his place, angle and animation's frame from the cutscene's data) steps
 	// in events, and the cutscene's values are evaluated for both of the tick's steps
@@ -1871,6 +1872,7 @@ namespace wwhd::debug
 // parameters again (a chest's item, TBOX, is anglez >> 8)
 void f_025D5678(PPCInterpreter_t* __restrict ctx);
 void f_025E14A8(PPCInterpreter_t* __restrict ctx);
+void f_02008974(PPCInterpreter_t* __restrict ctx);
 namespace
 {
 	struct Spawn { int tick, proc, subtype; uint32 param; float x, y, z; uint32 anglex, angley, anglez; };
@@ -1924,11 +1926,103 @@ namespace
 			w.x, w.y, w.z, id, layer != current ? " (in Link's layer: the frame's current layer was the root layer)" : "");
 	}
 
-	// the debug menu's spawn (wwhd::debug::RequestSpawn): one waiting for the next game frame, placed
-	// 150 units ahead of Link and facing him
+	// the Debug Menu's spawns (wwhd::debug::RequestSpawns): a list waiting for Link to be settled in play (below), then
+	// placed all at once (PlanSpawns) and created four a game frame, each facing him; what was placed and left out is
+	// reported once the last is made (TakeSpawnReport, the menu's toast)
 	std::mutex s_spawnLock;
-	bool s_spawnWaiting = false;
-	Spawn s_spawnAsked{};
+	std::vector<wwhd::debug::SpawnAsk> s_spawnsAsked;
+	std::deque<Spawn> s_spawnPlan;
+	bool s_spawnPlanned = false, s_spawnReport = false;
+	int s_spawnPlaced = 0, s_spawnDropped = 0;
+
+	// the ground under (x, z) below y, the play's collision as an actor's ground check sees it: cBgS::GroundCross
+	// (f_02008974) on the play's BgS (g_dComIfG_gameInfo + 0x12A0, as dBgS_Acch::CrrPos's callers pass it), with a copy
+	// of Link's Acch's ground check. dBgS_Acch::GroundCheck (f_024EFF50, called from CrrPos f_024F08A8) shows the
+	// layout: the check at the Acch's +0xD4 (0x54 bytes, the roof check after it at +0x128: f_024F03A0, dBgS::RoofChk
+	// f_024EF6E8), its position at +0x24, the cross's height stored to the Acch's +0x94 (m_ground_h, as sixty.cpp reads
+	// Link's at +0x8A0) and compared with -1e9 (0x10043828): no ground. Link's Acch is at +0x80C; the copy keeps his
+	// check's own pass checks. Below -1e8: no ground there
+	float GroundUnder(PPCInterpreter_t* ctx, float x, float y, float z)
+	{
+		Registers regs;
+		regs.Save(ctx);
+		const uint32 sp = (ctx->gpr[1] - 0x300) & ~0xFu;
+		const uint32 chk = sp + 0x100, from = s_link + 0x80C + 0xD4;
+		for (uint32 i = 0; i < 0x54; i += 4)
+			wr32(chk + i, rd32(from + i));
+		wr32(chk + 0x24, std::bit_cast<uint32>(x));
+		wr32(chk + 0x28, std::bit_cast<uint32>(y));
+		wr32(chk + 0x2C, std::bit_cast<uint32>(z));
+		wr32(sp, ctx->gpr[1]);                     // a back chain
+		ctx->gpr[1] = sp;
+		ctx->gpr[3] = kGameInfo + 0x12A0;
+		ctx->gpr[4] = chk;
+		f_02008974(ctx);
+		const float h = (float)ctx->fpr[1].fp0;
+		regs.Restore(ctx);
+		return h;
+	}
+
+	// The list's places (main's ask after the first capture: not into Link or each other, on the ground, never over water
+	// or out of bounds): rings ahead of Link (his heading), the first 30 units past his and the foe's edges, each next 30
+	// further out to 600; along a ring from straight ahead outwards to 110 degrees either side, a place each 20 units
+	// (none there: the rest of the circle, as at a pier's end facing the sea). A foe takes the first place clear of Link
+	// (his radius 35 and 30 more) and of those placed (their spacing radii and 20 more) whose ground (from 150 above his
+	// height down) is within 120 units of his height, so not the sea or a drop, which lie lower, nor a wall's top, and is
+	// under its whole footing too (four more probes at 0.6 of its radius, each within 60 of the middle's: not a pier's
+	// edge); it stands on that ground. One that finds no place is left out
+	void PlanSpawns(PPCInterpreter_t* ctx, const std::vector<wwhd::debug::SpawnAsk>& asks)
+	{
+		const float lx = std::bit_cast<float>(rd32(s_link + 0x314)), ly = std::bit_cast<float>(rd32(s_link + 0x318)),
+			lz = std::bit_cast<float>(rd32(s_link + 0x31C));
+		const double heading = (sint16)rd16(s_link + 0x32A) * (3.14159265358979 / 32768.0);   // shape_angle.y
+		struct Placed { float x, z, r; };
+		std::vector<Placed> placed;
+		int probes = 0;
+		const auto start = std::chrono::steady_clock::now();
+		const auto footing = [&](float x, float z, float r, float g) {
+			for (int i = 0; i < 4; i++)
+			{
+				probes++;
+				const float h = GroundUnder(ctx, x + (i == 0 ? r : i == 1 ? -r : 0), ly + 150, z + (i == 2 ? r : i == 3 ? -r : 0));
+				if (h < -1e8f || std::fabs(h - g) > 60)
+					return false;
+			}
+			return true;
+		};
+		for (const wwhd::debug::SpawnAsk& ask : asks)
+		{
+			bool found = false;
+			for (int pass = 0; pass < 2 && !found; pass++)              // ahead, then the rest of the circle
+				for (float d = 35 + ask.radius + 30; d <= 600 && !found; d += 30)
+			{
+				const double step = 20.0 / d, deg = 3.14159265358979 / 180, from = pass ? 110 * deg : 0, limit = pass ? 180 * deg : 110 * deg;
+				for (int k = 0; step * ((k + 1) / 2) <= limit && !found; k++)
+				{
+					const double off = step * ((k + 1) / 2);
+					if (off < from || (k % 2 == 0 && off >= 180 * deg && off > 0))
+						continue;
+					const double a = heading + off * (k % 2 ? 1 : -1);   // 0, +1, -1, +2, -2...
+					const float x = lx + d * (float)std::sin(a), z = lz + d * (float)std::cos(a);
+					if (std::any_of(placed.begin(), placed.end(), [&](const Placed& p) {
+							return std::hypot(p.x - x, p.z - z) < p.r + ask.radius + 20; }))
+						continue;
+					probes++;
+					const float g = GroundUnder(ctx, x, ly + 150, z);
+					if (g < -1e8f || std::fabs(g - ly) > 120 || !footing(x, z, ask.radius * 0.6f, g))
+						continue;
+					Spawn w{ 0, ask.process, 0, ask.param, x, g, z, ask.anglex, 0, 0 };
+					w.angley = (uint16)(sint16)std::lround(std::atan2(lx - x, lz - z) * (32768.0 / 3.14159265358979));   // facing him
+					s_spawnPlan.push_back(w);
+					placed.push_back({ x, z, ask.radius });
+					found = true;
+				}
+			}
+			s_spawnDropped += !found;
+		}
+		cemuLog_log(LogType::Force, "wwhd debug: the Debug Menu's list: {} placed, {} without a place ({} ground probes, {:.1f} ms)",
+			placed.size(), s_spawnDropped, probes, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
+	}
 
 	void DebugSpawn(PPCInterpreter_t* ctx)
 	{
@@ -1956,20 +2050,28 @@ namespace
 		}();
 		if (g_rtHalfTick || !s_link || rd16(s_link + 0x08) != 168)
 			return;
+		// the Debug Menu's list waits until Link has executed 60 game frames without a gap: never into a stage's first
+		// frames (a list asked for over the title spawned as play began, and the game panicked in a process creation a
+		// second later, once, in a real-time run that came into play late; not seen with spawns at play's first frames
+		// otherwise)
+		const uint32 frame = wwhd::rt::GameFrame(wwhd::os::SwapCount());
+		if (frame <= s_linkSeen + 1 && frame - s_linkSince >= 60)
 		{
 			std::lock_guard lock(s_spawnLock);
-			if (s_spawnWaiting)
+			if (!s_spawnPlanned && !s_spawnsAsked.empty())
 			{
-				s_spawnWaiting = false;
-				Spawn w = s_spawnAsked;
-				const sint16 heading = (sint16)rd16(s_link + 0x32A);   // shape_angle.y
-				const double a = heading * (3.14159265358979 / 32768.0);
-				w.x = std::bit_cast<float>(rd32(s_link + 0x314)) + 150.0f * (float)std::sin(a);
-				w.y = std::bit_cast<float>(rd32(s_link + 0x318));
-				w.z = std::bit_cast<float>(rd32(s_link + 0x31C)) + 150.0f * (float)std::cos(a);
-				w.angley = (uint16)(heading + 0x8000);
-				SpawnNow(ctx, w);
+				PlanSpawns(ctx, s_spawnsAsked);
+				s_spawnsAsked.clear();
+				s_spawnPlanned = true;
 			}
+			for (int k = 0; k < 4 && !s_spawnPlan.empty(); k++)
+			{
+				SpawnNow(ctx, s_spawnPlan.front());
+				s_spawnPlan.pop_front();
+				s_spawnPlaced++;
+			}
+			if (s_spawnPlanned && s_spawnPlan.empty())
+				s_spawnPlanned = false, s_spawnReport = true;
 		}
 		if (spawns.empty())
 			return;
@@ -2350,11 +2452,25 @@ namespace
 
 namespace wwhd::debug
 {
-	void RequestSpawn(int process, uint32 param, uint32 anglex)
+	void RequestSpawns(const std::vector<SpawnAsk>& asks)
 	{
 		std::lock_guard lock(s_spawnLock);
-		s_spawnAsked = Spawn{ 0, process, 0, param, 0, 0, 0, anglex, 0, 0 };
-		s_spawnWaiting = true;
+		s_spawnsAsked.insert(s_spawnsAsked.end(), asks.begin(), asks.end());
+	}
+	void CancelSpawns()
+	{
+		std::lock_guard lock(s_spawnLock);
+		s_spawnsAsked.clear(), s_spawnPlan.clear();
+		s_spawnPlanned = s_spawnReport = false, s_spawnPlaced = s_spawnDropped = 0;
+	}
+	bool TakeSpawnReport(int& placed, int& dropped)
+	{
+		std::lock_guard lock(s_spawnLock);
+		if (!s_spawnReport)
+			return false;
+		placed = s_spawnPlaced, dropped = s_spawnDropped;
+		s_spawnReport = false, s_spawnPlaced = s_spawnDropped = 0;
+		return true;
 	}
 }
 
@@ -4468,6 +4584,10 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	if (rd16(proc + 0x08) == 168)
 	{
 		s_link = proc;
+		const uint32 frame = wwhd::rt::GameFrame(wwhd::os::SwapCount());
+		if (frame > s_linkSeen + 2 || frame < s_linkSeen)
+			s_linkSince = frame;                        // back after a gap: a stage's load, a new play
+		s_linkSeen = frame;
 		if (place[0] >= 0 && !g_rtHalfTick && wwhd::rt::GameFrame(wwhd::os::SwapCount()) == (uint32)place[0])
 			for (uint32 i = 0; i < 3; i++)
 			{

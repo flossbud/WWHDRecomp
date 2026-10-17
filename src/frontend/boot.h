@@ -25,8 +25,5 @@ namespace wwhd
 	}
 	void UpdateOverlay();           // the system's keyboard and dialogs over the game (overlay.cpp, wwhd-null)
 	void UpdateFpsOverlay();        // the settings' FPS overlay (overlay.cpp)
-	// the debug menu's item at a point of the 1920x1080 TV frame: its index, -1 on the panel but no
-	// item, -2 outside the panel (overlay.cpp)
-	int DebugMenuItemAt(float tvx, float tvy);
 	void ShowPreparing(uint32 done, uint32 total);   // the shader cache's progress screen (overlay.cpp, wwhd-null)
 }

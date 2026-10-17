@@ -277,7 +277,7 @@ WWHD_OS_FUNCTION(padscore, KPADReadEx)
 	NoteCaller("KPADReadEx", true);
 	s_lastRead[channel] = now;
 
-	Pad pad = debug_menu::Filter(Current());          // the debug menu takes the pad while it is open
+	Pad pad = debug_menu::Filter(Current());          // both sticks clicked: the Debug Menu (not the game's)
 	s_lastPad = pad;
 	uint32 hold = 0;
 	for (auto [from, to] : kProButtons)

@@ -8,6 +8,7 @@
 #include "game_files.h"
 #include "ui_draw.h"
 #include "../gpu/vk/renderer.h"
+#include "../os/debug_menu.h"
 #include "../os/savestate.h"
 #include "../os/settings.h"
 #include <rapidjson/document.h>
@@ -21,6 +22,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <sstream>
@@ -169,7 +171,8 @@ namespace wwhd::pause_menu
 			{ "resolution", "WWHD_WINDOW_SIZE" }, { "aspect", "WWHD_ASPECT" }, { "vsync", "WWHD_VSYNC" }, { "vrr", "WWHD_VRR" },
 			{ "fpsOverlay", "WWHD_FPS_OVERLAY" }, { "cpuThreads", "WWHD_CORES" }, { "lazyDD", "WWHD_LAZY_DRAWDONE" },
 			{ "writeWatch", "WWHD_WRITE_WATCH" }, { "vtxDedupe", "WWHD_VTX_DEDUPE" }, { "surfaceFit", "WWHD_SURFACE_FIT" },
-			{ "barriers", "WWHD_BARRIERS" }, { "clearLoadop", "WWHD_CLEAR_LOADOP" } };
+			{ "barriers", "WWHD_BARRIERS" }, { "clearLoadop", "WWHD_CLEAR_LOADOP" },
+			{ "debugMenu", "WWHD_DEBUG_MENU" } };
 
 		void CheckRows();
 		// a row's "platform": "android" (shown only there), or { "not": "android" } (shown everywhere else); none: everywhere
@@ -228,6 +231,134 @@ namespace wwhd::pause_menu
 			}
 			CheckRows();
 			return !Categories().empty();
+		}
+
+		// ---- the Debug Menu (Pause Menu v10, its README and data/debug-menu.json: assets/pause_menu/debug-menu.json): four
+		// tabs of rows; each row's kind: a warp (a group and its index in os/debug_menu.h's order), the boss rush, the test
+		// arena, the bosses' refights (a toggle) or a foe of the spawn list ----
+		enum class DKind { Warp, Rush, Arena, Refights, Spawn };
+		struct DRow
+		{
+			std::string id, label, verb, note, desc;
+			DKind kind = DKind::Warp;
+			os::debug_menu::Group group = os::debug_menu::Group::Islands;
+			int index = 0;                              // in its group, or the foe's
+			bool needsRefights = false;
+		};
+		struct DTab { std::string name; std::vector<DRow> rows; };
+		struct DebugCopy
+		{
+			std::string title, subtitle, lockedToast, lockedFact, lockedValue, spawnsFact, cleared, spawnOne, spawnMany;
+			std::vector<DTab> tabs;
+		};
+		DebugCopy& Debug()
+		{
+			static DebugCopy d;
+			return d;
+		}
+		// a template's {key} filled
+		std::string Fill(std::string t, const std::string& key, const std::string& value)
+		{
+			for (size_t at; (at = t.find("{" + key + "}")) != std::string::npos;)
+				t.replace(at, key.size() + 2, value);
+			return t;
+		}
+		bool LoadDebug(const std::string& path)
+		{
+			std::ifstream in(path, std::ios::binary);
+			if (!in)
+				return false;
+			const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+			rapidjson::Document d;
+			d.Parse(text.c_str());
+			if (d.HasParseError() || !d.HasMember("debugMenu") || !d["debugMenu"].IsObject())
+				return false;
+			auto str = [](const rapidjson::Value& v, const char* k) {
+				return v.IsObject() && v.HasMember(k) && v[k].IsString() ? std::string(v[k].GetString()) : std::string();
+			};
+			const rapidjson::Value& m = d["debugMenu"];
+			DebugCopy c;
+			c.title = str(m, "title"), c.subtitle = str(m, "subtitle");
+			if (!m.HasMember("tabs") || !m["tabs"].IsArray())
+				return false;
+			int islands = 0, dungeons = 0, bosses = 0, foes = 0;
+			for (const auto& t : m["tabs"].GetArray())
+			{
+				DTab tab{ str(t, "name"), {} };
+				const std::string tmpl = str(t, "descTemplate"), spawnTmpl = str(t, "spawnDescTemplate");
+				std::string first, rematch;
+				if (t.HasMember("descTemplate") && t["descTemplate"].IsObject())
+					first = str(t["descTemplate"], "first"), rematch = str(t["descTemplate"], "rematch");
+				if (t.HasMember("lockedCopy") && t["lockedCopy"].IsObject())
+				{
+					const rapidjson::Value& l = t["lockedCopy"];
+					c.lockedToast = str(l, "toast"), c.lockedFact = str(l, "paneFactLabel"), c.lockedValue = str(l, "paneFactValue");
+				}
+				if (t.HasMember("spawnList") && t["spawnList"].IsObject())
+				{
+					const rapidjson::Value& sl = t["spawnList"];
+					c.cleared = str(sl, "clearToast");
+					if (sl.HasMember("spawnToast"))
+						c.spawnOne = str(sl["spawnToast"], "one"), c.spawnMany = str(sl["spawnToast"], "many");
+					if (sl.HasMember("paneFacts") && sl["paneFacts"].IsArray() && sl["paneFacts"].Size() > 1)
+						c.spawnsFact = str(sl["paneFacts"][1], "v");
+				}
+				if (!t.HasMember("rows") || !t["rows"].IsArray())
+					continue;
+				for (const auto& r : t["rows"].GetArray())
+				{
+					DRow row{ str(r, "id"), str(r, "label"), str(r, "verb"), str(r, "note"), str(r, "desc") };
+					const std::string type = str(r, "type");
+					row.needsRefights = str(r, "requires") == "refights";
+					if (row.id == "refights")
+						row.kind = DKind::Refights;
+					else if (row.id == "rush")
+						row.kind = DKind::Rush;
+					else if (row.id == "arena")
+						row.kind = DKind::Arena;
+					else if (type == "spawn")
+					{
+						row.kind = DKind::Spawn, row.index = foes++;
+						if (row.desc.empty())
+							row.desc = Fill(spawnTmpl, "label", row.label);
+					}
+					else if (row.id.rfind("i_", 0) == 0)
+						row.group = os::debug_menu::Group::Islands, row.index = islands++;
+					else if (row.id.rfind("d_", 0) == 0)
+						row.group = os::debug_menu::Group::Dungeons, row.index = dungeons++;
+					else if (row.id.rfind("b_", 0) == 0)
+						row.group = os::debug_menu::Group::Bosses, row.index = bosses++;
+					else
+						continue;                           // a row the game side has nothing for
+					if (row.desc.empty() && row.kind == DKind::Warp)
+					{
+						if (row.group == os::debug_menu::Group::Bosses)
+							row.desc = row.note.find("rematch") != std::string::npos ? Fill(rematch, "label", row.label)
+								: Fill(Fill(first, "label", row.label), "location", row.note);
+						else
+							row.desc = Fill(tmpl, "label", row.label);
+					}
+					tab.rows.push_back(std::move(row));
+				}
+				c.tabs.push_back(std::move(tab));
+			}
+			// the tabs against the game side's tables (a row past them is left out: logged)
+			for (DTab& tab : c.tabs)
+				for (size_t i = 0; i < tab.rows.size();)
+				{
+					const DRow& r = tab.rows[i];
+					const bool ok = r.kind == DKind::Spawn ? r.index < os::debug_menu::FoeCount()
+						: r.kind != DKind::Warp || r.index < os::debug_menu::Count(r.group);
+					if (ok)
+						i++;
+					else
+					{
+						cemuLog_log(LogType::Force, "wwhd: pause menu: the Debug Menu's row {} has no destination: left out", r.id);
+						tab.rows.erase(tab.rows.begin() + i);
+					}
+				}
+			Debug() = std::move(c);
+			return !Debug().tabs.empty();
 		}
 
 		// a row as it shows now: its value, note (warn: in the warning ink), markers, and whether it can change
@@ -374,12 +505,27 @@ namespace wwhd::pause_menu
 			return k;
 		}
 
+		// the menu's items: Debug Menu after Settings while Settings > Advanced > Enable Debug Menu is on (Pause Menu v10: in
+		// the first group, so the group gaps fall before Save and Quit), the menu as v9 otherwise
+		enum Item { kResume, kEnhancements, kSettings, kDebug, kSave, kQuit, kItemKinds };
+		const char* const kItemNames[kItemKinds] = { "Resume", "Enhancements", "Settings", "Debug Menu", "Save", "Quit" };
+		bool DebugOn() { return os::debug_menu::Enabled(); }
+		int MenuCount() { return DebugOn() ? 6 : 5; }
+		int MenuKind(int i) { return DebugOn() || i < kDebug ? i : i + 1; }       // item i's kind
+		int MenuIndexOf(int kind) { return DebugOn() || kind < kDebug ? kind : kind - 1; }
+		float MenuTop(int i)
+		{
+			constexpr float off[5] = { 0, 90, 180, 292, 404 }, on[6] = { 0, 90, 180, 270, 382, 494 };
+			return DebugOn() ? on[std::clamp(i, 0, 5)] : off[std::clamp(i, 0, 4)];
+		}
+
 		// what doesn't move, drawn once for the window's size: the panel (opaque), the header sheet with its title, each
 		// button idle (with the group's shadow) and focused, and the open dialog's frame and message
 		struct Layers
 		{
 			int w = 0, h = 0;
-			Image panel, header, button[5][2];
+			Image panel, header, button[kItemKinds][2];
+			Image debugPanel;                                  // the panel in the Debug Menu's blue (v10), over the green
 			int dialogKind = -1;
 			Image dialog;
 			std::vector<std::array<Image, 2>> dialogButtons;   // each idle and focused
@@ -396,7 +542,7 @@ namespace wwhd::pause_menu
 		enum class Phase { Closed, Waiting, Opening, Open, Closing };
 		enum class Dialog { None, Quit, QuitDesktop, QuitTitle, Overwrite, Load, SaveFile, Saving, Saved };
 
-		struct Toast { std::string text; Clock::time_point at; };
+		struct Toast { std::string text; Clock::time_point at; bool debug = false; };   // debug: raised from the Debug Menu (blue)
 		constexpr int kNoPress = -1, kPressZone = -2, kPressBack = -3;   // a touch's targets besides a button's index
 
 		struct State
@@ -439,7 +585,21 @@ namespace wwhd::pause_menu
 			int cat = 0, row = 0;
 			Clock::time_point rowSince;                 // the focused row's highlight cross-fades in over 140 ms
 			int prevRow = -1;
-			int sub = 0;                                // the sub-screen up (with settings set): 0 Settings, 1 Save (M3), 2 Enhancements (M4)
+			int sub = 0;                                // the sub-screen up (with settings set): 0 Settings, 1 Save (M3), 2 Enhancements (M4),
+			                                            // 3 the Debug Menu (v10)
+			int dcat = 0, drow = 0;                     // the Debug Menu's tab and row
+			float dscrollFrom = 0, dscrollTo = 0;       // its rows' scroll (design units): from, to, since (200 ms)
+			Clock::time_point dscrollSince;
+			Clock::time_point dsheetSince;              // its sheet's height eases to the tab's over 220 ms
+			float dsheetFrom = 0, dsheetTo = 0;
+			Clock::time_point wheelAt;                  // the wheel's last step (one each 90 ms)
+			std::vector<int> spawnQ;                    // the spawn list: counts per foe (os/debug_menu.h's order)
+			std::string afterToast;                     // a toast over play once the menu closed (the spawns'), in the Pause prompt's
+			bool afterToastDebug = false;               // place and time; blue when raised from the Debug Menu
+			bool spawnWaiting = false;                  // the list asked for at the close: its report awaited (TakeSpawnReport)
+			int spawnLeftOut = 0;                       // past kSpawnCap
+			std::string spawnOne;                       // the foe's name when the list was of one type
+			Clock::time_point spawnClosed;
 			int saveRow = 0, saveAct = 0;               // Save: the row (File 1, slots 1-4), Save (0) or Load (1)
 			int dialogSlot = 0;                         // the slot an Overwrite or Load dialog is about
 			Dialog quitAfterSave = Dialog::None;        // Save & Quit: to the desktop or the title once File 1 is saved
@@ -517,19 +677,18 @@ namespace wwhd::pause_menu
 			return a;
 		}
 
-		const char* const kItems[5] = { "Resume", "Enhancements", "Settings", "Save", "Quit" };
-		constexpr float kButtonTops[5] = { 0, 90, 180, 292, 404 };
 		constexpr float kWidePanelW = 1380;
 		constexpr float kPanelW = 680, kButtonX = 110, kButtonY = 396, kButtonW = 460, kButtonH = 72;
 
 		std::string Caption(int item)
 		{
-			switch (item)
+			switch (MenuKind(item))
 			{
-			case 0: return "Return to your voyage.";
-			case 1: return "Quality-of-life and gameplay tweaks.";
-			case 2: return "Graphics, display and advanced options.";
-			case 3:
+			case kResume: return "Return to your voyage.";
+			case kEnhancements: return "Quality-of-life and gameplay tweaks.";
+			case kSettings: return "Graphics, display and advanced options.";
+			case kDebug: return "Developer tools for testing. Changes here can break your save.";
+			case kSave:
 			{
 				const std::string ago = Ago(File1());
 				return ago.empty() ? "Not saved yet." : "Last saved " + ago + ".";
@@ -541,7 +700,7 @@ namespace wwhd::pause_menu
 		// the cursor's box for menu item i (design units): the button plus 13 on every side
 		void CursorFor(int i, float out[4])
 		{
-			out[0] = kButtonX - 13, out[1] = kButtonY + kButtonTops[i] - 13, out[2] = kButtonW + 26, out[3] = kButtonH + 26;
+			out[0] = kButtonX - 13, out[1] = kButtonY + MenuTop(i) - 13, out[2] = kButtonW + 26, out[3] = kButtonH + 26;
 		}
 		// Settings' row i: the row (26, 26 + i 74 in the sheet at 84,212, 808 x 70) plus 13 on every side
 		void RowCursorFor(int i, float out[4])
@@ -557,7 +716,7 @@ namespace wwhd::pause_menu
 
 		void ShowToast(State& st, std::string text)
 		{
-			st.toasts = { { std::move(text), Clock::now() } };
+			st.toasts = { { std::move(text), Clock::now(), st.settings && st.sub == 3 } };   // its colour as raised
 		}
 
 		// ---- the drawing ----
@@ -582,25 +741,32 @@ namespace wwhd::pause_menu
 			f.c.Text(font, size, x * f.s, cy * f.s + (font.Ascent(size) + font.Descent(size)) / 2, t, col, op);
 		}
 
-		void DrawSheet(Frame& f, float x, float y, float w, float h, float offs[4], float op)
+		// the Debug Menu's faded dark blue (v10 README "Colour theme")
+		constexpr Colour kDbgFrame = Colour::Hex(0x2e3f57), kDbgRim = Colour::Hex(0x4b6283), kDbgRimInner = Colour::Hex(0x24344a),
+			kDbgSheet = Colour::Hex(0x3d5373), kDbgInk = Colour::Hex(0xe1eaf5), kDbgMuted = Colour::Hex(0xaebfd6),
+			kDbgOnFocus = Colour::Hex(0x16263d), kDbgWarn = Colour::Hex(0xf2c27a), kDbgFocusRim = Colour::Hex(0xe8f0f9),
+			kDbgTabIdle = Colour::Hex(0x2f4360), kDbgTabRim = Colour::Hex(0x56708f), kDbgToggleOn = Colour::Hex(0x6f9be0),
+			kDbgToggleOff = Colour::Hex(0x26364c), kDbgLine = Colour::Hex(0x7d96b8), kDbgThumb = Colour::Hex(0xaebfd6);
+
+		void DrawSheet(Frame& f, float x, float y, float w, float h, float offs[4], float op, bool debug = false)
 		{
 			Assets& a = A();
 			const float s = f.s;
-			f.c.Fill(x * s, y * s, w * s, h * s, kSheet, op);
-			f.c.Tile(a.Get("texture_sheet-paper_tile"), x * s, y * s, w * s, h * s, 0, 0, false, false, op);
-			// the inner shade: inset 0 0 18px rgba(120,165,60,.45), a falloff from each edge
+			f.c.Fill(x * s, y * s, w * s, h * s, debug ? kDbgSheet : kSheet, op);
+			f.c.Tile(a.Get(debug ? "texture_debug-sheet_tile" : "texture_sheet-paper_tile"), x * s, y * s, w * s, h * s, 0, 0, false, false, op);
+			// the inner shade: inset 0 0 18px rgba(120,165,60,.45) (the Debug Menu's rgba(10,20,40,.45)), a falloff from each edge
 			for (int i = 0; i < (int)(18 * s); i++)
 			{
 				const float k = 0.45f * (1 - i / (18 * s)) * (1 - i / (18 * s));
-				const Colour sh{ 120, 165, 60, 255 };
+				const Colour sh = debug ? Colour{ 10, 20, 40, 255 } : Colour{ 120, 165, 60, 255 };
 				f.c.Fill(x * s + i, y * s + i, w * s - 2 * i, 1, sh, k * op / 3);
 				f.c.Fill(x * s + i, (y + h) * s - i - 1, w * s - 2 * i, 1, sh, k * op / 3);
 				f.c.Fill(x * s + i, y * s + i + 1, 1, h * s - 2 * i - 2, sh, k * op / 3);
 				f.c.Fill((x + w) * s - i - 1, y * s + i + 1, 1, h * s - 2 * i - 2, sh, k * op / 3);
 			}
 			// the torn edges: 18 px strips of the frame's notches, offset per edge so they never mirror
-			const Image& hz = a.Get("sheet_torn-notch_horizontal");
-			const Image& vt = a.Get("sheet_torn-notch_vertical");
+			const Image& hz = a.Get(debug ? "sheet_torn-notch_horizontal_debug" : "sheet_torn-notch_horizontal");
+			const Image& vt = a.Get(debug ? "sheet_torn-notch_vertical_debug" : "sheet_torn-notch_vertical");
 			const float e = 18 * s;
 			f.c.Tile(hz, x * s, y * s, w * s, e, offs[0] * s, 0, false, false, op);
 			f.c.Tile(hz, x * s, (y + h) * s - e, w * s, e, offs[1] * s, 0, false, true, op);
@@ -731,6 +897,22 @@ namespace wwhd::pause_menu
 			}
 		}
 
+		// a toast's chip at x, y (design units)
+		void DrawToastAt(Frame& f, const Toast& t, float x, float y, float op)
+		{
+			Assets& a = A();
+			const float s = f.s;
+			const float tw = a.rocknroll.Width(t.text, 24 * s) / s;
+			const float w = tw + 60 + 20, h = 24 * 1.4f + 28 + 20;
+			// (raised from the Debug Menu: its blue, fixed as raised: chip #2e3f57, rim #4b6283, inner #3d5373, ink #e1eaf5)
+			const Colour chip = t.debug ? kDbgFrame : kFrame, rim = t.debug ? kDbgRim : kRimLight, inner = t.debug ? kDbgSheet : kSheet;
+			f.c.Fill((x + 4) * s, (y + 10) * s, w * s, h * s, { 10, 40, 20, 255 }, 0.2f * op);
+			f.c.Fill(x * s, y * s, w * s, h * s, chip, op);
+			f.c.Fill(x * s, y * s, w * s, 4 * s, rim, op), f.c.Fill(x * s, (y + h - 4) * s, w * s, 4 * s, rim, op);
+			f.c.Fill(x * s, y * s, 4 * s, h * s, rim, op), f.c.Fill((x + w - 4) * s, y * s, 4 * s, h * s, rim, op);
+			f.c.Fill((x + 10) * s, (y + 10) * s, (w - 20) * s, (h - 20) * s, inner, op);
+			TextCentred(f, a.rocknroll, 24, x + w / 2, y + h / 2, t.text, t.debug ? kDbgInk : kInk, op);
+		}
 		void DrawToast(Frame& f, State& st, Clock::time_point now)
 		{
 			if (st.toasts.empty())
@@ -742,19 +924,10 @@ namespace wwhd::pause_menu
 				st.toasts.clear();
 				return;
 			}
-			Assets& a = A();
-			const float s = f.s;
 			const float op = ms < 2200 ? Linear(ms, 0, 260) : 1 - Linear(ms, 2200, 260);
 			const float dy = 24 * (1 - Bezier(.3f, 1.5f, .5f, 1, Linear(ms, 0, 320)));
-			const float tw = a.rocknroll.Width(t.text, 24 * s) / s;
-			const float w = tw + 60 + 20, h = 24 * 1.4f + 28 + 20;
-			const float x = f.c.W() / s - 56 - w, y = f.c.H() / s - 56 - h + dy;
-			f.c.Fill((x + 4) * s, (y + 10) * s, w * s, h * s, { 10, 40, 20, 255 }, 0.2f * op);
-			f.c.Fill(x * s, y * s, w * s, h * s, kFrame, op);
-			f.c.Fill(x * s, y * s, w * s, 4 * s, kRimLight, op), f.c.Fill(x * s, (y + h - 4) * s, w * s, 4 * s, kRimLight, op);
-			f.c.Fill(x * s, y * s, 4 * s, h * s, kRimLight, op), f.c.Fill((x + w - 4) * s, y * s, 4 * s, h * s, kRimLight, op);
-			f.c.Fill((x + 10) * s, (y + 10) * s, (w - 20) * s, (h - 20) * s, kSheet, op);
-			TextCentred(f, a.rocknroll, 24, x + w / 2, y + h / 2, t.text, kInk, op);
+			const float w = A().rocknroll.Width(t.text, 24 * f.s) / f.s + 60 + 20, h = 24 * 1.4f + 28 + 20;
+			DrawToastAt(f, t, f.c.W() / f.s - 56 - w, f.c.H() / f.s - 56 - h + dy, op);
 		}
 
 		struct DialogSpec { std::string title, body; std::vector<std::string> buttons; std::vector<bool> enabled; };
@@ -946,6 +1119,14 @@ namespace wwhd::pause_menu
 			kToggleOff = Colour::Hex(0xc3dc9f), kCursorBrown = Colour::Hex(0x5b3b22), kOrange = Colour::Hex(0xf0a53a),
 			kOrangeText = Colour::Hex(0x3a240f), kBanner = Colour::Hex(0xf7d58a), kBannerRim = Colour::Hex(0xd79a3c);
 
+		// an info pane's title (Reggae 28), smaller until it fits the pane (Settings' "Enable Debug Menu")
+		float TitlePx(ui::Font& font, const std::string& t, float s, float w)
+		{
+			float px = 28;
+			while (px > 20 && font.Width(t, px * s) > w * s)
+				px -= 1;
+			return px;
+		}
 		// a rounded pill (a badge, a toggle), in design units
 		void Pill(Frame& f, float x, float y, float w, float h, Colour fill, Colour ring, float ringW, float op)
 		{
@@ -1130,7 +1311,7 @@ namespace wwhd::pause_menu
 				float offs2[4] = { 20, -70, -30, 50 };
 				DrawSheet(f, px, py, pw, h, offs2, op);
 				float y = py + 36;
-				f.c.Text(a.reggae, 28 * s, (px + 32) * s, y * s + a.reggae.Ascent(28 * s), r.label, kInk, op);
+				f.c.Text(a.reggae, TitlePx(a.reggae, r.label, s, inner) * s, (px + 32) * s, y * s + a.reggae.Ascent(28 * s), r.label, kInk, op);
 				y += 40 + 14;
 				for (int i = 0; i < 10; i++)
 					f.c.Fill((px + 32 + i * 12) * s, y * s, 4 * s, 4 * s, kDot, op);
@@ -1153,6 +1334,275 @@ namespace wwhd::pause_menu
 					y += 12;
 				}
 			}
+		}
+
+		// ---- the Debug Menu (Pause Menu v10, its README "3. Debug Menu screen"): Settings' layout in the faded dark blue;
+		// up to ten rows show, a longer tab (the bosses' 14) scrolls; the info pane's facts by the row's kind ----
+		constexpr float kDbgViewport = 10 * 74 - 4;      // 736: ten rows
+		float MsSince(Clock::time_point now, Clock::time_point t) { return std::chrono::duration<float, std::milli>(now - t).count(); }
+		bool DebugLocked(const DRow& r) { return r.needsRefights && !wwhd::debug::BossRefight(); }
+		int SpawnTotal(const State& st)
+		{
+			int n = 0;
+			for (int c : st.spawnQ)
+				n += c;
+			return n;
+		}
+		bool TabSpawns(const DTab& t)
+		{
+			return std::any_of(t.rows.begin(), t.rows.end(), [](const DRow& r) { return r.kind == DKind::Spawn; });
+		}
+		const DRow* FoeRow(int index)
+		{
+			for (const DTab& t : Debug().tabs)
+				for (const DRow& r : t.rows)
+					if (r.kind == DKind::Spawn && r.index == index)
+						return &r;
+			return nullptr;
+		}
+		// the list as the info pane says it: "3 Bokoblin, 1 Moblin" (the design's order), else Empty
+		std::string SpawnListText(const State& st)
+		{
+			std::string t;
+			for (int i = 0; i < (int)st.spawnQ.size(); i++)
+				if (const DRow* r = FoeRow(i); r && st.spawnQ[i] > 0)
+					t += (t.empty() ? "" : ", ") + std::to_string(st.spawnQ[i]) + " " + r->label;
+			return t.empty() ? "Empty" : t;
+		}
+		// the scroll that keeps row `row` about fifth from the top (README "Scrolling"); the sheet's height for n rows
+		float DebugOffFor(int row, int n) { return std::clamp((row - 4) * 74.0f, 0.0f, std::max(0, n - 10) * 74.0f); }
+		float DebugSheetFor(int n) { return 52 + std::min(n, 10) * 74.0f - 4; }
+		float DebugScroll(const State& st, Clock::time_point now)
+		{
+			const float t = Bezier(.25f, .8f, .25f, 1, Linear(MsSince(now, st.dscrollSince), 0, 200));
+			return st.dscrollFrom + (st.dscrollTo - st.dscrollFrom) * t;
+		}
+		float DebugSheetH(const State& st, Clock::time_point now)
+		{
+			const float t = Bezier(.25f, .8f, .25f, 1, Linear(MsSince(now, st.dsheetSince), 0, 220));
+			return st.dsheetFrom + (st.dsheetTo - st.dsheetFrom) * t;
+		}
+		// the focus gloss (#9ab7da 0%, #bfd3ec 16%, #cadcf1 58%, #adc6e5 100%), a row of pixels at a time
+		void DebugGloss(Frame& f, float x, float y, float w, float h, float op)
+		{
+			const struct { float at; Colour c; } stops[4] = { { 0, Colour::Hex(0x9ab7da) }, { .16f, Colour::Hex(0xbfd3ec) },
+				{ .58f, Colour::Hex(0xcadcf1) }, { 1, Colour::Hex(0xadc6e5) } };
+			const int rows = std::max(1, (int)std::lround(h * f.s));
+			for (int i = 0; i < rows; i++)
+			{
+				const float t = (i + 0.5f) / rows;
+				int k = 0;
+				while (k < 2 && t > stops[k + 1].at)
+					k++;
+				const float u = std::clamp((t - stops[k].at) / (stops[k + 1].at - stops[k].at), 0.0f, 1.0f);
+				auto mix = [&](uint8 a, uint8 b) { return (uint8)std::lround(a + (b - a) * u); };
+				const Colour c{ mix(stops[k].c.r, stops[k + 1].c.r), mix(stops[k].c.g, stops[k + 1].c.g), mix(stops[k].c.b, stops[k + 1].c.b), 255 };
+				f.c.Fill(x * f.s, y * f.s + i, w * f.s, 1, c, op);
+			}
+		}
+
+		// a vertical bar with round ends (the scrollbar's: radius half its width), a pixel row at a time
+		void VBar(Frame& f, float x, float y, float w, float h, Colour c, float op)
+		{
+			const float s = f.s, r = w * s / 2, top = y * s, bottom = (y + h) * s, cx = (x + w / 2) * s;
+			for (int row = (int)std::floor(top); row < (int)std::ceil(bottom); row++)
+			{
+				const float py = row + 0.5f, d = py < top + r ? top + r - py : py > bottom - r ? py - (bottom - r) : 0;
+				if (d >= r)
+					continue;
+				const float half = std::sqrt(r * r - d * d);
+				f.c.Fill(cx - half, (float)row, 2 * half, 1, c, op);
+			}
+		}
+
+		void DrawDebug(Frame& f, State& st, Clock::time_point now, float dx, float op)
+		{
+			Assets& a = A();
+			const float s = f.s;
+			const DebugCopy& d = Debug();
+			if (d.tabs.empty())
+				return;
+			const int ci = std::clamp(st.dcat, 0, (int)d.tabs.size() - 1);
+			const DTab& tab = d.tabs[ci];
+			// the title (Reggae 46 at 90,50) and its subtitle 22 to the right, on its baseline (19 px #aebfd6)
+			const float tbase = 50 * s + a.reggae.Ascent(46 * s);
+			const float tw = f.c.Text(a.reggae, 46 * s, (90 + dx) * s, tbase, d.title, kDbgInk, op);
+			f.c.Text(a.rocknroll, 19 * s, (90 + dx) * s + tw + 22 * s, tbase, d.subtitle, kDbgMuted, op);
+			// the tab bar, 84..1290 at 128, 60 tall, as Settings' in the blue (idle #2f4360 rim #56708f, active the gloss)
+			{
+				const float y = 128, h = 60, cy = y + h / 2;
+				const Image& arrow = a.Get("arrow_tab_left_debug");
+				f.c.Draw(arrow, (84 + dx) * s, cy * s - arrow.h / 2.0f, op);
+				f.c.Draw(arrow, (1290 + dx) * s - arrow.w, cy * s - arrow.h / 2.0f, op, true);
+				const std::string lg = st.pad ? "LB" : "Q", rg = st.pad ? "RB" : "E";
+				const float gl = GlyphWidth(lg, st.pad), gr = GlyphWidth(rg, st.pad);
+				const float gh = (float)a.Get(st.pad ? "prompt_pad-bumper_blank" : "prompt_key_blank").h;
+				DrawGlyph(f, lg, st.pad, (84 + dx) * s + arrow.w + 6 * s, cy * s - gh / 2, op);
+				DrawGlyph(f, rg, st.pad, (1290 + dx) * s - arrow.w - 6 * s - gr, cy * s - gh / 2, op);
+				float x = 84 + dx + (arrow.w + gl) / s + 20;
+				for (int i = 0; i < (int)d.tabs.size(); i++)
+				{
+					const float tabw = a.rocknroll.Width(d.tabs[i].name, 20 * s) / s + 36;
+					const bool active = i == ci;
+					const float ty = cy - 22;
+					f.c.Fill(x * s, ty * s, tabw * s, 44 * s, active ? kDbgFocusRim : kDbgTabRim, op);
+					if (active)
+						DebugGloss(f, x + 3, ty + 3, tabw - 6, 38, op);
+					else
+						f.c.Fill((x + 3) * s, (ty + 3) * s, (tabw - 6) * s, 38 * s, kDbgTabIdle, op);
+					TextCentred(f, a.rocknroll, 20, x + tabw / 2, cy, d.tabs[i].name, active ? kDbgOnFocus : kDbgInk, op);
+					x += tabw + 8;
+				}
+			}
+			// the rows sheet at 84,212, 860 wide, 26 padding: rows 70 tall 4 apart, ten showing, scrolled to the focus
+			const int n = (int)tab.rows.size();
+			const float sx = 84 + dx, sy = 212, sw = 860, sh = DebugSheetH(st, now);
+			float offs[4] = { -60, -20, 40, -90 };
+			DrawSheet(f, sx, sy, sw, sh, offs, op, true);
+			const float off = DebugScroll(st, now);
+			const float rms = MsSince(now, st.rowSince);
+			int clip[4];
+			f.c.GetClip(clip);
+			const float vtop = sy + 26, vbottom = sy + sh - 26;
+			f.c.Clip(std::max(clip[0], (int)(sx * s)), std::max(clip[1], (int)(vtop * s)), std::min(clip[2], (int)((sx + sw) * s)),
+				std::min(clip[3], (int)std::ceil(vbottom * s)));
+			for (int i = 0; i < n; i++)
+			{
+				const DRow& r = tab.rows[i];
+				const float rx = sx + 26, ry = vtop + i * 74 - off, rw = 808, rh = 70;
+				if (ry + rh < vtop || ry > vbottom)
+					continue;
+				const bool focus = i == st.drow;
+				const float hl = focus ? Linear(rms, 0, 140) : (i == st.prevRow ? 1 - Linear(rms, 0, 140) : 0);
+				if (hl > 0)
+					f.c.Draw(a.Get("row_debug_808x70_focused"), rx * s, ry * s, op * hl);
+				for (float x = rx + 4; x < rx + rw - 4; x += 10)          // the dotted rule: rgba(170,200,240,.3)
+					f.c.Fill(x * s, (ry + rh - 2) * s, 3 * s, 2 * s, { 170, 200, 240, 255 }, op * 0.3f);
+				const bool locked = DebugLocked(r);
+				const float dim = locked ? 0.5f : 1.0f;
+				const Colour ink = focus && hl > 0.5f ? kDbgOnFocus : kDbgInk;
+				const int count = r.kind == DKind::Spawn && r.index < (int)st.spawnQ.size() ? st.spawnQ[r.index] : 0;
+				// the label, the changed dot (a spawn row with some on the list), the note under it
+				const float lx = rx + 26;
+				const bool note = !r.note.empty();
+				const float lbase = note ? ry + 34 : ry + rh / 2 + (a.rocknroll.Ascent(26 * s) + a.rocknroll.Descent(26 * s)) / 2 / s;
+				const float lw = f.c.Text(a.rocknroll, 26 * s, lx * s, lbase * s, r.label, ink, op * dim) / s;
+				if (count > 0)
+				{
+					const Image& dot = a.Get("indicator_changed-dot");
+					f.c.Draw(dot, (lx + lw + 12) * s, (lbase - 13) * s - dot.h / 2.0f, op);
+				}
+				if (note)
+					f.c.Text(a.rocknroll, 17 * s, lx * s, (ry + 58) * s, r.note, focus && hl > 0.5f ? kDbgOnFocus : kDbgMuted, op * dim);
+				// the value column: 330 wide, right-aligned, 20 from the row's right
+				const float vr = rx + rw - 20, vcy = ry + rh / 2, vop = op * dim;
+				const float tmid = vcy * s + (a.rocknroll.Ascent(23 * s) + a.rocknroll.Descent(23 * s)) / 2;
+				if (r.kind == DKind::Refights)
+				{
+					const bool on = wwhd::debug::BossRefight();
+					const float tx = vr - 78, ty = vcy - 19;
+					float pos = on ? 1.0f : 0.0f;
+					if (st.toggled == r.id)
+					{
+						const float t = Bezier(.3f, 1.4f, .5f, 1, Linear(MsSince(now, st.toggledSince), 0, 220));
+						pos = on ? t : 1 - t;
+					}
+					Pill(f, tx, ty, 78, 38, on ? kDbgToggleOn : kDbgToggleOff, kDbgLine, 3, vop);
+					Pill(f, tx + 6 + 40 * pos, ty + 6, 26, 26, kWhite, kDbgLine, 3, vop);
+					const std::string t = on ? "On" : "Off";
+					f.c.Text(a.rocknroll, 23 * s, (tx - 12) * s - a.rocknroll.Width(t, 23 * s), tmid, t, ink, vop);
+				}
+				else if (r.kind == DKind::Spawn)
+				{
+					// < count >: "Add" at 0 (no left arrow), "x N" from 1; the arrows in 36 boxes either side of a 226 box
+					const Image& arr = a.Get("arrow_choice_right_debug");
+					const float bx = vr - 36 - 226 - 36;
+					if (count > 0)
+						f.c.Draw(arr, (bx + 18) * s - arr.w / 2.0f, vcy * s - arr.h / 2.0f, vop, true);
+					f.c.Draw(arr, (vr - 18) * s - arr.w / 2.0f, vcy * s - arr.h / 2.0f, vop);
+					TextCentred(f, a.rocknroll, 24, bx + 36 + 113, vcy, count > 0 ? "\xC3\x97 " + std::to_string(count) : "Add", ink, vop);
+				}
+				else
+				{
+					// the verb (23 px) and the action triangle (12 x 16, in the text's colour)
+					const Image& tri = a.Get(focus && hl > 0.5f ? "arrow_action_debug_dark" : "arrow_action_debug_light");
+					f.c.Draw(tri, vr * s - tri.w, vcy * s - tri.h / 2.0f, vop);
+					f.c.Text(a.rocknroll, 23 * s, vr * s - tri.w - 10 * s - a.rocknroll.Width(r.verb, 23 * s), tmid, r.verb, ink, vop);
+				}
+			}
+			f.c.Clip(clip[0], clip[1], clip[2], clip[3]);
+			// the scrollbar: 6 wide at the sheet's right 7, top 26, as tall as the viewport; hidden when all fit
+			if (n > 10)
+			{
+				const float bx = sx + sw - 7 - 6, by = vtop, bh = kDbgViewport;
+				const float maxOff = (n - 10) * 74.0f, th = bh * 10 / n, tt = (off / maxOff) * (bh - th);
+				VBar(f, bx, by, 6, bh, { 10, 20, 40, 255 }, op * 0.35f);
+				VBar(f, bx, by + tt, 6, th, kDbgThumb, op);
+			}
+			// the info pane at 966,212, 310 wide: the row's title, description and facts
+			if (st.drow < n)
+			{
+				const DRow& r = tab.rows[st.drow];
+				const float px = 966 + dx, py = 212, pw = 310, inner = pw - 64;
+				std::vector<std::string> desc = WrapText(a.rocknroll, 21 * s, inner * s, r.desc);
+				std::vector<std::pair<std::string, std::string>> facts;
+				if (DebugLocked(r))
+					facts.push_back({ d.lockedFact, d.lockedValue });
+				else if (r.kind == DKind::Refights)
+					facts.push_back({ "Default", "Off" }), facts.push_back({ "Applies", "Right away" });
+				else if (r.kind == DKind::Spawn)
+					facts.push_back({ "Spawn list", SpawnListText(st) }), facts.push_back({ "Spawns", d.spawnsFact });
+				float h = 36 + 40 + 14 + 6 + desc.size() * 21 * 1.55f + 14 + 32;
+				for (const auto& fc : facts)
+					h += 16 + 4 + 20 * 1.3f * WrapText(a.rocknroll, 20 * s, inner * s, fc.second).size() + 12;
+				float offs2[4] = { 20, -70, -30, 50 };
+				DrawSheet(f, px, py, pw, h, offs2, op, true);
+				float y = py + 36;
+				const float tpx = TitlePx(a.reggae, r.label, s, inner);
+				f.c.Text(a.reggae, tpx * s, (px + 32) * s, y * s + a.reggae.Ascent(28 * s), r.label, kDbgInk, op);
+				y += 40 + 14;
+				for (int i = 0; i < 10; i++)
+					f.c.Fill((px + 32 + i * 12) * s, y * s, 4 * s, 4 * s, kDbgLine, op);
+				y += 6 + 14;
+				for (const std::string& line : desc)
+				{
+					f.c.Text(a.rocknroll, 21 * s, (px + 32) * s, (y + 21) * s, line, kDbgInk, op);
+					y += 21 * 1.55f;
+				}
+				y += 14;
+				for (const auto& fc : facts)
+				{
+					f.c.Text(a.rocknroll, 16 * s, (px + 32) * s, (y + 16) * s, fc.first, kDbgMuted, op);
+					y += 16 + 4;
+					for (const std::string& line : WrapText(a.rocknroll, 20 * s, inner * s, fc.second))
+					{
+						f.c.Text(a.rocknroll, 20 * s, (px + 32) * s, (y + 20) * s, line, kDbgInk, op);
+						y += 20 * 1.3f;
+					}
+					y += 12;
+				}
+			}
+		}
+
+		// the Debug Menu's prompts (README "Prompt sets"): the row's verb, Toggle or Add (none on a locked row), the
+		// categories, Clear on the spawn list's tab while it isn't empty, Close
+		std::vector<std::pair<std::string, std::string>> DebugPrompts(const State& st)
+		{
+			std::vector<std::pair<std::string, std::string>> pr;
+			const auto& tabs = Debug().tabs;
+			if (tabs.empty())
+				return pr;
+			const DTab& tab = tabs[std::clamp(st.dcat, 0, (int)tabs.size() - 1)];
+			if (st.drow < (int)tab.rows.size() && !DebugLocked(tab.rows[st.drow]))
+			{
+				const DRow& r = tab.rows[st.drow];
+				pr.push_back({ st.pad ? "A" : "Enter", r.kind == DKind::Refights ? "Toggle" : r.kind == DKind::Spawn ? "Add" : r.verb });
+			}
+			pr.push_back({ st.pad ? "LB RB" : "Q E", "Category" });
+			if (TabSpawns(tab) && SpawnTotal(st) > 0)
+				pr.push_back({ st.pad ? "Y" : "R", "Clear" });
+			pr.push_back({ st.pad ? "B" : "Esc", "Close" });
+			return pr;
 		}
 
 		// ---- Save (M3): the slots' thumbnails, 320x180 RGBA beside each state (slotN.thumb: "WWTH", w, h, pixels; a
@@ -1346,6 +1796,14 @@ namespace wwhd::pause_menu
 				l.panel = c.Take();
 			}
 			{
+				ui::Canvas c(pw, h);                      // the Debug Menu's: frame #2e3f57 and its noise, its flourishes
+				c.Fill(0, 0, (float)pw, (float)h, kDbgFrame);
+				c.Tile(a.Get("texture_debug-frame_tile"), 0, 0, (float)pw, (float)h);
+				const Image& fl = a.Get("frame_corner-flourish_debug");
+				c.Draw(fl, 14 * s, 14 * s), c.Draw(fl, 14 * s, h - 14 * s - fl.h, 1, false, true);
+				l.debugPanel = c.Take();
+			}
+			{
 				ui::Canvas c((int)std::ceil(560 * s) + 1, (int)std::ceil(250 * s) + 1);
 				Frame f{ c, s };
 				float offs[4] = { -40, -110, 30, -50 };
@@ -1355,9 +1813,9 @@ namespace wwhd::pause_menu
 					c.Fill((280 - 90 + i * 12 + 3) * s, 132 * s, 4 * s, 4 * s, kDot);
 				l.header = c.Take();
 			}
-			for (int i = 0; i < 5; i++)
+			for (int i = 0; i < kItemKinds; i++)
 				for (int k = 0; k < 2; k++)
-					l.button[i][k] = ButtonLayer(s, "menu_460x72", kButtonW, kButtonH, 32, kItems[i], k == 1);
+					l.button[i][k] = ButtonLayer(s, "menu_460x72", kButtonW, kButtonH, 32, kItemNames[i], k == 1);
 		}
 
 		// ---- the start screen (t-startscreen S1: Launch; the owner's Start Screen design, README "2. Launch: desktop"):
@@ -2366,7 +2824,7 @@ namespace wwhd::pause_menu
 			// Settings once still (its widening and fades over, no row's highlight or toggle's knob moving): the panel as
 			// last drawn while nothing it shows has changed (its key: the category, row, values, device)
 			std::string skey;
-			if (st.settings && !closing && sms > 700 && wipe >= 1 &&
+			if (st.settings && st.sub != 3 && !closing && sms > 700 && wipe >= 1 &&
 				std::chrono::duration<float, std::milli>(now - st.rowSince).count() > 160 &&
 				std::chrono::duration<float, std::milli>(now - st.toggledSince).count() > 240)
 			{
@@ -2397,6 +2855,18 @@ namespace wwhd::pause_menu
 			{
 				const Image& fl = a.Get("frame_corner-flourish");
 				c.Draw(fl, pw - 22 * s - fl.w, 14 * s, 1, true), c.Draw(fl, pw - 22 * s - fl.w, c.H() - 14 * s - fl.h, 1, true, true);
+			}
+			// the Debug Menu's blue over the whole panel: in over 420 ms as it opens, out over 300 as it goes back (v10)
+			const float blue = st.sub != 3 ? 0.0f : st.settings ? Linear(sms, 0, 420) : 1 - Linear(sms, 0, 300);
+			if (blue > 0)
+			{
+				c.Draw(l.debugPanel, 0, 0, blue);
+				c.Clip(0, 0, std::min(shown, (int)pw), c.H());
+				c.Fill(pw - 9 * s, 0, 3 * s, (float)c.H(), kDbgRimInner, blue);
+				c.Fill(pw - 6 * s, 0, 6 * s, (float)c.H(), kDbgRim, blue);
+				const Image& fl = a.Get("frame_corner-flourish_debug");
+				c.Draw(fl, pw - 22 * s - fl.w, 14 * s, blue, true), c.Draw(fl, pw - 22 * s - fl.w, c.H() - 14 * s - fl.h, blue, true, true);
+				c.Clip(0, 0, shown, c.H());
 			}
 			// the menu's layer: out over 180 ms (30 to the left) as Settings opens, back 200 ms after it closes; Settings in
 			// after 260 ms (opacity 300, from 40 to the right over 380), out over 160
@@ -2430,7 +2900,7 @@ namespace wwhd::pause_menu
 					TextCentred(f, a.rocknroll, 26, 340 + menuDx, top + (i + 0.5f) * 26 * 1.4f, lines[i], kInk, hp);
 			}
 			// the buttons: pop up from +20, each 45 ms after the one before, from 220 ms; the focus cross-fades over 140
-			for (int i = 0; i < 5; i++)
+			for (int i = 0; i < MenuCount(); i++)
 			{
 				const float d = 220 + 45.0f * i;
 				const float bp = (closing ? 1 - Linear(ms, 0, 260) : Linear(ms, d, 260)) * menuOp;
@@ -2441,13 +2911,14 @@ namespace wwhd::pause_menu
 				float focus = Linear(fms, 0, 140);
 				if (!(st.focused.size() > (size_t)i && st.focused[i]))
 					focus = 1 - focus;
-				const float bx = (kButtonX + menuDx) * s, byy = (kButtonY + kButtonTops[i] + by) * s;
-				c.Draw(l.button[i][0], bx, byy, bp);
+				const float bx = (kButtonX + menuDx) * s, byy = (kButtonY + MenuTop(i) + by) * s;
+				c.Draw(l.button[MenuKind(i)][0], bx, byy, bp);
 				if (focus > 0)
-					c.Draw(l.button[i][1], bx, byy, bp * focus);
+					c.Draw(l.button[MenuKind(i)][1], bx, byy, bp * focus);
 			}
 			if (setOp > 0)
-				st.sub == 1 ? DrawSaves(f, st, now, setDx, setOp) : st.sub == 2 ? DrawEnhancements(f, setDx, setOp) : DrawSettings(f, st, now, setDx, setOp);
+				st.sub == 1 ? DrawSaves(f, st, now, setDx, setOp) : st.sub == 2 ? DrawEnhancements(f, setDx, setOp) :
+					st.sub == 3 ? DrawDebug(f, st, now, setDx, setOp) : DrawSettings(f, st, now, setDx, setOp);
 			if (!skey.empty())                            // drawn still: kept for the frames after
 			{
 				l.settings.w = (int)pw, l.settings.h = c.H();
@@ -2493,6 +2964,8 @@ namespace wwhd::pause_menu
 				}
 				else if (st.sub == 2)
 					pr.push_back({ st.pad ? "B" : "Esc", "Back" });
+				else if (st.sub == 3)
+					pr = DebugPrompts(st);
 				else if (st.cat < (int)cats.size() && st.row < (int)cats[st.cat].rows.size())
 				{
 					const Row& r = cats[st.cat].rows[st.row];
@@ -2531,8 +3004,8 @@ namespace wwhd::pause_menu
 		void Focus(State& st, int item)
 		{
 			const Clock::time_point now = Clock::now();
-			if (st.focusSince.size() < 5)
-				st.focusSince.assign(5, now - std::chrono::seconds(10)), st.focused.assign(5, false), st.focused[0] = true;
+			if (st.focusSince.size() < kItemKinds)
+				st.focusSince.assign(kItemKinds, now - std::chrono::seconds(10)), st.focused.assign(kItemKinds, false), st.focused[0] = true;
 			if (item != st.item)
 			{
 				st.focused[st.item] = false, st.focusSince[st.item] = now;
@@ -2737,6 +3210,7 @@ namespace wwhd::pause_menu
 				return;
 			}
 			st.blackout = "Returning to title\xE2\x80\xA6";
+			std::fill(st.spawnQ.begin(), st.spawnQ.end(), 0);   // quitting discards the spawn list
 			st.toTitle = true, st.titleSeen = seen, st.titleAt = Clock::now(), st.titleAsked = {};
 			wwhd::state::RequestHold(false);
 		}
@@ -2746,6 +3220,127 @@ namespace wwhd::pause_menu
 			cemuLog_log(LogType::Force, "wwhd: quit to the desktop from the pause menu");
 			gpu::SaveShaderCache();
 			_exit(0);
+		}
+
+		// ---- the Debug Menu's input (README "Input": as Settings'; Up/Down wrap, a tab change focuses row 0) ----
+		void FocusDebugRow(State& st, int row, bool now = false)
+		{
+			const auto& tabs = Debug().tabs;
+			const int n = tabs.empty() ? 0 : (int)tabs[std::clamp(st.dcat, 0, (int)tabs.size() - 1)].rows.size();
+			if (row != st.drow)
+				st.prevRow = st.drow, st.rowSince = Clock::now();
+			st.drow = row;
+			const Clock::time_point t = Clock::now();
+			st.dscrollFrom = now ? DebugOffFor(row, n) : DebugScroll(st, t), st.dscrollTo = DebugOffFor(row, n), st.dscrollSince = t;
+			float box[4];
+			RowCursorFor(0, box);
+			box[1] += row * 74 - st.dscrollTo;          // README "Cursor y = 26 + i x 74 - off"
+			if (now)
+				for (int k = 0; k < 4; k++)
+					st.curFrom[k] = st.curTo[k] = box[k];
+			GlideTo(st, box);
+		}
+		void DebugTab(State& st, int cat, bool now = false)
+		{
+			const auto& tabs = Debug().tabs;
+			const Clock::time_point t = Clock::now();
+			st.dsheetFrom = now ? DebugSheetFor((int)tabs[cat].rows.size()) : DebugSheetH(st, t);
+			st.dsheetTo = DebugSheetFor((int)tabs[cat].rows.size()), st.dsheetSince = t;
+			st.dcat = cat, st.prevRow = -1, st.drow = 0, st.rowSince = t;
+			FocusDebugRow(st, 0, now);
+			TurnCompass(st, cat * 45.0f);
+		}
+		// the Debug Menu from the pause menu's item (or straight from play: OpenDebugMenu) on Islands, row 0
+		void EnterDebug(State& st)
+		{
+			st.settings = true, st.sub = 3, st.screenSince = Clock::now();
+			if (st.spawnQ.size() != (size_t)os::debug_menu::FoeCount())
+				st.spawnQ.assign(os::debug_menu::FoeCount(), 0);
+			DebugTab(st, 0, true);
+		}
+		void BackFromDebug(State& st)
+		{
+			st.settings = false, st.screenSince = Clock::now();
+			Focus(st, std::min(MenuIndexOf(kDebug), MenuCount() - 1));   // Debug Menu still focused
+			float box[4];
+			CursorFor(st.item, box);
+			GlideTo(st, box);
+			TurnCompass(st, st.item * -52.0f);
+		}
+		// the menu closes and the game goes on: a warp, the rush or a fight run at its next frame (the list discarded)
+		void DebugGo(State& st, const std::function<void()>& go)
+		{
+			std::fill(st.spawnQ.begin(), st.spawnQ.end(), 0);
+			go();
+			Close(st);
+		}
+		void ActDebug(State& st, Input in)
+		{
+			const auto& tabs = Debug().tabs;
+			if (tabs.empty())
+			{
+				if (in == Input::Back)
+					BackFromDebug(st);
+				return;
+			}
+			st.dcat = std::clamp(st.dcat, 0, (int)tabs.size() - 1);
+			const DTab& tab = tabs[st.dcat];
+			const int n = (int)tab.rows.size();
+			switch (in)
+			{
+			case Input::Up: if (n) FocusDebugRow(st, (st.drow + n - 1) % n); return;
+			case Input::Down: if (n) FocusDebugRow(st, (st.drow + 1) % n); return;
+			case Input::CatPrev: case Input::CatNext:
+				DebugTab(st, (st.dcat + (in == Input::CatNext ? 1 : (int)tabs.size() - 1)) % (int)tabs.size());
+				return;
+			case Input::Back: BackFromDebug(st); return;
+			case Input::Reset:                          // Y/R: the spawn list cleared (its tab, while it isn't empty)
+				if (TabSpawns(tab) && SpawnTotal(st) > 0)
+				{
+					std::fill(st.spawnQ.begin(), st.spawnQ.end(), 0);
+					ShowToast(st, Debug().cleared);
+				}
+				return;
+			case Input::Left: case Input::Right: case Input::Confirm:
+			{
+				if (st.drow >= n)
+					return;
+				const DRow& r = tab.rows[st.drow];
+				if (DebugLocked(r))
+				{
+					if (in == Input::Confirm)
+						ShowToast(st, Debug().lockedToast);
+					return;
+				}
+				switch (r.kind)
+				{
+				case DKind::Refights:                   // applies at once; not kept across runs (main's call)
+					wwhd::debug::SetBossRefight(!wwhd::debug::BossRefight());
+					st.toggled = r.id, st.toggledSince = Clock::now();
+					return;
+				case DKind::Spawn:
+					if (r.index < (int)st.spawnQ.size())
+					{
+						int& c = st.spawnQ[r.index];
+						c = in == Input::Left ? std::max(0, c - 1) : c + 1;   // no limit on the list (the spawn: kSpawnCap)
+					}
+					return;
+				default:
+					break;
+				}
+				if (in != Input::Confirm)
+					return;
+				cemuLog_log(LogType::Force, "wwhd: Debug Menu: {}", r.label + (r.note.empty() ? "" : " (" + r.note + ")"));
+				if (r.kind == DKind::Rush)
+					DebugGo(st, [] { os::debug_menu::StartRush(); });
+				else if (r.kind == DKind::Arena)
+					DebugGo(st, [] { os::debug_menu::StartArena(); });
+				else
+					DebugGo(st, [&r] { os::debug_menu::Warp(r.group, r.index); });
+				return;
+			}
+			default: return;
+			}
 		}
 
 
@@ -3191,6 +3786,8 @@ namespace wwhd::pause_menu
 						TurnCompass(st, st.item * -52.0f);
 					}
 				}
+				else if (st.sub == 3)
+					ActDebug(st, in);
 				else
 					st.sub == 1 ? ActSaves(st, in) : ActSettings(st, in);
 				st.dirty = true;
@@ -3254,20 +3851,22 @@ namespace wwhd::pause_menu
 				st.dirty = true;
 				return;
 			}
+			if (st.item >= MenuCount())
+				Focus(st, MenuCount() - 1);                 // Debug Menu switched off with the focus past the end
 			switch (in)
 			{
-			case Input::Up: Focus(st, (st.item + 4) % 5); break;
-			case Input::Down: Focus(st, (st.item + 1) % 5); break;
+			case Input::Up: Focus(st, (st.item + MenuCount() - 1) % MenuCount()); break;
+			case Input::Down: Focus(st, (st.item + 1) % MenuCount()); break;
 			case Input::Back: Close(st); break;
 			case Input::Confirm:
-				if (st.item == 0)
+				if (MenuKind(st.item) == kResume)
 					Close(st);
-				else if (st.item == 4)
+				else if (MenuKind(st.item) == kQuit)
 				{
 					st.dialog = Dialog::Quit, st.dialogItem = 0, st.dialogSince = Clock::now();
 					// the Save & Quit choice needs File 1's save from the menu (M3): Desktop opens the unsaved dialog
 				}
-				else if (st.item == 3)
+				else if (MenuKind(st.item) == kSave)
 				{
 					st.settings = true, st.sub = 1, st.screenSince = Clock::now();
 					for (int r = 1; r <= 4; r++)
@@ -3275,21 +3874,71 @@ namespace wwhd::pause_menu
 					st.prevRow = -1, st.saveRow = -1, st.rowSince = Clock::now();
 					FocusSave(st, 0, 0);
 				}
-				else if (st.item == 2 && !Categories().empty())
+				else if (MenuKind(st.item) == kSettings && !Categories().empty())
 				{
 					st.settings = true, st.sub = 0, st.screenSince = Clock::now();
 					st.cat = 0, st.prevRow = -1, st.row = 0, st.rowSince = Clock::now();
 					FocusRow(st, 0);
 					TurnCompass(st, 0);
 				}
-				else if (st.item == 1)
+				else if (MenuKind(st.item) == kEnhancements)
 					st.settings = true, st.sub = 2, st.screenSince = Clock::now();
+				else if (MenuKind(st.item) == kDebug)
+					EnterDebug(st);
 				else
-					ShowToast(st, std::string(kItems[st.item]) + " comes in a later update.");
+					ShowToast(st, std::string(kItemNames[MenuKind(st.item)]) + " comes in a later update.");
 				break;
 			default: break;
 			}
 			st.dirty = true;
+		}
+
+		// the spawn list as the menu closes (README "Spawning": on any unpause, all at once; then emptied, and a toast over
+		// play in the Pause prompt's stead once they're made: SpawnToast)
+		void SpawnList(State& st)
+		{
+			const int asked = SpawnTotal(st);
+			if (asked == 0)
+				return;
+			const int queued = os::debug_menu::SpawnFoes(st.spawnQ);
+			int types = 0;
+			st.spawnOne.clear();
+			for (int i = 0; i < (int)st.spawnQ.size(); i++)
+				if (st.spawnQ[i] > 0)
+					if (const DRow* r = FoeRow(i))
+						types++, st.spawnOne = r->label;
+			if (types != 1)
+				st.spawnOne.clear();
+			st.spawnLeftOut = asked - queued;            // past kSpawnCap: the first ones (the list's order)
+			st.spawnWaiting = true, st.spawnClosed = Clock::now();
+			cemuLog_log(LogType::Force, "wwhd: Debug Menu: {} enemies asked for ahead of Link ({} past the limit)", asked, asked - queued);
+			std::fill(st.spawnQ.begin(), st.spawnQ.end(), 0);
+		}
+		// the list's toast once the game made it (sixty.cpp's report: placed, and without a place); always the Debug
+		// Menu's blue (main's call, the design's screenshot 10), whichever screen the menu closed from. Until then (5 s at
+		// most) the Pause prompt waits: true while it should
+		bool SpawnToast(State& st, Clock::time_point now)
+		{
+			if (!st.spawnWaiting)
+				return false;
+			int placed = 0, dropped = 0;
+			if (!wwhd::debug::TakeSpawnReport(placed, dropped))
+				return st.phase == Phase::Closed && now - st.spawnClosed < std::chrono::seconds(5);
+			st.spawnWaiting = false;
+			const int out = dropped + st.spawnLeftOut;
+			if (placed == 0)
+				st.afterToast = "No room to spawn ahead of Link.";
+			else if (placed == 1)
+				st.afterToast = st.spawnOne.empty() ? "1 enemy spawned ahead of Link." : Fill(Debug().spawnOne, "enemy", st.spawnOne);
+			else
+				st.afterToast = Fill(Debug().spawnMany, "total", std::to_string(placed));
+			if (out > 0)
+				st.afterToast += fmt::format(" {} more didn\xE2\x80\x99t fit.", out);
+			st.afterToastDebug = true;
+			if (st.phase == Phase::Closed)
+				st.hintAt = now, st.hintKey.clear();
+			cemuLog_log(LogType::Force, "wwhd: Debug Menu: {} enemies spawned ahead of Link, {} without a place, {} past the limit", placed, dropped, st.spawnLeftOut);
+			return false;
 		}
 
 		// the menu's thread: the backdrop once the TV picture comes, then a frame each 16 ms while it moves
@@ -3304,17 +3953,42 @@ namespace wwhd::pause_menu
 				st.playSeen = plays, st.hintAt = now + std::chrono::milliseconds(3000);   // play's first frames: after its load and fade
 				cemuLog_log(LogType::Force, "wwhd: pause menu: play starts: the Pause prompt in 3 s");
 			}
-			const float ms = std::chrono::duration<float, std::milli>(now - st.hintAt).count();
-			if (st.hintAt == Clock::time_point{} || st.phase != Phase::Closed || !ww || !wh || ms > 4600)
+			if (SpawnToast(st, now))
 			{
-				if (st.hintAt != Clock::time_point{} && (st.phase != Phase::Closed || ms > 4600))
-					st.hintAt = {};
+				gpu::SetHintOpacity(0);                 // the spawns' toast comes next, not the prompt
+				return;
+			}
+			const float ms = std::chrono::duration<float, std::milli>(now - st.hintAt).count();
+			const bool toast = !st.afterToast.empty();
+			const float end = toast ? 2200 + 260 : 4600;
+			if (st.hintAt == Clock::time_point{} || st.phase != Phase::Closed || !ww || !wh || ms > end)
+			{
+				if (st.hintAt != Clock::time_point{} && (st.phase != Phase::Closed || ms > end))
+					st.hintAt = {}, st.afterToast.clear();
 				gpu::SetHintOpacity(0);
 				return;
 			}
 			if (ms < 0)
 				return;
 			const float s = std::min(ww / 1920.0f, wh / 1080.0f);
+			if (toast)
+			{
+				// the toast as the menu draws it (DrawToast), at the window's bottom right
+				const std::string key = fmt::format("{}x{} toast {} {}", ww, wh, st.afterToastDebug ? 1 : 0, st.afterToast);
+				if (key != st.hintKey)
+				{
+					A().Rescale(s);
+					const float tw = A().rocknroll.Width(st.afterToast, 24 * s) / s, w = tw + 60 + 20, h = 24 * 1.4f + 28 + 20;
+					ui::Canvas c((int)std::ceil((w + 4) * s) + 1, (int)std::ceil((h + 10) * s) + 1);
+					Frame f{ c, s };
+					DrawToastAt(f, { st.afterToast, now, st.afterToastDebug }, 0, 0, 1);
+					gpu::SetHintPanel((sint32)ww - (sint32)std::lround((56 + w) * s), (sint32)wh - (sint32)std::lround((56 + h) * s),
+						(uint32)c.W(), (uint32)c.H(), std::move(c.Pixels()));
+					st.hintKey = key;
+				}
+				gpu::SetHintOpacity(ms < 260 ? ms / 260 : ms < 2200 ? 1.0f : 1 - (ms - 2200) / 260);
+				return;
+			}
 			const std::string key = fmt::format("{}x{} {} {}", ww, wh, st.pad ? 1 : 0, st.touch ? 1 : 0);
 			if (key != st.hintKey)
 			{
@@ -3610,6 +4284,7 @@ namespace wwhd::pause_menu
 					{
 						// the game is the state's now: the menu goes at once (its picture is from before), the game goes on
 						st.busySlot = 0, st.blackout.clear();
+						std::fill(st.spawnQ.begin(), st.spawnQ.end(), 0);   // a state's load discards the spawn list
 						st.phase = Phase::Closed, st.closedAt = Clock::now(), st.settings = false, st.hintAt = st.closedAt + std::chrono::milliseconds(300);
 						gpu::SetMenuPanel(0, 0, {});
 						wwhd::state::RequestHold(false);
@@ -3647,6 +4322,7 @@ namespace wwhd::pause_menu
 				if (st.phase == Phase::Closing && ms > 560)
 				{
 					st.phase = Phase::Closed, st.closedAt = Clock::now(), st.hintAt = st.closedAt + std::chrono::milliseconds(300);
+					SpawnList(st);
 					if (st.start)                               // Start Game: into the live title (no Pause prompt over it)
 					{
 						st.start = false, st.startDone = true, st.hintAt = {};
@@ -3705,6 +4381,8 @@ namespace wwhd::pause_menu
 			}
 			if (!LoadCategories(a.dir + "/menu-and-settings.json"))
 				cemuLog_log(LogType::Force, "wwhd: the pause menu's settings (menu-and-settings.json) didn't load: no Settings screen");
+			if (!LoadDebug(a.dir + "/debug-menu.json"))
+				cemuLog_log(LogType::Force, "wwhd: the pause menu's Debug Menu (debug-menu.json) didn't load: no Debug Menu");
 			return true;
 		}();
 		return ok;
@@ -3716,6 +4394,7 @@ namespace wwhd::pause_menu
 		if (begun.load(std::memory_order_relaxed) || gpu::ShownFrames() == 0 || !Available())
 			return;                                     // (once the renderer has shown a frame: it is up, Available won't start it)
 		begun = true;
+		os::debug_menu::SetOpener(&OpenDebugMenu);       // both sticks clicked: the Debug Menu (os/debug_menu.h Filter)
 		State& st = S();
 		std::lock_guard lock(st.lock);
 		st.begun = true;
@@ -3773,6 +4452,43 @@ namespace wwhd::pause_menu
 		std::lock_guard lock(st.lock);
 		Start(st);
 		Act(st, Input::Toggle);
+		st.wake.notify_one();
+	}
+
+	void OpenDebugMenu()
+	{
+		if (!Available() || !os::debug_menu::Enabled())
+			return;
+		State& st = S();
+		std::lock_guard lock(st.lock);
+		Start(st);
+		if (st.start || st.setup || !st.blackout.empty() || st.phase == Phase::Closing)
+			return;                                     // not over the start screen, a load or a closing menu
+		if (st.phase == Phase::Closed)
+		{
+			Act(st, Input::Toggle);
+			if (st.phase == Phase::Closed)
+				return;
+		}
+		if (st.dialog != Dialog::None || (st.settings && st.sub == 3))
+			return;
+		Focus(st, MenuIndexOf(kDebug));
+		EnterDebug(st);
+		st.dirty = true;
+		st.wake.notify_one();
+	}
+
+	void Wheel(int dir)
+	{
+		State& st = S();
+		std::lock_guard lock(st.lock);
+		if ((st.phase != Phase::Open && st.phase != Phase::Opening) || !st.settings || st.sub != 3 || st.dialog != Dialog::None)
+			return;
+		const Clock::time_point now = Clock::now();
+		if (now - st.wheelAt < std::chrono::milliseconds(90))
+			return;
+		st.wheelAt = now;
+		Act(st, dir > 0 ? Input::Down : Input::Up);
 		st.wake.notify_one();
 	}
 
@@ -4055,9 +4771,42 @@ namespace wwhd::pause_menu
 			if (button == 2)
 				Act(st, Input::Back);
 		}
+		else if (st.settings && st.sub == 3)
+		{
+			// the Debug Menu: as Settings' (its rows scrolled); the wheel moves the focus (Wheel)
+			const auto& tabs = Debug().tabs;
+			if (!tabs.empty())
+			{
+				const DTab& tab = tabs[std::clamp(st.dcat, 0, (int)tabs.size() - 1)];
+				const float off = DebugScroll(st, Clock::now()), top = 238, bottom = 238 + std::min((int)tab.rows.size(), 10) * 74.0f;
+				for (int i = 0; i < (int)tab.rows.size(); i++)
+				{
+					const float rx = 110, ry = top + i * 74.0f - off;
+					if (dx < rx || dx >= rx + 808 || dy < std::max(ry, top) || dy >= std::min(ry + 70, bottom))
+						continue;
+					if (st.drow != i)
+						FocusDebugRow(st, i);
+					if (button == 1)
+					{
+						const float vr = rx + 808 - 20, bx = vr - 36 - 226 - 36;
+						Act(st, dx >= bx && dx < bx + 36 ? Input::Left : dx >= vr - 36 && dx < vr ? Input::Right : Input::Confirm);
+					}
+				}
+				if (button == 1 && dy >= 128 && dy < 188)
+				{
+					const float aw = A().Get("arrow_tab_left_debug").w / s;
+					if (dx >= 84 && dx < 84 + aw)
+						Act(st, Input::CatPrev);
+					else if (dx >= 1290 - aw && dx < 1290)
+						Act(st, Input::CatNext);
+				}
+			}
+			if (button == 2)
+				Act(st, Input::Back);
+		}
 		else
 		{
-			for (int i = 0; i < 5; i++)
+			for (int i = 0; i < MenuCount(); i++)
 			{
 				float box[4];
 				CursorFor(i, box);

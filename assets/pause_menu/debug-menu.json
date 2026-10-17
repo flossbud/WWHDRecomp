@@ -1,0 +1,118 @@
+{
+  "version": "debug-menu v1 (Pause Menu v10)",
+  "pauseMenuChanges": {
+    "newSetting": {
+      "location": "Settings > Advanced (last row)",
+      "id": "debugMenu",
+      "label": "Enable Debug Menu",
+      "type": "toggle",
+      "default": false,
+      "applies": "now",
+      "description": "Adds Debug Menu to the pause menu, under Settings. For testing only."
+    },
+    "newMenuItem": {
+      "id": "debug",
+      "label": "Debug Menu",
+      "visibleWhen": "values.debugMenu === true",
+      "position": "after Settings, inside the first group",
+      "caption": "Developer tools for testing. Changes here can break your save.",
+      "opens": "Debug Menu screen (Islands tab, row 0)"
+    },
+    "menuOrder": {
+      "debugOff": ["resume", "enh", "settings", "|", "save", "|", "quit"],
+      "debugOn": ["resume", "enh", "settings", "debug", "|", "save", "|", "quit"]
+    },
+    "groupGapIndices": { "debugOff": [3, 4], "debugOn": [4, 5] },
+    "buttonTops": { "debugOff": [0, 90, 180, 292, 404], "debugOn": [0, 90, 180, 270, 382, 494] }
+  },
+  "debugMenu": {
+    "title": "Debug Menu",
+    "subtitle": "For testing · can break your save",
+    "tabs": [
+      {
+        "name": "Islands",
+        "rows": [
+          { "id": "i_outset", "label": "Outset Island", "type": "action", "verb": "Warp", "desc": "Warps Link to Outset Island.", "result": "warp:Outset Island" },
+          { "id": "i_windfall", "label": "Windfall Island", "type": "action", "verb": "Warp", "desc": "Warps Link to Windfall Island.", "result": "warp:Windfall Island" },
+          { "id": "i_dragonroost", "label": "Dragon Roost Island", "type": "action", "verb": "Warp", "desc": "Warps Link to Dragon Roost Island.", "result": "warp:Dragon Roost Island" },
+          { "id": "i_ritoaerie", "label": "Rito Aerie", "type": "action", "verb": "Warp", "desc": "Warps Link to Rito Aerie.", "result": "warp:Rito Aerie" },
+          { "id": "i_foresthaven", "label": "Forest Haven", "type": "action", "verb": "Warp", "desc": "Warps Link to Forest Haven.", "result": "warp:Forest Haven" }
+        ]
+      },
+      {
+        "name": "Dungeons",
+        "rows": [
+          { "id": "d_drc", "label": "Dragon Roost Cavern", "type": "action", "verb": "Warp", "result": "warp:Dragon Roost Cavern" },
+          { "id": "d_fw", "label": "Forbidden Woods", "type": "action", "verb": "Warp", "result": "warp:Forbidden Woods" },
+          { "id": "d_totg", "label": "Tower of the Gods", "type": "action", "verb": "Warp", "result": "warp:Tower of the Gods" },
+          { "id": "d_ff", "label": "Forsaken Fortress", "type": "action", "verb": "Warp", "result": "warp:Forsaken Fortress" },
+          { "id": "d_et", "label": "Earth Temple", "type": "action", "verb": "Warp", "result": "warp:Earth Temple" },
+          { "id": "d_wt", "label": "Wind Temple", "type": "action", "verb": "Warp", "result": "warp:Wind Temple" },
+          { "id": "d_hc", "label": "Hyrule Castle", "type": "action", "verb": "Warp", "result": "warp:Hyrule Castle" },
+          { "id": "d_gt", "label": "Ganon’s Tower", "type": "action", "verb": "Warp", "result": "warp:Ganon’s Tower" }
+        ],
+        "descTemplate": "Warps Link to {label}."
+      },
+      {
+        "name": "Bosses",
+        "rows": [
+          { "id": "refights", "label": "Boss Refights", "type": "toggle", "default": false, "applies": "now", "desc": "Lets you fight bosses you’ve already beaten. Boss Rush and the boss warps need it on." },
+          { "id": "rush", "label": "Boss Rush", "type": "action", "verb": "Start", "note": "First eight bosses · no heart containers", "requires": "refights", "desc": "The first eight bosses back to back, in order, with no heart containers between fights.", "order": ["b_gohma", "b_kalle", "b_gohdan", "b_helmaroc", "b_jalhalla", "b_molgera", "b_puppet", "b_ganondorf"], "result": "blackout:Starting Boss Rush…" },
+          { "id": "b_gohma", "label": "Gohma", "note": "Dragon Roost Cavern", "type": "action", "verb": "Fight", "requires": "refights" },
+          { "id": "b_kalle", "label": "Kalle Demos", "note": "Forbidden Woods", "type": "action", "verb": "Fight", "requires": "refights" },
+          { "id": "b_gohdan", "label": "Gohdan", "note": "Tower of the Gods", "type": "action", "verb": "Fight", "requires": "refights" },
+          { "id": "b_helmaroc", "label": "Helmaroc King", "note": "Forsaken Fortress", "type": "action", "verb": "Fight", "requires": "refights" },
+          { "id": "b_jalhalla", "label": "Jalhalla", "note": "Earth Temple", "type": "action", "verb": "Fight", "requires": "refights" },
+          { "id": "b_molgera", "label": "Molgera", "note": "Wind Temple", "type": "action", "verb": "Fight", "requires": "refights" },
+          { "id": "b_puppet", "label": "Puppet Ganon", "note": "Ganon’s Tower", "type": "action", "verb": "Fight", "requires": "refights" },
+          { "id": "b_ganondorf", "label": "Ganondorf", "note": "Ganon’s Tower", "type": "action", "verb": "Fight", "requires": "refights" },
+          { "id": "b_gohma2", "label": "Gohma", "note": "Ganon’s Tower · rematch", "type": "action", "verb": "Fight", "requires": "refights" },
+          { "id": "b_kalle2", "label": "Kalle Demos", "note": "Ganon’s Tower · rematch", "type": "action", "verb": "Fight", "requires": "refights" },
+          { "id": "b_jalhalla2", "label": "Jalhalla", "note": "Ganon’s Tower · rematch", "type": "action", "verb": "Fight", "requires": "refights" },
+          { "id": "b_molgera2", "label": "Molgera", "note": "Ganon’s Tower · rematch", "type": "action", "verb": "Fight", "requires": "refights" }
+        ],
+        "descTemplate": { "first": "Warps straight to {label} in {location}.", "rematch": "Rematch {label} in Ganon’s Tower." },
+        "lockedCopy": { "toast": "Turn on Boss Refights first.", "paneFactLabel": "Unavailable", "paneFactValue": "Turn on Boss Refights first" }
+      },
+      {
+        "name": "Combat",
+        "rows": [
+          { "id": "arena", "label": "Test Arena", "type": "action", "verb": "Warp", "note": "Gohma’s room · big open floor", "desc": "Gohma’s room with the boss already beaten and no warp-out. A big open floor for testing.", "result": "warp:the Test Arena" },
+          { "id": "e_bokoblin", "label": "Bokoblin", "type": "spawn" },
+          { "id": "e_moblin", "label": "Moblin", "type": "spawn" },
+          { "id": "e_darknut", "label": "Darknut", "type": "spawn", "note": "With shield and cape" },
+          { "id": "e_chuchu", "label": "Chuchu", "type": "spawn" },
+          { "id": "e_keese", "label": "Keese", "type": "spawn" },
+          { "id": "e_redead", "label": "ReDead", "type": "spawn" },
+          { "id": "e_kargaroc", "label": "Kargaroc", "type": "spawn" }
+        ],
+        "spawnDescTemplate": "Adds a {label} to the spawn list. The menu stays open so you can add more. Everything on the list spawns at once, just ahead of Link, when you unpause.",
+        "spawnList": {
+          "maxPerEnemy": null,
+          "maxTotal": null,
+          "valueText": { "zero": "Add", "nonZero": "× {n}" },
+          "paneFacts": [ { "k": "Spawn list", "v": "{n} {enemy}, … | Empty" }, { "k": "Spawns", "v": "All at once, when you unpause" } ],
+          "clearToast": "Spawn list cleared.",
+          "spawnToast": { "one": "1 {enemy} spawned ahead of Link.", "many": "{total} enemies spawned ahead of Link." }
+        }
+      }
+    ],
+    "prompts": {
+      "action": ["A/Enter {verb}", "LB RB / Q E Category", "B/Esc Close"],
+      "toggle": ["A/Enter Toggle", "LB RB / Q E Category", "B/Esc Close"],
+      "spawn": ["A/Enter Add", "LB RB / Q E Category", "Y/R Clear (only when the list is not empty)", "B/Esc Close"],
+      "locked": ["LB RB / Q E Category", "B/Esc Close"]
+    },
+    "warpResult": { "blackoutText": "Warping to {label}…", "after": "close menu, run the warp, resume gameplay" }
+  },
+  "palette": {
+    "frame": "#2e3f57", "frameRim": "#4b6283", "frameInnerLine": "#24344a", "flourish": "#7d96b8",
+    "sheet": "#3d5373", "sheetShade": "rgba(10,20,40,.45)", "sheetGrid": "rgba(170,200,240,.07)", "rowRule": "rgba(170,200,240,.3)",
+    "ink": "#e1eaf5", "inkMuted": "#aebfd6", "inkOnFocus": "#16263d", "warn": "#f2c27a",
+    "focusGloss": ["#9ab7da 0%", "#bfd3ec 16%", "#cadcf1 58%", "#adc6e5 100%"], "focusRim": "#e8f0f9",
+    "tabIdle": "#2f4360", "tabIdleRim": "#56708f",
+    "toggleOn": "#6f9be0", "toggleOff": "#26364c", "toggleLine": "#7d96b8",
+    "scrollTrack": "rgba(10,20,40,.35)", "scrollThumb": "#aebfd6",
+    "toast": { "chip": "#2e3f57", "rim": "#4b6283", "inner": "#3d5373", "ink": "#e1eaf5" }
+  }
+}

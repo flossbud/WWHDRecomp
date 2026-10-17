@@ -87,6 +87,7 @@ namespace wwhd::ui
 			Colour outline = { 0, 0, 0, 0 }, float outlineWidth = 0);
 		void Clip(int x0, int y0, int x1, int y1) { m_cx0 = std::max(0, x0), m_cy0 = std::max(0, y0), m_cx1 = std::min(m_w, x1), m_cy1 = std::min(m_h, y1); }
 		void NoClip() { m_cx0 = 0, m_cy0 = 0, m_cx1 = m_w, m_cy1 = m_h; }
+		void GetClip(int out[4]) const { out[0] = m_cx0, out[1] = m_cy0, out[2] = m_cx1, out[3] = m_cy1; }
 
 	private:
 		void Blend(int x, int y, Colour c, float a);
