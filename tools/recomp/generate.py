@@ -59,7 +59,8 @@ need; RT_LATE_TICK), on the whole tick otherwise; it takes the same instructions
 the instruction while the runtime's hold flag is up (RT_HOLD: src/overrides/sixty.cpp raises it for a step that
 must leave something out, as Link's half step after his whole step changed his action: the new action's own
 first step waits for the next tick, as at 30, while the step's common part still runs); its entry and exit
-call rt_hold_enter and rt_hold_leave (sixty.cpp notes what the call changed); r3= as for whole. A late
+call rt_hold_enter and rt_hold_leave (sixty.cpp notes what the call changed), its skip rt_hold_skipped (sixty.cpp
+keeps what the call would have set again: B93); r3= as for whole. A late
 store that a stepping process's whole tick passes over is noted (late_wr32 and on, ppc_ops.h), and
 made on the half tick if an event's edge holds that process's half step (src/overrides/sixty.cpp). Step
 rules, for the code of processes that run every frame with a time step h
@@ -732,10 +733,17 @@ def apply_tick_rule(rule, i, lines, ea=0):
             assert any("late_wr" in l for l in noted) and not any(WRITE.search(l) for l in noted), \
                 f"{what}: a late store whose writes can't be noted ({i.op})"
             return out + ["else {"] + ["\t" + l for l in noted] + ["}"]
+        rest = []
+        if kind == "hold":
+            rest.append("{ void rt_hold_skipped(); rt_hold_skipped(); }")   # its skip noted too (sixty.cpp, B93)
         if i.op in STORES and i.op.endswith("u"):
-            out += ["else", f"\tGPR({i.rA}) = GPR({i.rA}) + {emit.hx(i.d)};"]   # the update without the store
+            rest.append(f"GPR({i.rA}) = GPR({i.rA}) + {emit.hx(i.d)};")   # the update without the store
         if arg is not None:
-            out += ["else", f"\tGPR(3) = {reg_expr(arg) if isinstance(arg, str) else emit.hx(arg)};"]
+            rest.append(f"GPR(3) = {reg_expr(arg) if isinstance(arg, str) else emit.hx(arg)};")
+        if len(rest) == 1 and kind != "hold":
+            out += ["else", "\t" + rest[0]]
+        elif rest:
+            out += ["else {"] + ["\t" + l for l in rest] + ["}"]
         return out
     if kind in ("reload", "reloadh"):
         dest, base, off, off2 = arg

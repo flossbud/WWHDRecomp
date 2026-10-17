@@ -468,6 +468,12 @@ namespace
 		return action == 0x17 || action == 4 || action == 0x42 || action == 0x93 || action == 0x33 || action == 0x34 || action == 0x15 || action == 0x5A ||
 			std::find(extra.begin(), extra.end(), action) != extra.end();
 	}
+	bool RootHold()                                   // (B93: rt_hold_skipped, below)
+	{
+		static const bool on = [] { const char* e = getenv("WWHD_60FPS_ROOTHOLD"); return !(e && atoi(e) == 0); }();
+		return on;
+	}
+	int s_rootModeHeld = -1;                          // Link's m34C2 as his held half step began (-1: none held)
 	bool s_linkActionChanged = false;                 // by his action call in the last whole step
 	uint32 s_linkActionAtCall = 0;
 
@@ -4688,6 +4694,7 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 	g_rtLinkGroundLost = groundLost;
 	const bool hold = (g_rtHalfTick && link && ((s_linkActionChanged && ActionHold()) || s_linkOrderHold)) || groundHold;
 	s_actionStops += hold;
+	s_rootModeHeld = hold && RootHold() ? rd8(proc + 0x68DE) : -1;   // (B93, rt_hold_skipped)
 	g_rtHold = hold || camTick;                     // his half step leaves his new action's call out; the camera's
 	                                                // half step for show leaves its sound and rumble to its replay
 	// its whole step: the late stores it passes over are noted for its half step (s_lateNoted); at N > 2 its early
@@ -4757,6 +4764,7 @@ void f_025DE58C(PPCInterpreter_t* __restrict ctx)
 		s_lateNotes.swap(outer);
 	}
 	g_rtHold = false;
+	s_rootModeHeld = -1;
 	g_rtLinkGroundLost = false;
 	s_converting--;
 	g_rtStep = step;
@@ -5304,6 +5312,20 @@ void rt_hold_enter()
 {
 	if (s_link && !g_rtHalfTick)
 		s_linkActionAtCall = rd32(s_link + 0x65F0);
+}
+
+// B93 (the owner: at the top of a ladder's climb Link was drawn far above it for a moment): his execute clears m34C2
+// (+0x68DE, the animation's root mode: 5 moves him by the root's translation, 0 leaves it in the pose) before his action
+// call, which sets it again each step (procLadderUpEnd's 5). A half step that leaves the call out (the holds above:
+// the ground hit as the climb-over set him on the lookout, B93) kept the clear: his model was posed with the climb's
+// whole root lift (~210 units) over a position that didn't move, for one frame. At 30 that frame shows the whole
+// step's. Now the call's skip keeps what the whole step left (but execute's own 8 -> 9 step). WWHD_60FPS_ROOTHOLD=0: off.
+void rt_hold_skipped()
+{
+	if (s_rootModeHeld < 0 || !s_link || s_rootModeHeld == 8)
+		return;
+	if (rd8(s_link + 0x68DE) == 0)
+		wr8(s_link + 0x68DE, (uint8)s_rootModeHeld);
 }
 
 void rt_hold_leave()
